@@ -1,11 +1,11 @@
 cff-version: 1.2.0
 message: "If you use this software in your research, please cite it as below."
-title: "bao-noise-tolerance: Baryon Acoustic Oscillation Noise Tolerance Analysis"
+title: "RFIsher: Baryon Acoustic Oscillation Noise Tolerance Analysis"
 authors:
   - family-names: "Gormley"
     given-names: "Dylan"
     affiliation: "WVU Radio Astronomy Instrumentation Lab"
 version: "1.0.0"
 date-released: "2026-08-16"
-repository-code: "https://github.com/WVURAIL/bao-noise-tolerance"
+repository-code: "https://github.com/WVURAIL/RFIsher"
 license: "MIT"

@@ -1,4 +1,4 @@
-# bao-noise-tolerance
+# RFIsher
 
 **How much observing time does RFI masking cost a 21 cm BAO survey?**
 A general framework + tool: feed it per-channel masked-time fractions, get
@@ -17,6 +17,24 @@ api.required_time(fc, mask, target=5.0)           # survey-level 5-sigma BAO
 api.required_time(fc, mask, target=5.0, zbin=6)   # worst bin (z=1.40-1.50)
 api.significance(fc, 2.0, mask)                   # sigma after 2 on-sky yr
 api.tolerance_curve(fc, band=scenarios.DTV_BAND)  # years-to-target vs masking
+```
+
+(The repository was renamed from bao-noise-tolerance; the import name stays
+`baonoise` at v1.x, because each shipped bank's source manifest hashes
+`src/baonoise/*.py` and a package rename would invalidate those fingerprints.)
+
+The ATSC channel dict is only a convenience adapter. Any telescope-band
+contaminant expressible as a (band, masked fraction, residual) triple
+evaluates the same way, and continuous bands mix freely with per-channel
+masks — say a 5G n71-style downlink at 617–652 MHz masked 15% of the time:
+
+```python
+n71 = scenarios.FrequencyBand("5g_n71_downlink", 617.0, 652.0)
+sc = scenarios.Scenario("n71", "ATSC + 5G n71 downlink",
+                        fractions={17: 0.33, 31: 0.24},
+                        frequency_fractions={n71: 0.15})
+api.required_time(fc, sc, target=5.0)
+api.significance(fc, 2.0, sc)
 ```
 
 `examples/minimal_example.py` runs this end-to-end (~2 s). Banks must use the
@@ -59,6 +77,12 @@ the survey barely notices.
    every requested observing time can be evaluated instantly from the bank
    by rescaling each bin's effective time and volume. Elements are
    interpolated as F(t)/t² in log t (exact in the noise-dominated limit).
+   The schema, not RadioFisher, is the interface: any builder that writes a
+   strict-v2 bank (F, t_grid, zs, zc, paramnames, meta) under the
+   precondition that noise enters the Fisher integrand only as
+   P_N ∝ 1/t_eff and that bin information scales linearly with surviving
+   bandwidth evaluates identically through this package. RadioFisher is the
+   shipped builder, not a requirement of the contract.
 
 2. **Masking → per-bin factors.** A channel masked a fraction *f* of the
    time keeps t_eff = t·(1−f) of its integration; its noise power grows by
@@ -192,8 +216,8 @@ Figures produced in `out/`:
 ## Usage
 
 ```bash
-git clone https://github.com/WVURAIL/bao-noise-tolerance
-cd bao-noise-tolerance
+git clone https://github.com/WVURAIL/RFIsher
+cd RFIsher
 pip install -e ".[test]"        # numpy, scipy, matplotlib, pytest
 
 # The shipped CHIME bank and masking rates work without RadioFisher.

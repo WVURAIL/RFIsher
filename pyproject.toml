@@ -3,9 +3,12 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
+# The repository is RFIsher; the distribution/import name stays 'baonoise' at
+# v1.x because the shipped banks' source manifests hash src/baonoise/*.py, so
+# renaming the package would invalidate every committed bank fingerprint.
 name = "baonoise"
 version = "1.0.0"
-description = "RFI-masking noise-tolerance forecasts for 21cm BAO detection with RadioFisher + pilot-proxy"
+description = "RFIsher: RFI-masking noise-tolerance forecasts for 21cm BAO detection with RadioFisher + pilot-proxy (import name: baonoise)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
