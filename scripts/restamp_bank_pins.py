@@ -9,7 +9,15 @@ dict entry's anchor rather than the old hash value, so it works from any
 starting state. ``--check`` verifies the current pins against the current
 files and changes nothing.
 
-    python scripts/restamp_bank_pins.py [--check]
+A byte pin certifies identity, not freshness: re-signing whatever bytes
+sit at the bank paths would happily bless a bank built from an outdated
+source tree. Before touching the pins, each bank's recorded baonoise and
+RadioFisher ``working_tree_sha256`` is therefore compared against the
+current checkouts, and the script refuses on any mismatch (or if no
+RadioFisher checkout is discoverable). ``--allow-stale-provenance``
+proceeds anyway, printing every mismatch.
+
+    python scripts/restamp_bank_pins.py [--check] [--allow-stale-provenance]
 """
 from __future__ import annotations
 
@@ -39,11 +47,69 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def stale_provenance() -> list[str]:
+    """Compare each bank's recorded source trees against the checkouts.
+
+    Uses the same digests the tests enforce: ``fisherbank._git_state`` over
+    the release source manifests, with the RadioFisher checkout discovered
+    exactly as ``find_radiofisher_dir`` does (env RADIOFISHER_DIR overrides).
+    A missing checkout is a hard error, not a skipped check.
+    """
+    from baonoise import fisherbank
+    from baonoise.compat import find_radiofisher_dir
+
+    try:
+        radiofisher_root = find_radiofisher_dir()
+    except FileNotFoundError as exc:
+        sys.exit(
+            "cannot verify bank provenance: no RadioFisher checkout found\n"
+            f"  ({exc})\n"
+            "Set RADIOFISHER_DIR to the checkout the banks were built from; "
+            "the provenance gate is never skipped silently.")
+
+    current = {
+        "baonoise": fisherbank._git_state(
+            ROOT, **fisherbank.BAONOISE_SOURCE_MANIFEST)
+            ["working_tree_sha256"],
+        "radiofisher": fisherbank._git_state(
+            radiofisher_root, **fisherbank.RADIOFISHER_SOURCE_MANIFEST)
+            ["working_tree_sha256"],
+    }
+    mismatches = []
+    for rel in BANKS.values():
+        provenance = fisherbank.FisherBank(ROOT / rel).meta["provenance"]
+        for link, current_digest in current.items():
+            recorded = provenance[link]["working_tree_sha256"]
+            if recorded != current_digest:
+                mismatches.append(
+                    f"{Path(rel).name}: stale {link} provenance\n"
+                    f"  recorded {recorded}\n"
+                    f"  current  {current_digest}")
+    return mismatches
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true",
                     help="verify pins against the bank files; write nothing")
+    ap.add_argument("--allow-stale-provenance", action="store_true",
+                    help="re-pin even when a bank's recorded source trees do "
+                         "not match the current checkouts (printed loudly)")
     args = ap.parse_args(argv)
+
+    mismatches = stale_provenance()
+    for message in mismatches:
+        print(message)
+    if mismatches and not args.check:
+        if args.allow_stale_provenance:
+            print("WARNING: re-pinning despite stale provenance "
+                  "(--allow-stale-provenance)")
+        else:
+            sys.exit(
+                "refusing to re-pin: the banks above record source trees "
+                "that do not match the current checkouts. Rebuild via "
+                "scripts/rebuild_shipped_banks.sh, or pass "
+                "--allow-stale-provenance to re-sign them anyway.")
 
     text = TESTS.read_text(encoding="utf-8")
     stale = 0
@@ -67,8 +133,9 @@ def main(argv=None) -> int:
                                text, count=1)
             print(f"{name}: re-pinned\n  {old} -> {new}")
     if args.check:
+        print("provenance", "STALE" if mismatches else "OK")
         print("pins", "STALE" if stale else "OK")
-        return 1 if stale else 0
+        return 1 if stale or mismatches else 0
     if stale:
         TESTS.write_text(text, encoding="utf-8")
         print(f"updated {stale} pin(s) in {TESTS}")

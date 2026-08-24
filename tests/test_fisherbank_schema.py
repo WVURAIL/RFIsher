@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from baonoise import api, fisherbank
+from baonoise import api, fisherbank, pkcache
 from baonoise.fisherbank import (ARTIFACT_BIAS_RESPONSE, ARTIFACT_FORECAST,
                                  BANK_SCHEMA_VERSION, FisherBank)
 from baonoise.forecast import Forecast
@@ -23,6 +23,12 @@ def _write_bank(path, *, kind=ARTIFACT_FORECAST,
         zs=np.array([0.8, 0.9]), zc=np.array([0.85]),
         paramnames=np.asarray(names))
     digest = "a" * 64
+    # Loading verifies the cosmology fingerprint against the recorded
+    # parameters, so a synthetic bank must record the genuine digest.
+    parameters = {
+        "h": 0.6732, "ns": 0.96605, "sigma_8": 0.812,
+        "N_eff": 3.046, "mnu": 0.06,
+        "ombh2": 0.022383, "omch2": 0.120092, "omnuh2": 0.000645}
     meta = {
             "schema_version": BANK_SCHEMA_VERSION,
             "artifact_kind": kind, "config": "chime2022",
@@ -50,12 +56,9 @@ def _write_bank(path, *, kind=ARTIFACT_FORECAST,
                         key: list(value) for key, value in
                         fisherbank.RADIOFISHER_SOURCE_MANIFEST.items()}},
                 "cosmology": {
-                    "name": "planck2018", "sha256": digest,
-                    "parameters": {
-                        "h": 0.6732, "ns": 0.96605, "sigma_8": 0.812,
-                        "N_eff": 3.046, "mnu": 0.06,
-                        "ombh2": 0.022383, "omch2": 0.120092,
-                        "omnuh2": 0.000645},
+                    "name": "planck2018",
+                    "sha256": pkcache.cosmology_fingerprint(parameters),
+                    "parameters": parameters,
                     "astrophysical_model_profile": "chime_overview_2022",
                     "astrophysical_models": {
                         "Tb_model": "hall", "bias_HI_model": "castorina",
@@ -229,6 +232,44 @@ def test_bias_response_requires_pres_backend_capability(tmp_path):
         names=("A", "_Pres"), mutate=mutate)
     with pytest.raises(ValueError, match="P_res"):
         FisherBank(path)
+
+
+@pytest.mark.parametrize("cosmology", ["planck2018", "pact2025"])
+def test_shipped_banks_pass_cosmology_fingerprint_verification(cosmology):
+    from baonoise.resources import bank_file
+
+    bank = FisherBank(bank_file(cosmology))
+    recorded = bank.meta["provenance"]["cosmology"]
+    assert recorded["sha256"] \
+        == pkcache.cosmology_fingerprint(recorded["parameters"])
+
+
+def test_tampered_cosmology_parameter_is_rejected(tmp_path):
+    """A recorded fingerprint that disagrees with its own recorded parameters
+    means one of the two was edited after the build; neither can be trusted
+    to describe the matrices."""
+    def mutate(_arrays, meta):
+        meta["provenance"]["cosmology"]["parameters"]["omch2"] = 0.13
+
+    path = _write_bank(tmp_path / "tampered.npz", mutate=mutate)
+    with pytest.raises(ValueError,
+                       match="recomputed from its own recorded parameters"):
+        FisherBank(path)
+
+
+def test_above_grid_evaluation_clamps_with_a_warning(tmp_path):
+    """F() at times above the grid returns the grid-top matrix; that ceiling
+    is imposed by the bank, not the physics, and must not be silent."""
+    bank = FisherBank(_write_bank(tmp_path / "bank.npz"))
+    with pytest.warns(RuntimeWarning, match="above the bank grid"):
+        clamped = bank.F(0, 16.0)
+    assert np.allclose(clamped, bank.F(0, 8.0))
+    # One warning per bank instance is enough to make the clamp auditable.
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        bank.F(0, 32.0)
 
 
 @pytest.mark.parametrize("field", ["F", "t_grid", "zs", "zc", "paramnames"])

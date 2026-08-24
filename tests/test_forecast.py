@@ -14,6 +14,7 @@ class _Bank:
         self.matrix = np.asarray(matrix, dtype=float)
         self.paramnames = list(names)
         self.zs = np.array([0.8, 0.9])
+        self.t_grid = np.array([1.0, 1e6])
         self.nbins = 1
         self.artifact_kind = "forecast"
 
@@ -355,6 +356,46 @@ def test_satisfied_lower_endpoint_wins_even_if_upper_endpoint_fails():
         nonmonotonic_endpoint_metric(t)
     assert fc.required_hours(SCENARIO, target=1.0) == 10.0
     assert fc.required_hours_metric(nonmonotonic_endpoint_metric, 1.0) == 10.0
+
+
+def test_required_hours_returns_the_first_crossing_of_a_dipping_curve():
+    """PCHIP monotonicity holds for the banked G = F/t^2, not for F = G t^2:
+    in the CV-saturated top of the grid S(t) can dip back through an already
+    reached target, giving three crossings. The answer to "how long until
+    the requirement is met" is the first one, not whichever crossing brentq's
+    bisection happens to straddle."""
+    fc = _forecast([[1.0]], names=("A",))
+    target = 120.5
+    # Piecewise linear in log10(t): rises through the target, peaks at
+    # 121.5, dips to 118.5 (second and third crossings), then recovers.
+    def dipping_significance(t_hours):
+        return float(np.interp(np.log10(t_hours),
+                               [1.0, 4.0, 4.8, 6.0],
+                               [100.0, 121.5, 118.5, 123.7]))
+
+    first_logt = 1.0 + 3.0 * (target - 100.0) / (121.5 - 100.0)
+    fc.significance = lambda _scenario, t, bins=None: dipping_significance(t)
+    assert fc.required_hours(SCENARIO, target=target) \
+        == pytest.approx(10.0 ** first_logt, rel=1e-6)
+    assert fc.required_hours_metric(dipping_significance, target) \
+        == pytest.approx(10.0 ** first_logt, rel=1e-6)
+
+
+def test_shipped_bank_required_hours_is_unchanged_where_monotone():
+    """The first-crossing scan must reproduce the plain bracketed root
+    wherever the significance curve crosses the target only once."""
+    from scipy.optimize import brentq
+
+    from baonoise.fisherbank import FisherBank
+    from baonoise.resources import DEFAULT_BANK
+    from baonoise.scenarios import clean
+
+    fc = Forecast(FisherBank(DEFAULT_BANK), style="perbin_A")
+    scenario = clean()
+    got = fc.required_hours(scenario, target=5.0)
+    f = lambda logt: fc.significance(scenario, 10.0 ** logt) - 5.0
+    reference = 10.0 ** brentq(f, np.log10(10.0), 6.0, xtol=1e-10)
+    assert got == pytest.approx(reference, rel=1e-9)
 
 
 def test_significance_curve_rejects_invalid_times():

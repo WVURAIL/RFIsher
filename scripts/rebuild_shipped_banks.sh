@@ -51,9 +51,25 @@ cp "$WORK/fisher_bank_chime2022_pact2025.npz" src/baonoise/data/
 cp "$WORK/fisher_bank_bull2015_planck2013_epsfg1e-6.npz" data/
 cp "$WORK/fisher_bank_bull2015_planck2013_epsfg1e-5.npz" data/
 python scripts/fg_sensitivity.py
+
+# Verify before re-signing anything: a pin must certify banks that already
+# passed the physics gates, not whatever bytes the build produced. set -e
+# aborts the re-stamp on any failure below.
+python scripts/verify_bank.py --bank src/baonoise/data/fisher_bank_chime2022.npz
+python scripts/verify_bank.py --bank src/baonoise/data/fisher_bank_chime2022_pact2025.npz
+# The byte pins still describe the pre-rebuild banks here, so the two
+# byte-pin tests are deselected and run again after the re-stamp below;
+# everything else (provenance vs the live source trees, direct-backend
+# agreement) must pass first.
+python -m pytest tests/test_resources.py -q \
+  --deselect tests/test_resources.py::test_packaged_data_bytes_are_unchanged \
+  --deselect tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_1_0_builds
+
 python scripts/restamp_bank_pins.py
 python scripts/check_paper_numbers.py
-echo "ALL SHIPPED BANKS REBUILT AND RE-PINNED (workdir: $WORK)"
+python -m pytest -q \
+  tests/test_resources.py::test_packaged_data_bytes_are_unchanged \
+  tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_1_0_builds
+echo "ALL SHIPPED BANKS REBUILT, VERIFIED, AND RE-PINNED (workdir: $WORK)"
 echo "foreground_sensitivity.csv regenerated and paper-number gate passed."
-echo "Now: python scripts/verify_bank.py && python -m pytest tests/ -q,"
-echo "then commit banks + pins together as the re-stamp commit."
+echo "Now: commit banks + pins together as the re-stamp commit."

@@ -83,6 +83,34 @@ def test_duty_cycle_is_what_separates_the_two_regimes():
     assert caught[0.95] < 0.1                 # majority: absorbed into baseline
 
 
+@pytest.mark.parametrize("M,N", [(8, 1), (16, 2)])
+def test_sk_sigma_matches_the_exact_null_variance(M, N):
+    """Nita & Gary (2010): Var = 2 M^2 N (N+1) / ((M-1)(MN+2)(MN+3)).
+
+    At these accumulation counts the large-N shortcut (M*N treated as one
+    accumulation) sits well below the exact value, so this pins the exact
+    expression rather than the limit.
+    """
+    exact = np.sqrt(2.0 * M**2 * N * (N + 1)
+                    / ((M - 1) * (M * N + 2) * (M * N + 3)))
+    assert incumbent.sk_sigma(M, N) == pytest.approx(exact, rel=1e-12)
+    nm = M * N
+    shortcut = np.sqrt(2.0 * nm * (nm + 1) / ((M - 1) * (nm + 2) * (nm + 3)))
+    assert incumbent.sk_sigma(M, N) > shortcut
+
+
+def test_sk_sigma_large_n_limit_matches_the_old_shortcut():
+    """The calibrated path runs at large effective n_accum, where the exact
+    expression and the old shortcut agree to O(1/N), so calibrated behavior
+    is unchanged."""
+    M, N = 8, 1e6
+    nm = M * N
+    shortcut = np.sqrt(2.0 * nm * (nm + 1) / ((M - 1) * (nm + 2) * (nm + 3)))
+    assert incumbent.sk_sigma(M, N) == pytest.approx(shortcut, rel=1e-5)
+    assert incumbent.sk_sigma(M, N) == pytest.approx(np.sqrt(2.0 / (M - 1)),
+                                                    rel=1e-5)
+
+
 def test_sk_null_calibration_centers_the_statistic():
     power, unit = synth(rel_sigma=5e-4, seed=5)
     n_accum = incumbent.calibrate_sk_null(power, unit, min_frames=8)

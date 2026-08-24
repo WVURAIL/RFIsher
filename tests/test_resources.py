@@ -181,12 +181,15 @@ def test_named_banks_are_distinct_matched_1_0_builds():
         radio_digests.add(
             provenance["radiofisher"]["working_tree_sha256"])
     assert radio_digests == {EXPECTED_RADIOFISHER_SOURCE_SHA256}
-    if radiofisher_root is not None:
-        current_radio_digest = fisherbank._git_state(
-            radiofisher_root,
-            **fisherbank.RADIOFISHER_SOURCE_MANIFEST,
-        )["working_tree_sha256"]
-        assert current_radio_digest == EXPECTED_RADIOFISHER_SOURCE_SHA256
+    if radiofisher_root is None:
+        pytest.skip(
+            "RadioFisher code-tree cross-check needs a checkout; "
+            "set RADIOFISHER_DIR to run it")
+    current_radio_digest = fisherbank._git_state(
+        radiofisher_root,
+        **fisherbank.RADIOFISHER_SOURCE_MANIFEST,
+    )["working_tree_sha256"]
+    assert current_radio_digest == EXPECTED_RADIOFISHER_SOURCE_SHA256
 
 
 def test_packaged_pact_bank_matches_direct_backend_for_masked_bin():

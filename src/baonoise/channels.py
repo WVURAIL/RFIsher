@@ -1,6 +1,13 @@
 """ATSC DTV channel <-> 21cm frequency/redshift mapping, and ingestion of
 pilot-proxy masking statistics.
 
+This module is the ATSC / pilot-proxy ingestion adapter, not the package's
+model of frequency bands: its constants encode the one channel plan the
+vendored survey products and rate tables were recorded against, so those
+inputs can be mapped onto frequency and redshift. A forecast over arbitrary
+bands should build :class:`baonoise.scenarios.FrequencyBand` intervals
+directly rather than press these channel numbers into service.
+
 A masking fraction is only meaningful next to the rule that produced it, and
 the two sources here differ by up to 90x on the same channels:
 
@@ -33,6 +40,7 @@ import csv
 import datetime as dt
 import json
 import re
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -131,7 +139,17 @@ def _coarse_mask_rule(d) -> str:
 
 
 def channel_edges(ch: int) -> tuple[float, float]:
-    """Lower/upper frequency edge [MHz] of an ATSC UHF physical channel."""
+    """Lower/upper frequency edge [MHz] of an ATSC UHF physical channel.
+
+    Only channels 14-36 are accepted: the linear ``470 + 6*(ch - 14)`` map
+    holds nowhere else (VHF channels 2-13 sit in disjoint low bands, and
+    channels above 36 were cleared in the repack), so any other channel
+    number would be assigned a frequency no transmitter uses.
+    """
+    if ch not in ATSC_DTV_CHANNELS:
+        raise ValueError(
+            f"channel {ch} is not an ATSC UHF DTV channel; supported "
+            f"channels are {ATSC_DTV_CHANNELS[0]}-{ATSC_DTV_CHANNELS[-1]}")
     lo = ATSC_CH14_LOWER_EDGE + (ch - 14) * ATSC_WIDTH
     return lo, lo + ATSC_WIDTH
 
@@ -145,23 +163,42 @@ def channel_z_range(ch: int) -> tuple[float, float]:
 
 def measured_mask_fractions(rates_csv: str | Path = DEFAULT_RATES_CSV,
                             refused_fraction: float = REFUSED_FRACTION,
-                            rate_col: str = "hi_rate_all") -> dict[int, float]:
+                            rate_col: str = "hi_rate_all",
+                            weight_col: str = "n_valid_frames"
+                            ) -> dict[int, float]:
     """Exposure-weighted mean masking fraction per ATSC channel.
 
-    Weights each quarterly hi-rate by its n_valid_frames, then adds the
-    refused channels at ``refused_fraction``.
+    Weights each quarterly rate in ``rate_col`` by the exposure count in
+    ``weight_col``, then adds the refused channels at ``refused_fraction``.
+    The weight must count the frames the rate was computed over, so a custom
+    ``rate_col`` usually needs its matching weight column: ``hi_rate_all``
+    pairs with ``n_valid_frames`` (the default), ``hi_rate_frb`` with
+    ``n_frb_frames``. Rows whose rate or weight cell is empty (quarters in
+    which the survey recorded no frames of that kind) carry no exposure and
+    are skipped, with the skipped count reported as a :class:`UserWarning`.
     """
     num = defaultdict(float)
     den = defaultdict(float)
+    skipped = 0
     opener = getattr(rates_csv, "open", None)
     fh = (opener("r", encoding="utf-8", newline="") if opener is not None
           else open(rates_csv, encoding="utf-8", newline=""))
     with fh:
         for row in csv.DictReader(fh):
+            rate_text = (row[rate_col] or "").strip()
+            weight_text = (row[weight_col] or "").strip()
+            if not rate_text or not weight_text:
+                skipped += 1
+                continue
             ch = int(row["atsc_channel"])
-            n = float(row["n_valid_frames"])
-            num[ch] += n * float(row[rate_col])
+            n = float(weight_text)
+            num[ch] += n * float(rate_text)
             den[ch] += n
+    if skipped:
+        warnings.warn(
+            f"skipped {skipped} row(s) of {_source_name(rates_csv)} with an "
+            f"empty {rate_col!r} or {weight_col!r} cell",
+            stacklevel=2)
     fractions = {ch: num[ch] / den[ch] for ch in num if den[ch] > 0}
     for ch in REFUSED_CHANNELS:
         fractions[ch] = refused_fraction
@@ -425,14 +462,18 @@ def mask_table_from_products(paths, refused_channels=REFUSED_CHANNELS,
 
 def measured_mask_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
                         refused_fraction: float = REFUSED_FRACTION,
-                        rate_col: str = "hi_rate_all") -> MaskTable:
+                        rate_col: str = "hi_rate_all",
+                        weight_col: str = "n_valid_frames") -> MaskTable:
     """The vendored quarterly CSV, wrapped so its provenance and limits show.
 
     The rule and epoch are those of the shipped
     ``survey_quarterly_rates_all23.csv``; a caller passing another CSV with the
     same column layout inherits the same labels and should override them.
+    A custom ``rate_col`` usually needs its matching ``weight_col``; see
+    :func:`measured_mask_fractions`.
     """
-    fr = measured_mask_fractions(rates_csv, refused_fraction, rate_col)
+    fr = measured_mask_fractions(rates_csv, refused_fraction, rate_col,
+                                 weight_col)
     return MaskTable(
         fractions=fr, source="csv", rule=LEGACY_CSV_RULE,
         epoch=LEGACY_CSV_EPOCH, occupancy_valid=False,
@@ -447,11 +488,24 @@ def measured_mask_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
 def merge_mask_tables(*tables: MaskTable) -> MaskTable:
     """Refuse to merge tables from different detectors. There is no valid
     merge: a forecast half from one stage and half from another is not a
-    forecast of anything."""
+    forecast of anything. The rule, epoch, and detector version must all
+    agree and are kept in the result rather than reset to trusting defaults;
+    the merge is occupancy-valid only if every input is, and differing
+    windows are joined into one description so a mixed-window merge stays
+    visible instead of claiming the full span."""
     rules = {t.rule for t in tables}
     if len(rules) > 1:
         raise ValueError(f"cannot merge tables built under different rules: "
                          f"{sorted(rules)}")
+    epochs = {t.epoch for t in tables}
+    if len(epochs) > 1:
+        raise ValueError(f"cannot merge tables from different detector "
+                         f"epochs: {sorted(epochs)}")
+    versions = {t.detector_version for t in tables}
+    if len(versions) > 1:
+        raise ValueError(f"cannot merge tables from different detector "
+                         f"versions: {sorted(versions)}")
+    windows = sorted({t.window for t in tables})
     out, n = {}, {}
     for t in tables:
         out.update(t.fractions)
@@ -459,7 +513,12 @@ def merge_mask_tables(*tables: MaskTable) -> MaskTable:
     return MaskTable(fractions=dict(sorted(out.items())),
                      source="+".join(sorted({t.source for t in tables})),
                      rule=rules.pop(), n_frames=n,
-                     notes=[m for t in tables for m in t.notes])
+                     notes=[m for t in tables for m in t.notes],
+                     window=(windows[0] if len(windows) == 1
+                             else " + ".join(windows)),
+                     epoch=epochs.pop(),
+                     detector_version=versions.pop(),
+                     occupancy_valid=all(t.occupancy_valid for t in tables))
 
 
 def compare_mask_tables(a: MaskTable, b: MaskTable) -> list[tuple]:

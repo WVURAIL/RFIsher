@@ -110,9 +110,20 @@ def spectral_kurtosis(p: np.ndarray, n_accum: float) -> float:
 
 
 def sk_sigma(M: int, n_accum: float) -> float:
-    """Standard deviation of SK under the Gaussian null, mean 1."""
-    nm = n_accum * M
-    return float(np.sqrt((2 * nm * (nm + 1)) / ((M - 1) * (nm + 2) * (nm + 3))))
+    """Standard deviation of SK under the Gaussian null, mean 1.
+
+    The exact Nita & Gary (2010) null variance for the generalised estimator,
+    ``2 M^2 N (N+1) / ((M-1)(MN+2)(MN+3))`` with ``N = n_accum`` raw spectra
+    behind each of the ``M`` power estimates. For large ``N`` this tends to
+    the same ``2/(M-1)`` as the large-accumulation shortcut that treats
+    ``M*N`` as a single accumulation count, but at the small ``N`` this
+    archive forces the shortcut understates the scatter (M=8, N=1: 0.43
+    against the exact 0.58), which would flag at a tighter threshold than the
+    nominal nsigma.
+    """
+    N = float(n_accum)
+    return float(np.sqrt((2.0 * M * M * N * (N + 1.0))
+                         / ((M - 1) * (M * N + 2.0) * (M * N + 3.0))))
 
 
 def calibrate_sk_null(power, unit, min_frames: int = 8) -> float:

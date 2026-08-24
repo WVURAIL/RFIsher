@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from baonoise import cli, scenarios
+from baonoise import cli, scenarios, survey
 
 
 @pytest.mark.parametrize(
@@ -170,6 +170,9 @@ def test_forecast_cli_defaults_to_planck_and_dtv(monkeypatch, capsys):
 
     assert seen["cosmology"] == "planck2018"
     assert seen["band"] is scenarios.DTV_BAND
+    # The Overview on-sky normalization (1 yr = 8,760 on-sky hours) is the
+    # convention every quoted time in this repository uses.
+    assert seen["hours_per_year"] == survey.OVERVIEW_ONSKY_YEAR_HOURS
     assert json.loads(capsys.readouterr().out) == {"hours": 1.0}
 
 

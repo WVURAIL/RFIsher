@@ -9,8 +9,18 @@ so a one-off bank of F(z_bin, ttot) covers every scenario and every requested
 observing time.
 
 In the deep noise-dominated limit every Fisher element scales as ttot^2 (each
-dP/dtheta term carries one power of P_S/P_N); the bank interpolates elements
-with monotone splines in log(ttot) and uses the t^2 law below the grid.
+dP/dtheta term carries one power of P_S/P_N); the bank interpolates the
+banked shape function G = F/ttot^2 with monotone splines in log(ttot) and
+uses the t^2 law below the grid. Monotone G does not make the reconstructed
+F = G * ttot^2 monotone: in the CV-saturated top of the grid the interpolated
+F can dip, so a significance target can be crossed more than once there, and
+the time-to-target root find is defined as the *first* crossing.
+
+The bank schema, not the backend, is the interface: any builder producing
+(F, t_grid, zs, zc, paramnames, meta) under the precondition above -- noise
+enters the Fisher integrand only through P_N proportional to 1/t_eff, and a
+bin's information scales linearly with its surviving bandwidth -- evaluates
+identically through this module.
 """
 from __future__ import annotations
 
@@ -24,6 +34,7 @@ import multiprocessing as mp
 import os
 import subprocess
 import time
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -724,6 +735,21 @@ def _normalise_metadata(meta: dict, paramnames: list[str]) -> dict:
            or not np.isfinite(parameters[key])
            for key in COSMOLOGY_PARAMETER_KEYS):
         raise ValueError("v2 bank cosmology parameters must be finite numbers")
+    # The cosmology fingerprint is recomputable from the recorded parameters
+    # alone, so a record edited after the build is detectable offline. Reject
+    # the mismatch outright: nothing downstream can tell which of the two
+    # records described the matrices.
+    try:
+        recomputed_fingerprint = pkcache.cosmology_fingerprint(parameters)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "v2 bank cosmology parameters do not resolve to a valid "
+            f"cosmology: {exc}") from exc
+    if recomputed_fingerprint != provenance["cosmology"]["sha256"]:
+        raise ValueError(
+            "v2 bank cosmology sha256 does not match the fingerprint "
+            "recomputed from its own recorded parameters; the cosmology "
+            "record was altered after the build")
     if not isinstance(provenance["experiment"]["settings"], dict):
         raise ValueError("v2 bank experiment settings must be an object")
     return out
@@ -782,6 +808,7 @@ class FisherBank:
             for i in range(nbins)
         ]
         self.npar = npar
+        self._warned_above_grid = False
 
     def require_artifact_kind(self, expected: str) -> None:
         """Reject accidental use of a response/bias bank as a forecast bank."""
@@ -806,6 +833,17 @@ class FisherBank:
             # deep noise-dominated limit: F scales as t^2
             return self.F_grid[ibin, 0] * (t_hours / tmin) ** 2
         if t_hours > tmax:
+            # Above the grid the bank has no information; the CV-saturated
+            # value at the grid top is the best available estimate, but a
+            # silently flat F would let a significance curve saturate without
+            # any sign that the grid, not the physics, imposed the ceiling.
+            if not self._warned_above_grid:
+                warnings.warn(
+                    f"integration time {t_hours:g} h is above the bank grid; "
+                    f"evaluating at the grid top {tmax:g} h instead. "
+                    "Rebuild the bank with a taller t_grid to evaluate "
+                    "beyond it.", RuntimeWarning, stacklevel=2)
+                self._warned_above_grid = True
             t_hours = tmax
         vec = self._interps[ibin](np.log10(t_hours))
         return vec.reshape(self.npar, self.npar) * t_hours**2

@@ -7,9 +7,13 @@ synthetic feed layout matching the RadioFisher CHIME spec used in
 Bull, Ferreira, Patel & Santos (2015): 5 cylinders x 256 feeds, 20 m wide,
 80 m instrumented length.
 
-Processing recipe replicated exactly from process_chime_baselines.py:
+Processing recipe following process_chime_baselines.py, except for the
+short-baseline cut:
   * u = d / lambda at nu = 800 MHz
-  * cut baselines with d <= Dcut = Ddish = 20 m  (the 'nx_CHIME_800.dat' case)
+  * cut baselines with d <= Dcut = Ddish = 20 m  -- the Bull (2015)
+    synthetic-layout cut, so the tables written here have zero density below
+    20 m; the as-built 'nx_CHIME_800.dat' table is built with no cut
+    (Dcut = 0) in process_chime_baselines.py
   * ring histogram with du = (1/30) / sqrt(FOV),
     FOV = 180deg * 1.22 * (lambda/D) * (pi/180)^2   [cylinder strip beam]
   * n(u) = counts / (2 pi u du), no renormalisation, no small-u averaging

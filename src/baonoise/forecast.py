@@ -230,25 +230,48 @@ class Forecast:
         return np.array([self.significance(scenario, t) for t in times])
 
     # ------------------------------------------------------------------
+    def _first_crossing_hours(self, f, t_lo: float, t_hi: float) -> float:
+        """Smallest t in [t_lo, t_hi] with f(log10 t) >= 0, or inf.
+
+        The bank interpolates the shape function G = F/t^2 monotonically, but
+        the reconstructed F = G t^2 need not be monotone where the grid
+        saturates against cosmic variance, so a target can be crossed more
+        than once. brentq over the full bracket converges to whichever
+        crossing its bisection steps happen to straddle; the answer to "how
+        long until the requirement is met" is the earliest one. Scan the bank
+        grid knots for the first bracket containing a crossing (without
+        assuming the knot values themselves are monotone), refine it on a
+        fine log grid, and only then hand brentq a single-crossing bracket.
+        """
+        lo, hi = np.log10(t_lo), np.log10(t_hi)
+        if f(lo) >= 0.0:
+            return t_lo
+        knots = np.log10(self.bank.t_grid)
+        edges = np.concatenate(
+            ([lo], knots[(knots > lo) & (knots < hi)], [hi]))
+        for left, right in zip(edges[:-1], edges[1:]):
+            if f(right) < 0.0:
+                continue
+            fine = np.linspace(left, right, 64)
+            for a, b in zip(fine[:-1], fine[1:]):
+                if f(b) >= 0.0:
+                    return float(10.0 ** brentq(f, a, b, xtol=1e-10))
+        return np.inf
+
     def required_hours(self, scenario: Scenario, target: float = 5.0,
                        t_lo: float = 10.0, t_hi: float = 1e6) -> float:
-        """Total on-sky hours needed for significance >= target (inf if the
-        target is unreachable within t_hi hours)."""
+        """Total on-sky hours until significance first reaches the target
+        (inf if it never does within t_hi hours). Defined as the first
+        crossing: the interpolated significance need not be monotone in the
+        CV-saturated top of the bank grid."""
         target = _positive_finite_scalar(target, "target")
         t_lo, t_hi = _time_bracket(t_lo, t_hi)
         f = lambda logt: self.significance(scenario, 10.0 ** logt) - target
-        if f(np.log10(t_lo)) >= 0.0:
-            return t_lo
-        if f(np.log10(t_hi)) < 0.0:
-            return np.inf
-        # General first-crossing detection for nonmonotonic curves is a
-        # separate concern; brentq retains the established bracket behavior.
-        logt = brentq(f, np.log10(t_lo), np.log10(t_hi), xtol=1e-4)
-        return float(10.0 ** logt)
+        return self._first_crossing_hours(f, t_lo, t_hi)
 
     def required_years(self, scenario: Scenario, target: float = 5.0,
                        duty: float = 1.0,
-                       hours_per_year: float = survey.MEAN_CALENDAR_YEAR_HOURS) -> float:
+                       hours_per_year: float = survey.OVERVIEW_ONSKY_YEAR_HOURS) -> float:
         duty = _positive_finite_scalar(duty, "duty")
         hours_per_year = _positive_finite_scalar(
             hours_per_year, "hours_per_year")
@@ -388,7 +411,8 @@ class Forecast:
     def required_hours_metric(self, metric_fn, threshold: float,
                               decreasing: bool = False, t_lo: float = 10.0,
                               t_hi: float = 1e6) -> float:
-        """Smallest t with metric_fn(t) >= threshold (or <= if decreasing)."""
+        """Smallest t with metric_fn(t) >= threshold (or <= if decreasing),
+        taken as the first crossing when the metric is non-monotone."""
         threshold = _finite_scalar(threshold, "threshold")
         t_lo, t_hi = _time_bracket(t_lo, t_hi)
         sign = -1.0 if decreasing else 1.0
@@ -399,14 +423,7 @@ class Forecast:
                 raise ValueError("metric_fn must return a scalar that is not NaN")
             return sign * (value - threshold)
 
-        if f(np.log10(t_lo)) >= 0.0:
-            return t_lo
-        if f(np.log10(t_hi)) < 0.0:
-            return np.inf
-        # General first-crossing detection for nonmonotonic curves is a
-        # separate concern; brentq retains the established bracket behavior.
-        logt = brentq(f, np.log10(t_lo), np.log10(t_hi), xtol=1e-4)
-        return float(10.0 ** logt)
+        return self._first_crossing_hours(f, t_lo, t_hi)
 
     # ------------------------------------------------------------------
     def sigma_dv_bin(self, scenario: Scenario, t_hours: float,

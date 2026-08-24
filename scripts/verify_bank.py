@@ -11,7 +11,7 @@ Checks:
    the cosmic-variance limit.
 3. Magnitudes: per-cent-level distance errors, tens-of-sigma BAO.
 4. Scenario ordering: clean >= excised >= kept(fourier).
-5. In-fork RFI hooks vs the bank-rescaling path (must agree).
+5. In-fork RFI hooks vs the bank-rescaling path (must agree to <0.2%).
 """
 import argparse
 import contextlib
@@ -136,7 +136,9 @@ for name, sc, bins in cases:
     sA_hook = fc.sigma_A_direct(sc, 1e4, bins=bins, cosmo=cosmo,
                                 cosmo_fns=cosmo_fns, rf_dir=rf_dir)
     rel = abs(sA_hook / sA_bank - 1.0)
-    flag = "PASS" if rel < 0.015 else "FAIL"
+    # The documented claim is <0.2% sigma_A agreement between the two
+    # paths; both shipped banks measure <=0.13%, so the gate has headroom.
+    flag = "PASS" if rel < 0.002 else "FAIL"
     ok &= flag == "PASS"
     print(f"  {name:22s} sigma_A bank={sA_bank:.5f} hook={sA_hook:.5f} "
           f"rel diff={rel:.2e} [{flag}] ({time.time()-t0:.0f}s)")

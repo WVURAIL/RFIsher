@@ -369,8 +369,9 @@ Channel 30 (566-572 MHz, z = 1.48-1.51) is masked ~97% of the time. Options:
   requires x{ch30_mult:.0f} the integration time: if the survey needs T years,
   that slice needs {ch30_mult:.0f} T. Ten years of integration buys the depth of
   {120/ch30_mult:.1f} clean months. That is "never" for any practical purpose,
-  and under the Fourier-mode noise convention the surviving 97% of the
-  containing z-bin is dragged down with it (see ch30_kept_fourier rows).
+  and under the Fourier-mode noise convention the surviving
+  {100*ch30_volume:.0f}% of the containing z-bin is dragged down with it
+  (see ch30_kept_fourier rows).
 * **Excise it** (what the forecast prices by default): costs the overlapped
   bandwidth, a {100*(1-ch30_volume):.0f}% volume hit to the z={ib_z_label} bin, a
   {100*(next(r for r in rows if r['scenario']=='ch30_excised')['time_penalty_vs_clean']-1):.1f}%

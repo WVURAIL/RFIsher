@@ -32,8 +32,10 @@ def forecast_main(argv=None) -> int:
     parser.add_argument("--duty", type=float, default=1.0)
     parser.add_argument(
         "--hours-per-year", type=float,
-        default=survey.MEAN_CALENDAR_YEAR_HOURS,
-        help="8766 for mean calendar years; 8760 for Overview on-sky years")
+        default=survey.OVERVIEW_ONSKY_YEAR_HOURS,
+        help="8760 for Overview on-sky years (default, the convention every "
+             "quoted time in this repository uses); 8766 for mean calendar "
+             "years")
     args = parser.parse_args(argv)
     bank = (args.bank if args.bank is not None
             else resources.bank_file(args.cosmology or "planck2018"))

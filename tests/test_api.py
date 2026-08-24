@@ -1,11 +1,17 @@
 """Validation tests for the high-level public API wrappers."""
+import warnings
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from baonoise import api, compat, scenarios
+from baonoise import api, compat, scenarios, survey
 from baonoise.fisherbank import ARTIFACT_FORECAST
+
+
+@pytest.fixture(scope="module")
+def banked_forecast():
+    return api.load()
 
 
 class _NoForecastWork:
@@ -176,8 +182,73 @@ def test_scenario_passthrough_refuses_overrides():
         api.scenario_from(sc, uniform=0.5)
 
 
-def test_required_time_accepts_a_scenario():
-    fc = api.load()
-    out = api.required_time(fc, mask=scenarios.clean(), target=5.0)
+def test_required_time_accepts_a_scenario(banked_forecast):
+    out = api.required_time(banked_forecast, mask=scenarios.clean(), target=5.0)
     assert np.isfinite(out["hours"])
     assert out["penalty_vs_clean"] == pytest.approx(1.0)
+
+
+def test_quoted_years_default_to_overview_onsky_normalization(banked_forecast):
+    """Every quoted time in the repository uses the Overview convention
+    (1 yr = 8,760 on-sky hours); the API defaults must match it."""
+    out = api.required_time(banked_forecast, mask=scenarios.clean())
+    assert out["hours_per_year"] == survey.OVERVIEW_ONSKY_YEAR_HOURS
+    assert out["years"] == pytest.approx(
+        out["hours"] / survey.OVERVIEW_ONSKY_YEAR_HOURS)
+
+
+def test_significance_defaults_to_overview_onsky_hours():
+    class Forecast:
+        def significance(self, scenario, hours, bins=None):
+            assert hours == pytest.approx(survey.OVERVIEW_ONSKY_YEAR_HOURS)
+            return 3.0
+
+    assert api.significance(Forecast(), 1.0, uniform=0.0) == 3.0
+
+
+@pytest.mark.parametrize("zbin", [-1, 15, 100, 2.5, True])
+def test_required_time_rejects_out_of_range_zbin(banked_forecast, zbin):
+    with pytest.raises(ValueError, match="zbin"):
+        api.required_time(banked_forecast, uniform=0.0, zbin=zbin)
+
+
+@pytest.mark.parametrize("zbin", [-1, 15, True])
+def test_significance_rejects_out_of_range_zbin(banked_forecast, zbin):
+    with pytest.raises(ValueError, match="zbin"):
+        api.significance(banked_forecast, 1.0, uniform=0.0, zbin=zbin)
+
+
+def test_threshold_curve_rejects_out_of_range_zbin(banked_forecast):
+    with pytest.raises(ValueError, match="zbin"):
+        api.threshold_curve(
+            banked_forecast, {0.5: {30: (0.5, 0.0)}}, zbin=15)
+
+
+def test_disjoint_band_warns_and_keeps_penalty_one(banked_forecast):
+    """A scenario entirely outside the bank's coverage legitimately costs
+    nothing, but the same answer comes from a units mistake; the warning
+    tells the two apart without changing the number."""
+    fm = scenarios.FrequencyBand("fm", 88.0, 108.0)
+    with pytest.warns(UserWarning, match=r"bands \['fm'\].*outside"):
+        out = api.required_time(banked_forecast, uniform=0.5, band=fm)
+    assert out["penalty_vs_clean"] == pytest.approx(1.0)
+
+
+def test_overlapping_band_does_not_warn(banked_forecast):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        api.significance(banked_forecast, 1.0, uniform=0.3)
+
+
+@pytest.mark.parametrize("param", ["fs8", "aperp", "apar", "dv"])
+def test_per_bin_error_is_finite_from_the_shipped_bank(banked_forecast, param):
+    err = api.per_bin_error(banked_forecast, 1.0, zbin=3, param=param,
+                            mask=scenarios.clean())
+    assert np.isfinite(err)
+    assert err > 0.0
+
+
+def test_per_bin_error_validates_zbin(banked_forecast):
+    with pytest.raises(ValueError, match="zbin"):
+        api.per_bin_error(banked_forecast, 1.0, zbin=15,
+                          mask=scenarios.clean())
