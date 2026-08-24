@@ -26,6 +26,9 @@ jobs:
       - run: python -m pip install ".[test]"
       - run: python -m pip check
       - run: python -m pytest -q
+      # The paper number gate: every value quoted in paper/*.tex must
+      # regenerate from the shipped out/*.csv tables.
+      - run: python scripts/check_paper_numbers.py
 
   dissertation-figure:
     runs-on: ubuntu-latest

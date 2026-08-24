@@ -25,9 +25,12 @@ multiplication sign -> 'x', digit-group commas removed, TeX comments stripped):
   FORBID-PAIR  two numbers that cannot both be right; fails only while both
                are present, so fixing either side clears it.
 
-CSV-driven checks recompute their needles from `out/optimal_thresholds.csv`
-and `out/fine_operating_points.csv` at the dissertation's rounding, so a
-forecast rerun moves the expectation automatically. JSON checks read the
+CSV-driven checks recompute their needles from the shipped out/ artifacts
+(`optimal_thresholds.csv`, `fine_operating_points.csv`, and the forecast
+headline tables: `fig31_validation.csv`, `required_times.csv`,
+`bin_level_targets.csv`, `forecast_completion_all_dtv_bins.json`,
+`forecast_completion_template_comparison.csv`) at the dissertation's
+rounding, so a forecast rerun moves the expectation automatically. JSON checks read the
 pilot-proxy snapshot (`--summary-json`); they SKIP when it is not supplied.
 
 Exit status 0 = all checks pass; 1 = at least one FAIL. A red run is the
@@ -82,7 +85,11 @@ def load_tex(paths: list[str]) -> tuple[str, list[Path]]:
     for raw in paths:
         p = Path(raw)
         if p.is_dir():
-            found = sorted(p.rglob("*.tex"))
+            # Archived papers under evidence/legacy_projects keep their own
+            # historical prose; this gate does not govern them, and sweeping
+            # them trips FORBID checks on text that is deliberately frozen.
+            found = sorted(f for f in p.rglob("*.tex")
+                           if "legacy_projects" not in f.parts)
             if not found:
                 sys.exit(f"error: no .tex files under {p}")
             files.extend(found)
@@ -181,6 +188,53 @@ def fine_rows() -> dict[int, dict]:
     return rows
 
 
+def fig31_clean_columns() -> list[tuple[float, float]]:
+    """The seven columns of the Ch. 9 clean-baseline mini-table, from
+    out/fig31_validation.csv: the table samples every other forecast bin plus
+    the last (z = 0.85 ... 2.43), quoting sigma_dv_clean_pct."""
+    rows = {round(float(r["z_center"]), 2): float(r["sigma_dv_clean_pct"])
+            for r in read_csv("fig31_validation.csv")}
+    return [(z, rows[z]) for z in (0.85, 1.05, 1.25, 1.45, 1.65, 1.85, 2.43)]
+
+
+def required_times_years() -> dict[str, float]:
+    """Survey-level 5-sigma on-sky years per scenario
+    (out/required_times.csv)."""
+    return {r["scenario"]: float(r["years_5sig"])
+            for r in read_csv("required_times.csv")}
+
+
+def bin_target_years(zbin: str = "1.40-1.50") -> dict[str, float]:
+    """Bin-level 5-sigma on-sky years per scenario for one redshift bin
+    (out/bin_level_targets.csv); 1.40-1.50 is the most affected DTV bin."""
+    return {r["scenario"]: float(r["years_bin5sig"])
+            for r in read_csv("bin_level_targets.csv")
+            if r["zbin"] == zbin}
+
+
+def perbin_fs8_tolerances() -> dict[int, float]:
+    """Per-bin minimum accepted fsigma8 r_tolerance of the
+    perbin_noise_normalized ledger in
+    out/forecast_completion_all_dtv_bins.json -- the quantity the
+    dissertation's per-bin tolerance table quotes at x1e-3."""
+    data = json.loads(
+        (OUT / "forecast_completion_all_dtv_bins.json").read_text())
+    tol: dict[int, float] = {}
+    for b in data["ledgers"]["perbin_noise_normalized"]["bins"]:
+        vals = [pt["parameters"]["fs8"]["central"]["r_tolerance"]
+                for pt in b["points"] if pt["parameters"]["fs8"]["accepted"]]
+        if vals:
+            tol[int(b["bin_index"])] = min(vals)
+    return tol
+
+
+def template_rows(family: str = "noise_shaped") -> list[dict]:
+    """One analytic family's per-bin rows of
+    out/forecast_completion_template_comparison.csv."""
+    return [r for r in read_csv("forecast_completion_template_comparison.csv")
+            if r["family"] == family]
+
+
 def frac_needles(x: float) -> list[str]:
     """A fraction as quoted raw (4 dp) or as a percentage (1 dp)."""
     return [f"{100 * x:.1f}%", f"{100 * x:.1f} %", f"{x:.4f}"]
@@ -264,6 +318,99 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
         if r.get("r_late"):
             ck.value(f"ch {ch}: r_late", [f"{float(r['r_late']):.3f}"],
                      "quote the CSV at the table's rounding")
+
+    # ---- Ch.9 clean-baseline mini-table <- out/fig31_validation.csv -----
+    ck.section("Ch.9 baseline mini-table <- out/fig31_validation.csv")
+    for i, (z, v) in enumerate(fig31_clean_columns()):
+        # Column-anchored so a matching digit string elsewhere in the text
+        # cannot green-light a stale cell; 2 dp accepted as a prefix of the
+        # table's 3 dp rendering.
+        alt = f"(?:{re.escape(f'{v:.2f}')}|{re.escape(f'{v:.3f}')})"
+        ck.require(f"z = {z:.2f}: sigma(D_V)/D_V clean, 1 on-sky yr",
+                   rf", clean, 1 on-sky yr( & \d[\d.]*){{{i}}} & {alt}",
+                   "quote out/fig31_validation.csv sigma_dv_clean_pct at the"
+                   " mini-table's rounding")
+
+    # ---- Table 9.1 <- out/required_times.csv + out/bin_level_targets.csv
+    ck.section("Table 9.1 <- out/required_times.csv / bin_level_targets.csv")
+    yrs = required_times_years()
+    byrs = bin_target_years()
+    ck.value("survey 5-sigma clean on-sky years", [f"{yrs['clean']:.4f}"],
+             "quote out/required_times.csv years_5sig at the table's"
+             " rounding")
+    ck.value("survey 5-sigma measured on-sky years",
+             [f"{yrs['measured']:.4f}"],
+             "quote out/required_times.csv years_5sig at the table's"
+             " rounding")
+    ck.value("z=1.40-1.50 bin clean years", [f"{byrs['clean']:.3f}"],
+             "quote out/bin_level_targets.csv years_bin5sig at the table's"
+             " rounding")
+    ck.value("z=1.40-1.50 bin measured years", [f"{byrs['measured']:.3f}"],
+             "quote out/bin_level_targets.csv years_bin5sig at the table's"
+             " rounding")
+    ck.value("z=1.40-1.50 bin penalty (measured/clean years)",
+             [f"{byrs['measured'] / byrs['clean']:.3f}"],
+             "the bin penalty is the years_bin5sig ratio at 3 dp")
+    # The table must also agree with itself: the quoted bin penalty has to
+    # equal quoted-measured / quoted-clean within the rounding slack of its
+    # own printed cells, whatever record the row happens to hold.
+    row_pat = r" & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*)"
+    clean_m = re.search(r"clean \(no DTV\)" + row_pat, ck.text)
+    meas_m = (re.search(row_pat, ck.text[clean_m.end():])
+              if clean_m else None)
+    if meas_m is None:
+        ck._emit("FAIL", "Table 9.1 bin penalty consistent with its years",
+                 "rows not found; keep the 'clean (no DTV)' label and four"
+                 " numeric columns per row")
+    else:
+        def half_ulp(s: str) -> float:
+            return 0.5 * 10.0 ** -(len(s) - s.index(".") - 1
+                                   if "." in s else 0)
+        c_bin, m_bin, pen = clean_m.group(3), meas_m.group(3), meas_m.group(4)
+        lo = (float(m_bin) - half_ulp(m_bin)) / (float(c_bin)
+                                                 + half_ulp(c_bin))
+        hi = (float(m_bin) + half_ulp(m_bin)) / (float(c_bin)
+                                                 - half_ulp(c_bin))
+        ok = lo - half_ulp(pen) <= float(pen) <= hi + half_ulp(pen)
+        ck._emit("PASS" if ok else "FAIL",
+                 "Table 9.1 bin penalty consistent with its years",
+                 "" if ok else
+                 f"quoted penalty {pen} outside {m_bin}/{c_bin} ="
+                 f" [{lo:.3f}, {hi:.3f}]; recompute the row from"
+                 " out/bin_level_targets.csv")
+
+    # ---- per-bin r_tol table <- forecast_completion_all_dtv_bins.json ---
+    ck.section("Per-bin r_tol table <- out/forecast_completion_all_dtv_bins"
+               ".json")
+    tol = perbin_fs8_tolerances()
+    # Columns run 1.30-1.40 .. 1.90-2.04 (bin indices 5..11); the binding
+    # pair and the last two bins are the drift-prone cells worth pinning.
+    for b, col, zbin in ((5, 0, "1.30-1.40"), (6, 1, "1.40-1.50"),
+                         (10, 5, "1.80-1.90"), (11, 6, "1.90-2.04")):
+        needle = re.escape(f"{1e3 * tol[b]:.2f}")
+        ck.require(f"bin {zbin}: min accepted fs8 r_tol x1e3",
+                   rf"\(x 10\^\{{-3\}}\)( & \d[\d.]*){{{col}}} & {needle}",
+                   "quote the perbin_noise_normalized ledger minimum at the"
+                   " table's rounding")
+
+    # ---- template table <- forecast_completion_template_comparison.csv --
+    ck.section("Template table <- out/forecast_completion_template_"
+               "comparison.csv")
+    trs = template_rows()
+    per = [float(r["perbin_binding_tolerance"]) for r in trs]
+    joint = [float(r["combined_binding_tolerance"]) for r in trs]
+    ck.value("noise-shaped per-bin fs8 tolerance range",
+             [f"{min(per):.6f}-{max(per):.6f}"],
+             "quote the CSV's perbin_binding_tolerance span at the table's"
+             " rounding")
+    ck.value("noise-shaped joint fs8 tolerance range",
+             [f"{min(joint):.6f}-{max(joint):.6f}"],
+             "quote the CSV's combined_binding_tolerance span at the table's"
+             " rounding")
+    ck.value("noise-shaped per-bin accepted/rejected count",
+             [f"{sum(int(r['perbin_accepted']) for r in trs)}"
+              f"/{sum(int(r['perbin_rejected']) for r in trs)}"],
+             "quote the CSV's per-bin acceptance tally")
 
     # ---- SS9.3 quarterly-table provenance --------------------------------
     ck.section("SS9.3 quarterly-table provenance")

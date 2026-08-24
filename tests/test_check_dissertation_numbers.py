@@ -77,9 +77,13 @@ def test_num_needles_never_too_short():
 
 
 def test_csv_operating_rows_resolve():
+    # The channel set follows the threshold sweep's conventions and may
+    # move with a regeneration; what must stay fixed is that the selectors
+    # resolve populated operating rows, so a column rename fails loudly.
     thr = cdn.threshold_rows()
-    assert set(thr) >= {31, 32, 33, 35}
-    assert abs(float(thr[32]["eta"]) - 1.01) < 0.005
+    assert thr and all(
+        r[k] for r in thr.values()
+        for k in ("eta", "f", "r_fine", "margin", "penalty"))
     fine = cdn.fine_rows()
     assert fine and all(r["multiplier_q16"] for r in fine.values())
 
@@ -101,7 +105,7 @@ def test_end_to_end_exit_codes(tmp_path):
         + ["1566x over now", "the fs/2 legacy epoch quarterly table",
            "3.2-7.8 dB", "46748 LRGs", "7.6 yr", "XOR 0x88",
            "48.5% of verified-quiet time", "fine_gain_mc evidence",
-           "Youden-J table"])
+           "Youden-J table", _forecast_headline_rows()])
     red = green + " eight years; 316x over; 5.9-7.8 dB; ten measured channels"
     g, r = tmp_path / "g.txt", tmp_path / "r.txt"
     g.write_text(green)
@@ -138,7 +142,78 @@ def _green_min() -> str:
            + (f"{float(r['r_late']):.3f}" if r.get("r_late") else "")
            for r in fine.values()]
         + ["fs/2 legacy quarterly", "3.2-7.8", "46748", "7.6 yr", "1566x",
-           "XOR 0x88", "48.5%", "fine_gain_mc", "Youden"])
+           "XOR 0x88", "48.5%", "fine_gain_mc", "Youden",
+           _forecast_headline_rows()])
+
+
+def _forecast_headline_rows() -> str:
+    """Synthetic renderings of the forecast headline tables, built from the
+    same out/ sources the registry reads and shaped like the normalized
+    rows the column-anchored checks expect, so the green text tracks a
+    forecast rerun exactly as the dissertation would."""
+    cols = cdn.fig31_clean_columns()
+    yrs = cdn.required_times_years()
+    byrs = cdn.bin_target_years()
+    tol = cdn.perbin_fs8_tolerances()
+    trs = cdn.template_rows()
+    per = [float(r["perbin_binding_tolerance"]) for r in trs]
+    joint = [float(r["combined_binding_tolerance"]) for r in trs]
+    return " ".join(
+        ["sigma(D_V)/D_V [%], clean, 1 on-sky yr & "
+         + " & ".join(f"{v:.3f}" for _, v in cols),
+         f"clean (no DTV) & {yrs['clean']:.4f} & 1.000 &"
+         f" {byrs['clean']:.3f} & 1.000 \\\\",
+         f"measured & {yrs['measured']:.4f} &"
+         f" {yrs['measured'] / yrs['clean']:.3f} & {byrs['measured']:.3f} &"
+         f" {byrs['measured'] / byrs['clean']:.3f}",
+         "r_tol (x 10^{-3}) & "
+         + " & ".join(f"{1e3 * tol[b]:.2f}" for b in range(5, 12)),
+         f"{min(per):.6f}-{max(per):.6f}",
+         f"{min(joint):.6f}-{max(joint):.6f}",
+         f"{sum(int(r['perbin_accepted']) for r in trs)}"
+         f"/{sum(int(r['perbin_rejected']) for r in trs)}"])
+
+
+def test_forecast_sources_resolve():
+    cols = cdn.fig31_clean_columns()
+    assert len(cols) == 7
+    assert [z for z, _ in cols] == [0.85, 1.05, 1.25, 1.45, 1.65, 1.85, 2.43]
+    yrs = cdn.required_times_years()
+    byrs = cdn.bin_target_years()
+    assert 0 < yrs["clean"] < yrs["measured"]
+    assert 0 < byrs["clean"] < byrs["measured"]
+    tol = cdn.perbin_fs8_tolerances()
+    assert set(tol) >= {5, 6, 10, 11}
+    assert all(0 < v < 0.01 for v in tol.values())
+    assert cdn.template_rows()
+
+
+def test_legacy_projects_excluded_from_tex_sweep(tmp_path):
+    (tmp_path / "chapters").mkdir()
+    keep = tmp_path / "chapters" / "ch01.tex"
+    keep.write_text("kept prose")
+    legacy = tmp_path / "evidence" / "legacy_projects" / "old_paper"
+    legacy.mkdir(parents=True)
+    (legacy / "main.tex").write_text("the present draft")
+    text, files = cdn.load_tex([str(tmp_path)])
+    assert files == [keep]
+    assert "the present draft" not in text
+
+
+def test_table91_penalty_consistency_direction(capsys):
+    byrs = cdn.bin_target_years()
+    pen = f"{byrs['measured'] / byrs['clean']:.3f}"
+    good = _green_min()
+    # Keep the CSV-derived needle present so only the internal-consistency
+    # check can fail on the corrupted row.
+    bad = good.replace(f"& {pen}", "& 9.999") + f" {pen}"
+    for text, want in ((good, "PASS"), (bad, "FAIL")):
+        ck = cdn.Checker(cdn.normalize(text))
+        cdn.run_checks(ck, None)
+        out = capsys.readouterr().out
+        lines = [ln for ln in out.splitlines()
+                 if "penalty consistent" in ln]
+        assert lines and lines[0].startswith(want)
 
 
 def test_baseline_ratchet(tmp_path):
