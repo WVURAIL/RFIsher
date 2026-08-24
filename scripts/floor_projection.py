@@ -46,9 +46,9 @@ FINE_GAIN_DB = (9.4, 10.0)
 def channel_state(npz):
     st = R.shelf_statistics(npz)
     corr = R.correlation_time(npz)
-    gain = (st.intraday_fraction
-            * R.n_coh_from_correlation_time(corr.tau_for_budget)
-            + st.fast_fraction)
+    # One booking for the whole package: a refused tau_c takes no
+    # ground-filter credit (see residual.surviving_components).
+    gain = sum(f * n for f, n in R.surviving_components(st, corr))
     return st, corr, gain
 
 

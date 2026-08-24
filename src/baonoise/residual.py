@@ -102,6 +102,21 @@ SIDEREAL_DAY = 86164.0905               # s
 # terms from double-counting the same power.
 MAX_TAU_C_SECONDS = SIDEREAL_DAY
 
+# A "measured" kept-frame floor must rest on at least this many null frames.
+# Thinner populations (ch31's floor stood on 2 frames, ch28's on 6) sample the
+# null tail rather than characterise it; below the bar the floor falls back to
+# the sigma-implied substitute and is labelled stated evidence.
+MIN_MEASURED_NULLS = 30
+
+# Channels whose transmitter has a verified off epoch in the archive, mapped
+# to the last YYYY-MM of that epoch. The off era supplies a *measured*
+# transmitter-off sensitivity floor for the kept-frame bound. ch35's station
+# signed on in 2021-09; its pre-sign-on exceedance tail is 7-300x heavier
+# than the fitted null (q50/q90/q99 of F-1 vs a Gaussian at sigma_null), so
+# the off-era floor records real ambient structure, not detector scatter,
+# and it is the level an undetected frame on this channel can hide.
+SIGN_ON_OFF_THROUGH = {35: "2021-08"}
+
 
 # ----------------------------------------------------------------------
 # Survey-product measurements
@@ -916,6 +931,35 @@ def floor_provenance(npz_path: str | Path,
     )
 
 
+def kept_frame_floor(npz_path: str | Path, off_through: str | None = None,
+                     off_from: str | None = None,
+                     floor_percentile: float = 90.0) -> tuple[float, str]:
+    """``(floor_db, evidence)`` under the package's one floor discipline.
+
+    The kept-frame bound is *measured* where a null population of at least
+    :data:`MIN_MEASURED_NULLS` frames supports it --- the transmitter-off
+    era where the channel has one (:data:`SIGN_ON_OFF_THROUGH`), otherwise
+    the archive's own null population. Anything thinner falls back to the
+    sigma-implied substitute (:func:`floor_provenance`), labelled
+    ``'stated'``: the level a threshold at the null centre can resolve,
+    which is a property of the detector rather than a measurement of the
+    channel, and is therefore evidence of a weaker kind. On a channel with
+    a measured off era the measurement wins: ch35's off-era exceedances are
+    far heavier than the fitted null, so its sigma-implied level provably
+    understates what an undetected frame can carry there.
+    """
+    if off_through is None and off_from is None:
+        ch = int(load_npz(npz_path)["physical_channel"][0])
+        off_through = SIGN_ON_OFF_THROUGH.get(ch)
+    st = shelf_statistics(npz_path, off_through=off_through,
+                          floor_percentile=floor_percentile,
+                          off_from=off_from)
+    if np.isfinite(st.floor_db) and st.n_off_frames >= MIN_MEASURED_NULLS:
+        return float(st.floor_db), "measured"
+    return float(floor_provenance(
+        npz_path, floor_percentile=floor_percentile).sigma_implied_db), "stated"
+
+
 def budget_from_statistics(stats: ShelfStatistics, delay_key: str = DEFAULT_DELAY_KEY,
                            tau_intraday: float = MAX_TAU_C_SECONDS,
                            tau_fast: float = CHIME_FRAME_SECONDS,
@@ -961,6 +1005,31 @@ def n_coh_from_correlation_time(tau_c_seconds: float,
         raise ValueError("frame_seconds must be positive")
     tau = min(float(tau_c_seconds), MAX_TAU_C_SECONDS)
     return max(1.0, tau / float(frame_seconds))
+
+
+def surviving_components(stats: ShelfStatistics, corr: CorrelationTime,
+                         tau_intraday: float | None = None) -> tuple:
+    """The ``(power_fraction, n_coh)`` components the budget's own discipline
+    assigns to the surviving shelf power.
+
+    A usable correlation time books the measured variance split: intra-day
+    power at ``n_coh(tau)``, sub-acquisition power at 1. A refusal makes the
+    split itself unmeasurable --- the non-stationarity that defeats the
+    timescale estimator defeats the variance decomposition too, since both
+    are moments of the same process --- so the fallback takes no
+    ground-filter credit: all shelf power surviving, at the sidereal-day cap.
+    ``tau_intraday`` overrides the timescale only; it cannot restore credit
+    a refusal removed. This is the single home of that rule; every consumer
+    (:func:`budget_from_products`, :func:`threshold_sweep`, the scripts)
+    books the same way.
+    """
+    if corr.is_usable:
+        tau = corr.tau_for_budget if tau_intraday is None else tau_intraday
+        return ((float(stats.intraday_fraction),
+                 n_coh_from_correlation_time(tau)),
+                (float(stats.fast_fraction), 1.0))
+    tau = MAX_TAU_C_SECONDS if tau_intraday is None else tau_intraday
+    return ((1.0, n_coh_from_correlation_time(tau)),)
 
 
 def residuals_from_products(paths, off_through=None, delay_key=DEFAULT_DELAY_KEY,
@@ -1020,16 +1089,14 @@ def budget_from_products(npz_path: str | Path, off_through: str | None = None,
                                         tau_intraday=corr.tau_c,
                                         tau_measured=corr.is_measured)
     else:
-        # The estimator refuses when the shelf is episodic, and the same
-        # non-stationarity that makes tau_c unmeasurable makes the variance
-        # split unmeasurable, since both are moments of the same process. So
-        # the fallback takes no ground-filter credit either: all shelf power
-        # surviving, at the sidereal-day cap. That is an actual bound rather
-        # than a cap applied to a split that is an artefact of the trim.
+        # The refusal convention lives in surviving_components: no
+        # ground-filter credit, all shelf power surviving at the sidereal-day
+        # cap. That is an actual bound rather than a cap applied to a split
+        # that is an artefact of the trim.
         budget = ResidualBudget(
             shelf_floor_db=stats.floor_db,
             delay_filter_db=DELAY_SUPPRESSION_DB[delay_key],
-            components=((1.0, n_coh_from_correlation_time(MAX_TAU_C_SECONDS)),),
+            components=surviving_components(stats, corr),
             tau_measured=False,
             label=f"ch{stats.channel} ({delay_key}, BOUND: no stationary split)")
     return budget, stats, corr
@@ -1393,16 +1460,16 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
                              off_from=off_from)
     corr = correlation_time(npz_path, off_through=off_through,
                             off_from=off_from)
-    tau = tau_intraday if tau_intraday is not None else corr.tau_for_budget
-    n_slow = n_coh_from_correlation_time(tau)
-    comps_for = lambda db: ((stats.intraday_fraction, n_slow),
-                            (stats.fast_fraction, 1.0))
+    # One booking for the whole package: a refused correlation time takes no
+    # ground-filter credit (see surviving_components). tau_intraday narrows
+    # the timescale where the cadence resolves it; it cannot restore credit.
+    comps = surviving_components(stats, corr, tau_intraday)
 
     def r_of(mean_lin):
         db = 10.0 * np.log10(max(mean_lin, 1e-30))
         return ResidualBudget(shelf_floor_db=db,
                               delay_filter_db=DELAY_SUPPRESSION_DB[delay_key],
-                              components=comps_for(db)).ratio
+                              components=comps).ratio
 
     r_un = r_of(float(lin[on].mean()))
     if etas is None:

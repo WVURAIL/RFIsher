@@ -130,7 +130,8 @@ from baonoise import residual as res  # noqa: E402
 from ppcal import era_view as EV, eras as E  # noqa: E402
 from ppcal.calib import calibrate  # noqa: E402
 from ppcal.products import load_all  # noqa: E402
-from channel_tolerances import TOL_APERP_PUBLISHED, channel_tolerances  # noqa: E402
+from baonoise.tolerances import TOL_APERP as TOL_APERP_STABLE  # noqa: E402
+from channel_tolerances import channel_tolerances  # noqa: E402
 
 ETA_GRID = np.concatenate([[1.0], np.geomspace(1.01, 60.0, 90)])
 DAY_CAP = 86164.0
@@ -142,16 +143,20 @@ PLATEAU = 1.02        # "within 2% of optimal" tie-break, smallest eta wins
 def r_tolerances():
     """{ch: (r_tol_dilation, r_tol_growth)}.
 
-    The released selector's hard-coded dilation table is preferred wherever
-    it exists (ch27-36) so this run stands on the published numbers; the
-    lower band is extended from the completed forecast ledger.
+    Every channel's dilation tolerance comes from the one stable table
+    (baonoise.tolerances.TOL_APERP): the stable zeta = 1 minima of the dense
+    bias-response bank, the same convention for upper and lower band. The
+    retired practice of extending ch14-26 from the completed-forecast
+    ledger's single 1-on-sky-year point screened the lower band against
+    tolerances up to ~1.8x looser than the published channels'. The ledger
+    still supplies the growth tolerance and the bin edges.
     """
     derived = channel_tolerances()
     out = {}
     for ch, rec in derived.items():
-        dil = TOL_APERP_PUBLISHED.get(ch, rec["aperp"])
+        dil = TOL_APERP_STABLE.get(ch, rec["aperp"])
         out[ch] = (dil, rec["fs8"], rec["z_low"], rec["z_high"],
-                   ch in TOL_APERP_PUBLISHED)
+                   ch in TOL_APERP_STABLE)
     return out
 
 

@@ -778,3 +778,138 @@ def test_threshold_sweep_refuses_without_floor_but_accepts_a_stated_one(tmp_path
     # above F = 1, where newly kept frames carry measured levels *below* the
     # stated floor bound and briefly pull the kept-set mean down.)
     assert rows[-1]["r_masked"] > 5 * rows[0]["r_masked"]
+
+
+# ----------------------------------------------------------------------
+# One booking, one floor discipline (the ch35/ch32 reconciliation)
+# ----------------------------------------------------------------------
+
+def test_surviving_components_refusal_removes_split_credit(tmp_path):
+    """A refused tau_c invalidates the variance split, not just the timescale."""
+    p = _episodic_product(tmp_path)
+    st = residual.shelf_statistics(p)
+    ct = residual.correlation_time(p, n_boot=40)
+    assert not ct.is_usable
+    cap_n = residual.n_coh_from_correlation_time(residual.MAX_TAU_C_SECONDS)
+    assert residual.surviving_components(st, ct) == ((1.0, cap_n),)
+    # an explicit timescale narrows the cap but cannot restore the credit
+    assert residual.surviving_components(st, ct, tau_intraday=3600.0) \
+        == ((1.0, residual.n_coh_from_correlation_time(3600.0)),)
+
+
+def test_surviving_components_usable_books_the_split(tmp_path):
+    p = _stationary_product(tmp_path, tau_true=2400.0)
+    st = residual.shelf_statistics(p)
+    ct = residual.correlation_time(p, n_boot=60)
+    assert ct.is_usable
+    comps = residual.surviving_components(st, ct)
+    assert len(comps) == 2
+    assert comps[0][0] == pytest.approx(st.intraday_fraction)
+    assert comps[0][1] == pytest.approx(
+        residual.n_coh_from_correlation_time(ct.tau_c))
+    assert comps[1] == (pytest.approx(st.fast_fraction), 1.0)
+
+
+def test_threshold_sweep_refusal_matches_budget_convention(tmp_path):
+    """The sweep books refused channels exactly as budget_from_products does."""
+    src = _episodic_product(tmp_path)
+    d = dict(np.load(src, allow_pickle=False))
+    n = d["valid"].shape[0]
+    d["fstat_raw"] = np.full((n, 1), 5.0)
+    d["mu0"] = np.array([1.0])
+    dst = tmp_path / "episodic_sweep.npz"
+    np.savez(dst, **d)
+
+    row = residual.threshold_sweep(dst, etas=np.array([10.0]),
+                                   floor_db=-60.0)[0]
+    st = residual.shelf_statistics(dst)
+    ct = residual.correlation_time(dst, n_boot=40)
+    assert not ct.is_usable
+
+    shelf = d["snr_shelf_db"][:, 0]
+    lin = np.where(np.isfinite(shelf), 10.0 ** (shelf / 10.0), 10.0 ** -6.0)
+    mean_db = 10.0 * np.log10(lin.mean())
+    expected = residual.ResidualBudget(
+        shelf_floor_db=mean_db,
+        delay_filter_db=residual.DELAY_SUPPRESSION_DB[
+            residual.DEFAULT_DELAY_KEY],
+        components=residual.surviving_components(st, ct)).ratio
+    assert row["r_unmasked"] == pytest.approx(expected, rel=1e-9)
+    assert row["r_masked"] == pytest.approx(expected, rel=1e-9)  # eta=10 keeps all
+    # and the retired split-credit booking took credit the refusal invalidated
+    cap_n = residual.n_coh_from_correlation_time(residual.MAX_TAU_C_SECONDS)
+    old_gain = (st.intraday_fraction
+                * residual.n_coh_from_correlation_time(ct.tau_for_budget)
+                + st.fast_fraction)
+    assert old_gain < cap_n
+    assert expected == pytest.approx(
+        10.0 ** ((mean_db - residual.DELAY_SUPPRESSION_DB[
+            residual.DEFAULT_DELAY_KEY]) / 10.0) * cap_n, rel=1e-9)
+
+
+def _floor_discipline_product(tmp_path, name, center, mu0=1.0, n=2000,
+                              sigma=0.02, channel=19):
+    """An F-consistent product whose null-population size is set by center."""
+    rng = np.random.default_rng(5)
+    F = center + sigma * rng.standard_normal(n)
+    shelf = np.where(F > 1.0, 10.0 * np.log10(np.maximum(F - 1.0, 1e-12)),
+                     np.nan)
+    t0 = 1.6e9 + np.arange(n) * 3600.0
+    np.savez(
+        tmp_path / name,
+        valid=np.ones((n, 1), dtype=np.uint8),
+        reject_mask=(F > mu0).reshape(n, 1).astype(np.uint8),
+        snr_shelf_db=shelf.reshape(n, 1),
+        fstat_raw=F.reshape(n, 1),
+        mu0=np.array([mu0]),
+        frame_unit_index=np.arange(n, dtype=np.int32),
+        unit_time0_ctime=t0,
+        physical_channel=np.array([channel], dtype=np.int32),
+        freq_id=np.array([767], dtype=np.int64),
+        chime_frequency_hz=np.array([500.39e6]),
+        pilot_below_data_db=np.array(0.0),
+        dtv_bandwidth_hz=np.array(1.0),
+        bin_enbw_hz=np.array(1.0),
+    )
+    return tmp_path / name
+
+
+def test_kept_frame_floor_measured_above_the_null_bar(tmp_path):
+    # centered just below mu0=1.05: a fat sliver 1 < F <= mu0
+    p = _floor_discipline_product(tmp_path, "fat.npz", center=1.02, mu0=1.05)
+    floor_db, evidence = residual.kept_frame_floor(p)
+    assert evidence == "measured"
+    st = residual.shelf_statistics(p)
+    assert st.n_off_frames >= residual.MIN_MEASURED_NULLS
+    assert floor_db == pytest.approx(st.floor_db)
+
+
+def test_kept_frame_floor_thin_nulls_fall_to_stated(tmp_path):
+    # centered far below 1: essentially no frame carries a level
+    p = _floor_discipline_product(tmp_path, "thin.npz", center=0.90)
+    st = residual.shelf_statistics(p)
+    assert st.n_off_frames < residual.MIN_MEASURED_NULLS
+    floor_db, evidence = residual.kept_frame_floor(p)
+    assert evidence == "stated"
+    prov = residual.floor_provenance(p)
+    assert floor_db == pytest.approx(prov.sigma_implied_db)
+
+
+def test_kept_frame_floor_honors_an_explicit_off_epoch(tmp_path):
+    import datetime as _dt
+    rng = np.random.default_rng(9)
+    n = 300
+    # off era at -40 dB (2019), on era at -10 dB (2020-06 onward)
+    shelf = np.concatenate([-40.0 + 0.1 * rng.standard_normal(n),
+                            -10.0 + 0.1 * rng.standard_normal(n)])
+    t0 = np.concatenate([
+        _dt.datetime(2019, 6, 1, tzinfo=_dt.timezone.utc).timestamp()
+        + np.arange(n) * 3600.0,
+        _dt.datetime(2020, 6, 1, tzinfo=_dt.timezone.utc).timestamp()
+        + np.arange(n) * 3600.0])
+    p = _write_product(tmp_path / "signon19.npz", shelf,
+                       np.arange(2 * n), t0, channel=19,
+                       rejected=np.r_[np.zeros(n), np.ones(n)].astype(np.uint8))
+    floor_db, evidence = residual.kept_frame_floor(p, off_through="2020-05")
+    assert evidence == "measured"
+    assert floor_db == pytest.approx(-40.0, abs=0.5)

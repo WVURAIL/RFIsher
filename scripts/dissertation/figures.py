@@ -136,21 +136,27 @@ def fig_bao_two_walls(out: Path) -> Path:
     ax.text(.02,.14,r"dilation-tolerable screening region",fontsize=6.8,color=style.MUTED)
     ax.text(.02,.035,r"$f\sigma_8$ wall (bin-dependent)",fontsize=6.8,color=style.FAILURE)
     ax.text(1.012,.0045,r"occupancy wall",rotation=90,va="bottom",fontsize=6.8,color=style.INK)
+    # Story channels keep their role colors; every other channel draws gray.
+    # Dashing follows the table's own evidence column (stated floors dash),
+    # and only story channels and channels entering the tolerable box are
+    # labelled -- 23 curves cannot all carry endpoint labels.
     colors={29:style.GOLD,31:style.PENDING,32:style.MEASURED,33:style.MODEL,35:style.CONDITIONAL}
-    stated={27,28,30,34,36}
     for ch in sorted(groups):
         vals=sorted(groups[ch],key=lambda r:int(r["order"])); x=np.array([float(r["masked_fraction"]) for r in vals]); y=np.clip(np.array([float(r["r_over_rtol"]) for r in vals]),2e-3,5e4)
-        if ch in stated:
-            c=style.PENDING; ls=(0,(4,2)); lw=1.15
-        else:
-            c=colors.get(ch,style.PENDING); ls="-"; lw=1.35
+        bound=(vals[0].get("evidence","measured")=="stated"
+               or vals[0].get("tau_bound","0")=="1")
+        c=colors.get(ch,style.PENDING); ls=(0,(4,2)) if bound else "-"
+        lw=1.35 if ch in colors else 1.05
         ax.plot(x,y,color=c,ls=ls,lw=lw)
-        ax.scatter([x[-1]],[y[-1]],s=22,color=c,edgecolor="white",linewidth=.5,zorder=4)
-        dx=.012 if x[-1]<.96 else .008
-        ax.text(min(x[-1]+dx,1.035),y[-1]*1.12,rf"ch{ch}",fontsize=6.6,color=c,ha="left")
-    # Post-switch-on epoch for channel 35.
-    ax.scatter([.992],[.052],marker="x",s=35,color=style.CONDITIONAL,lw=1.2,zorder=5)
-    ax.annotate(r"ch35, 2022 onward: same channel, other wall",xy=(.992,.052),xytext=(.42,.018),fontsize=6.8,color=style.CONDITIONAL,
+        ax.scatter([x[-1]],[y[-1]],s=22 if ch in colors else 12,color=c,edgecolor="white",linewidth=.5,zorder=4)
+        if ch in colors or y[-1]<1.0:
+            dx=.012 if x[-1]<.96 else .008
+            ax.text(min(x[-1]+dx,1.035),y[-1]*1.12,rf"ch{ch}",fontsize=6.6,color=c,ha="left")
+    # Post-sign-on epoch for channel 35: eta = 1 on frames after 2021-08 at
+    # the channel's measured off-era floor (scripts/dissertation/
+    # make_two_walls.py conventions; regenerate with plot_two_walls.era_point).
+    ax.scatter([.985],[3.83],marker="x",s=35,color=style.CONDITIONAL,lw=1.2,zorder=5)
+    ax.annotate(r"ch35 after sign-on (2021-09 onward): both walls at once",xy=(.985,3.83),xytext=(.30,.018),fontsize=6.8,color=style.CONDITIONAL,
                 arrowprops=dict(arrowstyle="->",color=style.CONDITIONAL,lw=.7))
     ax.set_yscale("log"); ax.set_xlim(0,1.045); ax.set_ylim(2e-3,5e4)
     ax.set_xlabel(r"Masked fraction of observing time, $f$"); ax.set_ylabel(r"Residual over tolerance, $r_{\rm proxy}/r_{\rm tol}$")

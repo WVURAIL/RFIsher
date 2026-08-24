@@ -22,10 +22,10 @@ MAPPING = os.path.join(ROOT, "out", "forecast_completion_channel_mapping.csv")
 ESTIMATOR = "perbin_noise_normalized"
 TARGETS = ("aperp", "apar", "fs8")
 
-# the hard-coded table optimal_thresholds.py stands on, for cross-checking
-TOL_APERP_PUBLISHED = {27: 0.014, 28: 0.014, 29: 0.014, 30: 0.0144,
-                       31: 0.0156, 32: 0.0156, 33: 0.0156, 34: 0.0156,
-                       35: 0.0352, 36: 0.0352}
+# the stable table optimal_thresholds.py stands on, for cross-checking
+# (one home: baonoise.tolerances; the published ch27-36 subset)
+from baonoise.tolerances import TOL_APERP as _TOL_APERP_STABLE  # noqa: E402
+TOL_APERP_PUBLISHED = {ch: _TOL_APERP_STABLE[ch] for ch in range(27, 37)}
 
 
 def bin_tolerances(ledger_path=LEDGER, estimator=ESTIMATOR):

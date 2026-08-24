@@ -39,9 +39,9 @@ from baonoise.plots import (
 import matplotlib.pyplot as plt
 
 # Stable zeta = 1 tolerances on the binding dilation, alpha_perp, per z bin
-# (scripts/bias_tolerance.py --zeta 1.0, unrefused entries).
-TOL_APERP = {27: 0.014, 28: 0.014, 29: 0.014, 30: 0.0144, 31: 0.0156, 32: 0.0156,
-             33: 0.0156, 34: 0.0156, 35: 0.0352, 36: 0.0352}
+# (one home: baonoise.tolerances). The figure shows the first-measured block.
+from baonoise.tolerances import TOL_APERP
+CHANNELS = tuple(range(27, 37))
 # fs8 tolerance relative to alpha_perp's, per bin, drawn as a band because
 # the ratio differs between the two z bins the five channels occupy.
 FS8_REL = (0.00156 / 0.0352, 0.00153 / 0.0156)     # (0.044, 0.098)
@@ -49,7 +49,7 @@ FS8_REL = (0.00156 / 0.0352, 0.00153 / 0.0156)     # (0.044, 0.098)
 FINE_DB = 10.0                                     # measured 9.4-10.0
 from baonoise import products as P
 from baonoise.npzio import load_npz
-PATHS = P.paths(channels=sorted(TOL_APERP))
+PATHS = P.paths(channels=CHANNELS)
 # Verdict classes: the three threshold-feasible channels in full color, the
 # tau_c-hostage marginal in its own color, the occupancy-pinned five in gray.
 COLORS = {32: SERIES[0], 33: SERIES[1], 35: SERIES[2], 29: SERIES[3]}
@@ -57,33 +57,36 @@ GRAY = MUTED
 
 
 def channel_curve(ch, p):
-    """(f, r/tol) along the threshold family, with provenance flags."""
-    prov = R.floor_provenance(p)
-    kw = {}
-    stated = not np.isfinite(prov.reported_db)
-    if stated:                                    # mu0 < 1: state the bound
-        kw["floor_db"] = prov.sigma_implied_db
+    """(f, r/tol) along the threshold family, with provenance flags.
+
+    Floor and residual booking follow the package's one discipline
+    (kept_frame_floor / surviving_components inside threshold_sweep).
+    """
+    floor_db, evidence = R.kept_frame_floor(p)
     etas = np.concatenate([np.linspace(1.0, 1.8, 17), np.geomspace(2, 300, 12)])
-    sweep = R.threshold_sweep(p, etas=etas, **kw)
+    sweep = R.threshold_sweep(p, etas=etas, floor_db=floor_db)
     tol = TOL_APERP[ch]
     pts = [(row["f"], row["r_masked"] / 10 ** (FINE_DB / 10) / tol,
             row["eta"]) for row in sweep]
     corr = R.correlation_time(p)
-    return dict(ch=ch, pts=pts, stated_floor=stated,
-                tau_bound=(corr.quality != "measured"),
-                n_kept=prov.n_kept)
+    return dict(ch=ch, pts=pts, stated_floor=(evidence == "stated"),
+                tau_bound=(corr.quality != "measured"))
 
 
-def era_point(path, year_from, floor_db, gain):
-    """f at eta = 1 restricted to an era, at the same floor and gain."""
-    import datetime as dt
-    d = load_npz(path)
-    v = d["valid"][:, 0].astype(bool)
-    rej = d["reject_mask"][:, 0].astype(bool)
-    t = d["unit_time0_ctime"][d["frame_unit_index"]]
-    yr = np.array([dt.datetime.utcfromtimestamp(x).year for x in t])
-    m = v & (yr >= year_from)
-    return float(rej[m].mean())
+def era_point(path, off_through, tol):
+    """(f, r/tol) at eta = 1 restricted to the post-sign-on era.
+
+    Both coordinates are the era's own: the sweep is evaluated on frames
+    after ``off_through`` (the transmitter-on epoch), at the channel's
+    disciplined floor, so the marker describes the era its caption names.
+    """
+    floor_db, _ = R.kept_frame_floor(path)
+    rows = R.threshold_sweep(path, off_through=off_through,
+                             etas=np.array([1.0]), floor_db=floor_db)
+    if not rows:
+        return None
+    return (float(rows[0]["f"]),
+            rows[0]["r_masked"] / 10 ** (FINE_DB / 10) / tol)
 
 
 def main(argv=None):
@@ -140,18 +143,21 @@ def main(argv=None):
                     fontsize=9.5 if big else 8, color=c,
                     fontweight="semibold" if big else "normal")
 
-    # ch35's era dependence: the same channel, 2022 onward
+    # ch35's era dependence: the same channel, after sign-on (2021-09 onward),
+    # both coordinates from that era's own sweep.
     c35 = next(c for c in curves if c["ch"] == 35)
-    if c35["pts"]:
-        f_fwd = era_point(PATHS[35], 2022, None, None)
-        r35 = c35["pts"][0][1]
-        ax.plot([f_fwd], [r35], "X", ms=9, color=COLORS[35], zorder=6,
+    pt = era_point(PATHS[35], R.SIGN_ON_OFF_THROUGH[35], TOL_APERP[35]) \
+        if c35["pts"] else None
+    if pt is not None:
+        f_fwd, r_fwd = pt
+        c35_color = COLORS.get(35, GRAY)
+        ax.plot([f_fwd], [r_fwd], "X", ms=9, color=c35_color, zorder=6,
                 markeredgecolor=SURFACE, markeredgewidth=1.2)
-        ax.annotate("ch35, 2022 onward:\nthe station lit up and the same\n"
-                    "channel moved to the other wall",
-                    xy=(f_fwd, r35), xytext=(0.42, 6e-3), fontsize=8.5,
-                    color=COLORS[35],
-                    arrowprops=dict(arrowstyle="-", color=COLORS[35], lw=0.8,
+        ax.annotate("ch35 after sign-on (2021-09 onward):\nthe station lit up "
+                    "and the same\nchannel moved to the other wall",
+                    xy=(f_fwd, r_fwd), xytext=(0.42, 6e-3), fontsize=8.5,
+                    color=c35_color,
+                    arrowprops=dict(arrowstyle="-", color=c35_color, lw=0.8,
                                     shrinkA=2, shrinkB=3))
 
     ax.annotate("Filled dots mark positive excess ($\\eta = 1$): minimum "

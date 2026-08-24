@@ -89,10 +89,8 @@ def stable_minima(bank):
 def channel_r_eta1(p):
     """Fine-stage residual at eta = 1, product-basis floor (as in the
     optimizer): the minimum-residual point of the threshold family."""
-    prov = R.floor_provenance(p)
-    kw = {} if np.isfinite(prov.reported_db) else \
-        {"floor_db": prov.sigma_implied_db}
-    sweep = R.threshold_sweep(p, etas=np.array([1.0]), **kw)
+    floor_db, _ = R.kept_frame_floor(p)
+    sweep = R.threshold_sweep(p, etas=np.array([1.0]), floor_db=floor_db)
     corr = R.correlation_time(p)
     return (sweep[0]["r_masked"] / 10 ** (FINE_DB / 10),
             corr.quality != "measured")

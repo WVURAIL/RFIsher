@@ -12,12 +12,18 @@ with the fine stage's measured sensitivity credit applied to the bound.
 Selection discipline:
 
 * The residual bound is computed on TWO floor bases and both are reported.
-  ``product`` uses each product's own kept-frame floor where one exists (the
-  mu0 sliver), which is the convention the chapter's verdicts currently stand
-  on. ``sigma_null`` bounds every undetected frame at the level a threshold
-  sitting at the null center can actually resolve; defensible everywhere,
-  including the mu0 < 1 channels, and stricter. Where the two disagree about
-  feasibility, that disagreement is the finding rather than a nuisance.
+  ``product`` follows the package's one floor discipline
+  (baonoise.residual.kept_frame_floor): the measured null floor where at
+  least MIN_MEASURED_NULLS frames support it --- the transmitter-off era on
+  channels that have one (ch35), the archive null population elsewhere ---
+  and the sigma-implied substitute, labelled stated evidence, below the bar.
+  ``sigma_null`` bounds every undetected frame at the level a threshold
+  sitting at the null center can actually resolve; a detector property
+  rather than a channel measurement, defensible only where no measurement
+  exists. On ch35 the two now disagree by ~19 dB because the off-era
+  exceedance tail is measurably heavier than the fitted null; where the two
+  disagree about feasibility, that disagreement is the finding rather than
+  a nuisance, and the measured basis is the one a verdict may stand on.
 
 * Among near-optimal thresholds (within 2% of the minimum cost) the SMALLEST
   eta is selected: equal cost, more residual margin. Optima on flat plateaus
@@ -42,14 +48,8 @@ import numpy as np
 
 from baonoise import residual as R
 
-# Stable zeta = 1 tolerances (scripts/bias_tolerance.py --zeta 1.0).
-# per channel, from the stable zeta=1 entries of the channel's z bin:
-# ch27-29 z 1.51-1.59 (bin 1.5-1.6); ch30 straddles; ch31-34 bin 1.4-1.5;
-# ch35/36 bin 1.3-1.4.
-TOL_APERP = {27: 0.014, 28: 0.014, 29: 0.014, 30: 0.0144, 31: 0.0156, 32: 0.0156,
-             33: 0.0156, 34: 0.0156, 35: 0.0352, 36: 0.0352}
-TOL_FS8 = {27: 0.0016, 28: 0.0016, 29: 0.0016, 30: 0.0016, 31: 0.00153, 32: 0.00153,
-           33: 0.00153, 34: 0.00153, 35: 0.00156, 36: 0.00156}
+# Stable zeta = 1 tolerances (scripts/bias_tolerance.py --zeta 1.0), one home.
+from baonoise.tolerances import TOL_APERP, TOL_FS8
 FINE_DB = 10.0                       # measured fine-stage credit, 9.4-10.0 dB
 DEPLOYED_DELAY_DB = 11.4             # CHIME's 200 ns cut; NOT booked in the
                                      # verdicts; shown as a labeled scenario.
@@ -88,13 +88,14 @@ def optimize(path, ch):
     yr_max = dt.datetime.utcfromtimestamp(float(t.max())).year
     era_from = max(yr_max - 2, 2018)
 
+    floor_db, floor_evidence = R.kept_frame_floor(path)
     out = {"ch": ch, "mu0": prov.mu0, "tau_bound": corr.quality != "measured",
-           "tol_aperp": tol, "era_from": era_from, "bases": {}}
+           "tol_aperp": tol, "era_from": era_from,
+           "floor_evidence": floor_evidence, "bases": {}}
 
     for basis in ("product", "sigma_null"):
-        kw = {}
-        if basis == "sigma_null" or not np.isfinite(prov.reported_db):
-            kw["floor_db"] = prov.sigma_implied_db
+        kw = {"floor_db": (floor_db if basis == "product"
+                           else prov.sigma_implied_db)}
         sweep = R.threshold_sweep(path, etas=ETAS, **kw)
         rows = [dict(eta=s["eta"], f=s["f"],
                      r_fine=s["r_masked"] / 10 ** (FINE_DB / 10))
@@ -136,7 +137,11 @@ def main(argv=None):
         ch, _, path = spec.partition("=")
         products[int(ch)] = path
 
-    results = [optimize(p, ch) for ch, p in sorted(products.items())]
+    # The selector's scope is the first-measured block (the channels with
+    # published fs8 constants); the lower band's operating points come from
+    # scripts/calibrated_thresholds.py on the same stable tolerance table.
+    results = [optimize(p, ch) for ch, p in sorted(products.items())
+               if ch in TOL_FS8]
 
     print(f"objective: min (1+r)/(1-f)  s.t.  r_fine <= r_tol(alpha_perp), "
           f"zeta = 1, fine stage {FINE_DB:.0f} dB\n")
@@ -166,7 +171,8 @@ def main(argv=None):
             rows_csv.append({"ch": res["ch"], "basis": basis,
                              "mu0": res["mu0"], "tau_bound": res["tau_bound"],
                              "tol_aperp": res["tol_aperp"],
-                             "era_from": res["era_from"], **rec2})
+                             "era_from": res["era_from"],
+                             "floor_evidence": res["floor_evidence"], **rec2})
         print()
 
     print("*  tau_c refused (capped at one sidereal day): r is a bound, so a "

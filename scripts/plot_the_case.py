@@ -81,9 +81,9 @@ def policies(npz):
     """(label, residual, time penalty, is_ours) through the full chain."""
     st = R.shelf_statistics(npz)
     corr = R.correlation_time(npz)
-    gain = (st.intraday_fraction
-            * R.n_coh_from_correlation_time(corr.tau_for_budget)
-            + st.fast_fraction)
+    # One booking for the whole package: a refused tau_c takes no
+    # ground-filter credit (see residual.surviving_components).
+    gain = sum(f * n for f, n in R.surviving_components(st, corr))
     d = load_npz(npz)
     valid = d["valid"][:, 0].astype(bool)
     f_dep = float(d["reject_mask"][valid, 0].astype(bool).mean())
@@ -92,8 +92,16 @@ def policies(npz):
     def chain(db):
         return 10.0 ** (db / 10.0) * gain
 
+    # Keep-everything prices the untrimmed time-mean of the on-epoch shelf
+    # (threshold_sweep's r_unmasked): under that policy nothing is removed,
+    # so the burst trim's median understates what an integrated analysis
+    # sees on episodic channels. Same statistic as the sweep, one booking.
+    floor_db, _ = R.kept_frame_floor(npz)
+    r_keep = R.threshold_sweep(
+        npz, etas=np.array([1.0]), floor_db=floor_db)[0]["r_unmasked"]
+
     rows = [
-        ("keep everything", chain(st.on_shelf_db), 0.0, False),
+        ("keep everything", r_keep, 0.0, False),
         ("MAD $1.8\\times$ (incumbent)",
          chain(res["MAD 1.8x within acquisition"].shelf_kept_db),
          res["MAD 1.8x within acquisition"].f, False),
