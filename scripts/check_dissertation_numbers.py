@@ -180,10 +180,16 @@ def threshold_rows() -> dict[int, dict]:
 
 
 def fine_rows() -> dict[int, dict]:
-    """Product-basis operating rows of out/fine_operating_points.csv."""
+    """Product-basis operating rows of out/fine_operating_points.csv.
+
+    Only era-certified rows bind the dissertation: the script records
+    archive-only pairs (era_stable False) for the era-mixture demonstration,
+    and those are not operating points the text is required to quote.
+    """
     rows = {}
     for r in read_csv("fine_operating_points.csv"):
-        if r.get("multiplier_q16") and r.get("basis") == "product":
+        if (r.get("multiplier_q16") and r.get("basis") == "product"
+                and r.get("era_stable") == "True"):
             rows[int(r["ch"])] = r
     return rows
 
