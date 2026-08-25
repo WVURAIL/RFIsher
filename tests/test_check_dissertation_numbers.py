@@ -256,7 +256,7 @@ def _forecast_headline_rows() -> str:
     return " ".join(
         ["sigma(D_V)/D_V [%], clean, 1 on-sky yr & "
          + " & ".join(f"{v:.3f}" for _, v in cols),
-         f"clean (no DTV) & {yrs['clean']:.4f} & 1.000 &"
+         f"uncontaminated baseline & {yrs['clean']:.4f} & 1.000 &"
          f" {byrs['clean']:.3f} & 1.000 \\\\",
          f"legacy rate table & {yrs['legacy_rate_table']:.4f} &"
          f" {yrs['legacy_rate_table'] / yrs['clean']:.3f} & {byrs['legacy_rate_table']:.3f} &"
