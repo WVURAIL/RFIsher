@@ -85,7 +85,7 @@ def stale_provenance() -> list[str]:
                     f"{Path(rel).name}: stale {link} provenance\n"
                     f"  recorded {recorded}\n"
                     f"  current  {current_digest}")
-    return mismatches
+    return mismatches, current
 
 
 def main(argv=None) -> int:
@@ -97,7 +97,7 @@ def main(argv=None) -> int:
                          "not match the current checkouts (printed loudly)")
     args = ap.parse_args(argv)
 
-    mismatches = stale_provenance()
+    mismatches, current = stale_provenance()
     for message in mismatches:
         print(message)
     if mismatches and not args.check:
@@ -132,6 +132,30 @@ def main(argv=None) -> int:
             text = pattern.sub(lambda mm: mm.group(1) + new + mm.group(3),
                                text, count=1)
             print(f"{name}: re-pinned\n  {old} -> {new}")
+    # The RadioFisher source digest is a pin of the same class as the byte
+    # pins: it certifies which backend tree the banks record, and it goes
+    # stale in exactly the same rebuild. Maintain it here, behind the same
+    # provenance gate, so a backend transition cannot leave it dangling.
+    rf_pattern = re.compile(
+        r'(EXPECTED_RADIOFISHER_SOURCE_SHA256 = \(\s*\n\s*")'
+        r'([0-9a-f]{64})(")')
+    rf_m = rf_pattern.search(text)
+    if not rf_m:
+        sys.exit(f"EXPECTED_RADIOFISHER_SOURCE_SHA256 not found in {TESTS}")
+    if rf_m.group(2) != current["radiofisher"]:
+        stale += 1
+        if args.check:
+            print(f"EXPECTED_RADIOFISHER_SOURCE_SHA256: STALE pin\n"
+                  f"  pinned {rf_m.group(2)}\n"
+                  f"  actual {current['radiofisher']}")
+        else:
+            text = rf_pattern.sub(
+                lambda mm: mm.group(1) + current["radiofisher"] + mm.group(3),
+                text, count=1)
+            print(f"EXPECTED_RADIOFISHER_SOURCE_SHA256: re-pinned\n"
+                  f"  {rf_m.group(2)} -> {current['radiofisher']}")
+    else:
+        print("EXPECTED_RADIOFISHER_SOURCE_SHA256: pin current")
     if args.check:
         print("provenance", "STALE" if mismatches else "OK")
         print("pins", "STALE" if stale else "OK")

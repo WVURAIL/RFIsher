@@ -94,7 +94,7 @@ def main() -> int:
     ck.check("ch30 excised (S/N)_A", sig("ch30_excised"), "63.02", 2)
     ck.check("ch30 retained (S/N)_A", sig("ch30_kept"), "63.19", 2)
     ck.check("ch30 retained Fourier (S/N)_A", sig("ch30_kept_fourier"), "60.26", 2)
-    ck.check("pilot-proxy survey penalty", pen("measured"), "1.032", 3)
+    ck.check("pilot-proxy survey penalty", pen("measured"), "1.033", 3)
     ck.check("pilot-proxy Fourier penalty", pen("measured_fourier"), "1.034", 3)
     ck.check("uniform 25% penalty", pen("uniform25_dtv"), "1.076", 3)
     ck.check("uniform 50% penalty", pen("uniform50_dtv"), "1.152", 3)
@@ -112,7 +112,7 @@ def main() -> int:
     # prose percentages derived from the penalties
     print("-- Prose: survey penalties as percentages --")
     ck.check("pilot-proxy penalty as per cent", 100 * (pen("measured") - 1),
-             "3.2", 1, tex_needle="3.2 per cent")
+             "3.3", 1, tex_needle="3.3 per cent")
     ck.check("uniform 50% penalty as per cent", 100 * (pen("uniform50_dtv") - 1),
              "15.2", 1, tex_needle="15.2 per cent")
     ck.check("ch30-excision penalty as per cent", 100 * (pen("ch30_excised") - 1),

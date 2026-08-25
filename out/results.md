@@ -15,13 +15,13 @@ eps_FG=1e-6, no calibration systematics); the robust currency is the
 | scenario | label | sig_at_2yr | years_5sig | time_penalty_vs_clean |
 |---|---|---|---|---|
 | clean | No masking (RFI-free) | 63.57 | 0.0238 | 1.0 |
-| measured | Measured pilot-proxy masking | 61.96 | 0.0246 | 1.032 |
+| measured | Measured pilot-proxy masking | 61.96 | 0.0246 | 1.033 |
 | uniform50_dtv | 50% masked, dtv band | 57.88 | 0.0275 | 1.152 |
-| uniform75_dtv | 75% masked, dtv band | 53.89 | 0.029 | 1.219 |
+| uniform75_dtv | 75% masked, dtv band | 53.89 | 0.0291 | 1.219 |
 | uniform97_dtv | 97% masked, dtv band | 49.7 | 0.0299 | 1.256 |
 | measured_fourier | Measured (Fourier-mode noise convention) | 61.89 | 0.0247 | 1.034 |
 | uniform25_dtv | 25% masked, dtv band | 60.98 | 0.0256 | 1.076 |
-| uniform90_dtv | 90% masked, dtv band | 51.01 | 0.0297 | 1.247 |
+| uniform90_dtv | 90% masked, dtv band | 51.01 | 0.0297 | 1.248 |
 | uniform50_chime | 50% masked, chime band | 48.84 | 0.0477 | 2.0 |
 | ch30_excised | ch30 97% masked (excised) | 63.02 | 0.024 | 1.008 |
 | ch30_kept | ch30 97% masked (kept) | 63.19 | 0.0241 | 1.013 |
@@ -66,8 +66,9 @@ Channel 30 (566-572 MHz, z = 1.48-1.51) is masked ~97% of the time. Options:
   requires x33 the integration time: if the survey needs T years,
   that slice needs 33 T. Ten years of integration buys the depth of
   3.6 clean months. That is "never" for any practical purpose,
-  and under the Fourier-mode noise convention the surviving 97% of the
-  containing z-bin is dragged down with it (see ch30_kept_fourier rows).
+  and under the Fourier-mode noise convention the surviving
+  84% of the containing z-bin is dragged down with it
+  (see ch30_kept_fourier rows).
 * **Excise it** (what the forecast prices by default): costs the overlapped
   bandwidth, a 16% volume hit to the z=1.40-1.50 bin, a
   0.8%

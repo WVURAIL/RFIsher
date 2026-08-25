@@ -231,9 +231,11 @@ baonoise-forecast --version             # baonoise-forecast 1.0.0
 # supported P(k) caches ship in the wheel; new or stale caches also require
 # the optional Python CAMB dependency.
 git clone https://github.com/WVURAIL/RadioFisher ../RadioFisher
-# Reviewed backend for the committed v1.0 banks; update this pin only with a
+# Reviewed backend for the committed banks: the published pilot-proxy branch
+# (a single squashed commit; the pre-squash commit the earliest banks
+# recorded reproduces bit-exactly from it). Update this pin only with a
 # passing cross-repository bank verification.
-git -C ../RadioFisher checkout --detach 3cc9f34e183db9e04820c8a2e7932395ec3a0441
+git -C ../RadioFisher checkout pilot-proxy
 
 export RADIOFISHER_DIR=../RadioFisher   # optional; sibling dir is found automatically
 pip install -e ".[pk]"                 # only when generating/refreshing P(k)
