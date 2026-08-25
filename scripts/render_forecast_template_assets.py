@@ -146,6 +146,26 @@ def _portable_path(path: Path) -> str:
         return path.name
 
 
+def _commit_note(bao_commits: set[str]) -> str:
+    if len(bao_commits) == 1:
+        opening = (
+            "The scalar baseline and named-template banks were built and "
+            "evaluated at one clean Bao commit. "
+        )
+    else:
+        opening = (
+            "The scalar baseline and named-template banks were evaluated at "
+            "different clean Bao commits, but the canonical scientific "
+            "source manifest and content digest are identical. "
+        )
+    return (
+        opening
+        + "Release-only scripts, tests, documentation, and outputs are "
+        "outside that scientific source manifest. The Git commit containing "
+        "this manifest is reported externally to avoid a self-reference."
+    )
+
+
 def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
     per_evidence = []
     bao_digests = set()
@@ -221,13 +241,7 @@ def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
             "source_manifest": json.loads(next(iter(radiofisher_manifests))),
         },
         "per_evidence": per_evidence,
-        "commit_note": (
-            "The scalar baseline and named-template banks were evaluated at "
-            "different clean Bao commits, but the canonical scientific "
-            "source manifest and content digest are identical. Release-only "
-            "scripts, tests, documentation, and outputs are outside that "
-            "scientific source manifest. The Git commit containing this "
-            "manifest is reported externally to avoid a self-reference."),
+        "commit_note": _commit_note(bao_commits),
     }
 
 

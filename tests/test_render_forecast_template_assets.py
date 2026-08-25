@@ -141,3 +141,9 @@ def test_aggregate_retains_exact_disposition_counts():
     assert summary["wedge_like"]["combined_noise_rejected"] == 23
     assert summary["k_shell_localized"]["combined_fixed_accepted"] == 39
     assert summary["k_shell_localized"]["combined_fixed_rejected"] == 24
+
+
+def test_commit_note_matches_the_evaluation_history():
+    assert "one clean Bao commit" in renderer._commit_note({"a" * 40})
+    assert "different clean Bao commits" in renderer._commit_note(
+        {"a" * 40, "b" * 40})
