@@ -59,7 +59,7 @@ ERA_PRODUCT_PINS = {
          "9f3e63e5ad81ba39d085abe5f725cc5c53d9d7a175724158c6d84230f7e1a38f"),
 }
 ERA_SOURCE_PIN = (
-    "40082de9cc973858151c94aee0ca5cd44e55309343f7f7f91d8cd38fa0b18ea9")
+    "a6a8bafebab00aad326bc7056c7d6ec16a289064f938732449b1b884c2c995e7")
 ERA_PRODUCT_SCHEMA = "pilotproxy_detector_datatrawl_v3"
 ERA_VALUE_PINS = {
     32: {
@@ -91,16 +91,16 @@ ERA_VALUE_PINS = {
 }
 WORLD_BANK_PINS = {
     "none": ("fisher_bank_chime2022_pres_dense.npz",
-             "2b613cff3aea772751c00907fd2927507a9269553cdce9456d965e02d0719020",
+             "70e1be4ae7141fb735be3ff96430c6c264e86a4e52d2b3acdc0ce945db24e744",
              None),
     "peak1": ("fisher_bank_chime2022_pres_kfg22_dense.npz",
-              "c289e8cdce00f3ee1f8e832c599aa2ddbc75c43d9fcadf66df0bd70202112e35",
+              "7e834c8f4b5e19b4bbac472f25f2a69ea2805f7aa49ea148657fcc7a3e4b14bf",
               22.0),
     "peak2": ("fisher_bank_chime2022_pres_kfg44_dense.npz",
-              "1e7cecb61371c280d582f864d55aeba9cc21f48c1a298b1665ba0448cfb78aa0",
+              "d93e671f4ff8d4bbd65494174ddb8a1b24cd0d7606774f6aebe5b1745719a95b",
               44.0),
     "deployed": ("fisher_bank_chime2022_pres_kfg80_dense.npz",
-                  "e9ce345c500481e3ba6e0f4409cfd120ff2a83bb6ac42cd7ec64f0047095db73",
+                  "51d209c38df6aada3bc1094b715d89d4fcb94b240414dc745fb14a05b65e0dd4",
                   80.0),
 }
 WORLD_PRODUCT_PINS = {
@@ -111,9 +111,9 @@ WORLD_PRODUCT_PINS = {
          "5bc12254565cc414e6e72d7e3217c8d51c4f9bc92f41b62d2be59037abd86c83"),
     35: ERA_PRODUCT_PINS[35],
 }
-WORLD_SOURCE_COMMIT = "70be39cb73bd576da7d17f40a671b6c12e22a147"
+WORLD_SOURCE_COMMIT = "7f772492a83ac130315544446d0b09379c07e599"
 WORLD_SOURCE_SHA256 = (
-    "9461797acf3f1be1394bb514f98dc717aaa09ccc37313a195c63f2bc1b4ec389")
+    "b94bfb2426bfcc7b40c32f567b167fb52905e3db97967d2158647dd72f9db281")
 WORLD_BACKEND_COMMIT = "f6bc9ea0972028ce30472dd21b25d4b21b7068c0"
 WORLD_BACKEND_SHA256 = (
     "efad0173be49d51679cf98071ccd1dfccd386dc9b2774e202164086347a4c2cf")
@@ -121,7 +121,7 @@ WORLD_SUPPRESSION_DB = {
     "none": 0.0, "peak1": 3.6, "peak2": 8.2, "deployed": 11.4,
 }
 WORLD_ROWS_SHA256 = (
-    "d0d6aa799ffe6163757347c6d97dd9e9d7215d48e68b45c8bf03939ecaf0b2c9")
+    "90b2c542b60eb5ef27737d546837a7f11e2f9e3b5535e28d5466b1579169d01e")
 
 
 # ---------------------------------------------------------------- normalize
@@ -745,12 +745,12 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     # equal quoted-legacy / quoted-clean within the rounding slack of its
     # own printed cells, whatever record the row happens to hold.
     row_pat = r" & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*)"
-    clean_m = re.search(r"clean \(no DTV\)" + row_pat, ck.text)
+    clean_m = re.search(r"uncontaminated baseline" + row_pat, ck.text)
     legacy_m = (re.search(row_pat, ck.text[clean_m.end():])
                 if clean_m else None)
     if legacy_m is None:
         ck._emit("FAIL", "Table 9.1 bin penalty consistent with its years",
-                 "rows not found; keep the 'clean (no DTV)' label and four"
+                 "rows not found; keep the 'uncontaminated baseline' label and four"
                  " numeric columns per row")
     else:
         def half_ulp(s: str) -> float:
