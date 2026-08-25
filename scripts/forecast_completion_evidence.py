@@ -200,7 +200,8 @@ def main(argv=None) -> int:
 
     try:
         bank = bt.load_bias_bank(
-            args.bank, rf_dir=args.radiofisher_dir)
+            args.bank, expected_epsilon_fg=0.0,
+            rf_dir=args.radiofisher_dir)
     except ValueError as exc:
         parser.error(str(exc))
     bins = bt.dtv_bin_indices(bank) if args.all_dtv_bins else [

@@ -32,7 +32,7 @@ two different, explicitly named time families:
 Bias-response banks are intentionally not distributed. Build one and run:
 
     python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
-        --p-res 1.0 --dense-knee \
+        --epsilon-fg 0 --p-res 1.0 --dense-knee \
         --out data/fisher_bank_chime2022_pres_dense.npz
     python scripts/bias_tolerance.py \
         --bank data/fisher_bank_chime2022_pres_dense.npz \
@@ -70,10 +70,11 @@ PRES = "_Pres"
 DEFAULT_BIAS_BANK = ROOT / "data" / "fisher_bank_chime2022_pres_dense.npz"
 DEFAULT_BUILD_COMMAND = (
     "python scripts/build_bank.py --config chime2022 "
-    "--cosmology planck2018 --p-res 1.0 --dense-knee "
+    "--cosmology planck2018 --epsilon-fg 0 --p-res 1.0 --dense-knee "
     "--out data/fisher_bank_chime2022_pres_dense.npz"
 )
 _ANY_KFG = object()
+_ANY_EPSILON_FG = object()
 
 PERBIN_APPENDIX_A = "perbin_appendix_a"
 OVERVIEW_COMBINED_MULTIBIN = "overview_combined_multibin"
@@ -293,7 +294,8 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
 
 
 def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
-                   expected_kfg_fac=_ANY_KFG, rf_dir=None):
+                   expected_kfg_fac=_ANY_KFG,
+                   expected_epsilon_fg=_ANY_EPSILON_FG, rf_dir=None):
     """Load an explicitly generated strict-v2 unit-response bank."""
     path = Path(path)
     instruction = (
@@ -331,6 +333,9 @@ def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
             "P_res response")
     actual_kfg = (overrides.get("kfg_fac")
                   if isinstance(overrides, dict) else None)
+    foregrounds = bank.meta.get("foreground_settings")
+    actual_epsilon_fg = (foregrounds.get("epsilon_fg")
+                         if isinstance(foregrounds, dict) else None)
     if expected_kfg_fac is _ANY_KFG:
         kfg_matches = True
     elif expected_kfg_fac is None:
@@ -340,6 +345,11 @@ def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
     if not kfg_matches:
         problems.append(
             f"expt_overrides.kfg_fac must equal {expected_kfg_fac!r}")
+    if expected_epsilon_fg is not _ANY_EPSILON_FG and not _exact_numeric(
+            actual_epsilon_fg, expected_epsilon_fg):
+        problems.append(
+            "foreground_settings.epsilon_fg must equal "
+            f"{expected_epsilon_fg!r}")
     if problems:
         raise ValueError(
             f"{path} is incompatible with the bias workflow: "

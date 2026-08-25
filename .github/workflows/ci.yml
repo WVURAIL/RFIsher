@@ -68,8 +68,9 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -q -rs --no-header \
+            tests/test_dissertation_figures.py \
             tests/test_render_forecast_template_assets.py | tee /tmp/figure.log
-          if grep -q "dissertation figure audit needs" /tmp/figure.log; then
+          if grep -Eq "dissertation figure.*need" /tmp/figure.log; then
             echo "::error::figure audit skipped even though the toolchain installed"
             exit 1
           fi

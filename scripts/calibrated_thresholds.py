@@ -48,20 +48,21 @@ pre-sign-on quiet era).  Both choices push the residual up rather than down,
 so the floor is bounded in the same one-sided sense as the coherence cap
 below, and ``note`` records per channel which basis a row used.
 
-**Adopted basis: the bound, not the measurement.**  The residual depends on
-how long contamination stays coherent, and only three channels carry a
-measured coherence time.  Everywhere else the chain is evaluated at the
-sidereal-day cap, which is the physical ceiling: anything longer-lived has
-already been removed as m = 0.  Since tau_cap >= tau_true, and the coherent
-amplification n_coh grows with tau, the residual reported at the cap is an
-**upper bound** on the true residual, not an estimate of it.
+**Adopted basis: measured value, resolved upper bound, or cap.**  The residual
+depends on how long contamination stays coherent.  A measured value is used
+when the estimator resolves one, and a shortest-lag crossing is carried as an
+upper bound.  A refusal is evaluated at the sidereal-day cap, which is the
+physical ceiling: anything longer-lived has already been removed as m = 0.
+Since tau_cap >= tau_true, and the coherent amplification n_coh grows with
+tau, the residual reported at the cap is an **upper bound** on the true
+residual, not an estimate of it.
 
 Two consequences follow, and both matter for how the columns are read:
 
-* ``r > r_tol`` at the cap does **not** demonstrate that a channel violates
-  its tolerance.  It demonstrates that the tolerance is *not certified* on
-  present evidence.  A measured tau can only lower the residual, so it can
-  only enlarge the feasible set.
+* ``r > r_tol`` at an adopted upper bound does **not** demonstrate that a
+  channel violates its tolerance.  It demonstrates that the tolerance is
+  *not certified* on present evidence.  A tighter coherence result can only
+  lower the residual, so it can only enlarge the feasible set.
 * Nothing in the keep/excise disposition rests on this.  Every excised
   channel fails on carrier dominance -- the densest population in its latest
   era is the carrier, so no null exists to threshold against -- which is a
@@ -71,12 +72,12 @@ Two consequences follow, and both matter for how the columns are read:
 The thermal end (one frame, n_coh = 1) is carried alongside as the
 optimistic limit, so the width of the bracket is visible; it is not the
 operating basis.  ``residual_basis`` names, per channel, which of the two a
-row's cap-end numbers actually rest on.
+row's adopted-coherence numbers actually rest on.
 
 **What an exact residual still needs**, in descending order of how much it
 would move the answer:
 
-1. a measured coherence time per channel.  Twenty of twenty-three sit at the
+1. a usable coherence result per channel.  Refused channels sit at the
    sidereal-day cap, and the bracket between that and the thermal limit spans
    four to six orders of magnitude -- far more than any other term here.  The
    acquisition is specified but not scheduled.
@@ -96,8 +97,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import inspect
 import os
 import sys
+import tempfile
 
 # This is the tolerance-layer half of the calibration suite and belongs in
 # RFIsher; the calibration package it reads products through
@@ -126,18 +130,178 @@ except ImportError as exc:                # pragma: no cover - setup guidance
         f"underlying import error: {exc}") from exc
 
 from baonoise import residual as res  # noqa: E402
+from baonoise import tolerances as tolerance_source  # noqa: E402
 
 from ppcal import era_view as EV, eras as E  # noqa: E402
 from ppcal.calib import calibrate  # noqa: E402
-from ppcal.products import load_all  # noqa: E402
+from ppcal.products import Channel, load_all, product_paths  # noqa: E402
 from baonoise.tolerances import TOL_APERP as TOL_APERP_STABLE  # noqa: E402
 from channel_tolerances import channel_tolerances  # noqa: E402
 
 ETA_GRID = np.concatenate([[1.0], np.geomspace(1.01, 60.0, 90)])
-DAY_CAP = 86164.0
 FRAME_S = 16384 * 2.56e-6
 FINE_DB = 10.0        # measured fine-stage credit, 9.4-10.0 dB (MC verified)
 PLATEAU = 1.02        # "within 2% of optimal" tie-break, smallest eta wins
+ERA_POINT_FIELDS = (
+    "channel", "era", "eta_basis", "masked_fraction", "r_over_rtol",
+    "best_cost_masked_fraction", "best_cost_r_over_rtol", "tau_seconds",
+    "tau_quality", "floor_basis", "floor_era", "floor_frames", "floor_db",
+    "r_tol_dilation", "r_eta1_adopted", "r_cost_adopted", "product_file",
+    "product_sha256", "product_schema", "detector_version",
+    "generator_sha256", "analysis_source_sha256",
+)
+CAP_ALIAS_STEMS = (
+    "eta_cost", "mask_cost", "penalty_cost", "r_cost", "r_unmasked",
+    "r_floor", "eta_dilation", "mask_dilation", "penalty_dilation",
+    "r_dilation", "eta_growth", "mask_growth", "penalty_growth",
+    "r_growth",
+)
+
+
+def load_channels(directory, only=None):
+    """Load all channels, or only the requested physical channels."""
+    if only is None:
+        return load_all(directory)
+    selected = []
+    for path in product_paths(directory):
+        with np.load(path, allow_pickle=False) as data:
+            ch = int(np.asarray(data["physical_channel"]).flat[0])
+        if ch in only:
+            selected.append(Channel(path))
+    found = {c.ch for c in selected}
+    missing = sorted(only - found)
+    if missing:
+        raise SystemExit("requested channel products not found: %s" %
+                         ", ".join(str(ch) for ch in missing))
+    return selected
+
+
+def residual_basis(tau_quality):
+    """Describe the coherence value used by the residual budget."""
+    if tau_quality == "measured":
+        return "measured tau"
+    if tau_quality == "bounded_above":
+        return "upper bound on tau"
+    if tau_quality == "refused":
+        return "upper bound (tau at sidereal cap)"
+    return "unavailable"
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def analysis_source_sha256():
+    """Hash the source files used by this export."""
+    sources = {
+        "generator": __file__,
+        "baonoise.residual": res.__file__,
+        "baonoise.tolerances": tolerance_source.__file__,
+        "ppcal.era_view": EV.__file__,
+        "ppcal.eras": E.__file__,
+        "ppcal.calib": inspect.getsourcefile(calibrate),
+        "ppcal.products": inspect.getsourcefile(Channel),
+        "channel_tolerances": inspect.getsourcefile(channel_tolerances),
+    }
+    digest = hashlib.sha256(b"calibrated-era-source-v1\0")
+    for label, path in sorted(sources.items()):
+        if not path:
+            raise ValueError(f"source path unavailable for {label}")
+        digest.update(label.encode("utf-8") + b"\0")
+        digest.update(bytes.fromhex(file_sha256(path)))
+    return digest.hexdigest()
+
+
+def product_identity(path):
+    with np.load(path, allow_pickle=False) as data:
+        return {
+            "product_file": os.path.basename(path),
+            "product_sha256": file_sha256(path),
+            "product_schema": str(np.asarray(data["schema_version"]).item()),
+            "detector_version": str(
+                np.asarray(data["detector_version"]).item()),
+        }
+
+
+def eta1_row(rows):
+    matches = [row for row in rows
+               if np.isclose(row["eta_mu"], 1.0, rtol=0.0, atol=1e-12)]
+    if len(matches) != 1:
+        raise ValueError("the calibrated eta_mu=1 row is unavailable")
+    return matches[0]
+
+
+def add_cap_aliases(rec):
+    """Keep the calibration table's established column names."""
+    for stem in CAP_ALIAS_STEMS:
+        rec[f"{stem}_cap"] = rec.get(f"{stem}_adopted", "")
+
+
+def era_point_record(rec):
+    """Build the compact current-era figure row."""
+    if rec.get("eta1_status_adopted") != "evaluated":
+        raise ValueError(
+            f"channel {rec['ch']} has no calibrated eta_mu=1 row")
+    values = {
+        "channel": str(rec["ch"]),
+        "era": rec["era"],
+        "eta_basis": "eta_mu_1",
+        "masked_fraction": rec["mask_eta1_adopted"],
+        "r_over_rtol": rec["r_eta1_adopted"] / rec["r_tol_dilation"],
+        "best_cost_masked_fraction": rec["mask_cost_adopted"],
+        "best_cost_r_over_rtol": (
+            rec["r_cost_adopted"] / rec["r_tol_dilation"]),
+        "tau_seconds": rec["tau_seconds"],
+        "tau_quality": rec["tau_quality"],
+        "floor_basis": rec["floor_basis"],
+        "floor_era": rec["floor_era"],
+        "floor_frames": rec["floor_frames"],
+        "floor_db": rec["floor_db"],
+        "r_tol_dilation": rec["r_tol_dilation"],
+        "r_eta1_adopted": rec["r_eta1_adopted"],
+        "r_cost_adopted": rec["r_cost_adopted"],
+        "product_file": rec["product_file"],
+        "product_sha256": rec["product_sha256"],
+        "product_schema": rec["product_schema"],
+        "detector_version": rec["detector_version"],
+        "generator_sha256": rec["generator_sha256"],
+        "analysis_source_sha256": rec["analysis_source_sha256"],
+    }
+    return {
+        key: (f"{value:.10g}" if isinstance(value, float) else value)
+        for key, value in values.items()
+    }
+
+
+def write_csv_atomic(path, fieldnames, rows):
+    """Replace a CSV only after a complete write."""
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(
+        prefix=f".{os.path.basename(path)}.", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=fieldnames, lineterminator="\n")
+            writer.writeheader()
+            writer.writerows(rows)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def write_era_points(path, rows):
+    """Write compact rows used by the dissertation figures."""
+    records = [era_point_record(row) for row in rows]
+    write_csv_atomic(path, ERA_POINT_FIELDS, records)
 
 
 def r_tolerances():
@@ -167,26 +331,41 @@ def sweep(c, segs, fmask, mu, tau):
     if np.isfinite(floor_db):
         note = "floor from era %s (%d frames, p90 %.2f dB)" % (
             floor_era, n_floor, floor_db)
+        floor_info = {
+            "floor_basis": "quiet_era_p90",
+            "floor_era": floor_era,
+            "floor_frames": int(n_floor),
+            "floor_db": float(floor_db),
+        }
     else:
         try:
             fp = res.floor_provenance(c.path)
             floor_db = fp.sigma_implied_db
             note = ("floor substituted: sigma-implied %.2f dB (no quiet era)"
                     % floor_db)
+            floor_info = {
+                "floor_basis": "sigma_implied",
+                "floor_era": "",
+                "floor_frames": "",
+                "floor_db": float(floor_db),
+            }
         except Exception as exc:                   # noqa: BLE001
-            return [], "no floor available: %s" % exc
+            return [], "no floor available: %s" % exc, {
+                "floor_basis": "unavailable", "floor_era": "",
+                "floor_frames": "", "floor_db": "",
+            }
     try:
         with EV.era_product_view(c, fmask) as view:
             rows = res.threshold_sweep(view, etas=ETA_GRID * scale,
                                        tau_intraday=tau, floor_db=floor_db)
     except Exception as exc:                       # noqa: BLE001
-        return [], "sweep failed: %s" % exc
+        return [], "sweep failed: %s" % exc, floor_info
     credit = 10.0 ** (FINE_DB / 10.0)
     for r in rows:
         r["eta_mu"] = r["eta"] / scale
         r["r_fine"] = r["r_masked"] / credit
         r["penalty"] = (1.0 + r["r_fine"]) / max(1.0 - r["f"], 1e-12)
-    return rows, note
+    return rows, note, floor_info
 
 
 def select(rows, r_tol=None):
@@ -211,6 +390,8 @@ def main(argv=None):
     ap.add_argument("--out", default=os.environ.get(
         "PP_CALIB_OUT", os.path.join(ROOT, "out")))
     ap.add_argument("--only", default=None)
+    ap.add_argument("--era-points", default=None,
+                    help="write compact current-era figure rows")
     args = ap.parse_args(argv)
     if not args.products:
         raise SystemExit("pass --products, or set PP_PER_PILOT, to the "
@@ -218,13 +399,14 @@ def main(argv=None):
 
     tol = r_tolerances()
     only = ({int(x) for x in args.only.split(",")} if args.only else None)
+    if args.era_points and only is None:
+        ap.error("--era-points requires --only")
     rows = []
+    source_digest = analysis_source_sha256()
     print("%3s %-9s %10s %10s | %8s %8s %9s %9s | %8s %8s | %s"
           % ("ch", "z range", "r_tol_dil", "r_tol_gro", "eta_cost", "mask",
              "penalty", "r/r_dil", "eta_feas", "mask", "tau"))
-    for c in sorted(load_all(args.products), key=lambda c: c.ch):
-        if only and c.ch not in only:
-            continue
+    for c in sorted(load_channels(args.products, only), key=lambda c: c.ch):
         segs = E.segment(c)
         fmask = E.final_era_frame_mask(c, segs)
         cal = calibrate(c, fmask, segs[-1].label, 0)
@@ -233,27 +415,40 @@ def main(argv=None):
 
         rec = dict(ch=c.ch, era=segs[-1].label, mu=cal.mu, z_low=z_lo,
                    z_high=z_hi, r_tol_dilation=dil, r_tol_growth=gro,
-                   dilation_tol_published=published, note="")
+                   dilation_tol_published=published, note="",
+                   generator_sha256=file_sha256(__file__),
+                   analysis_source_sha256=source_digest,
+                   **product_identity(c.path))
         try:
             with EV.era_product_view(c, fmask) as view:
                 corr = res.correlation_time(view)
             rec["tau_seconds"] = float(corr.tau_for_budget)
             rec["tau_measured"] = bool(corr.is_measured)
-        except Exception:                          # noqa: BLE001
-            rec["tau_seconds"], rec["tau_measured"] = DAY_CAP, False
-        # The adopted basis is the bound wherever tau was refused: the
-        # cap-end residual is then an upper limit on the true one, and a
-        # later measurement can only move it down.
-        rec["residual_basis"] = ("measured tau" if rec["tau_measured"]
-                                 else "upper bound (tau at sidereal cap)")
+            rec["tau_quality"] = corr.quality
+            rec["tau_reason"] = corr.reason
+        except Exception as exc:                   # noqa: BLE001
+            rec["tau_seconds"], rec["tau_measured"] = "", False
+            rec["tau_quality"] = "unavailable"
+            rec["tau_reason"] = str(exc)
+        rec["residual_basis"] = residual_basis(rec["tau_quality"])
 
-        for tag, tau in (("cap", None), ("thermal", FRAME_S)):
-            s, note = sweep(c, segs, fmask, cal.mu, tau)
+        for tag, tau in (("adopted", None), ("thermal", FRAME_S)):
+            s, note, floor_info = sweep(c, segs, fmask, cal.mu, tau)
+            rec.update(floor_info)
             if note:
                 rec["note"] = note
             if not s:
+                rec["eta1_status_%s" % tag] = "unavailable"
                 continue
-            rec["r_unmasked_%s" % tag] = s[0]["r_unmasked"]
+            try:
+                eta1 = eta1_row(s)
+            except ValueError:
+                rec["eta1_status_%s" % tag] = "unavailable"
+            else:
+                rec["eta1_status_%s" % tag] = "evaluated"
+                rec["mask_eta1_%s" % tag] = eta1["f"]
+                rec["r_eta1_%s" % tag] = eta1["r_fine"]
+                rec["r_unmasked_%s" % tag] = eta1["r_unmasked"]
             rec["r_floor_%s" % tag] = min(r["r_fine"] for r in s)
             cost = select(s)                       # unconstrained cost optimum
             if cost is not None:
@@ -275,49 +470,73 @@ def main(argv=None):
                     rec["penalty_" + pre] = pick["penalty"]
                     rec["r_" + pre] = pick["r_fine"]
 
+        add_cap_aliases(rec)
+
         def num(key, fmt):
             v = rec.get(key, "")
             return (fmt % v) if isinstance(v, float) else "-"
 
-        rr = rec.get("r_cost_cap")
+        rr = rec.get("r_cost_adopted")
+        tau = rec["tau_seconds"]
+        tau_text = ("%.0f s" % tau) if isinstance(tau, float) else "-"
         print("%3d %4.2f-%4.2f %10.3g %10.3g | %8s %8s %9s %9s | %8s %8s | "
-              "%6.0f s%s  %s"
+              "%8s %-13s %s"
               % (c.ch, z_lo, z_hi, dil, gro,
-                 num("eta_cost_cap", "%.3f"), num("mask_cost_cap", "%.4f"),
-                 num("penalty_cost_cap", "%.4g"),
+                 num("eta_cost_adopted", "%.3f"),
+                 num("mask_cost_adopted", "%.4f"),
+                 num("penalty_cost_adopted", "%.4g"),
                  ("%.3g" % (rr / dil)) if isinstance(rr, float) else "-",
-                 num("eta_dilation_cap", "%.3f"),
-                 num("mask_dilation_cap", "%.4f"),
-                 rec["tau_seconds"], "*" if rec["tau_measured"] else " ",
+                 num("eta_dilation_adopted", "%.3f"),
+                 num("mask_dilation_adopted", "%.4f"),
+                 tau_text, rec["tau_quality"],
                  rec["note"][:30]))
         rows.append(rec)
 
     cols = ["ch", "era", "mu", "z_low", "z_high", "r_tol_dilation",
             "r_tol_growth", "dilation_tol_published", "tau_seconds",
-            "tau_measured", "residual_basis",
-            "eta_cost_cap", "mask_cost_cap", "penalty_cost_cap", "r_cost_cap",
+            "tau_measured", "tau_quality", "tau_reason", "residual_basis",
+            "product_file", "product_sha256", "product_schema",
+            "detector_version", "generator_sha256",
+            "analysis_source_sha256", "floor_basis",
+            "floor_era", "floor_frames", "floor_db",
+            "eta_cost_adopted", "mask_cost_adopted",
+            "penalty_cost_adopted", "r_cost_adopted",
             "eta_cost_thermal", "mask_cost_thermal", "penalty_cost_thermal",
-            "r_cost_thermal", "r_unmasked_cap", "r_floor_cap",
-            "eta_dilation_cap", "mask_dilation_cap", "penalty_dilation_cap",
-            "r_dilation_cap", "eta_growth_cap", "mask_growth_cap",
-            "penalty_growth_cap", "r_growth_cap", "r_unmasked_thermal",
+            "r_cost_thermal", "r_unmasked_adopted", "r_floor_adopted",
+            "eta1_status_adopted", "mask_eta1_adopted", "r_eta1_adopted",
+            "eta_dilation_adopted", "mask_dilation_adopted",
+            "penalty_dilation_adopted", "r_dilation_adopted",
+            "eta_growth_adopted", "mask_growth_adopted",
+            "penalty_growth_adopted", "r_growth_adopted",
+            "eta_cost_cap", "mask_cost_cap", "penalty_cost_cap",
+            "r_cost_cap", "r_unmasked_cap", "r_floor_cap",
+            "eta_dilation_cap", "mask_dilation_cap",
+            "penalty_dilation_cap", "r_dilation_cap", "eta_growth_cap",
+            "mask_growth_cap", "penalty_growth_cap", "r_growth_cap",
+            "r_unmasked_thermal",
             "r_floor_thermal", "eta_dilation_thermal", "mask_dilation_thermal",
             "penalty_dilation_thermal", "r_dilation_thermal",
             "eta_growth_thermal", "mask_growth_thermal",
-            "penalty_growth_thermal", "r_growth_thermal", "note"]
+            "penalty_growth_thermal", "r_growth_thermal",
+            "eta1_status_thermal", "mask_eta1_thermal", "r_eta1_thermal",
+            "note"]
     tdir = os.path.join(args.out, "tables")
     os.makedirs(tdir, exist_ok=True)
     # A --only run is a spot check, not the table every downstream consumer
     # reads; writing it to eta_bao.csv would silently drop the other channels
     # and send them back to the global fallback threshold.
     name = "eta_bao.csv" if only is None else "eta_bao_subset.csv"
-    with open(os.path.join(tdir, name), "w", newline="",
-              encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols, lineterminator="\n")
-        w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") for k in cols})
-    print("\nwrote", os.path.join(tdir, "eta_bao.csv"))
+    output_path = os.path.join(tdir, name)
+    write_csv_atomic(
+        output_path, cols,
+        ({key: row.get(key, "") for key in cols} for row in rows))
+    print("\nwrote", output_path)
+    if args.era_points:
+        try:
+            write_era_points(args.era_points, rows)
+        except (KeyError, TypeError, ValueError) as exc:
+            ap.error(str(exc))
+        print("wrote", args.era_points)
     return 0
 
 

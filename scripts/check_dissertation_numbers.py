@@ -29,8 +29,10 @@ CSV-driven checks recompute their needles from the shipped out/ artifacts
 (`optimal_thresholds.csv`, `fine_operating_points.csv`, and the forecast
 headline tables: `fig31_validation.csv`, `required_times.csv`,
 `bin_level_targets.csv`, `forecast_completion_all_dtv_bins.json`,
-`forecast_completion_template_comparison.csv`) at the dissertation's
-rounding, so a forecast rerun moves the expectation automatically. JSON checks read the
+`forecast_completion_template_comparison.csv`, `three_worlds.csv`) at the
+dissertation's rounding, so a forecast rerun moves the expectation
+automatically. Current-era checks read
+`scripts/dissertation/data/bao_era_points.csv`. JSON checks read the
 pilot-proxy snapshot (`--summary-json`); they SKIP when it is not supplied.
 
 Exit status 0 = all checks pass; 1 = at least one FAIL. A red run is the
@@ -40,13 +42,86 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
+FIGURE_DATA = ROOT / "scripts" / "dissertation" / "data"
+ERA_PRODUCT_PINS = {
+    32: ("568.npz",
+         "99ad816a828ea8c29e7e5551a34cda7413a95b25afc7d42d0a3ed9d078e0d4da"),
+    35: ("521.npz",
+         "9f3e63e5ad81ba39d085abe5f725cc5c53d9d7a175724158c6d84230f7e1a38f"),
+}
+ERA_SOURCE_PIN = (
+    "40082de9cc973858151c94aee0ca5cd44e55309343f7f7f91d8cd38fa0b18ea9")
+ERA_PRODUCT_SCHEMA = "pilotproxy_detector_datatrawl_v3"
+ERA_VALUE_PINS = {
+    32: {
+        "era": "2023-02..2026-07",
+        "masked_fraction": "0.7056423174",
+        "best_cost_masked_fraction": "0.05602015113",
+        "tau_seconds": "300",
+        "tau_quality": "bounded_above",
+        "floor_era": "2023-02..2026-07",
+        "floor_frames": "14527",
+        "floor_db": "-31.53203804",
+        "r_tol_dilation": "0.0156",
+        "r_eta1_adopted": "0.1672010173",
+        "r_cost_adopted": "0.07569214993",
+    },
+    35: {
+        "era": "2021-11..2026-07",
+        "masked_fraction": "0.4805376645",
+        "best_cost_masked_fraction": "0.01351162139",
+        "tau_seconds": "2767.651212",
+        "tau_quality": "measured",
+        "floor_era": "2018-12..2021-10",
+        "floor_frames": "3359",
+        "floor_db": "-24.98298361",
+        "r_tol_dilation": "0.0352",
+        "r_eta1_adopted": "4.198385861",
+        "r_cost_adopted": "4.734007338",
+    },
+}
+WORLD_BANK_PINS = {
+    "none": ("fisher_bank_chime2022_pres_dense.npz",
+             "2b613cff3aea772751c00907fd2927507a9269553cdce9456d965e02d0719020",
+             None),
+    "peak1": ("fisher_bank_chime2022_pres_kfg22_dense.npz",
+              "c289e8cdce00f3ee1f8e832c599aa2ddbc75c43d9fcadf66df0bd70202112e35",
+              22.0),
+    "peak2": ("fisher_bank_chime2022_pres_kfg44_dense.npz",
+              "1e7cecb61371c280d582f864d55aeba9cc21f48c1a298b1665ba0448cfb78aa0",
+              44.0),
+    "deployed": ("fisher_bank_chime2022_pres_kfg80_dense.npz",
+                  "e9ce345c500481e3ba6e0f4409cfd120ff2a83bb6ac42cd7ec64f0047095db73",
+                  80.0),
+}
+WORLD_PRODUCT_PINS = {
+    29: ("614.npz",
+         "c8b13fcd8ea23b9a384ce71e11f05fed3d9d3fc0f9cbd472f77012233c52502c"),
+    32: ERA_PRODUCT_PINS[32],
+    33: ("552.npz",
+         "5bc12254565cc414e6e72d7e3217c8d51c4f9bc92f41b62d2be59037abd86c83"),
+    35: ERA_PRODUCT_PINS[35],
+}
+WORLD_SOURCE_COMMIT = "70be39cb73bd576da7d17f40a671b6c12e22a147"
+WORLD_SOURCE_SHA256 = (
+    "9461797acf3f1be1394bb514f98dc717aaa09ccc37313a195c63f2bc1b4ec389")
+WORLD_BACKEND_COMMIT = "f6bc9ea0972028ce30472dd21b25d4b21b7068c0"
+WORLD_BACKEND_SHA256 = (
+    "efad0173be49d51679cf98071ccd1dfccd386dc9b2774e202164086347a4c2cf")
+WORLD_SUPPRESSION_DB = {
+    "none": 0.0, "peak1": 3.6, "peak2": 8.2, "deployed": 11.4,
+}
+WORLD_ROWS_SHA256 = (
+    "d0d6aa799ffe6163757347c6d97dd9e9d7215d48e68b45c8bf03939ecaf0b2c9")
 
 
 # ---------------------------------------------------------------- normalize
@@ -166,6 +241,10 @@ def read_csv(name: str) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
+def path_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def threshold_rows() -> dict[int, dict]:
     """Operating rows of out/optimal_thresholds.csv.
 
@@ -192,6 +271,192 @@ def fine_rows() -> dict[int, dict]:
                 and r.get("era_stable") == "True"):
             rows[int(r["ch"])] = r
     return rows
+
+
+WORLD_ORDER = ("none", "peak1", "peak2", "deployed")
+
+
+def worlds_rows() -> dict[tuple[str, int], dict]:
+    raw = read_csv("three_worlds.csv")
+    rows = {(row["world"], int(row["ch"])): row for row in raw}
+    if len(rows) != len(raw):
+        raise ValueError("duplicate row in three_worlds.csv")
+    return rows
+
+
+def era_rows() -> dict[int, dict]:
+    with (FIGURE_DATA / "bao_era_points.csv").open(
+            newline="", encoding="utf-8") as stream:
+        raw = list(csv.DictReader(stream))
+    rows = {int(row["channel"]): row for row in raw}
+    if len(rows) != len(raw):
+        raise ValueError("duplicate channel in bao_era_points.csv")
+    return rows
+
+
+def era_provenance_ok(rows: dict[int, dict]) -> bool:
+    if set(rows) != set(ERA_PRODUCT_PINS):
+        return False
+    generator_digest = path_sha256(
+        ROOT / "scripts" / "calibrated_thresholds.py")
+    try:
+        for ch, (filename, digest) in ERA_PRODUCT_PINS.items():
+            row = rows[ch]
+            if not (
+                all(row[key] == value
+                    for key, value in ERA_VALUE_PINS[ch].items())
+                and
+                row["product_file"] == filename
+                and row["product_sha256"] == digest
+                and row["generator_sha256"] == generator_digest
+                and row["analysis_source_sha256"] == ERA_SOURCE_PIN
+                and row["product_schema"] == ERA_PRODUCT_SCHEMA
+                and row["detector_version"].startswith("pilot-proxy/")
+                and row["eta_basis"] == "eta_mu_1"
+                and row["floor_basis"] == "quiet_era_p90"
+                and row["floor_era"]
+                and int(row["floor_frames"]) > 0
+                and float(row["floor_db"]) < 0.0
+                and float(row["tau_seconds"]) > 0.0
+            ):
+                return False
+            tol = float(row["r_tol_dilation"])
+            eta1_ratio = float(row["r_eta1_adopted"]) / tol
+            cost_ratio = float(row["r_cost_adopted"]) / tol
+            if not (
+                math.isclose(eta1_ratio, float(row["r_over_rtol"]),
+                             rel_tol=2e-9, abs_tol=1e-10)
+                and math.isclose(
+                    cost_ratio, float(row["best_cost_r_over_rtol"]),
+                    rel_tol=2e-9, abs_tol=1e-10)
+            ):
+                return False
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        return False
+    return True
+
+
+def world_provenance_ok(rows: dict[tuple[str, int], dict],
+                        era: dict[int, dict]) -> bool:
+    expected = {(world, ch) for world in WORLD_BANK_PINS
+                for ch in WORLD_PRODUCT_PINS}
+    if set(rows) != expected:
+        return False
+    source_pins = {
+        "generator_sha256": path_sha256(ROOT / "scripts" /
+                                         "three_worlds.py"),
+        "bias_source_sha256": path_sha256(ROOT / "scripts" /
+                                           "bias_tolerance.py"),
+        "residual_source_sha256": path_sha256(ROOT / "src" / "baonoise" /
+                                               "residual.py"),
+    }
+    try:
+        for (world, ch), row in rows.items():
+            bank_file, bank_digest, kfg = WORLD_BANK_PINS[world]
+            product_file, product_digest = WORLD_PRODUCT_PINS[ch]
+            recorded_kfg = (None if row["bank_kfg_fac"] == ""
+                            else float(row["bank_kfg_fac"]))
+            if not (
+                all(row[key] == value for key, value in source_pins.items())
+                and row["bank_file"] == bank_file
+                and row["bank_sha256"] == bank_digest
+                and row["bank_schema"] == "2"
+                and row["bank_source_commit"] == WORLD_SOURCE_COMMIT
+                and row["bank_source_sha256"] == WORLD_SOURCE_SHA256
+                and row["bank_backend_commit"] == WORLD_BACKEND_COMMIT
+                and row["bank_backend_sha256"] == WORLD_BACKEND_SHA256
+                and recorded_kfg == kfg
+                and float(row["bank_epsilon_fg"]) == 0.0
+                and float(row["bank_p_res"]) == 1.0
+                and row["bank_grid_points"] == "27"
+                and row["product_file"] == product_file
+                and row["product_sha256"] == product_digest
+                and int(row["floor_frames"]) > 0
+            ):
+                return False
+        ch35 = [rows[(world, 35)] for world in WORLD_ORDER]
+        if not all(
+            row["floor_epoch"] == "through 2021-10"
+            and row["floor_frames"] == era[35]["floor_frames"]
+            and math.isclose(float(row["floor_db"]),
+                             float(era[35]["floor_db"]),
+                             rel_tol=0.0, abs_tol=1e-8)
+            for row in ch35
+        ):
+            return False
+    except (KeyError, TypeError, ValueError):
+        return False
+    return True
+
+
+def world_rows_sha256(rows: dict[tuple[str, int], dict]) -> str:
+    payload = [
+        {key: rows[item][key] for key in sorted(rows[item])}
+        for item in sorted(rows)
+    ]
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def world_results_ok(rows: dict[tuple[str, int], dict]) -> bool:
+    if world_rows_sha256(rows) != WORLD_ROWS_SHA256:
+        return False
+    same_by_channel = (
+        "residual_status", "n_eta1_kept", "n_eta1_valid",
+        "min_eta1_kept", "product_file", "product_sha256", "floor_epoch",
+        "floor_frames", "floor_db", "floor_evidence", "tau_quality",
+        "tau_reason", "tau_capped",
+    )
+    try:
+        for ch in WORLD_PRODUCT_PINS:
+            channel_rows = [rows[(world, ch)] for world in WORLD_ORDER]
+            reference = channel_rows[0]
+            if not all(all(row[field] == reference[field]
+                           for field in same_by_channel)
+                       for row in channel_rows):
+                return False
+            base_residual = reference["r_fine"]
+            for world, row in zip(WORLD_ORDER, channel_rows):
+                if not math.isclose(float(row["suppression_db"]),
+                                    WORLD_SUPPRESSION_DB[world],
+                                    rel_tol=0.0, abs_tol=1e-12):
+                    return False
+                if row["tau_capped"] != str(
+                        row["tau_quality"] == "refused"):
+                    return False
+                if row["residual_status"] == "insufficient_kept_frames":
+                    if not (
+                        int(row["n_eta1_kept"]) < int(row["min_eta1_kept"])
+                        and row["r_fine"] == ""
+                        and all(row[f"pass_{name}"] == ""
+                                for name in ("aperp", "apar", "fs8"))
+                    ):
+                        return False
+                    continue
+                if row["residual_status"] != "evaluated":
+                    return False
+                residual = float(row["r_fine"])
+                if not (math.isfinite(residual) and residual > 0.0):
+                    return False
+                expected = float(base_residual) / 10.0 ** (
+                    WORLD_SUPPRESSION_DB[world] / 10.0)
+                if not math.isclose(residual, expected, rel_tol=2e-12,
+                                    abs_tol=1e-15):
+                    return False
+                for name in ("aperp", "apar", "fs8"):
+                    tolerance = float(row[f"tol_{name}"])
+                    if not (math.isfinite(tolerance) and tolerance > 0.0):
+                        return False
+                    if row[f"pass_{name}"] != str(residual <= tolerance):
+                        return False
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        return False
+    return True
+
+
+def world_margin(row: dict) -> str:
+    return f"{float(row['tol_fs8']) / float(row['r_fine']):.2g}"
 
 
 def fig31_clean_columns() -> list[tuple[float, float]]:
@@ -313,6 +578,124 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
         ck.value(f"ch {ch}: penalty",
                  num_needles(pen) + ([f"{pen:.0f}x"] if pen >= 100 else []),
                  "quote the CSV at the table's rounding")
+
+    # ---- Worlds table <- out/three_worlds.csv --------------------------
+    ck.section("Worlds table <- out/three_worlds.csv")
+    worlds = worlds_rows()
+    worlds_provenance = world_provenance_ok(worlds, era_rows())
+    ck._emit("PASS" if worlds_provenance else "FAIL",
+             "worlds source identities preserved",
+             "" if worlds_provenance else
+             "regenerate the direct worlds table")
+    worlds_results = world_results_ok(worlds)
+    ck._emit("PASS" if worlds_results else "FAIL",
+             "worlds residuals and verdicts are internally consistent",
+             "" if worlds_results else
+             "regenerate the direct worlds table")
+    for ch in (33, 35):
+        cells = []
+        for world in WORLD_ORDER:
+            row = worlds[(world, ch)]
+            value = re.escape(world_margin(row))
+            if row["pass_fs8"] == "True":
+                value = rf"\\mathbf\{{{value}\}}"
+            cells.append(value)
+        pattern = rf"ch{ch}\s*&\s*" + r"\s*&\s*".join(cells)
+        ck.require(f"ch {ch}: direct fs8 margins", pattern,
+                   "quote out/three_worlds.csv at two significant digits")
+
+    ch32 = [worlds[(world, 32)] for world in WORLD_ORDER]
+    refusal_ok = all(
+        r["residual_status"] == "insufficient_kept_frames"
+        and r["n_eta1_kept"] == "16"
+        and r["n_eta1_valid"] == "8359"
+        and r["min_eta1_kept"] == "30"
+        and not r["r_fine"]
+        and all(not r[f"pass_{p}"] for p in ("aperp", "apar", "fs8"))
+        for r in ch32)
+    ck._emit("PASS" if refusal_ok else "FAIL",
+             "ch 32: eta=1 refusal preserved in CSV",
+             "" if refusal_ok else
+             "expected 16/8359 kept, minimum 30, with blank margins")
+    ck.require(
+        "ch 32: insufficient population in worlds table",
+        r"ch32\s*&\s*\\multicolumn\{4\}\{c\}\{not evaluated: "
+        r"16<30 kept frames at \\eta=1 in its transmitter-on era\}",
+        "render the machine-readable refusal rather than a numeric margin")
+
+    deployed29 = worlds[("deployed", 29)]
+    aperp_over = (float(deployed29["r_fine"])
+                  / float(deployed29["tol_aperp"]))
+    ck.require(
+        "ch 29: deployed-cut perpendicular excess",
+        rf"ch29\s*&\s*fails all\s*&\s*fails all\s*&\s*fails all"
+        rf"\s*&\s*fails all \(\\alpha_\\perp {aperp_over:.1f}x over\)",
+        "quote out/three_worlds.csv at one decimal place")
+    ck.require(
+        "ch 35: isolated parallel-dilation pass disclosed",
+        r"Channel 35.{0,300}parallel dilation alone passes at 110 ns",
+        "the direct bank passes apar only; aperp and fs8 still fail")
+    ch35_provenance = all(
+        worlds[(world, 35)].get("floor_evidence") == "measured"
+        and worlds[(world, 35)].get("tau_quality") == "measured"
+        for world in WORLD_ORDER)
+    ck._emit("PASS" if ch35_provenance else "FAIL",
+             "ch 35: measured floor and coherence preserved in CSV",
+             "" if ch35_provenance else
+             "expected measured floor_evidence and tau_quality")
+    ck.require(
+        "ch 35: measured off-era floor disclosed",
+        r"Channel 35.{0,300}measured off-era floor",
+        "state the floor basis used by the direct worlds row")
+
+    # ---- Current-era endpoints ----------------------------------------
+    ck.section("Current-era endpoints <- bao_era_points.csv")
+    era = era_rows()
+    ch32, ch35 = era[32], era[35]
+    provenance_ok = era_provenance_ok(era)
+    ck._emit("PASS" if provenance_ok else "FAIL",
+             "current-era source identity and ratios preserved",
+             "" if provenance_ok else
+             "regenerate the compact current-era export")
+    quality_ok = (
+        ch32["tau_quality"] == "bounded_above"
+        and ch35["tau_quality"] == "measured"
+    )
+    ck._emit("PASS" if quality_ok else "FAIL",
+             "current-era coherence provenance preserved",
+             "" if quality_ok else
+             "expected ch32 bounded_above and ch35 measured")
+
+    ch32_minutes = float(ch32["tau_seconds"]) / 60.0
+    ch32_best = float(ch32["best_cost_r_over_rtol"])
+    ck.require(
+        "ch 32: bound and adopted-coherence excess",
+        rf"Channel 32.{{0,500}}(?:upper bound.{{0,120}}"
+        rf"\\tau_c\\leq ?{ch32_minutes:g}|"
+        rf"\\tau_c\\leq ?{ch32_minutes:g}.{{0,120}}upper bound)"
+        rf".{{0,500}}{ch32_best:.2f}x",
+        "quote the upper bound and best-cost adopted-coherence excess")
+
+    ch35_minutes = float(ch35["tau_seconds"]) / 60.0
+    ch35_mask = 100.0 * float(ch35["masked_fraction"])
+    ch35_endpoint = float(ch35["r_over_rtol"])
+    ch35_best_mask = 100.0 * float(ch35["best_cost_masked_fraction"])
+    ch35_best = float(ch35["best_cost_r_over_rtol"])
+    ck.require(
+        "ch 35: calibrated endpoint",
+        rf"[Cc]hannel 35.{{0,500}}{ch35_mask:.1f}%"
+        rf".{{0,300}}{ch35_endpoint:.0f}x",
+        "quote the calibrated eta_mu=1 endpoint")
+    ck.require(
+        "ch 35: best-cost endpoint",
+        rf"{ch35_best_mask:.2f}%.*{ch35_best:.0f}x",
+        "quote the best-cost masked fraction and tolerance excess")
+    ck.require(
+        "ch 35: measured coherence",
+        rf"current-era.{{0,200}}(?:tau_c=)?{ch35_minutes:.1f}"
+        rf".{{0,20}}min.{{0,80}}measured"
+        rf"|measured.{{0,80}}{ch35_minutes:.1f}.{{0,20}}min",
+        "quote the current-era measured coherence time")
 
     # ---- Table 8.1 <- out/fine_operating_points.csv ---------------------
     ck.section("Table 8.1 <- out/fine_operating_points.csv")

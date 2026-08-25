@@ -86,6 +86,82 @@ def test_csv_operating_rows_resolve():
         for k in ("eta", "f", "r_fine", "margin", "penalty"))
     fine = cdn.fine_rows()
     assert fine and all(r["multiplier_q16"] for r in fine.values())
+    worlds = cdn.worlds_rows()
+    assert len(worlds) == 16
+    assert cdn.world_provenance_ok(worlds, cdn.era_rows())
+    assert cdn.world_results_ok(worlds)
+    assert all(worlds[(world, 32)]["residual_status"]
+               == "insufficient_kept_frames" for world in cdn.WORLD_ORDER)
+    assert all(worlds[(world, 35)]["floor_evidence"] == "measured"
+               and worlds[(world, 35)]["tau_quality"] == "measured"
+               for world in cdn.WORLD_ORDER)
+    era = cdn.era_rows()
+    assert set(era) == {32, 35}
+    assert cdn.era_provenance_ok(era)
+    assert era[32]["tau_quality"] == "bounded_above"
+    assert era[35]["tau_quality"] == "measured"
+
+
+def test_era_provenance_rejects_changed_inputs_and_ratios():
+    original = cdn.era_rows()
+    for key, value in (
+        ("product_sha256", "0" * 64),
+        ("analysis_source_sha256", "0" * 64),
+        ("r_over_rtol", "1"),
+        ("floor_basis", "unknown"),
+        ("masked_fraction", "0.1"),
+        ("best_cost_masked_fraction", "0.1"),
+        ("tau_seconds", "1"),
+        ("floor_frames", "1"),
+    ):
+        rows = {ch: dict(row) for ch, row in original.items()}
+        rows[32][key] = value
+        assert not cdn.era_provenance_ok(rows)
+
+
+def test_world_provenance_rejects_changed_inputs():
+    original = cdn.worlds_rows()
+    for key, value in (
+        ("bank_sha256", "0" * 64),
+        ("product_sha256", "0" * 64),
+        ("floor_epoch", "unknown"),
+        ("generator_sha256", "0" * 64),
+    ):
+        rows = {item: dict(row) for item, row in original.items()}
+        rows[("none", 35)][key] = value
+        assert not cdn.world_provenance_ok(rows, cdn.era_rows())
+
+
+def test_world_results_reject_changed_values():
+    original = cdn.worlds_rows()
+    for item, key, value in (
+        (("peak1", 33), "pass_fs8", "False"),
+        (("peak1", 33), "r_fine", "999"),
+        (("peak1", 33), "suppression_db", "999"),
+        (("none", 29), "tau_capped", "False"),
+        (("none", 32), "pass_fs8", "False"),
+    ):
+        rows = {row_item: dict(row)
+                for row_item, row in original.items()}
+        rows[item][key] = value
+        assert not cdn.world_results_ok(rows)
+
+
+def test_world_results_reject_coordinated_changes():
+    original = cdn.worlds_rows()
+    rows = {item: dict(row) for item, row in original.items()}
+    for world in cdn.WORLD_ORDER:
+        row = rows[(world, 33)]
+        residual = 2.0 * float(row["r_fine"])
+        row["r_fine"] = str(residual)
+        for name in ("aperp", "apar", "fs8"):
+            row[f"pass_{name}"] = str(residual <= float(row[f"tol_{name}"]))
+    assert not cdn.world_results_ok(rows)
+
+    rows = {item: dict(row) for item, row in original.items()}
+    rows[("peak1", 33)]["tol_fs8"] = "999"
+    rows[("peak1", 33)]["pass_fs8"] = "True"
+    assert not cdn.world_results_ok(rows)
 
 
 def test_end_to_end_exit_codes(tmp_path):
@@ -158,6 +234,25 @@ def _forecast_headline_rows() -> str:
     trs = cdn.template_rows()
     per = [float(r["perbin_binding_tolerance"]) for r in trs]
     joint = [float(r["combined_binding_tolerance"]) for r in trs]
+    worlds = cdn.worlds_rows()
+
+    def worlds_line(ch: int) -> str:
+        cells = []
+        for world in cdn.WORLD_ORDER:
+            row = worlds[(world, ch)]
+            value = cdn.world_margin(row)
+            cells.append(
+                rf"\mathbf{{{value}}}" if row["pass_fs8"] == "True"
+                else value)
+        return f"ch{ch} & " + " & ".join(cells)
+
+    deployed29 = worlds[("deployed", 29)]
+    aperp_over = (float(deployed29["r_fine"])
+                  / float(deployed29["tol_aperp"]))
+    era = cdn.era_rows()
+    ch32, ch35 = era[32], era[35]
+    ch32_minutes = float(ch32["tau_seconds"]) / 60.0
+    ch35_minutes = float(ch35["tau_seconds"]) / 60.0
     return " ".join(
         ["sigma(D_V)/D_V [%], clean, 1 on-sky yr & "
          + " & ".join(f"{v:.3f}" for _, v in cols),
@@ -171,7 +266,23 @@ def _forecast_headline_rows() -> str:
          f"{min(per):.6f}-{max(per):.6f}",
          f"{min(joint):.6f}-{max(joint):.6f}",
          f"{sum(int(r['perbin_accepted']) for r in trs)}"
-         f"/{sum(int(r['perbin_rejected']) for r in trs)}"])
+         f"/{sum(int(r['perbin_rejected']) for r in trs)}",
+         worlds_line(33), worlds_line(35),
+         r"ch32 & \multicolumn{4}{c}{not evaluated: 16<30 kept frames at "
+         r"\eta=1 in its transmitter-on era}",
+         f"ch29 & fails all & fails all & fails all & fails all "
+         rf"(\alpha_\perp {aperp_over:.1f}x over)",
+         "Channel 35's parallel dilation alone passes at 110 ns",
+         "Channel 35 uses its measured off-era floor",
+         f"Channel 32 upper bound \\tau_c\\leq {ch32_minutes:g} min "
+         f"and best adopted-coherence residual "
+         f"{float(ch32['best_cost_r_over_rtol']):.2f}x",
+         f"channel 35 calibrated endpoint masks "
+         f"{100 * float(ch35['masked_fraction']):.1f}% and remains "
+         f"{float(ch35['r_over_rtol']):.0f}x over; best-cost point masks "
+         f"{100 * float(ch35['best_cost_masked_fraction']):.2f}% and remains "
+         f"{float(ch35['best_cost_r_over_rtol']):.0f}x over; current-era "
+         f"{ch35_minutes:.1f} min is measured"])
 
 
 def test_forecast_sources_resolve():

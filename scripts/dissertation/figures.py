@@ -19,9 +19,12 @@ replacement path, and until then its bridge status is recorded, not hidden.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 from collections import defaultdict
+import hashlib
 from pathlib import Path
+import string
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,6 +32,39 @@ import matplotlib.pyplot as plt
 import style
 
 DATA = Path(__file__).resolve().parent / "data"
+
+
+def _stable_subset_prefix(charset) -> str:
+    """Return a repeatable PDF font-subset tag."""
+    glyphs = "\0".join(sorted(str(name) for name in charset))
+    value = int.from_bytes(
+        hashlib.sha256(glyphs.encode("utf-8")).digest()[:8], "big")
+    letters = []
+    for _ in range(6):
+        value, index = divmod(value, 26)
+        letters.append(string.ascii_uppercase[index])
+    return "".join(letters) + "+"
+
+
+@contextlib.contextmanager
+def _stable_pdf_subset_tags():
+    """Use content-based tags where Matplotlib exposes its PDF hook."""
+    from matplotlib.backends.backend_pdf import PdfFile
+
+    original = vars(PdfFile).get("_get_subset_prefix")
+    if original is None:
+        yield
+        return
+    PdfFile._get_subset_prefix = staticmethod(_stable_subset_prefix)
+    try:
+        yield
+    finally:
+        PdfFile._get_subset_prefix = original
+
+
+def _save_pdf(fig, path: Path, *, title: str) -> Path:
+    with _stable_pdf_subset_tags():
+        return style.save(fig, path, title=title)
 
 
 def read_csv(name: str):
@@ -61,7 +97,7 @@ def fig_bao_time_vs_masking(out: Path) -> Path:
     ax.set_xlabel(r"Masked fraction of the DTV band [\%]"); ax.set_ylabel(r"Required observing time [on-sky yr]")
     style.clean_axes(ax); ax.legend(loc="upper left",fontsize=7.2)
     ax.set_title(r"Noise tolerance: observing time to reach BAO targets versus uniform DTV masking",pad=5)
-    return style.save(fig,out/"fig_bao_time_vs_masking.pdf",title="BAO observing time versus DTV masking")
+    return _save_pdf(fig,out/"fig_bao_time_vs_masking.pdf",title="BAO observing time versus DTV masking")
 
 
 def fig_bao_the_case(out: Path) -> Path:
@@ -98,7 +134,7 @@ def fig_bao_the_case(out: Path) -> Path:
     ax.set_xscale("log"); ax.set_xlim(7e-4,15); ax.set_ylim(-.55,4.8); ax.set_yticks([])
     ax.set_xlabel(r"Residual DTV power surviving to the power spectrum, in units of system noise")
     style.clean_axes(ax,grid="x"); ax.set_title(rf"Channel {channel}: full residual chain at the measured floor and $\tau_c\leq{tau:g}$ min",pad=5)
-    return style.save(fig,out/"fig_bao_the_case.pdf",title=f"Channel {channel} residual-policy comparison")
+    return _save_pdf(fig,out/"fig_bao_the_case.pdf",title=f"Channel {channel} residual-policy comparison")
 
 
 def fig_bao_convergence(out: Path) -> Path:
@@ -123,7 +159,7 @@ def fig_bao_convergence(out: Path) -> Path:
     ax.set_xscale("log"); ax.set_yscale("log"); ax.set_ylim(1e-3,1e6)
     ax.set_xlabel(r"Integration time [on-sky yr]"); ax.set_ylabel(r"$|\Delta f\sigma_8|/\sigma(f\sigma_8)$")
     style.clean_axes(ax); style.panel_label(ax,"b"); ax.set_title(r"noise-normalized residual family",pad=4); ax.legend(loc="lower left",fontsize=6.8)
-    return style.save(fig,out/"fig_bao_convergence.pdf",title="Time scaling under the current residual normalization")
+    return _save_pdf(fig,out/"fig_bao_convergence.pdf",title="Time scaling under the current residual normalization")
 
 
 def fig_bao_two_walls(out: Path) -> Path:
@@ -153,17 +189,17 @@ def fig_bao_two_walls(out: Path) -> Path:
         if ch in colors or y[-1]<1.0:
             dx=.012 if x[-1]<.96 else .008
             ax.text(min(x[-1]+dx,1.035),y[-1]*1.12,rf"ch{ch}",fontsize=6.6,color=c,ha="left")
-    # Post-sign-on epoch for channel 35: eta = 1 on frames after 2021-10 at
-    # the channel's measured off-era floor (scripts/dissertation/
-    # make_two_walls.py conventions; regenerate with plot_two_walls.era_point).
-    ax.scatter([.992],[4.98],marker="x",s=35,color=style.CONDITIONAL,lw=1.2,zorder=5)
-    ax.annotate(r"ch35 after sign-on (2021-11 onward): both walls at once",xy=(.992,4.98),xytext=(.30,.018),fontsize=6.8,color=style.CONDITIONAL,
+    era = next(r for r in read_csv("bao_era_points.csv")
+               if int(r["channel"]) == 35)
+    era_point = (float(era["masked_fraction"]), float(era["r_over_rtol"]))
+    ax.scatter([era_point[0]],[era_point[1]],marker="x",s=35,color=style.CONDITIONAL,lw=1.2,zorder=5)
+    ax.annotate(rf"ch35 after sign-on: calibrated endpoint remains ${era_point[1]:.0f}\times$ above the bias wall",xy=era_point,xytext=(.30,.018),fontsize=6.8,color=style.CONDITIONAL,
                 arrowprops=dict(arrowstyle="->",color=style.CONDITIONAL,lw=.7))
     ax.set_yscale("log"); ax.set_xlim(0,1.045); ax.set_ylim(2e-3,5e4)
     ax.set_xlabel(r"Masked fraction of observing time, $f$"); ax.set_ylabel(r"Residual over tolerance, $r_{\rm proxy}/r_{\rm tol}$")
     style.clean_axes(ax); ax.set_title(r"Two ways to fail, one plane: every threshold is a point and every channel a curve",pad=5)
     ax.text(.5,-.16,r"Solid curves: measured floor and correlation information. Dashed curves: stated floor or bounded $\tau_c$.",transform=ax.transAxes,ha="center",fontsize=6.8,color=style.MUTED)
-    return style.save(fig,out/"fig_bao_two_walls.pdf",title="Bias and occupancy walls across threshold sweeps")
+    return _save_pdf(fig,out/"fig_bao_two_walls.pdf",title="Bias and occupancy walls across threshold sweeps")
 
 
 def main(argv=None) -> int:

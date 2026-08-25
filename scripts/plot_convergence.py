@@ -23,7 +23,7 @@ coincide only at the reference time.
 The bias-response bank is not shipped. Build it explicitly first:
 
     python scripts/build_bank.py --config chime2022 --cosmology planck2018 \\
-        --p-res 1.0 --dense-knee \\
+        --epsilon-fg 0 --p-res 1.0 --dense-knee \\
         --out data/fisher_bank_chime2022_pres_dense.npz
     python scripts/plot_convergence.py --out out/
 """
@@ -128,7 +128,8 @@ def main(argv=None):
     print(f"time_scaling={bt.NOISE_NORMALIZED_AT_EACH_TIME}  "
           "(this figure intentionally does not hold physical power fixed)")
     try:
-        bank = bt.load_bias_bank(args.bank, expected_kfg_fac=None)
+        bank = bt.load_bias_bank(
+            args.bank, expected_kfg_fac=None, expected_epsilon_fg=0.0)
     except ValueError as exc:
         ap.error(str(exc))
     if args.npz is None:

@@ -28,6 +28,7 @@ frames, ch36 keeps 34, and their r values are bounds from starved estimates.
 from __future__ import annotations
 
 import argparse
+import csv
 from pathlib import Path
 
 import numpy as np
@@ -47,14 +48,22 @@ CHANNELS = tuple(range(27, 37))
 FS8_REL = (0.00156 / 0.0352, 0.00153 / 0.0156)     # (0.044, 0.098)
 
 FINE_DB = 10.0                                     # measured 9.4-10.0
+ERA_POINTS = Path(__file__).resolve().parent / "dissertation" / "data" \
+    / "bao_era_points.csv"
 from baonoise import products as P
-from baonoise.npzio import load_npz
 PATHS = P.paths(channels=CHANNELS)
 # Story channels in color: ch33 (the one basis-sensitive feasible channel),
 # ch32 and ch35 (the reconciliation's two instructive removals), ch29 (the
 # tau_c-hostage contrast); everything else gray.
 COLORS = {32: SERIES[0], 33: SERIES[1], 35: SERIES[2], 29: SERIES[3]}
 GRAY = MUTED
+
+
+def era_point(channel):
+    with ERA_POINTS.open(newline="", encoding="utf-8") as handle:
+        rows = csv.DictReader(handle)
+        row = next(r for r in rows if int(r["channel"]) == channel)
+    return float(row["masked_fraction"]), float(row["r_over_rtol"])
 
 
 def channel_curve(ch, p):
@@ -72,22 +81,6 @@ def channel_curve(ch, p):
     corr = R.correlation_time(p)
     return dict(ch=ch, pts=pts, stated_floor=(evidence == "stated"),
                 tau_bound=(corr.quality != "measured"))
-
-
-def era_point(path, off_through, tol):
-    """(f, r/tol) at eta = 1 restricted to the post-sign-on era.
-
-    Both coordinates are the era's own: the sweep is evaluated on frames
-    after ``off_through`` (the transmitter-on epoch), at the channel's
-    disciplined floor, so the marker describes the era its caption names.
-    """
-    floor_db, _ = R.kept_frame_floor(path)
-    rows = R.threshold_sweep(path, off_through=off_through,
-                             etas=np.array([1.0]), floor_db=floor_db)
-    if not rows:
-        return None
-    return (float(rows[0]["f"]),
-            rows[0]["r_masked"] / 10 ** (FINE_DB / 10) / tol)
 
 
 def main(argv=None):
@@ -144,18 +137,16 @@ def main(argv=None):
                     fontsize=9.5 if big else 8, color=c,
                     fontweight="semibold" if big else "normal")
 
-    # ch35's era dependence: the same channel, after sign-on (2021-11 onward),
-    # both coordinates from that era's own sweep.
+    # Calibrated eta_mu = 1 on the post-sign-on channel-35 era.
     c35 = next(c for c in curves if c["ch"] == 35)
-    pt = era_point(PATHS[35], R.SIGN_ON_OFF_THROUGH[35], TOL_APERP[35]) \
-        if c35["pts"] else None
+    pt = era_point(35) if c35["pts"] else None
     if pt is not None:
         f_fwd, r_fwd = pt
         c35_color = COLORS.get(35, GRAY)
         ax.plot([f_fwd], [r_fwd], "X", ms=9, color=c35_color, zorder=6,
                 markeredgecolor=SURFACE, markeredgewidth=1.2)
-        ax.annotate("ch35 after sign-on (2021-11 onward):\nthe station lit up "
-                    "and the same\nchannel moved to the other wall",
+        ax.annotate("ch35 after sign-on (2021-11 onward):\ncalibrated "
+                    f"endpoint remains {r_fwd:.0f}x above the bias wall",
                     xy=(f_fwd, r_fwd), xytext=(0.42, 6e-3), fontsize=8.5,
                     color=c35_color,
                     arrowprops=dict(arrowstyle="-", color=c35_color, lw=0.8,

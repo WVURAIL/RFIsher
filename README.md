@@ -297,16 +297,16 @@ matched prerequisites locally before running the research scripts:
 
 ```bash
 python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
-  --p-res 1.0 --dense-knee \
+  --epsilon-fg 0 --p-res 1.0 --dense-knee \
   --out data/fisher_bank_chime2022_pres_dense.npz
 python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
-  --p-res 1.0 --kfg-fac 22 --dense-knee \
+  --epsilon-fg 0 --p-res 1.0 --kfg-fac 22 --dense-knee \
   --out data/fisher_bank_chime2022_pres_kfg22_dense.npz
 python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
-  --p-res 1.0 --kfg-fac 44 --dense-knee \
+  --epsilon-fg 0 --p-res 1.0 --kfg-fac 44 --dense-knee \
   --out data/fisher_bank_chime2022_pres_kfg44_dense.npz
 python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
-  --p-res 1.0 --kfg-fac 80 --dense-knee \
+  --epsilon-fg 0 --p-res 1.0 --kfg-fac 80 --dense-knee \
   --out data/fisher_bank_chime2022_pres_kfg80_dense.npz
 
 python scripts/bias_tolerance.py --zeta 1.0
@@ -346,10 +346,10 @@ Fisher matrices. Bias evaluation additionally recomputes the Bao and
 RadioFisher scientific-source hashes and reconstructs the cosmology, P(k)
 cache, experiment, baseline, overrides, and foreground settings. A mismatch
 fails closed with the exact rebuild command; `kfg_fac=null` and `kfg_fac=80`
-remain distinct provenance states. The historical `bias_tolerance*.json` and
-`three_worlds.csv` outputs
-made from absent pre-1.0 banks are not distributed; regenerate them only from
-the locally built prerequisites above.
+remain distinct provenance states. The current `out/three_worlds.csv` is the
+direct regeneration record from the four matched banks above; the large banks
+remain local prerequisites. The historical `bias_tolerance*.json` outputs made
+from absent pre-1.0 banks are not distributed.
 
 To swap in new masking measurements, point `baonoise.scenarios.measured()`
 at any CSV with `atsc_channel`, `n_valid_frames`, `hi_rate_all` columns

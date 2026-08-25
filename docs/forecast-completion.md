@@ -142,6 +142,7 @@ For example:
 PYTHONPATH=src RADIOFISHER_DIR=/path/to/RadioFisher \
 python3 scripts/build_bank.py \
   --config chime2022 --cosmology planck2018 \
+  --epsilon-fg 0 \
   --residual-template low_kparallel \
   --template-param k_parallel_scale_mpc_inv=0.04 \
   --dense-knee --out data/fisher_bank_low_kparallel.npz
@@ -213,7 +214,7 @@ records, not the information included in the combined Fisher matrix.
 ```bash
 PYTHONPATH=src RADIOFISHER_DIR=/path/to/RadioFisher \
 python3 scripts/build_bank.py \
-  --config chime2022 --cosmology planck2018 --p-res 1 \
+  --config chime2022 --cosmology planck2018 --p-res 1 --epsilon-fg 0 \
   --tmin 7000 --tmax 11000 --nt 3 --nproc 8 \
   --out /tmp/bias_response_small.npz
 
@@ -223,6 +224,10 @@ python3 scripts/forecast_completion_evidence.py \
   --bin 6 --years 0.9 1 1.1 --reference-years 1 \
   --out out/forecast_completion_evidence.json
 ```
+
+The dated forecast-completion release below uses `epsilon_fg=0` exactly.
+State it on each scalar or named-template bank built for that release; the
+general-purpose bank wrapper has a different default.
 
 The evidence command refuses a bank whose time grid would require
 extrapolation at any lower or upper stability perturbation. It records the
