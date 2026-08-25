@@ -392,7 +392,14 @@ not eligible for propagation. The export records `none` for both policy-change
 fields on every row. It is a sensitivity envelope for a later policy analysis,
 not a replacement policy decision.
 
-The machine-readable assets are:
+The unversioned assets below are the frozen first release and are not
+rewritten. The reconciled release lives at
+`out/forecast_completion_20260824_reconciliation/` with the same 12 artifact
+basenames. Its four evidence ledgers were built and evaluated from clean Bao
+commit `1d7de4f0329772a18320d390bbe7eab12c3d9a0c`, with `epsilon_fg=0` in every
+bank; the local `banks/` directory is not part of the release.
+
+The frozen machine-readable assets are:
 
 - `out/forecast_completion_all_dtv_bins.json` and the corresponding
   `low_kparallel`, `wedge_like`, and `k_shell_localized` complete-v2 JSON
@@ -424,10 +431,12 @@ PNG, PDF, table, caption, and manifest to be byte-identical.
 The manifest also points consumers to `/bank/scientific_identity` in every
 evidence file and summarizes the clean Bao build/evaluation commits, common
 Bao scientific source manifest and content digest, and clean RadioFisher
-commit, source manifest, and content digest. The scalar baseline and named
-template banks carry different Bao commit IDs because release-only scripts and
-documentation were committed between runs; their canonical scientific-source
-digest is identical, and that distinction is recorded rather than hidden.
+commit, source manifest, and content digest. The frozen scalar baseline and
+named-template banks carry different Bao commit IDs because release-only
+scripts and documentation were committed between runs; their canonical
+scientific-source digest is identical. The reconciled release uses one clean
+evaluation commit for all four ledgers. The renderer derives this note from
+the evidence identities rather than assuming either history.
 
 The figure caption is: *Model-only residual-amplitude tolerance on the common
 f-sigma-8 target at one on-sky year, mapped to ATSC channels 14--36. Panel (a)

@@ -18,6 +18,8 @@ __pycache__/
 !src/baonoise/data/fisher_bank_chime2022_pact2025.npz
 !data/fisher_bank_bull2015_planck2013_epsfg1e-6.npz
 !data/fisher_bank_bull2015_planck2013_epsfg1e-5.npz
+!out/forecast_completion_20260824_reconciliation/forecast_completion_channel_tolerances.pdf
+!out/forecast_completion_20260824_reconciliation/forecast_completion_channel_tolerances.png
 
 # Machine-local product locations
 data/products.local.json

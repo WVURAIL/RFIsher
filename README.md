@@ -334,6 +334,12 @@ PYTHONPATH=src python3 scripts/forecast_template_comparison.py \
 PYTHONPATH=src python3 scripts/render_forecast_template_assets.py
 ```
 
+The unversioned forecast-completion files are the frozen first release. The
+reconciled release is under
+`out/forecast_completion_20260824_reconciliation/`; it retains the same 12
+artifact basenames, records `epsilon_fg=0`, and keeps its four small response
+banks local under the ignored `banks/` directory.
+
 The three empirical visibility families--frequency-localized,
 baseline-localized, and sidereal-coherent--remain explicit
 `data_dependent_incomplete` refusals. The model-only grid does not invent the

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -26,6 +27,7 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 renderer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(renderer)
+DATED_RELEASE = ROOT / "out" / "forecast_completion_20260824_reconciliation"
 
 
 @requires_figure_toolchain
@@ -147,3 +149,49 @@ def test_commit_note_matches_the_evaluation_history():
     assert "one clean Bao commit" in renderer._commit_note({"a" * 40})
     assert "different clean Bao commits" in renderer._commit_note(
         {"a" * 40, "b" * 40})
+
+
+def test_dated_manifest_is_complete_and_self_consistent():
+    manifest = json.loads((
+        DATED_RELEASE / "forecast_completion_release_manifest.json"
+    ).read_text(encoding="utf-8"))
+    assert manifest["artifact_count"] == 12
+    assert "one clean Bao commit" in manifest[
+        "scientific_identities"]["commit_note"]
+    assert manifest["scientific_identities"]["baonoise"][
+        "clean_git_commits"] == [
+            "1d7de4f0329772a18320d390bbe7eab12c3d9a0c"]
+    assert all("banks/" not in item["path"]
+               for item in manifest["artifacts"])
+    for item in manifest["artifacts"]:
+        path = ROOT / item["path"]
+        assert path.stat().st_size == item["size_bytes"]
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
+
+
+@requires_figure_toolchain
+def test_dated_renderer_reproduces_the_released_assets(tmp_path):
+    figure = tmp_path / "forecast_completion_channel_tolerances.png"
+    table = tmp_path / "forecast_completion_template_summary.tex"
+    caption = tmp_path / "forecast_completion_channel_tolerances_caption.txt"
+    manifest = tmp_path / "forecast_completion_release_manifest.json"
+    assert renderer.main([
+        "--comparison", str(
+            DATED_RELEASE / "forecast_completion_template_comparison.csv"),
+        "--channels", str(
+            DATED_RELEASE / "forecast_completion_channel_mapping.csv"),
+        "--status", str(
+            DATED_RELEASE / "forecast_completion_template_status.csv"),
+        "--figure", str(figure),
+        "--table", str(table),
+        "--caption", str(caption),
+        "--manifest", str(manifest),
+    ]) == 0
+    for generated, released in (
+        (figure, DATED_RELEASE / figure.name),
+        (figure.with_suffix(".pdf"),
+         DATED_RELEASE / figure.with_suffix(".pdf").name),
+        (table, DATED_RELEASE / table.name),
+        (caption, DATED_RELEASE / caption.name),
+    ):
+        assert generated.read_bytes() == released.read_bytes()

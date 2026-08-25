@@ -27,6 +27,16 @@ EVIDENCE = {
     "k_shell_localized": ROOT / "out"
         / "forecast_completion_all_dtv_bins_k_shell_localized.json",
 }
+DATED_RELEASE = ROOT / "out" / "forecast_completion_20260824_reconciliation"
+DATED_EVIDENCE = {
+    "noise_shaped": DATED_RELEASE / "forecast_completion_all_dtv_bins.json",
+    "low_kparallel": DATED_RELEASE
+        / "forecast_completion_all_dtv_bins_low_kparallel.json",
+    "wedge_like": DATED_RELEASE
+        / "forecast_completion_all_dtv_bins_wedge_like.json",
+    "k_shell_localized": DATED_RELEASE
+        / "forecast_completion_all_dtv_bins_k_shell_localized.json",
+}
 
 
 def _read_csv(path):
@@ -34,9 +44,9 @@ def _read_csv(path):
         return list(csv.DictReader(stream))
 
 
-def _arguments(tmp_path):
+def _arguments(tmp_path, evidence=EVIDENCE):
     arguments = []
-    for family, path in EVIDENCE.items():
+    for family, path in evidence.items():
         arguments.extend(["--evidence", f"{family}={path}"])
     arguments.extend([
         "--comparison-out", str(tmp_path / "comparison.csv"),
@@ -44,6 +54,28 @@ def _arguments(tmp_path):
         "--status-out", str(tmp_path / "status.csv"),
     ])
     return arguments
+
+
+def test_dated_release_regenerates_exact_tables(tmp_path):
+    assert comparison.main(_arguments(tmp_path, DATED_EVIDENCE)) == 0
+    for generated, released in (
+        (tmp_path / "comparison.csv",
+         DATED_RELEASE / "forecast_completion_template_comparison.csv"),
+        (tmp_path / "channels.csv",
+         DATED_RELEASE / "forecast_completion_channel_mapping.csv"),
+        (tmp_path / "status.csv",
+         DATED_RELEASE / "forecast_completion_template_status.csv"),
+    ):
+        assert generated.read_bytes() == released.read_bytes()
+
+    commits = set()
+    for family, path in DATED_EVIDENCE.items():
+        payload = comparison._validate_evidence(path, family)
+        assert payload["bank"]["foreground_settings"]["epsilon_fg"] == 0
+        identity = payload["bank"]["scientific_identity"]
+        assert identity["verified_equal"] is True
+        commits.add(identity["evaluation"]["baonoise"]["git_commit"])
+    assert commits == {"1d7de4f0329772a18320d390bbe7eab12c3d9a0c"}
 
 
 def test_actual_evidence_exports_complete_template_and_channel_tables(tmp_path):
