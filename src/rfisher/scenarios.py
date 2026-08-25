@@ -25,8 +25,8 @@ Two conventions for w_bar over a bin containing slices with different f:
                    arithmetic mean of per-slice noise power; pessimistic)
 The two agree when f is uniform across the bin.
 
-Residual contamination
-----------------------
+Contamination residuals
+-----------------------
 Masking is only half the cost. What survives the mask adds power to the band,
 and a slice carrying a residual-to-thermal power ratio r has its effective
 noise raised to P_N (1 + r), exactly equivalent in this framework to
@@ -136,16 +136,20 @@ def _overlap(a_lo: float, a_hi: float, b_lo: float, b_hi: float) -> float:
 
 @dataclass(frozen=True)
 class FrequencyBand:
-    """A named, continuous observing-frequency interval in MHz."""
+    """A continuous frequency interval with machine and display names."""
 
     name: str
     nu_min_mhz: float
     nu_max_mhz: float
+    label: str | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name \
                 or self.name.strip() != self.name:
             raise ValueError("frequency-band name must be a non-empty string")
+        label = self.name if self.label is None else self.label
+        if not isinstance(label, str) or not label or label.strip() != label:
+            raise ValueError("frequency-band label must be a non-empty string")
         lo = _as_real(self.nu_min_mhz, "nu_min_mhz")
         hi = _as_real(self.nu_max_mhz, "nu_max_mhz")
         if not np.isfinite(lo) or not np.isfinite(hi) or lo < 0.0 or hi <= lo:
@@ -154,12 +158,13 @@ class FrequencyBand:
                 f"0 <= nu_min_mhz < nu_max_mhz, got {(lo, hi)!r}")
         object.__setattr__(self, "nu_min_mhz", lo)
         object.__setattr__(self, "nu_max_mhz", hi)
+        object.__setattr__(self, "label", label)
 
 
 DTV_BAND = FrequencyBand(
-    "dtv", chn.ATSC_CH14_LOWER_EDGE, chn.ATSC_DTV_UPPER_EDGE)
+    "dtv", chn.ATSC_CH14_LOWER_EDGE, chn.ATSC_DTV_UPPER_EDGE, label="DTV")
 CHIME_BAND = FrequencyBand(
-    "chime", CHIME_FREQUENCY_MIN_MHZ, CHIME_FREQUENCY_MAX_MHZ)
+    "chime", CHIME_FREQUENCY_MIN_MHZ, CHIME_FREQUENCY_MAX_MHZ, label="CHIME")
 
 
 def _band_values(values, value_validator, field_name: str
@@ -332,6 +337,12 @@ class Scenario:
 # Constructors
 # ----------------------------------------------------------------------
 
+def _mode_identity(name: str, label: str, mode: str) -> tuple[str, str]:
+    if mode == "fourier":
+        return f"{name}_fourier", f"{label} (Fourier weighting)"
+    return name, label
+
+
 def clean() -> Scenario:
     return Scenario("clean", "Uncontaminated baseline")
 
@@ -422,6 +433,7 @@ def _masking_scenario(
     else:
         fr = table.fractions
 
+    name, label = _mode_identity(name, label, mode)
     return Scenario(name, label,
                     fractions=fr, excise_threshold=excise_threshold, mode=mode,
                     residuals=dict(residuals or {}),
@@ -520,7 +532,9 @@ def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",
 
     tag = "excised" if scenario.is_band_excised(band) else "masked"
     rtag = f", r={residual:g}" if residual else ""
-    scenario.label = f"{100 * f:.0f}% {tag}, {band.name} band{rtag}"
+    scenario.label = f"{100 * f:.0f}% {tag}, {band.label} band{rtag}"
+    scenario.name, scenario.label = _mode_identity(
+        scenario.name, scenario.label, mode)
     return scenario
 
 
@@ -541,8 +555,10 @@ def at_threshold(per_channel: dict[int, tuple[float, float]],
     rs = {int(c): float(v[1]) for c, v in per_channel.items()}
     eta_text = None if eta is None else str(eta)
     tag = "" if eta_text is None else f" (eta={eta_text})"
-    return Scenario(f"threshold{'' if eta_text is None else f'_{eta_text}'}",
-                    f"Detector operating point{tag}",
+    name, label = _mode_identity(
+        f"threshold{'' if eta_text is None else f'_{eta_text}'}",
+        f"Detector operating point{tag}", mode)
+    return Scenario(name, label,
                     fractions=fr, residuals=rs,
                     excise_threshold=excise_threshold,
                     residual_excise_threshold=residual_excise_threshold,
@@ -571,8 +587,10 @@ def from_mask_decisions(decisions,
         else:
             fr[d.channel], rs[d.channel] = 0.0, d.r_unmasked
     tag = "all channels" if force else f"{len(masked)}/{len(fr)} channels"
-    return Scenario("selective" if not force else "uniform",
-                    f"Mask applied to {tag}",
+    name, label = _mode_identity(
+        "selective" if not force else "uniform", f"Mask applied to {tag}",
+        mode)
+    return Scenario(name, label,
                     fractions=fr, residuals=rs,
                     excise_threshold=excise_threshold,
                     residual_excise_threshold=residual_excise_threshold,
@@ -588,6 +606,8 @@ def single_channel(ch: int, f: float, keep: bool = True,
         raise ValueError(f"keep must be a boolean, got {keep!r}")
     thr = NO_EXCISION_THRESHOLD if keep else 0.0
     verb = "kept" if keep else "excised"
-    return Scenario(f"ch{ch}_{int(round(100 * f))}_{verb}",
-                    f"ch{ch} {100 * f:.0f}% masked ({verb})",
+    name, label = _mode_identity(
+        f"ch{ch}_{int(round(100 * f))}_{verb}",
+        f"ch{ch} {100 * f:.0f}% masked ({verb})", mode)
+    return Scenario(name, label,
                     fractions={ch: f}, excise_threshold=thr, mode=mode)

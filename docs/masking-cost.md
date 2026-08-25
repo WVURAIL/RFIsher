@@ -88,7 +88,8 @@ overlap its frequency coverage:
 ```python
 from rfisher import api, scenarios
 
-band = scenarios.FrequencyBand("example_downlink", 617.0, 652.0)
+band = scenarios.FrequencyBand(
+    "example_downlink", 617.0, 652.0, label="Example downlink")
 scenario = scenarios.Scenario(
     "example",
     "example downlink",

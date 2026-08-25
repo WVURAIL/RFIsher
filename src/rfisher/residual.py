@@ -1,4 +1,4 @@
-"""Residual contamination: what the mask *leaves behind*, and what it costs.
+"""Contamination residuals: what the mask *leaves behind*, and what they cost.
 
 Why this module exists
 ----------------------

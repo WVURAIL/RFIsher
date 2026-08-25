@@ -116,8 +116,6 @@ def main() -> None:
     # ------------------------------------------------- table of req. times
     table_scens = dict(scen_main)
     legacy_fourier = scenarios.legacy_rate_table_scenario(mode="fourier")
-    legacy_fourier.name = "legacy_rate_table_fourier"
-    legacy_fourier.label = "Legacy detector rate table (Fourier weighting)"
     table_scens["legacy_rate_table_fourier"] = legacy_fourier
     table_scens["uniform25_dtv"] = scenarios.uniform(0.25, scenarios.DTV_BAND)
     table_scens["uniform90_dtv"] = scenarios.uniform(0.90, scenarios.DTV_BAND)
@@ -125,9 +123,9 @@ def main() -> None:
         0.50, scenarios.CHIME_BAND)
     table_scens["ch30_excised"] = scenarios.single_channel(30, 0.97, keep=False)
     table_scens["ch30_kept"] = scenarios.single_channel(30, 0.97, keep=True)
-    sc30f = scenarios.single_channel(30, 0.97, keep=True, mode="fourier")
-    sc30f.name = "ch30_kept_fourier"
-    table_scens["ch30_kept_fourier"] = sc30f
+    ch30_fourier = scenarios.single_channel(
+        30, 0.97, keep=True, mode="fourier")
+    table_scens["ch30_kept_fourier"] = ch30_fourier
 
     h5_clean = fc.required_hours(scen_main["clean"], 5.0)
     rows = []
@@ -263,11 +261,14 @@ def main() -> None:
             w.writerow(["z_center", "sigma_dv_clean_pct",
                         "sigma_dv_legacy_rate_table_pct"])
             for i, z in enumerate(bank.zc):
-                sc_cl = fc.sigma_dv_bin(scen_main["clean"], t1yr, i)
-                sc_ms = fc.sigma_dv_bin(scen_main["legacy_rate_table"], t1yr, i)
+                sigma_clean = fc.sigma_dv_bin(scen_main["clean"], t1yr, i)
+                sigma_legacy = fc.sigma_dv_bin(
+                    scen_main["legacy_rate_table"], t1yr, i)
                 w.writerow([round(float(z), 3),
-                            round(100 * sc_cl, 3) if np.isfinite(sc_cl) else "inf",
-                            round(100 * sc_ms, 3) if np.isfinite(sc_ms) else "inf"])
+                            round(100 * sigma_clean, 3)
+                            if np.isfinite(sigma_clean) else "inf",
+                            round(100 * sigma_legacy, 3)
+                            if np.isfinite(sigma_legacy) else "inf"])
         print("[fig31] per-bin sigma_DV/DV at 1 on-sky yr written", flush=True)
 
     # ------------------------------------------ fig 3: channel masking

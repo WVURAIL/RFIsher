@@ -1,4 +1,4 @@
-"""Residual contamination: the second half of the tolerance cost.
+"""Contamination residuals: the second half of the tolerance cost.
 
 Two things this suite has to establish. First, that adding the term changes
 nothing when it is absent; every published number in ``out/`` predates it and
@@ -586,10 +586,15 @@ def test_selective_scenario_keeps_declined_channels_contaminated(tmp_path):
     no = residual.mask_benefit(34, f=0.99, r_unmasked=0.01, r_masked=0.005)
     sc = scenarios.from_mask_decisions(
         [yes, no], excise_threshold=scenarios.NO_EXCISION_THRESHOLD)
+    fourier = scenarios.from_mask_decisions(
+        [yes, no], excise_threshold=scenarios.NO_EXCISION_THRESHOLD,
+        mode="fourier")
     assert sc.fractions[35] == pytest.approx(0.5)
     assert sc.residuals[35] == pytest.approx(1.0)
     assert sc.fractions[34] == 0.0                  # not masked
     assert sc.residuals[34] == pytest.approx(0.01)  # but still contaminated
+    assert fourier.name == f"{sc.name}_fourier"
+    assert fourier.label == f"{sc.label} (Fourier weighting)"
     forced = scenarios.from_mask_decisions(
         [yes, no], excise_threshold=scenarios.NO_EXCISION_THRESHOLD,
         force=True)

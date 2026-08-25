@@ -32,7 +32,8 @@ api.masking_cost_curve(fc, band=scenarios.DTV_BAND)  # masking-cost curve
 continuous band works through the same scenario interface:
 
 ```python
-n71 = scenarios.FrequencyBand("5g_n71_downlink", 617.0, 652.0)
+n71 = scenarios.FrequencyBand(
+    "5g_n71_downlink", 617.0, 652.0, label="5G n71 downlink")
 scenario = scenarios.Scenario(
     "n71",
     "ATSC and 5G n71 downlink",

@@ -30,6 +30,20 @@ def test_uniform_time_mode():
     assert w2 == pytest.approx(0.5)
 
 
+@pytest.mark.parametrize("factory", [
+    lambda mode: scenarios.legacy_rate_table_scenario(mode=mode),
+    lambda mode: scenarios.uniform(0.5, scenarios.DTV_BAND, mode=mode),
+    lambda mode: scenarios.at_threshold({30: (0.3, 0.2)}, eta=1.2,
+                                        mode=mode),
+    lambda mode: scenarios.single_channel(30, 0.97, keep=True, mode=mode),
+])
+def test_fourier_factory_identity_is_distinct(factory):
+    time = factory("time")
+    fourier = factory("fourier")
+    assert fourier.name == f"{time.name}_fourier"
+    assert fourier.label == f"{time.label} (Fourier weighting)"
+
+
 def test_uniform_outside_dtv_band():
     sc = scenarios.uniform(0.5, scenarios.DTV_BAND)
     v, w = sc.bin_factors(410.0, 440.0)   # below 470 MHz: clean
@@ -207,6 +221,8 @@ def test_full_chime_band_is_a_physical_frequency_interval():
     sc = scenarios.uniform(0.5, scenarios.CHIME_BAND)
     assert sc.fractions == {}
     assert sc.frequency_fractions == {scenarios.CHIME_BAND: 0.5}
+    assert sc.name == "uniform50_chime"
+    assert sc.label == "50% masked, CHIME band"
     assert sc.bin_factors(400.0, 800.0) == pytest.approx((1.0, 0.5))
     weight = sc.freq_weight_fn()
     assert weight(399.0)[0] == pytest.approx(1.0)
@@ -229,6 +245,27 @@ def test_uniform_label_reflects_residual_excision_policy():
 def test_frequency_band_rejects_invalid_edges():
     with pytest.raises(ValueError, match="frequency-band edges"):
         scenarios.FrequencyBand("bad", 800.0, 400.0)
+
+
+def test_frequency_band_separates_slug_and_display_label():
+    assert scenarios.DTV_BAND.name == "dtv"
+    assert scenarios.DTV_BAND.label == "DTV"
+    assert scenarios.uniform(0.5).label == "50% masked, DTV band"
+    same_band = scenarios.FrequencyBand("dtv", 470.0, 608.0)
+    assert same_band == scenarios.DTV_BAND
+    defaulted = scenarios.FrequencyBand("n71", 617.0, 652.0)
+    assert defaulted.label == "n71"
+    labeled = scenarios.FrequencyBand(
+        "n71", 617.0, 652.0, label="5G n71 downlink")
+    sc = scenarios.uniform(0.5, labeled)
+    assert sc.name == "uniform50_n71"
+    assert sc.label == "50% masked, 5G n71 downlink band"
+
+
+@pytest.mark.parametrize("label", ["", " DTV", "DTV ", 7])
+def test_frequency_band_rejects_invalid_display_labels(label):
+    with pytest.raises(ValueError, match="frequency-band label"):
+        scenarios.FrequencyBand("dtv", 470.0, 608.0, label=label)
 
 
 def test_channel_and_frequency_band_masks_must_not_overlap():

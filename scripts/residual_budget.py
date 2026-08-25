@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Residual contamination budget from pilot-proxy survey products.
+"""Contamination-residual budget from pilot-proxy survey products.
 
 Prints the dB chain that takes a measured DTV shelf to the residual an analysis
 actually sees, then sweeps the one term left open, the intra-day correlation
