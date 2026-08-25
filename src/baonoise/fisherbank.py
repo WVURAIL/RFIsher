@@ -239,7 +239,7 @@ def _git_state(path: Path, *, include: tuple[str, ...] = (),
     # and a whole-repo flag said it did while the working_tree_sha256 it
     # rode with provably matched a committed tree.
     status = run_bytes("status", "--porcelain=v1", "-z", "--",
-                       *(include or ("."),))
+                       *(include if include else (".",)))
     files = run_bytes(
         "ls-files", "--cached", "--others", "--exclude-standard", "-z")
     commit = (commit_bytes.decode("ascii").strip()
