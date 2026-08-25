@@ -16,16 +16,16 @@ eps_FG=1e-6, no calibration systematics); the robust currency is the
 |---|---|---|---|---|
 | clean | Uncontaminated baseline | 63.57 | 0.0238 | 1.0 |
 | legacy_rate_table | Legacy detector rate table | 61.96 | 0.0246 | 1.033 |
-| uniform50_dtv | 50% masked, dtv band | 57.88 | 0.0275 | 1.152 |
-| uniform75_dtv | 75% masked, dtv band | 53.89 | 0.0291 | 1.219 |
-| uniform97_dtv | 97% masked, dtv band | 49.7 | 0.0299 | 1.256 |
+| uniform50_dtv | 50% masked, DTV band | 57.88 | 0.0275 | 1.152 |
+| uniform75_dtv | 75% masked, DTV band | 53.89 | 0.0291 | 1.219 |
+| uniform97_dtv | 97% masked, DTV band | 49.7 | 0.0299 | 1.256 |
 | legacy_rate_table_fourier | Legacy detector rate table (Fourier weighting) | 61.89 | 0.0247 | 1.034 |
-| uniform25_dtv | 25% masked, dtv band | 60.98 | 0.0256 | 1.076 |
-| uniform90_dtv | 90% masked, dtv band | 51.01 | 0.0297 | 1.248 |
-| uniform50_chime | 50% masked, chime band | 48.84 | 0.0477 | 2.0 |
+| uniform25_dtv | 25% masked, DTV band | 60.98 | 0.0256 | 1.076 |
+| uniform90_dtv | 90% masked, DTV band | 51.01 | 0.0297 | 1.248 |
+| uniform50_chime | 50% masked, CHIME band | 48.84 | 0.0477 | 2.0 |
 | ch30_excised | ch30 97% masked (excised) | 63.02 | 0.024 | 1.008 |
 | ch30_kept | ch30 97% masked (kept) | 63.19 | 0.0241 | 1.013 |
-| ch30_kept_fourier | ch30 97% masked (kept) | 60.26 | 0.0254 | 1.064 |
+| ch30_kept_fourier | ch30 97% masked (kept) (Fourier weighting) | 60.26 | 0.0254 | 1.064 |
 
 Reading: the legacy detector rate table costs the survey only
 **3%
