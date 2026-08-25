@@ -19,9 +19,9 @@ from baonoise.fisherbank import (ARTIFACT_FORECAST, BANK_SCHEMA_VERSION,
 
 EXPECTED_SHA256 = {
     resources.DEFAULT_BANK_NAME:
-        "a0739568b8e79b439b48195a5a7391d04cb7a4ee9f9c8eb537288b60208974d7",
+        "2a3974193e2a1aa05956b327bd057dc0a43e1d3b4ae2a9967886437487b5fd7c",
     resources.PACT2025_BANK_NAME:
-        "77d930105942071661c07d0006ec69b0fe5fb071ea5e425a295c9133ed64023e",
+        "ce8fa461cf9c0946dbe3a37ba690ff499a43de2f05d3650465aab7ad95857493",
     resources.DEFAULT_RATES_NAME:
         "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
     resources.PRODUCTS_MANIFEST_NAME:
@@ -41,9 +41,9 @@ CANONICAL_TEXT_RESOURCES = frozenset({
 })
 BULL_BANK_SHA256 = {
     "fisher_bank_bull2015_planck2013_epsfg1e-6.npz":
-        "64f134b14666cc6870bfd62a490cabb9ea264e552752f46db965f5ad39144b48",
+        "fce85f0f72c2a70668e7205a17e892fba438de89fde5315a5ad50d3ec36a962e",
     "fisher_bank_bull2015_planck2013_epsfg1e-5.npz":
-        "35918bf91fcb9222ab5d969a1ea9e1f9c4415dba10584311f1bc8dcb04e52b72",
+        "e6b4afc3f0ae6e795849df812508b5510fb5ad0b982fe87e74696ae7938ae320",
 }
 EXPECTED_RADIOFISHER_SOURCE_SHA256 = (
     "efad0173be49d51679cf98071ccd1dfccd386dc9b2774e202164086347a4c2cf"
