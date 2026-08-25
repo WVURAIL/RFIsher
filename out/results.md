@@ -60,7 +60,8 @@ sigma(alpha_perp) <= 2% (a per-bin BAO distance measurement):
 
 ## The channel-30 story
 
-Channel 30 (566-572 MHz, z = 1.48-1.51) is masked ~97% of the time. Options:
+Channel 30 (566-572 MHz, z = 1.48-1.51) is modelled at a 97% masked fraction
+because the legacy table marks it refused. Options:
 
 * **Integrate through it**: recovering clean-equivalent depth in that 6 MHz
   requires x33 the integration time: if the survey needs T years,
