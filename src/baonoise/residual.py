@@ -117,6 +117,17 @@ MIN_MEASURED_NULLS = 30
 # and it is the level an undetected frame on this channel can hide.
 SIGN_ON_OFF_THROUGH = {35: "2021-08"}
 
+# The sign-off mirror: channels whose transmitter left the archive, mapped to
+# the first YYYY-MM of the off epoch (the monthly occupancy record dates the
+# departures: ch19 December 2024, ch26 April 2023, ch20's two-stage
+# step-down September 2022). Era-blind statistics on these channels are the
+# era-mixture trap realized: the sign-off step classifies into the DC and
+# inter-day shares the ground filter removes, so the transmitter's death
+# masquerades as filterable structure and ch19's straddling record even
+# returns a spuriously measured tau_c. Every epoch-aware consumer restricts
+# to one side of the step.
+SIGN_OFF_FROM = {19: "2024-12", 20: "2022-09", 26: "2023-04"}
+
 
 # ----------------------------------------------------------------------
 # Survey-product measurements
@@ -951,6 +962,7 @@ def kept_frame_floor(npz_path: str | Path, off_through: str | None = None,
     if off_through is None and off_from is None:
         ch = int(load_npz(npz_path)["physical_channel"][0])
         off_through = SIGN_ON_OFF_THROUGH.get(ch)
+        off_from = SIGN_OFF_FROM.get(ch)
     st = shelf_statistics(npz_path, off_through=off_through,
                           floor_percentile=floor_percentile,
                           off_from=off_from)

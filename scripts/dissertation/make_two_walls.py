@@ -68,8 +68,16 @@ def sweep_channel(path):
     with np.load(path, allow_pickle=False) as z:
         ch = int(z["physical_channel"][0])
     floor_db, evidence = res.kept_frame_floor(path)
-    tau_bound = res.correlation_time(path).quality != "measured"
-    rows = res.threshold_sweep(path, floor_db=floor_db)
+    # Sign-off channels sweep their transmitter-on era only: an era-blind
+    # sweep classifies the sign-off step into the DC/inter-day shares the
+    # ground filter removes, so the transmitter's death would masquerade as
+    # filterable structure (and ch19's straddling record returns a spurious
+    # tau_c). ch35's curve deliberately stays the full-archive statement the
+    # published plane made -- its post-sign-on era is the figure's X marker.
+    off_from = res.SIGN_OFF_FROM.get(ch)
+    tau_bound = res.correlation_time(
+        path, off_from=off_from).quality != "measured"
+    rows = res.threshold_sweep(path, off_from=off_from, floor_db=floor_db)
     return ch, evidence, tau_bound, rows
 
 

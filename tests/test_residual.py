@@ -848,7 +848,7 @@ def test_threshold_sweep_refusal_matches_budget_convention(tmp_path):
 
 
 def _floor_discipline_product(tmp_path, name, center, mu0=1.0, n=2000,
-                              sigma=0.02, channel=19):
+                              sigma=0.02, channel=21):
     """An F-consistent product whose null-population size is set by center."""
     rng = np.random.default_rng(5)
     F = center + sigma * rng.standard_normal(n)

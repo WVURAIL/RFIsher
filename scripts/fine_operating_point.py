@@ -156,8 +156,9 @@ def channel_tables(path):
 
     stats = R.shelf_statistics(path)
     corr = R.correlation_time(path)
-    n_slow = R.n_coh_from_correlation_time(corr.tau_for_budget)
-    comps = ((stats.intraday_fraction, n_slow), (stats.fast_fraction, 1.0))
+    # One booking for the whole package: a refused tau_c takes no
+    # ground-filter credit (see residual.surviving_components).
+    comps = R.surviving_components(stats, corr)
 
     def r_of(mean_lin):
         db = 10.0 * np.log10(max(mean_lin, 1e-30))
