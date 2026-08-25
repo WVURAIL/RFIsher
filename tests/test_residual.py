@@ -913,3 +913,45 @@ def test_kept_frame_floor_honors_an_explicit_off_epoch(tmp_path):
     floor_db, evidence = residual.kept_frame_floor(p, off_through="2020-05")
     assert evidence == "measured"
     assert floor_db == pytest.approx(-40.0, abs=0.5)
+
+
+def test_epoch_maps_pin_the_dated_record():
+    """The epoch maps are load-bearing constants; pin them to the monthly
+    occupancy record's dates so a corrupted entry cannot pass silently."""
+    assert residual.SIGN_ON_OFF_THROUGH == {35: "2021-10"}
+    assert residual.SIGN_OFF_FROM == {19: "2024-12", 20: "2022-09",
+                                      26: "2023-04", 27: "2022-10",
+                                      32: "2023-02"}
+
+
+def test_kept_frame_floor_auto_applies_the_epoch_maps(tmp_path, monkeypatch):
+    import datetime as _dt
+    rng = np.random.default_rng(9)
+    n = 300
+    shelf = np.concatenate([-40.0 + 0.1 * rng.standard_normal(n),
+                            -10.0 + 0.1 * rng.standard_normal(n)])
+    t0 = np.concatenate([
+        _dt.datetime(2019, 6, 1, tzinfo=_dt.timezone.utc).timestamp()
+        + np.arange(n) * 3600.0,
+        _dt.datetime(2020, 6, 1, tzinfo=_dt.timezone.utc).timestamp()
+        + np.arange(n) * 3600.0])
+    p = _write_product(tmp_path / "auto21.npz", shelf,
+                       np.arange(2 * n), t0, channel=21,
+                       rejected=np.r_[np.zeros(n), np.ones(n)].astype(np.uint8))
+    explicit = residual.kept_frame_floor(p, off_through="2020-05")
+    monkeypatch.setitem(residual.SIGN_ON_OFF_THROUGH, 21, "2020-05")
+    assert residual.kept_frame_floor(p) == explicit
+    assert explicit[1] == "measured"
+
+
+def test_threshold_sweep_internal_floor_refuses_thin_nulls(tmp_path):
+    """The internal floor obeys the same >=30-null bar as kept_frame_floor:
+    a handful of null frames must not masquerade as a measured floor."""
+    p = _floor_discipline_product(tmp_path, "thin_sweep.npz", center=0.95,
+                                  mu0=1.05)
+    st = residual.shelf_statistics(p)
+    assert 0 < st.n_off_frames < residual.MIN_MEASURED_NULLS
+    assert residual.threshold_sweep(p) == []
+    # an explicit substitute still sweeps
+    assert residual.threshold_sweep(
+        p, floor_db=-45.0, etas=np.array([10.0]))

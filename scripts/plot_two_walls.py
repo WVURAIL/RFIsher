@@ -50,8 +50,9 @@ FINE_DB = 10.0                                     # measured 9.4-10.0
 from baonoise import products as P
 from baonoise.npzio import load_npz
 PATHS = P.paths(channels=CHANNELS)
-# Verdict classes: the three threshold-feasible channels in full color, the
-# tau_c-hostage marginal in its own color, the occupancy-pinned five in gray.
+# Story channels in color: ch33 (the one basis-sensitive feasible channel),
+# ch32 and ch35 (the reconciliation's two instructive removals), ch29 (the
+# tau_c-hostage contrast); everything else gray.
 COLORS = {32: SERIES[0], 33: SERIES[1], 35: SERIES[2], 29: SERIES[3]}
 GRAY = MUTED
 
@@ -143,7 +144,7 @@ def main(argv=None):
                     fontsize=9.5 if big else 8, color=c,
                     fontweight="semibold" if big else "normal")
 
-    # ch35's era dependence: the same channel, after sign-on (2021-09 onward),
+    # ch35's era dependence: the same channel, after sign-on (2021-11 onward),
     # both coordinates from that era's own sweep.
     c35 = next(c for c in curves if c["ch"] == 35)
     pt = era_point(PATHS[35], R.SIGN_ON_OFF_THROUGH[35], TOL_APERP[35]) \
@@ -153,7 +154,7 @@ def main(argv=None):
         c35_color = COLORS.get(35, GRAY)
         ax.plot([f_fwd], [r_fwd], "X", ms=9, color=c35_color, zorder=6,
                 markeredgecolor=SURFACE, markeredgewidth=1.2)
-        ax.annotate("ch35 after sign-on (2021-09 onward):\nthe station lit up "
+        ax.annotate("ch35 after sign-on (2021-11 onward):\nthe station lit up "
                     "and the same\nchannel moved to the other wall",
                     xy=(f_fwd, r_fwd), xytext=(0.42, 6e-3), fontsize=8.5,
                     color=c35_color,

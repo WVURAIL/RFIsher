@@ -109,7 +109,11 @@ def main(argv=None):
     for st, corr, gain in measured:
         if corr.quality == "measured" or corr.tau_for_budget <= tau33:
             continue
-        g2 = st.intraday_fraction * n33 + st.fast_fraction
+        # The what-if books through the shared discipline: on a refused
+        # channel the assumed timescale narrows the cap but the invalidated
+        # split stays uncredited (all power at n_coh(tau33)).
+        g2 = sum(f * n for f, n in
+                 R.surviving_components(st, corr, tau_intraday=tau33))
         for label, extra in (("as-is", 0.0), ("+fine", FINE_GAIN_DB[1])):
             r = r_at(st.floor_db, g2, extra)
             mark = "PASS" if r <= R_TOL else f"x{r/R_TOL:,.0f} over"

@@ -99,9 +99,9 @@ def _require_floor(st):
 def policy_table(npz):
     st = R.shelf_statistics(npz)
     corr = R.correlation_time(npz)
-    gain = (st.intraday_fraction
-            * R.n_coh_from_correlation_time(corr.tau_for_budget)
-            + st.fast_fraction)
+    # One booking for the whole package: a refused tau_c takes no
+    # ground-filter credit (see residual.surviving_components).
+    gain = sum(f * n for f, n in R.surviving_components(st, corr))
     d = load_npz(npz)
     valid = d["valid"][:, 0].astype(bool)
     f_dep = float(d["reject_mask"][valid, 0].astype(bool).mean())

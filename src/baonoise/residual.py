@@ -110,23 +110,33 @@ MIN_MEASURED_NULLS = 30
 
 # Channels whose transmitter has a verified off epoch in the archive, mapped
 # to the last YYYY-MM of that epoch. The off era supplies a *measured*
-# transmitter-off sensitivity floor for the kept-frame bound. ch35's station
-# signed on in 2021-09; its pre-sign-on exceedance tail is 7-300x heavier
-# than the fitted null (q50/q90/q99 of F-1 vs a Gaussian at sigma_null), so
-# the off-era floor records real ambient structure, not detector scatter,
-# and it is the level an undetected frame on this channel can hide.
-SIGN_ON_OFF_THROUGH = {35: "2021-08"}
+# transmitter-off sensitivity floor for the kept-frame bound. ch35's monthly
+# excess record steps on at 2021-11 (2021-09/10 sit at the off level), so
+# the off epoch runs through 2021-10; its pre-sign-on exceedance tail is
+# 7-1500x heavier than the fitted null (q50/q90/q99 of F-1 vs a Gaussian at
+# sigma_null), so the off-era floor records real ambient structure, not
+# detector scatter, and it is the level an undetected frame on this channel
+# can hide. (One later month, 2022-09, sits back at the off level; a single
+# month-threshold mask cannot represent it and conservatively counts it on.)
+SIGN_ON_OFF_THROUGH = {35: "2021-10"}
 
 # The sign-off mirror: channels whose transmitter left the archive, mapped to
-# the first YYYY-MM of the off epoch (the monthly occupancy record dates the
-# departures: ch19 December 2024, ch26 April 2023, ch20's two-stage
-# step-down September 2022). Era-blind statistics on these channels are the
-# era-mixture trap realized: the sign-off step classifies into the DC and
+# the first YYYY-MM of the off epoch. The monthly record dates the
+# departures: ch19 December 2024; ch26 April 2023; ch27 and ch32 bounded
+# inside the 2021-2022 collection gap (strong through 2020-11; first
+# collected off months 2022-10 and 2023-02, and any month inside a gap
+# yields identical masks). ch20 is the one *step-down* rather than
+# departure: its 2022-09 step leaves a persistent live carrier (post-step
+# months stay 97-100% masked), so its post-step floor is a measured ambient
+# carrier level -- conservative as a kept-frame bound, but not a
+# transmitter-off sensitivity floor. Era-blind statistics on all of these
+# are the era-mixture trap realized: the step classifies into the DC and
 # inter-day shares the ground filter removes, so the transmitter's death
 # masquerades as filterable structure and ch19's straddling record even
 # returns a spuriously measured tau_c. Every epoch-aware consumer restricts
 # to one side of the step.
-SIGN_OFF_FROM = {19: "2024-12", 20: "2022-09", 26: "2023-04"}
+SIGN_OFF_FROM = {19: "2024-12", 20: "2022-09", 26: "2023-04",
+                 27: "2022-10", 32: "2023-02"}
 
 
 # ----------------------------------------------------------------------
@@ -957,7 +967,11 @@ def kept_frame_floor(npz_path: str | Path, off_through: str | None = None,
     channel, and is therefore evidence of a weaker kind. On a channel with
     a measured off era the measurement wins: ch35's off-era exceedances are
     far heavier than the fitted null, so its sigma-implied level provably
-    understates what an undetected frame can carry there.
+    understates what an undetected frame can carry there. One caveat rides
+    the ``'measured'`` label: on ch20, whose step leaves a live carrier in
+    the nominal off era, the measured level is an ambient carrier bound
+    rather than a transmitter-off sensitivity floor -- conservative in the
+    same direction, weaker as provenance (see :data:`SIGN_OFF_FROM`).
     """
     if off_through is None and off_from is None:
         ch = int(load_npz(npz_path)["physical_channel"][0])
@@ -976,7 +990,8 @@ def budget_from_statistics(stats: ShelfStatistics, delay_key: str = DEFAULT_DELA
                            tau_intraday: float = MAX_TAU_C_SECONDS,
                            tau_fast: float = CHIME_FRAME_SECONDS,
                            frame_seconds: float = CHIME_FRAME_SECONDS,
-                           tau_measured: bool = False) -> ResidualBudget:
+                           tau_measured: bool = False,
+                           corr: "CorrelationTime | None" = None) -> ResidualBudget:
     """Assemble a :class:`ResidualBudget` from measured shelf statistics.
 
     The two surviving populations get their own coherence. ``tau_intraday``
@@ -984,16 +999,25 @@ def budget_from_statistics(stats: ShelfStatistics, delay_key: str = DEFAULT_DELA
     that needs no assumption at all, since anything longer has already been
     removed as m = 0. Narrow it if the acquisition cadence resolves the
     intra-day structure.
+
+    Without ``corr`` this is the low-level explicit-split constructor: the
+    caller asserts the variance split is real. Pass the channel's
+    :class:`CorrelationTime` to route the components through
+    :func:`surviving_components` instead, so a refusal drops the split
+    credit the same way every other consumer does.
     """
     if delay_key not in DELAY_SUPPRESSION_DB:
         raise ValueError(f"unknown delay_key {delay_key!r}; "
                          f"choose from {sorted(DELAY_SUPPRESSION_DB)}")
-    comps = (
-        (float(stats.intraday_fraction),
-         n_coh_from_correlation_time(tau_intraday, frame_seconds)),
-        (float(stats.fast_fraction),
-         n_coh_from_correlation_time(tau_fast, frame_seconds)),
-    )
+    if corr is not None:
+        comps = surviving_components(stats, corr, tau_intraday=tau_intraday)
+    else:
+        comps = (
+            (float(stats.intraday_fraction),
+             n_coh_from_correlation_time(tau_intraday, frame_seconds)),
+            (float(stats.fast_fraction),
+             n_coh_from_correlation_time(tau_fast, frame_seconds)),
+        )
     return ResidualBudget(
         shelf_floor_db=stats.floor_db,
         delay_filter_db=DELAY_SUPPRESSION_DB[delay_key],
@@ -1031,9 +1055,11 @@ def surviving_components(stats: ShelfStatistics, corr: CorrelationTime,
     are moments of the same process --- so the fallback takes no
     ground-filter credit: all shelf power surviving, at the sidereal-day cap.
     ``tau_intraday`` overrides the timescale only; it cannot restore credit
-    a refusal removed. This is the single home of that rule; every consumer
-    (:func:`budget_from_products`, :func:`threshold_sweep`, the scripts)
-    books the same way.
+    a refusal removed. Passing a sub-cap ``tau_intraday`` on a refused
+    channel is therefore a *what-if* -- all power at the assumed timescale
+    -- and any result built from one must be labelled as such. This is the
+    single home of that rule; every consumer (:func:`budget_from_products`,
+    :func:`threshold_sweep`, the scripts) books the same way.
     """
     if corr.is_usable:
         tau = corr.tau_for_budget if tau_intraday is None else tau_intraday
@@ -1461,7 +1487,12 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
     if on.sum() < 50:
         return []
     if floor_db is None:
-        if fin_off.sum() == 0:
+        # The internal floor obeys the same bar as kept_frame_floor: a null
+        # population thinner than MIN_MEASURED_NULLS samples the tail rather
+        # than characterises it, and a sweep on such a floor would look
+        # measured while standing on a handful of frames. Callers wanting a
+        # substitute state it explicitly.
+        if fin_off.sum() < MIN_MEASURED_NULLS:
             return []
         floor_db = float(np.percentile(shelf[fin_off], floor_percentile))
     lin = np.where(np.isfinite(shelf), 10.0 ** (shelf / 10.0),

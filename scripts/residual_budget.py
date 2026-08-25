@@ -92,7 +92,7 @@ def main() -> int:
     tau_star = (args.tau_intraday if args.tau_intraday
                 else worst_ct.tau_for_budget)
     print(R.budget_from_statistics(
-        worst, args.delay, tau_intraday=tau_star,
+        worst, args.delay, tau_intraday=tau_star, corr=worst_ct,
         tau_measured=(worst_ct.is_measured and not args.tau_intraday)).chain())
     print()
     if worst_ct.is_measured:
@@ -124,7 +124,8 @@ def main() -> int:
         for tau in TAU_GRID:
             n = R.n_coh_from_correlation_time(float(tau))
             b = R.budget_from_statistics(worst, args.delay,
-                                         tau_intraday=float(tau))
+                                         tau_intraday=float(tau),
+                                         corr=worst_ct)
             sc = scenarios.measured(residuals={c: b.ratio for c in dtv_chans})
             h = fc.required_hours_metric(
                 lambda t: fc.significance(sc, t, bins=bins), args.target)

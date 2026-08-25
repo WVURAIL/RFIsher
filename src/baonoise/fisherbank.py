@@ -233,7 +233,13 @@ def _git_state(path: Path, *, include: tuple[str, ...] = (),
         return result.stdout if result.returncode == 0 else None
 
     commit_bytes = run_bytes("rev-parse", "HEAD")
-    status = run_bytes("status", "--porcelain=v1", "-z")
+    # The dirty flag is scoped to the same manifest the content digest
+    # hashes: an uncommitted edit to a file outside the scientific source
+    # (a README, a figure) does not make the recorded source state dirty,
+    # and a whole-repo flag said it did while the working_tree_sha256 it
+    # rode with provably matched a committed tree.
+    status = run_bytes("status", "--porcelain=v1", "-z", "--",
+                       *(include or ("."),))
     files = run_bytes(
         "ls-files", "--cached", "--others", "--exclude-standard", "-z")
     commit = (commit_bytes.decode("ascii").strip()

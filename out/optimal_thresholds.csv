@@ -1,6 +1,6 @@
 ch,basis,mu0,tau_bound,tol_aperp,era_from,floor_evidence,eta,F_thresh,f,r_fine,margin,penalty,penalty_pe,f_recent,feasible,fs8_with_delay
-27,product,0.992953335421234,True,0.014,2024,stated,,,,,,,,,0,
-27,sigma_null,0.992953335421234,True,0.014,2024,stated,,,,,,,,,0,
+27,product,0.992953335421234,True,0.014,2024,measured,,,,,,,,,0,
+27,sigma_null,0.992953335421234,True,0.014,2024,measured,,,,,,,,,0,
 28,product,1.0033102143757882,True,0.014,2024,stated,,,,,,,,,0,
 28,sigma_null,1.0033102143757882,True,0.014,2024,stated,,,,,,,,,0,
 29,product,1.0024384488319042,True,0.014,2024,measured,,,,,,,,,0,

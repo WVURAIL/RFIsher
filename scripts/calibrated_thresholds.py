@@ -3,7 +3,7 @@
 
 ``mu`` says where the null is; it does not say how far above the null the
 threshold belongs.  That is a science question, and it is answered exactly
-the way ``bao-noise-tolerance/scripts/optimal_thresholds.py`` answers it:
+the way ``RFIsher/scripts/optimal_thresholds.py`` answers it:
 minimise the survey-time cost
 
     T / T_clean = (1 + r) / (1 - f)
@@ -100,7 +100,7 @@ import os
 import sys
 
 # This is the tolerance-layer half of the calibration suite and belongs in
-# bao-noise-tolerance; the calibration package it reads products through
+# RFIsher; the calibration package it reads products through
 # lives in pilot-proxy, which owns the products. Point PP_ANALYSIS at that
 # repo's analysis/ directory (and PP_SRC at its src/) to relocate either.
 sys.path.insert(0, os.environ.get(

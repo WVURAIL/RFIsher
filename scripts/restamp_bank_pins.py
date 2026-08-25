@@ -47,7 +47,7 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def stale_provenance() -> list[str]:
+def stale_provenance() -> tuple[list[str], dict]:
     """Compare each bank's recorded source trees against the checkouts.
 
     Uses the same digests the tests enforce: ``fisherbank._git_state`` over

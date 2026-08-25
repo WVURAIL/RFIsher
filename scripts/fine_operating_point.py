@@ -31,9 +31,12 @@ Decision model (the chapter's usable-null-bulk definition, union window):
     D = union over era anchors a of [a-2, a+2] mod 256 (half-width = guard);
     B = independent (even) bins minus D minus census, all-finite rows only.
 
-Residual booking mirrors ``residual.threshold_sweep`` exactly (kept
-frames book their measured shelf where one exists and the stated floor
-where none does), and the measured fine-stage credit (9.4--10.0 dB,
+Residual booking mirrors ``residual.threshold_sweep`` exactly: kept
+frames book their measured shelf where one exists and undetected frames
+book the disciplined kept-frame floor (``residual.kept_frame_floor``:
+>=30-null bar, off-era epochs, stated sigma substitute below the bar),
+statistics and the correlation time are era-restricted per the epoch
+maps, and the measured fine-stage credit (9.4--10.0 dB,
 booked FINE_DB) divides the aggregate ratio, the same convention as
 ``optimal_thresholds.py``, so the two tables are directly comparable.
 ``r_nocredit`` reports the bare-floor booking alongside.
@@ -154,11 +157,19 @@ def channel_tables(path):
     enbw = float(d["bin_enbw_hz"]) / LF
     offset_hz = (anchor if anchor < LF // 2 else anchor - LF) * enbw
 
-    stats = R.shelf_statistics(path)
-    corr = R.correlation_time(path)
-    # One booking for the whole package: a refused tau_c takes no
-    # ground-filter credit (see residual.surviving_components).
+    # One booking and one floor discipline for the whole package: statistics
+    # and the correlation time are evaluated on the channel's own epoch
+    # (era-blind views of stepped channels are the era-mixture trap), a
+    # refused tau_c takes no ground-filter credit
+    # (residual.surviving_components), and the kept-frame floor follows
+    # residual.kept_frame_floor.
+    ch = int(d["physical_channel"][0])
+    _ot = R.SIGN_ON_OFF_THROUGH.get(ch)
+    _of = R.SIGN_OFF_FROM.get(ch)
+    stats = R.shelf_statistics(path, off_through=_ot, off_from=_of)
+    corr = R.correlation_time(path, off_through=_ot, off_from=_of)
     comps = R.surviving_components(stats, corr)
+    floor_db, floor_evidence = R.kept_frame_floor(path)
 
     def r_of(mean_lin):
         db = 10.0 * np.log10(max(mean_lin, 1e-30))
@@ -175,6 +186,7 @@ def channel_tables(path):
         maxD=ff[:, desg_arr].max(axis=1),
         srt=np.sort(ff[:, bulk], axis=1),
         prov=R.floor_provenance(path),
+        floor_db=floor_db, floor_evidence=floor_evidence,
         tau_bound=corr.quality != "measured",
         r_of=r_of, n_on=int(on.sum()))
 
@@ -217,10 +229,14 @@ def optimize_channel(ch, path):
 
     for basis in ("product", "sigma_null"):
         prov = tab["prov"]
-        if basis == "sigma_null" or not np.isfinite(prov.reported_db):
+        # The product basis follows the package's one floor discipline
+        # (kept_frame_floor: >=30-null bar, off-era epochs, stated
+        # sigma substitute below the bar); sigma_null applies the
+        # substitute everywhere.
+        if basis == "sigma_null":
             floor_db = prov.sigma_implied_db
         else:
-            floor_db = prov.reported_db
+            floor_db = tab["floor_db"]
         nocr = lin_meas + ~meas * 10.0 ** (floor_db / 10.0)
 
         rows = []

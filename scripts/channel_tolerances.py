@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Per-channel Fisher-bias tolerances, by target parameter.
 
-``scripts/optimal_thresholds.py`` in bao-noise-tolerance selects each
+``scripts/optimal_thresholds.py`` in RFIsher selects each
 channel's threshold subject to the *acoustic-dilation* tolerance
 (``alpha_perp``, zeta = 1), not the growth-rate one, and applies the measured
 fine-stage sensitivity credit to the bound.  Its hard-coded table covers only

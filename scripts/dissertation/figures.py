@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dissertation figures owned by bao-noise-tolerance.
+"""Dissertation figures owned by RFIsher.
 
 These render the tolerance-layer dissertation figures -- the observing-time
 versus masking curves, the channel-33 residual-policy comparison, the
@@ -8,10 +8,11 @@ style (Latin Modern through LaTeX, the WVU semantic palette, pinned PDF
 metadata). The dissertation bundle vendors the resulting PDFs; this module
 and the tables under ``data/`` are their editable source.
 
-Two tables are still legacy bridges recovered from the published artwork
-(see data/README.md): the convergence family and the two-walls sweep. Their
-direct regeneration from this repository's forecast machinery is the agreed
-replacement path; until then the bridge status is recorded, not hidden.
+One table is still a legacy bridge recovered from the published artwork
+(see data/README.md): the convergence family. The two-walls sweep is
+regenerated directly from the survey products by make_two_walls.py (bridge
+retired); the convergence family's direct regeneration is the agreed
+replacement path, and until then its bridge status is recorded, not hidden.
 
     python3 figures.py --out out/
 """
@@ -152,11 +153,11 @@ def fig_bao_two_walls(out: Path) -> Path:
         if ch in colors or y[-1]<1.0:
             dx=.012 if x[-1]<.96 else .008
             ax.text(min(x[-1]+dx,1.035),y[-1]*1.12,rf"ch{ch}",fontsize=6.6,color=c,ha="left")
-    # Post-sign-on epoch for channel 35: eta = 1 on frames after 2021-08 at
+    # Post-sign-on epoch for channel 35: eta = 1 on frames after 2021-10 at
     # the channel's measured off-era floor (scripts/dissertation/
     # make_two_walls.py conventions; regenerate with plot_two_walls.era_point).
-    ax.scatter([.985],[3.83],marker="x",s=35,color=style.CONDITIONAL,lw=1.2,zorder=5)
-    ax.annotate(r"ch35 after sign-on (2021-09 onward): both walls at once",xy=(.985,3.83),xytext=(.30,.018),fontsize=6.8,color=style.CONDITIONAL,
+    ax.scatter([.992],[4.98],marker="x",s=35,color=style.CONDITIONAL,lw=1.2,zorder=5)
+    ax.annotate(r"ch35 after sign-on (2021-11 onward): both walls at once",xy=(.992,4.98),xytext=(.30,.018),fontsize=6.8,color=style.CONDITIONAL,
                 arrowprops=dict(arrowstyle="->",color=style.CONDITIONAL,lw=.7))
     ax.set_yscale("log"); ax.set_xlim(0,1.045); ax.set_ylim(2e-3,5e4)
     ax.set_xlabel(r"Masked fraction of observing time, $f$"); ax.set_ylabel(r"Residual over tolerance, $r_{\rm proxy}/r_{\rm tol}$")

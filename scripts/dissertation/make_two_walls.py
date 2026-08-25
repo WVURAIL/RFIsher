@@ -30,15 +30,15 @@ row is the eta = 1 floor, where the figure draws each channel's dot.
 
 STATUS --- reconciled and adopted. The earlier STATUS blocked adoption on
 three moving channels and misdiagnosed the largest mover: ch35's endpoint
-shift (published 0.05 -> 4.4) was never a tau booking difference --- both
+shift (published 0.05 -> 5.8) was never a tau booking difference --- both
 paths book its measured 45-min tau_c identically --- it is the floor basis.
 The published point (and Table 9.5's 6.6x margin) stood on the sigma-implied
 substitute (-45.5 dB); this generator uses ch35's measured off-era floor
-(-26.2 dB, 3167 pre-sign-on null frames), and the substitution the published
-number relied on is now refuted by measurement: the off-era exceedance tail
-is 7-300x heavier than the fitted null (q50/q90/q99 of F-1), so real
-coherent-capable structure sits ~19 dB above what the sigma-implied level
-assumes an undetected frame can hide. ch31 and ch28 move because their 2-
+(-25.0 dB, 3,359 pre-sign-on null frames through 2021-10), and the
+substitution the published number relied on is refuted by measurement: the
+off-era exceedance tail is 7-1500x heavier than the fitted null (q50/q90/q99
+of F-1), so real coherent-capable structure sits ~20.5 dB above what the
+sigma-implied level assumes an undetected frame can hide. ch31 and ch28 move because their 2-
 and 6-frame floors fall below the >= 30-null bar and take the stated
 substitute; refused-tau channels move because the sweep no longer keeps a
 ground-filter credit the refusal invalidated. The artwork recovery's ch27
