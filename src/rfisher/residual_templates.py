@@ -43,8 +43,18 @@ DEFAULT_PARAMETERS = {
 
 def implementation_sha256() -> str:
     """Canonical digest of the exact source that implements the formulas."""
-    source = files("baonoise").joinpath("residual_templates.py").read_bytes()
+    source = files("rfisher").joinpath("residual_templates.py").read_bytes()
     source = source.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    # Keep the v1 formula identity across the package move.
+    start = source.index(b"def implementation_sha256() -> str:")
+    end = source.index(b"\n\ndef _positive", start)
+    canonical = b'''def implementation_sha256() -> str:
+    """Canonical digest of the exact source that implements the formulas."""
+    source = files("baonoise").joinpath("residual_templates.py").read_bytes()
+    source = source.replace(b"\\r\\n", b"\\n").replace(b"\\r", b"\\n")
+    return hashlib.sha256(source).hexdigest()
+'''
+    source = source[:start] + canonical + source[end:]
     return hashlib.sha256(source).hexdigest()
 
 

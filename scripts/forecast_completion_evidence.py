@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 import bias_tolerance as bt
-from baonoise import survey
+from rfisher import survey
 
 
 def _file_sha256(path: Path) -> str:

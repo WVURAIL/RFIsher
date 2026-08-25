@@ -1,11 +1,11 @@
 """One registry for the survey products.
 
 Every analysis script used to carry its own hardcoded product paths; this
-module replaces all of them with a packaged manifest
-(``baonoise.data/products.json``) plus an optional machine-local overlay
+module replaces all of them with a packaged manifest plus an optional
+machine-local overlay
 (``data/products.local.json``, gitignored) and an environment hook
-(``$BAONOISE_PRODUCT_DIRS``, separated by the platform path separator and
-searched first).
+(``$RFISHER_PRODUCT_DIRS``, separated by the platform path separator and
+searched first). ``$BAONOISE_PRODUCT_DIRS`` remains a fallback.
 
 Resolution, per channel: an explicit ``path`` (local overlay first, then
 manifest) that exists on disk wins; otherwise each search directory is tried
@@ -25,7 +25,8 @@ from .resources import PRODUCTS_MANIFEST
 _ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = PRODUCTS_MANIFEST
 LOCAL = _ROOT / "data" / "products.local.json"
-ENV_DIRS = "BAONOISE_PRODUCT_DIRS"
+ENV_DIRS = "RFISHER_PRODUCT_DIRS"
+LEGACY_ENV_DIRS = "BAONOISE_PRODUCT_DIRS"
 
 
 def _read_json(source) -> dict:
@@ -37,7 +38,10 @@ def _read_json(source) -> dict:
 
 def _search_dirs(manifest: dict, local: dict) -> list[Path]:
     dirs: list[Path] = []
-    for d in os.environ.get(ENV_DIRS, "").split(os.pathsep):
+    configured = os.environ.get(ENV_DIRS)
+    if configured is None:
+        configured = os.environ.get(LEGACY_ENV_DIRS, "")
+    for d in configured.split(os.pathsep):
         if d:
             dirs.append(Path(d))
     for src in (local, manifest):

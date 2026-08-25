@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
-    "baonoise_test_bias_tolerance", ROOT / "scripts" / "bias_tolerance.py")
+    "rfisher_test_bias_tolerance", ROOT / "scripts" / "bias_tolerance.py")
 assert SPEC is not None and SPEC.loader is not None
 bt = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(bt)
@@ -48,7 +48,7 @@ class Bank:
                 "git_dirty": False, "working_tree_sha256": digest,
                 "source_manifest": {
                     key: list(value) for key, value in
-                    bt.BAONOISE_SOURCE_MANIFEST.items()},
+                    bt.RFISHER_SOURCE_MANIFEST.items()},
             },
             "radiofisher": {
                 "backend_id": "radiofisher", "backend_version": "1.0.0",
@@ -474,5 +474,5 @@ def test_bank_build_source_manifest_mismatch_fails_before_backend_import():
     bank.meta["provenance"]["baonoise"]["source_manifest"] = {
         "include": ["one-file.py"], "exclude": []}
 
-    with pytest.raises(ValueError, match="Bao scientific-source manifest"):
+    with pytest.raises(ValueError, match="RFIsher source manifest"):
         bt._evaluation_identity(bank)

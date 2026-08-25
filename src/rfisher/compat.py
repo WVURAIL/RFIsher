@@ -100,7 +100,7 @@ def backend_capabilities(rf) -> frozenset[str]:
     if (isinstance(api_version, bool) or not isinstance(api_version, int)
             or api_version != SUPPORTED_BACKEND_API_VERSION):
         raise RuntimeError(
-            "RadioFisher backend API does not match this baonoise release; "
+            "RadioFisher backend API does not match this RFIsher release; "
             f"BACKEND_API_VERSION must equal {SUPPORTED_BACKEND_API_VERSION}")
     getter = getattr(rf, "get_backend_capabilities", None)
     if not callable(getter):

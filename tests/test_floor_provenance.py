@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from baonoise import residual
+from rfisher import residual
 
 BELOW_DB = 11.3
 ENBW_HZ = 3051.7578125

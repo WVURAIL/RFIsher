@@ -2,9 +2,9 @@
 """Smoke test: load the Bull-2015 cache and run one Fisher bin."""
 import time
 
-from baonoise.compat import import_radiofisher
-from baonoise import cosmologies, pkcache, survey
-from baonoise.resources import filesystem_data_file
+from rfisher.compat import import_radiofisher
+from rfisher import cosmologies, pkcache, survey
+from rfisher.resources import filesystem_data_file
 
 rf, rf_dir = import_radiofisher()
 print("radiofisher imported from", rf_dir)

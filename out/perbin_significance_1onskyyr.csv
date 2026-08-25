@@ -1,4 +1,4 @@
-z_center,sigmaA_pct_clean,sigmaA_pct_measured,sigmaA_pct_uniform50_dtv
+z_center,sigmaA_pct_clean,sigmaA_pct_legacy_rate_table,sigmaA_pct_uniform50_dtv
 0.85,7.019,7.019,7.019
 0.95,6.965,6.965,6.965
 1.05,7.054,7.054,7.054

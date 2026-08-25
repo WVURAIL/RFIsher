@@ -11,7 +11,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
-    "baonoise_test_forecast_template_comparison",
+    "rfisher_test_forecast_template_comparison",
     ROOT / "scripts" / "forecast_template_comparison.py")
 assert SPEC is not None and SPEC.loader is not None
 comparison = importlib.util.module_from_spec(SPEC)

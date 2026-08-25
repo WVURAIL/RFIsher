@@ -1,4 +1,4 @@
-"""Access the immutable data files distributed with :mod:`baonoise`.
+"""Access the immutable data files distributed with RFIsher.
 
 The returned objects implement :class:`importlib.resources.abc.Traversable`.
 Callers should use ``open()`` rather than converting them to filesystem paths:
@@ -14,7 +14,7 @@ except ModuleNotFoundError:  # Python 3.10
 from pathlib import Path
 from types import MappingProxyType
 
-DATA_PACKAGE = "baonoise.data"
+DATA_PACKAGE = "rfisher.data"
 DEFAULT_BANK_NAME = "fisher_bank_chime2022.npz"
 PACT2025_BANK_NAME = "fisher_bank_chime2022_pact2025.npz"
 BANK_NAMES = MappingProxyType({
@@ -37,7 +37,7 @@ def data_file(name: str) -> Traversable:
     resource = files(DATA_PACKAGE).joinpath(name)
     if not resource.is_file():
         raise FileNotFoundError(
-            f"baonoise package data is missing {name!r}; reinstall baonoise "
+            f"RFIsher package data is missing {name!r}; reinstall rfisher "
             "from a complete wheel or sdist")
     return resource
 
@@ -67,7 +67,7 @@ def filesystem_data_file(name: str) -> Path:
     except TypeError as exc:
         raise RuntimeError(
             f"{name!r} must be materialized on a filesystem before invoking "
-            "RadioFisher; install the baonoise wheel instead of importing it "
+            "RadioFisher; install the rfisher wheel instead of importing it "
             "directly from an archive") from exc
     if not path.is_file():  # pragma: no cover - guarded by data_file
         raise FileNotFoundError(f"package data is missing {name!r}: {path}")

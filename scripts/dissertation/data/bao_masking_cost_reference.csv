@@ -1,0 +1,4 @@
+series,scenario,time_year
+bin_amplitude,legacy_rate_table,0.235
+dilation,legacy_rate_table,0.421
+survey_amplitude,legacy_rate_table,0.0246

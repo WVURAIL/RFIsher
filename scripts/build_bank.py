@@ -5,10 +5,10 @@ from pathlib import Path
 
 import numpy as np
 
-from baonoise.fisherbank import build_bank
-from baonoise.residual_templates import (FAMILIES, make_template,
+from rfisher.fisherbank import build_bank
+from rfisher.residual_templates import (FAMILIES, make_template,
                                          parse_parameter_assignments)
-from baonoise.resources import BANK_NAMES
+from rfisher.resources import BANK_NAMES
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     elif default_name in BANK_NAMES.values():
         # Named CHIME-2022 cosmologies are package resources. The caller
         # remains responsible for the intended grid and scientific settings.
-        out = (Path(__file__).resolve().parents[1] / "src" / "baonoise" /
+        out = (Path(__file__).resolve().parents[1] / "src" / "rfisher" /
                "data" / default_name)
     else:
         out = Path(__file__).resolve().parents[1] / "data" / default_name

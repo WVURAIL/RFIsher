@@ -23,8 +23,8 @@ ESTIMATOR = "perbin_noise_normalized"
 TARGETS = ("aperp", "apar", "fs8")
 
 # the stable table optimal_thresholds.py stands on, for cross-checking
-# (one home: baonoise.tolerances; the published ch27-36 subset)
-from baonoise.tolerances import TOL_APERP as _TOL_APERP_STABLE  # noqa: E402
+# (one home: rfisher.tolerances; the published ch27-36 subset)
+from rfisher.tolerances import TOL_APERP as _TOL_APERP_STABLE  # noqa: E402
 TOL_APERP_PUBLISHED = {ch: _TOL_APERP_STABLE[ch] for ch in range(27, 37)}
 
 

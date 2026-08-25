@@ -13,7 +13,7 @@ Selection discipline:
 
 * The residual bound is computed on TWO floor bases and both are reported.
   ``product`` follows the package's one floor discipline
-  (baonoise.residual.kept_frame_floor): the measured null floor where at
+  (rfisher.residual.kept_frame_floor): the measured null floor where at
   least MIN_MEASURED_NULLS frames support it --- the transmitter-off era on
   channels that have one (ch35), the archive null population elsewhere ---
   and the sigma-implied substitute, labelled stated evidence, below the bar.
@@ -46,17 +46,17 @@ from pathlib import Path
 import numpy as np
 
 
-from baonoise import residual as R
+from rfisher import residual as R
 
 # Stable zeta = 1 tolerances (scripts/bias_tolerance.py --zeta 1.0), one home.
-from baonoise.tolerances import TOL_APERP, TOL_FS8
+from rfisher.tolerances import TOL_APERP, TOL_FS8
 FINE_DB = 10.0                       # measured fine-stage credit, 9.4-10.0 dB
 DEPLOYED_DELAY_DB = 11.4             # CHIME's 200 ns cut; NOT booked in the
                                      # verdicts; shown as a labeled scenario.
 PLATEAU = 1.02                       # "within 2% of optimal" tie-break window
 
-from baonoise import products as _products
-from baonoise.npzio import load_npz
+from rfisher import products as _products
+from rfisher.npzio import load_npz
 
 DEFAULT_PRODUCTS = _products.paths()
 

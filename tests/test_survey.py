@@ -1,4 +1,4 @@
-"""Survey-adapter contracts that bridge Bao to RadioFisher's public API."""
+"""Survey-adapter contracts that bridge RFIsher to RadioFisher's public API."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from baonoise import resources, survey
+from rfisher import resources, survey
 
 
 def test_bull_redshift_bins_use_supported_backend_helper_directly():

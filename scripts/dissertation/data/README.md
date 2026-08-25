@@ -5,7 +5,8 @@ rendered PDFs.
 
 | table | status |
 |---|---|
-| bao_time_vs_masking.csv | forecast-derived (pilot-proxy `tools/make_dissertation_tables.py --bao-time-vs-masking`, computed through this package's released forecast) |
+| bao_masking_cost_curve.csv | forecast-derived uniform masking-cost curves |
+| bao_masking_cost_reference.csv | historical legacy rate-table reference points |
 | bao_policy_case.csv | curated snapshot (channel-33 residual-policy comparison; from the pilot-proxy summary export) |
 | bao_convergence.csv | LEGACY BRIDGE recovered from the published vector artwork; replacement path: direct fixed-target tolerance calculation via the Pres research bank |
 | bao_two_walls.csv | regenerated from the survey products by make_two_walls.py under the reconciled conventions (bridge retired; all 23 channels, evidence + tau columns) |

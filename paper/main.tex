@@ -36,21 +36,21 @@ noise. Jensen's inequality orders these two reductions within the
 adopted diagonal-noise model, but they are not claimed to bound every
 analysis pipeline. Complete frequency excision is represented by a
 scalar loss of survey volume; the additional radial-mode coupling from
-spectral gaps and the covariance or bias from residual unmasked RFI are
-outside this calculation. The method is implemented in the
-\textsc{baonoise} package, with a versioned RadioFisher/CHIME
+spectral gaps and the covariance or bias from unmasked contamination residuals are
+outside this calculation. The method is implemented in
+\textsc{RFIsher}, with a versioned RadioFisher/CHIME
 calculation retained as the forecasting backend. The unmasked
 calculation is checked against the CHIME Overview forecast before any
-masking model is applied. For the pilot-proxy-derived DTV configuration
-used as the worked example, the survey-level integration-time penalty is
-3.2 per cent, while the time required for a 2 per cent
+masking model is applied. For the legacy detector rate table used as the
+worked example, the survey-level integration-time penalty is
+3.3 per cent, while the time required for a 2 per cent
 transverse-distance measurement in the most affected redshift bin
 increases by a factor 1.34. Uniformly masking half of the
 470--608\,MHz DTV band increases the survey-level time by a factor
-1.15. A channel masked 97 per cent of the time is more economically
+1.15. A channel modelled as 97 per cent masked is more economically
 excised than retained in this model. These results quantify the
 variance cost of masking; a complete detector-threshold calculation also
-requires a model for the residual RFI that survives the mask.
+requires a model for the contamination residual that survives the mask.
 
 \input{forecast_section}
 

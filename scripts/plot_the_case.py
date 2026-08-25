@@ -31,10 +31,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from baonoise import incumbent as I
-from baonoise import products as _products
-from baonoise import residual as R
-from baonoise.npzio import load_npz
+from rfisher import incumbent as I
+from rfisher import products as _products
+from rfisher import residual as R
+from rfisher.npzio import load_npz
 
 # Validated categorical pair:
 #   node scripts/validate_palette.js "#2a78d6,#eb6834" --pairs all  -> ALL PASS

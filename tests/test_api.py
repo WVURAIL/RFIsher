@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from baonoise import api, compat, scenarios, survey
-from baonoise.fisherbank import ARTIFACT_FORECAST
+from rfisher import api, compat, scenarios, survey
+from rfisher.fisherbank import ARTIFACT_FORECAST
 
 
 @pytest.fixture(scope="module")
@@ -117,15 +117,21 @@ def test_significance_rejects_invalid_duty_before_forecast(duty):
 
 
 @pytest.mark.parametrize("target", [0.0, -1.0, np.nan, np.inf, True])
-def test_tolerance_curve_validates_target_even_for_empty_curve(target):
+def test_masking_cost_curve_validates_target_even_for_empty_curve(target):
     with pytest.raises(ValueError, match="target"):
-        api.tolerance_curve(_NoForecastWork(), fracs=[], target=target)
+        api.masking_cost_curve(_NoForecastWork(), fracs=[], target=target)
 
 
 @pytest.mark.parametrize("duty", [0.0, -1.0, np.nan, np.inf, True])
-def test_tolerance_curve_validates_duty_even_for_empty_curve(duty):
+def test_masking_cost_curve_validates_duty_even_for_empty_curve(duty):
     with pytest.raises(ValueError, match="duty"):
-        api.tolerance_curve(_NoForecastWork(), fracs=[], duty=duty)
+        api.masking_cost_curve(_NoForecastWork(), fracs=[], duty=duty)
+
+
+def test_tolerance_curve_compatibility_name():
+    current = api.masking_cost_curve(_NoForecastWork(), fracs=[])
+    former = api.tolerance_curve(_NoForecastWork(), fracs=[])
+    assert all(np.array_equal(a, b) for a, b in zip(current, former))
 
 
 @pytest.mark.parametrize("target", [0.0, -1.0, np.nan, np.inf, True])

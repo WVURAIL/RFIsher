@@ -6,9 +6,9 @@ import time
 
 import numpy as np
 
-from baonoise import forecast, scenarios
-from baonoise.fisherbank import FisherBank
-from baonoise.resources import DEFAULT_BANK
+from rfisher import forecast, scenarios
+from rfisher.fisherbank import FisherBank
+from rfisher.resources import DEFAULT_BANK
 
 
 bank = FisherBank(DEFAULT_BANK)
@@ -22,7 +22,7 @@ print(f"schema={bank.schema_version} interpolation finite/symmetric")
 
 for scenario in [
     scenarios.clean(),
-    scenarios.measured(),
+    scenarios.legacy_rate_table_scenario(),
     scenarios.uniform(0.5, scenarios.DTV_BAND),
     scenarios.uniform(0.97, scenarios.CHIME_BAND),
 ]:
@@ -34,8 +34,9 @@ for scenario in [
         f"t_req(5sig)={required:12.1f} hr [{time.time() - started:.2f}s]"
     )
 
-factors = scenarios.measured().bin_factors_for_zbins(bank.zs)
-print("measured per-bin (v_frac, w_bar):")
+factors = scenarios.legacy_rate_table_scenario().bin_factors_for_zbins(
+    bank.zs)
+print("legacy rate-table per-bin (v_frac, w_bar):")
 for index in range(bank.nbins):
     print(
         f"  z=[{bank.zs[index]:.2f},{bank.zs[index + 1]:.2f}] "

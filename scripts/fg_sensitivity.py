@@ -8,9 +8,9 @@ from pathlib import Path
 
 import numpy as np
 
-from baonoise import forecast, scenarios
-from baonoise.compat import import_radiofisher
-from baonoise.fisherbank import FisherBank
+from rfisher import forecast, scenarios
+from rfisher.compat import import_radiofisher
+from rfisher.fisherbank import FisherBank
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +59,7 @@ def main() -> None:
             comparison, rf, style="shared_A", rf_dir=rf_dir),
     }
     scenario_set = {
-        "measured": scenarios.measured(),
+        "legacy_rate_table": scenarios.legacy_rate_table_scenario(),
         "uniform50_dtv": scenarios.uniform(0.50, scenarios.DTV_BAND),
         "uniform97_dtv": scenarios.uniform(0.97, scenarios.DTV_BAND),
     }
@@ -134,7 +134,8 @@ def main() -> None:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(
+            stream, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print(f"wrote {args.out}")

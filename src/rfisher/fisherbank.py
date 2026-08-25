@@ -68,9 +68,9 @@ BANK_BUILD_CAPABILITIES = frozenset(
     {"explicit_physical_densities", "astrophysical_model_profiles"})
 COSMOLOGY_PARAMETER_KEYS = frozenset(
     {"h", "ns", "sigma_8", "N_eff", "mnu", "ombh2", "omch2", "omnuh2"})
-BAONOISE_SOURCE_MANIFEST = {
-    "include": ("pyproject.toml", "src/baonoise/*.py"),
-    "exclude": ("src/baonoise/data/fisher_bank*.npz",),
+RFISHER_SOURCE_MANIFEST = {
+    "include": ("pyproject.toml", "src/rfisher/*.py"),
+    "exclude": ("src/rfisher/data/fisher_bank*.npz",),
 }
 RADIOFISHER_SOURCE_MANIFEST = {
     "include": ("pyproject.toml", "radiofisher/*.py",
@@ -359,10 +359,10 @@ def _build_provenance() -> dict:
             "version": __version__,
             "source_manifest": {
                 key: list(value) for key, value in
-                BAONOISE_SOURCE_MANIFEST.items()},
+                RFISHER_SOURCE_MANIFEST.items()},
             **_git_state(
                 package_root,
-                **BAONOISE_SOURCE_MANIFEST),
+                **RFISHER_SOURCE_MANIFEST),
         },
         "radiofisher": {
             "backend_id": getattr(rf, "BACKEND_ID", None),
@@ -649,7 +649,7 @@ def _normalise_metadata(meta: dict, paramnames: list[str]) -> dict:
                 "Git object ID")
     if (not isinstance(provenance["baonoise"]["version"], str)
             or not provenance["baonoise"]["version"]):
-        raise ValueError("v2 bank provenance requires a Bao package version")
+        raise ValueError("v2 bank provenance requires an RFIsher package version")
     if (not isinstance(provenance["radiofisher"]["backend_version"], str)
             or not provenance["radiofisher"]["backend_version"]):
         raise ValueError(

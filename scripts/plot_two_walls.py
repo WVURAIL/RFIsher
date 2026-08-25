@@ -34,14 +34,14 @@ from pathlib import Path
 import numpy as np
 
 
-from baonoise import residual as R
-from baonoise.plots import (
+from rfisher import residual as R
+from rfisher.plots import (
     CRITICAL, GRID, INK, INK2, MUTED, SERIES, SURFACE, _save, setup_style)
 import matplotlib.pyplot as plt
 
 # Stable zeta = 1 tolerances on the binding dilation, alpha_perp, per z bin
-# (one home: baonoise.tolerances). The figure shows the first-measured block.
-from baonoise.tolerances import TOL_APERP
+# (one home: rfisher.tolerances). The figure shows the first-measured block.
+from rfisher.tolerances import TOL_APERP
 CHANNELS = tuple(range(27, 37))
 # fs8 tolerance relative to alpha_perp's, per bin, drawn as a band because
 # the ratio differs between the two z bins the five channels occupy.
@@ -50,7 +50,7 @@ FS8_REL = (0.00156 / 0.0352, 0.00153 / 0.0156)     # (0.044, 0.098)
 FINE_DB = 10.0                                     # measured 9.4-10.0
 ERA_POINTS = Path(__file__).resolve().parent / "dissertation" / "data" \
     / "bao_era_points.csv"
-from baonoise import products as P
+from rfisher import products as P
 PATHS = P.paths(channels=CHANNELS)
 # Story channels in color: ch33 (the one basis-sensitive feasible channel),
 # ch32 and ch35 (the reconciliation's two instructive removals), ch29 (the

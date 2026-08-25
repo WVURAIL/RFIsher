@@ -258,9 +258,9 @@ def _forecast_headline_rows() -> str:
          + " & ".join(f"{v:.3f}" for _, v in cols),
          f"clean (no DTV) & {yrs['clean']:.4f} & 1.000 &"
          f" {byrs['clean']:.3f} & 1.000 \\\\",
-         f"measured & {yrs['measured']:.4f} &"
-         f" {yrs['measured'] / yrs['clean']:.3f} & {byrs['measured']:.3f} &"
-         f" {byrs['measured'] / byrs['clean']:.3f}",
+         f"legacy rate table & {yrs['legacy_rate_table']:.4f} &"
+         f" {yrs['legacy_rate_table'] / yrs['clean']:.3f} & {byrs['legacy_rate_table']:.3f} &"
+         f" {byrs['legacy_rate_table'] / byrs['clean']:.3f}",
          "r_tol (x 10^{-3}) & "
          + " & ".join(f"{1e3 * tol[b]:.2f}" for b in range(5, 12)),
          f"{min(per):.6f}-{max(per):.6f}",
@@ -291,8 +291,8 @@ def test_forecast_sources_resolve():
     assert [z for z, _ in cols] == [0.85, 1.05, 1.25, 1.45, 1.65, 1.85, 2.43]
     yrs = cdn.required_times_years()
     byrs = cdn.bin_target_years()
-    assert 0 < yrs["clean"] < yrs["measured"]
-    assert 0 < byrs["clean"] < byrs["measured"]
+    assert 0 < yrs["clean"] < yrs["legacy_rate_table"]
+    assert 0 < byrs["clean"] < byrs["legacy_rate_table"]
     tol = cdn.perbin_fs8_tolerances()
     assert set(tol) >= {5, 6, 10, 11}
     assert all(0 < v < 0.01 for v in tol.values())
@@ -313,7 +313,7 @@ def test_legacy_projects_excluded_from_tex_sweep(tmp_path):
 
 def test_table91_penalty_consistency_direction(capsys):
     byrs = cdn.bin_target_years()
-    pen = f"{byrs['measured'] / byrs['clean']:.3f}"
+    pen = f"{byrs['legacy_rate_table'] / byrs['clean']:.3f}"
     good = _green_min()
     # Keep the CSV-derived needle present so only the internal-consistency
     # check can fail on the corrupted row.

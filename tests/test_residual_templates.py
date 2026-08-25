@@ -8,12 +8,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from baonoise import fisherbank, residual_templates as templates
-from baonoise.compat import find_radiofisher_dir
+from rfisher import fisherbank, residual_templates as templates
+from rfisher.compat import find_radiofisher_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 BIAS_SPEC = importlib.util.spec_from_file_location(
-    "baonoise_test_named_template_bias_tolerance",
+    "rfisher_test_named_template_bias_tolerance",
     ROOT / "scripts" / "bias_tolerance.py")
 assert BIAS_SPEC is not None and BIAS_SPEC.loader is not None
 bias_tolerance = importlib.util.module_from_spec(BIAS_SPEC)
@@ -92,7 +92,7 @@ def test_named_template_builds_authenticated_response_bank_end_to_end(
     assert bank.meta["provenance"]["baonoise"]["working_tree_sha256"] \
         == fisherbank._git_state(
             ROOT,
-            **fisherbank.BAONOISE_SOURCE_MANIFEST)["working_tree_sha256"]
+            **fisherbank.RFISHER_SOURCE_MANIFEST)["working_tree_sha256"]
 
     authenticated = bias_tolerance.load_bias_bank(output, rf_dir=rf_dir)
     assert authenticated.evaluation_identity["baonoise"][

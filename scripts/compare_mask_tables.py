@@ -23,8 +23,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from baonoise import channels as chn
-from baonoise.resources import DEFAULT_BANK
+from rfisher import channels as chn
+from rfisher.resources import DEFAULT_BANK
 
 
 def main() -> int:
@@ -43,7 +43,7 @@ def main() -> int:
     args = ap.parse_args()
 
     kw = {} if args.rates_csv is None else {"rates_csv": args.rates_csv}
-    csv_t = chn.measured_mask_table(**kw)
+    csv_t = chn.legacy_rate_table(**kw)
     prod_t = chn.mask_table_from_products(args.npz)
 
     print("=" * 70)
@@ -92,8 +92,8 @@ def main() -> int:
               f"{', '.join('ch%d' % c for c in uncovered)}")
 
     if args.forecast:
-        from baonoise import forecast, scenarios          # noqa: PLC0415
-        from baonoise.fisherbank import FisherBank        # noqa: PLC0415
+        from rfisher import forecast, scenarios          # noqa: PLC0415
+        from rfisher.fisherbank import FisherBank        # noqa: PLC0415
 
         bank = FisherBank(args.bank)
         fc = forecast.Forecast(bank, None, style="perbin_A")

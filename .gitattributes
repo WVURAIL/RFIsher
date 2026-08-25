@@ -2,13 +2,20 @@
 *.py text eol=lf
 *.toml text eol=lf
 *.sh text eol=lf
+*.md text eol=lf
+*.tex text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.cff text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
 out/*.csv text eol=lf
 out/*.md text eol=lf
 scripts/dissertation/data/*.csv text eol=lf
-src/baonoise/data/*.csv text eol=lf
-src/baonoise/data/*.json text eol=lf
-src/baonoise/data/*.npz binary
-src/baonoise/data/*.dat text eol=lf
+src/rfisher/data/*.csv text eol=lf
+src/rfisher/data/*.json text eol=lf
+src/rfisher/data/*.npz binary
+src/rfisher/data/*.dat text eol=lf
 
 # Release evidence hashes identify the checked-in bytes, independent of a
 # contributor's core.autocrlf setting.

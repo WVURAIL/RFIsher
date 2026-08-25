@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from baonoise import incumbent
+from rfisher import incumbent
 
 
 def synth(n_acq=200, frames=16, rel_sigma=1e-3, seed=0):

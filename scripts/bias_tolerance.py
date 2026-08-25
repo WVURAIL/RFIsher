@@ -54,17 +54,17 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from baonoise import __version__, channels, cosmologies, pkcache, survey
-from baonoise.compat import (import_radiofisher,
+from rfisher import __version__, channels, cosmologies, pkcache, survey
+from rfisher.compat import (import_radiofisher,
                              require_backend_capabilities)
-from baonoise.constants import HI_REST_FREQUENCY_MHZ
-from baonoise.fisherbank import (
-    ARTIFACT_BIAS_RESPONSE, BAONOISE_SOURCE_MANIFEST, FOREGROUND_KEYS,
+from rfisher.constants import HI_REST_FREQUENCY_MHZ
+from rfisher.fisherbank import (
+    ARTIFACT_BIAS_RESPONSE, RFISHER_SOURCE_MANIFEST, FOREGROUND_KEYS,
     RADIOFISHER_SOURCE_MANIFEST, FisherBank, _git_state,
     experiment_settings_payload,
 )
-from baonoise.residual_templates import validate_template_metadata
-from baonoise.resources import filesystem_data_file
+from rfisher.residual_templates import validate_template_metadata
+from rfisher.resources import filesystem_data_file
 
 PRES = "_Pres"
 DEFAULT_BIAS_BANK = ROOT / "data" / "fisher_bank_chime2022_pres_dense.npz"
@@ -159,11 +159,11 @@ def _bank_build_identity(bank) -> dict:
 def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
     """Reconstruct and authenticate every scientific input used at runtime."""
     build = bank.meta["provenance"]
-    expected_bao_manifest = _canonical_manifest(BAONOISE_SOURCE_MANIFEST)
+    expected_rfisher_manifest = _canonical_manifest(RFISHER_SOURCE_MANIFEST)
     expected_rf_manifest = _canonical_manifest(RADIOFISHER_SOURCE_MANIFEST)
-    if build["baonoise"]["source_manifest"] != expected_bao_manifest:
+    if build["baonoise"]["source_manifest"] != expected_rfisher_manifest:
         raise ValueError(
-            "bank-build Bao scientific-source manifest differs from the "
+            "bank-build RFIsher source manifest differs from the "
             "evaluator's canonical manifest")
     if build["radiofisher"]["source_manifest"] != expected_rf_manifest:
         raise ValueError(
@@ -173,12 +173,12 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
     rf, resolved_rf_dir = import_radiofisher(rf_dir)
     capabilities = require_backend_capabilities(
         rf, build["radiofisher"]["capabilities"], rf_dir=resolved_rf_dir)
-    bao_state = _git_state(ROOT, **BAONOISE_SOURCE_MANIFEST)
+    rfisher_state = _git_state(ROOT, **RFISHER_SOURCE_MANIFEST)
     rf_state = _git_state(resolved_rf_dir, **RADIOFISHER_SOURCE_MANIFEST)
-    evaluation_bao = {
+    evaluation_rfisher = {
         "version": __version__,
-        "source_manifest": expected_bao_manifest,
-        **bao_state,
+        "source_manifest": expected_rfisher_manifest,
+        **rfisher_state,
     }
     evaluation_rf = {
         "backend_id": getattr(rf, "BACKEND_ID", None),
@@ -235,7 +235,7 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
         bank.meta["expt_overrides"], sort_keys=True, allow_nan=False))
 
     evaluation = {
-        "baonoise": evaluation_bao,
+        "baonoise": evaluation_rfisher,
         "radiofisher": evaluation_rf,
         "cosmology": evaluation_cosmology,
         "pk_cache": evaluation_cache,
@@ -258,10 +258,10 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
                 f"{section}.working_tree_sha256 build={recorded!r} "
                 f"evaluation={current!r}")
     for field in ("version",):
-        if build["baonoise"][field] != evaluation_bao[field]:
+        if build["baonoise"][field] != evaluation_rfisher[field]:
             mismatches.append(
                 f"baonoise.{field} build={build['baonoise'][field]!r} "
-                f"evaluation={evaluation_bao[field]!r}")
+                f"evaluation={evaluation_rfisher[field]!r}")
     for field in ("backend_id", "backend_version", "api_version",
                   "capabilities"):
         if build["radiofisher"][field] != evaluation_rf[field]:
@@ -506,8 +506,8 @@ class OverviewCombinedMultibinEstimator:
                 "RadioFisher lacks the combined-estimator API(s): "
                 + ", ".join(missing))
         if cosmo is None or cosmo_fns is None:
-            from baonoise import cosmologies, pkcache
-            from baonoise.resources import filesystem_data_file
+            from rfisher import cosmologies, pkcache
+            from rfisher.resources import filesystem_data_file
 
             cosmology_name = bank.meta["cosmology"]
             cache_tag = ("" if cosmology_name == "planck2018"

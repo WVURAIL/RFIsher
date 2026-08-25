@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from baonoise import incumbent, residual
+from rfisher import incumbent, residual
 
 
 def main(argv=None):
@@ -26,7 +26,7 @@ def main(argv=None):
     ap.add_argument("products", nargs="+", type=Path)
     ap.add_argument("--bias-tolerance", type=float, default=None,
                     help="largest residual r whose parameter bias is acceptable; "
-                         "omit for a pure noise trade")
+                         "omit for a variance-only trade")
     ap.add_argument("--mad-k", type=float, default=incumbent.DEFAULT_MAD_K)
     ap.add_argument("--sk-nsigma", type=float, default=3.0)
     ap.add_argument("--min-frames", type=int, default=8,

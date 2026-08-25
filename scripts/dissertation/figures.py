@@ -73,7 +73,9 @@ def read_csv(name: str):
 
 
 def fig_bao_time_vs_masking(out: Path) -> Path:
-    rows=read_csv("bao_time_vs_masking.csv")
+    rows=read_csv("bao_masking_cost_curve.csv")
+    reference={r["series"]:float(r["time_year"])
+               for r in read_csv("bao_masking_cost_reference.csv")}
     labels={"dilation":r"$\sigma(D_A)\leq2\%$ in the $z=1.40$--$1.50$ bin",
             "bin_amplitude":r"BAO amplitude $S/N=5$ in the $z=1.40$--$1.50$ bin",
             "survey_amplitude":r"BAO amplitude $S/N=5$, full survey"}
@@ -83,11 +85,15 @@ def fig_bao_time_vs_masking(out: Path) -> Path:
         sub=[r for r in rows if r["series"]==key]
         x=np.array([float(r["masked_fraction"]) for r in sub]); y=np.array([float(r["time_year"]) for r in sub]); o=np.argsort(x)
         ax.plot(100*x[o],y[o],color=colors[key],label=labels[key])
-        ax.scatter([0],[y[o][0]],color=colors[key],s=20,zorder=4,edgecolor="white",linewidth=.5)
+        ax.scatter([2],[reference[key]],color=colors[key],s=20,zorder=4,
+                   edgecolor="white",linewidth=.5)
     ax.scatter([50],[np.interp(.5,np.array([float(r["masked_fraction"]) for r in rows if r["series"]=="dilation"]),
                                   np.array([float(r["time_year"]) for r in rows if r["series"]=="dilation"]))],
                color=style.MEASURED,s=24,zorder=4,edgecolor="white",linewidth=.5)
-    ax.text(2,.36,"pilot-proxy-derived\nsurvey point",fontsize=7.1,color=style.MUTED)
+    ax.annotate("legacy rate table\n3.3% survey, 1.34x affected bin",
+                xy=(2,reference["dilation"]),xytext=(8,.54),fontsize=7.1,
+                color=style.MUTED,
+                arrowprops=dict(arrowstyle="->",color=style.MUTED,lw=.7))
     dil_x=np.array([float(r["masked_fraction"]) for r in rows if r["series"]=="dilation"])
     dil_y=np.array([float(r["time_year"]) for r in rows if r["series"]=="dilation"])
     dil_o=np.argsort(dil_x)
@@ -96,7 +102,7 @@ def fig_bao_time_vs_masking(out: Path) -> Path:
     ax.set_yscale("log"); ax.set_xlim(-5,102); ax.set_ylim(.018,20)
     ax.set_xlabel(r"Masked fraction of the DTV band [\%]"); ax.set_ylabel(r"Required observing time [on-sky yr]")
     style.clean_axes(ax); ax.legend(loc="upper left",fontsize=7.2)
-    ax.set_title(r"Noise tolerance: observing time to reach BAO targets versus uniform DTV masking",pad=5)
+    ax.set_title(r"Masking cost: observing time to reach BAO targets versus uniform DTV masking",pad=5)
     return _save_pdf(fig,out/"fig_bao_time_vs_masking.pdf",title="BAO observing time versus DTV masking")
 
 

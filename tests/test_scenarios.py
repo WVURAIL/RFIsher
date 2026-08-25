@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from baonoise import channels as chn
-from baonoise import scenarios
+from rfisher import channels as chn
+from rfisher import scenarios
 
 
 def test_channel_edges():
@@ -63,8 +63,8 @@ def test_kept_channel_costs_time():
     assert wf < 0.2
 
 
-def test_measured_fractions_load():
-    fr = chn.measured_mask_fractions()
+def test_legacy_rate_fractions_load():
+    fr = chn.legacy_rate_fractions()
     assert fr[30] == pytest.approx(0.97)
     assert fr[24] == pytest.approx(0.97)
     assert 0.005 < fr[36] < 0.02
@@ -74,12 +74,12 @@ def test_measured_fractions_load():
 
 def test_zbin_factor_array_shape():
     zs = np.array([0.78, 0.88, 0.98])
-    fac = scenarios.measured().bin_factors_for_zbins(zs)
+    fac = scenarios.legacy_rate_table_scenario().bin_factors_for_zbins(zs)
     assert fac.shape == (2, 2)
 
 
 def test_freq_weight_fn_matches_radiofisher_hook_semantics():
-    sc = scenarios.measured()
+    sc = scenarios.legacy_rate_table_scenario()
     w = sc.freq_weight_fn()
     # outside any DTV channel: clean
     assert w(450.0)[0] == 1.0 and w(700.0)[0] == 1.0
@@ -93,13 +93,14 @@ def test_freq_weight_fn_matches_radiofisher_hook_semantics():
     nu = np.linspace(400.0, 800.0, 1001)
     assert w(nu).shape == nu.shape
     assert sc.rf_mode() == "invvar"
-    assert scenarios.measured(mode="fourier").rf_mode() == "fourier"
+    assert scenarios.legacy_rate_table_scenario(
+        mode="fourier").rf_mode() == "fourier"
 
 
 def test_hook_band_average_equals_bin_factors():
     """The uniform-sampled band average RadioFisher's hook computes must
     reproduce Scenario.bin_factors' piecewise-exact w_bar."""
-    sc = scenarios.measured()
+    sc = scenarios.legacy_rate_table_scenario()
     w = sc.freq_weight_fn()
     nu_lo, nu_hi = 566.6, 591.4        # representative ch30-overlap bin
     nn = np.linspace(nu_lo, nu_hi, 200001)
@@ -111,7 +112,7 @@ def test_hook_band_average_equals_bin_factors():
 
 
 def test_api_scenario_from():
-    from baonoise import api
+    from rfisher import api
     sc = api.scenario_from(mask={30: 0.97, 17: 0.33})
     v, w = sc.bin_factors(566.6, 591.4)
     assert v < 1.0 and w == 1.0      # ch30 excised, ch17 outside this bin
@@ -179,7 +180,7 @@ def test_scenario_copies_and_normalises_inputs():
 
 
 def test_api_uniform_residual_mapping_is_validated_at_construction():
-    from baonoise import api
+    from rfisher import api
 
     with pytest.raises(ValueError, match="channel-specific"):
         api.scenario_from(uniform=0.2, residuals={30: np.nan})
@@ -187,7 +188,7 @@ def test_api_uniform_residual_mapping_is_validated_at_construction():
 
 @pytest.mark.parametrize("residual", [-0.1, np.nan, np.inf, True])
 def test_api_rejects_invalid_uniform_residual(residual):
-    from baonoise import api
+    from rfisher import api
 
     with pytest.raises(ValueError, match="residual"):
         api.scenario_from(uniform=0.2, residual=residual)
@@ -296,7 +297,7 @@ def test_product_table_carries_its_rule(tmp_path):
 
 
 def test_csv_table_carries_legacy_epoch_provenance():
-    t = chn.measured_mask_table()
+    t = chn.legacy_rate_table()
     # the rule is now identified (traceable) but it is the mistuned legacy
     # epoch, so the table is not an occupancy measurement
     assert t.is_traceable and t.rule == chn.LEGACY_CSV_RULE
@@ -308,6 +309,16 @@ def test_csv_table_carries_legacy_epoch_provenance():
 def test_measured_scenario_from_csv_warns_about_legacy_epoch():
     with pytest.warns(UserWarning, match="legacy fs/2-mistuned"):
         scenarios.measured()
+
+
+def test_legacy_compatibility_names_match_primary_names():
+    assert chn.measured_mask_fractions() == chn.legacy_rate_fractions()
+    assert (chn.measured_mask_table().fractions
+            == chn.legacy_rate_table().fractions)
+    with pytest.warns(UserWarning):
+        former = scenarios.measured()
+    current = scenarios.legacy_rate_table_scenario()
+    assert former.fractions == current.fractions
 
 
 def test_mixed_kernels_are_refused(tmp_path):
@@ -378,14 +389,14 @@ def test_duplicate_channel_is_refused(tmp_path):
         chn.mask_table_from_products(ps)
 
 
-def test_measured_refuses_to_mix_sources_by_default(tmp_path):
+def test_survey_product_scenario_refuses_to_mix_sources_by_default(tmp_path):
     p = [_product(tmp_path / "a.npz", 35, 0.837)]
     with pytest.raises(ValueError, match="mixes two detectors"):
-        scenarios.measured(products=p)
-    omitted = scenarios.measured(products=p, fill_missing="omit")
+        scenarios.survey_product_scenario(p)
+    omitted = scenarios.survey_product_scenario(p, fill_missing="omit")
     assert 17 not in omitted.fractions
     assert omitted.fractions[35] == pytest.approx(0.837, abs=2e-3)
-    mixed = scenarios.measured(products=p, fill_missing="csv")
+    mixed = scenarios.survey_product_scenario(p, fill_missing="csv")
     assert mixed.fractions[35] == pytest.approx(0.837, abs=2e-3)
     assert 17 in mixed.fractions and "CSV" in mixed.label
 
@@ -431,13 +442,15 @@ def test_windowed_scenario_carries_the_window(tmp_path):
     months = ["2019-06"] * 100 + ["2025-06"] * 100
     rej = np.concatenate([np.ones(100), np.zeros(100)])
     p = _product(tmp_path / "w.npz", 35, 0.5, months=months, rejected=rej)
-    sc = scenarios.measured(products=[p], fill_missing="omit", since="2025-01")
+    sc = scenarios.survey_product_scenario(
+        [p], fill_missing="omit", since="2025-01")
     assert sc.fractions[35] == pytest.approx(0.0)
     assert "2025-01" in sc.label
     with pytest.raises(ValueError, match="require products"):
         scenarios.measured(since="2025-01")
     with pytest.raises(ValueError, match="two decisions"):
-        scenarios.measured(products=[p], fill_missing="csv", since="2025-01")
+        scenarios.survey_product_scenario(
+            [p], fill_missing="csv", since="2025-01")
 
 
 def test_eta_rethresholds_from_the_stored_statistic(tmp_path):
@@ -477,13 +490,15 @@ def test_eta_scenario_carries_the_threshold(tmp_path):
     F = np.r_[np.full(100, 50.0), np.full(300, 1.02)]
     p = _product(tmp_path / "e.npz", 19, 1.0,
                  rejected=(F > 1.0).astype(np.uint8), fstat=F)
-    sc = scenarios.measured(products=[p], fill_missing="omit", eta=1.4)
+    sc = scenarios.survey_product_scenario(
+        [p], fill_missing="omit", eta=1.4)
     assert sc.fractions[19] == pytest.approx(0.25)
     assert "eta=1.4" in sc.label
     with pytest.raises(ValueError, match="require products"):
         scenarios.measured(eta=1.4)
     with pytest.raises(ValueError, match="two decisions"):
-        scenarios.measured(products=[p], fill_missing="csv", eta=1.4)
+        scenarios.survey_product_scenario(
+            [p], fill_missing="csv", eta=1.4)
 
 
 def test_compare_mask_tables_orders_by_disagreement():

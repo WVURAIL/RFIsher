@@ -1,4 +1,4 @@
-"""Generate Bao-owned CHIME baseline-density files n(x).
+"""Generate RFIsher-owned CHIME baseline-density files n(x).
 
 The original file was produced by ``process_chime_baselines.py`` from a raw
 baseline list that is not distributed with the repository (and the auxiliary
@@ -94,13 +94,13 @@ def build_nx_file(outfile: str | Path, ncyl: int = 5, nfeed: int = 256,
 
 def ensure_chime_nx(data_dir: str | Path,
                     layout: str = "bull2015") -> Path:
-    """Return a Bao-owned CHIME n(x) path, generating it if needed.
+    """Return an RFIsher-owned CHIME n(x) path, generating it if needed.
 
     layout='bull2015'  : 5 cyl x 256 feeds, 80 m  (RadioFisher paper spec)
     layout='asbuilt'   : 4 cyl x 256 feeds, 22 m spacing, 78 m instrumented
 
     RadioFisher's historical root-level ``array_config`` directory is not an
-    input. Forecast adapters bind Bull-2015 explicitly to Bao's packaged
+    input. Forecast adapters bind Bull-2015 explicitly to RFIsher's packaged
     synthetic table, so an unrelated checkout file cannot change the science.
     """
     if layout not in LAYOUTS:

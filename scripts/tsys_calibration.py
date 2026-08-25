@@ -8,7 +8,7 @@ temperature, the effective area, and the Jy/K conversion. It is CHIME
 collaboration calibration data and lives in the team SharePoint under
 ``RFI Mitigation/``; pass its local path here. Nothing in the packaged
 forecasts *reads* it -- they work in ratio units with Tsys_tot = 55 K
-(``baonoise.survey``) -- so this script is the calibration's one consumer: it
+(``rfisher.survey``) -- so this script is the calibration's one consumer: it
 prints the measured summary and checks that the packaged constant sits inside
 the measured spread, band-restricted to the DTV band this package prices.
 
@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
-PACKAGED_TSYS_K = 55.0          # baonoise.survey CHIME experiment dict
+PACKAGED_TSYS_K = 55.0          # rfisher.survey CHIME experiment dict
 DTV_BAND_MHZ = (470.0, 608.0)
 
 

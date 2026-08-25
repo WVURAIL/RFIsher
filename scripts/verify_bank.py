@@ -21,10 +21,10 @@ import time
 
 import numpy as np
 
-from baonoise import cosmologies, forecast, pkcache, scenarios, survey
-from baonoise.compat import import_radiofisher
-from baonoise.fisherbank import FisherBank
-from baonoise.resources import DEFAULT_BANK, filesystem_data_file
+from rfisher import cosmologies, forecast, pkcache, scenarios, survey
+from rfisher.compat import import_radiofisher
+from rfisher.fisherbank import FisherBank
+from rfisher.resources import DEFAULT_BANK, filesystem_data_file
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--bank", default=DEFAULT_BANK)
@@ -112,23 +112,25 @@ s_clean = fc.significance(scenarios.clean(), t2)
 s_exc = fc.significance(scenarios.single_channel(30, 0.97, keep=False), t2)
 s_kept_f = fc.significance(
     scenarios.single_channel(30, 0.97, keep=True, mode="fourier"), t2)
-s_meas = fc.significance(scenarios.measured(), t2)
+s_legacy = fc.significance(scenarios.legacy_rate_table_scenario(), t2)
 print(f"  S(clean)={s_clean:.2f}  S(ch30 excised)={s_exc:.2f}  "
-      f"S(ch30 kept, fourier)={s_kept_f:.2f}  S(measured)={s_meas:.2f}")
-flag = ("PASS" if s_clean >= s_exc >= s_kept_f and s_clean >= s_meas
+      f"S(ch30 kept, fourier)={s_kept_f:.2f}  "
+      f"S(legacy rate table)={s_legacy:.2f}")
+flag = ("PASS" if s_clean >= s_exc >= s_kept_f and s_clean >= s_legacy
         else "FAIL")
 ok &= flag == "PASS"
-print(f"  [{flag}] clean >= excised >= kept(fourier); clean >= measured")
+print(f"  [{flag}] clean >= excised >= kept(fourier); clean >= legacy")
 
 # ---------------------------------------------- 5. fork-hook equivalence
 print("== 5. in-fork RFI hooks vs bank-rescaling path ==")
 IB = 6
 cases = [
-    ("measured", scenarios.measured(), [IB]),
+    ("legacy rate table", scenarios.legacy_rate_table_scenario(), [IB]),
     ("uniform50_dtv", scenarios.uniform(0.50, scenarios.DTV_BAND), [IB]),
     ("ch30_kept_fourier",
      scenarios.single_channel(30, 0.97, keep=True, mode="fourier"), [IB]),
-    ("measured (all bins)", scenarios.measured(), None),
+    ("legacy rate table (all bins)",
+     scenarios.legacy_rate_table_scenario(), None),
 ]
 for name, sc, bins in cases:
     t0 = time.time()

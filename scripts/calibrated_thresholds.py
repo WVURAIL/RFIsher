@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Per-channel working threshold, priced against the BAO noise tolerance.
+"""Per-channel working threshold, priced against BAO residual tolerance.
 
 ``mu`` says where the null is; it does not say how far above the null the
 threshold belongs.  That is a science question, and it is answered exactly
@@ -30,7 +30,7 @@ view (``ppcal.era_view``).
 bases are available and they do not agree:
 
 * the product's own kept-frame floor (the ``mu0`` sliver, 1 < F <= mu0).
-  ``baonoise.residual.FloorProvenance`` shows this one is fixed by the weight
+  ``rfisher.residual.FloorProvenance`` shows this one is fixed by the weight
   bank rather than by the sky -- it lands on 10log10(mu0 - 1) plus a constant
   offset -- and it is the *lowest* of the three, so it is the least
   conservative.
@@ -129,13 +129,13 @@ except ImportError as exc:                # pragma: no cover - setup guidance
         "  export PP_SRC=~/rail/pilot-proxy/src\n"
         f"underlying import error: {exc}") from exc
 
-from baonoise import residual as res  # noqa: E402
-from baonoise import tolerances as tolerance_source  # noqa: E402
+from rfisher import residual as res  # noqa: E402
+from rfisher import tolerances as tolerance_source  # noqa: E402
 
 from ppcal import era_view as EV, eras as E  # noqa: E402
 from ppcal.calib import calibrate  # noqa: E402
 from ppcal.products import Channel, load_all, product_paths  # noqa: E402
-from baonoise.tolerances import TOL_APERP as TOL_APERP_STABLE  # noqa: E402
+from rfisher.tolerances import TOL_APERP as TOL_APERP_STABLE  # noqa: E402
 from channel_tolerances import channel_tolerances  # noqa: E402
 
 ETA_GRID = np.concatenate([[1.0], np.geomspace(1.01, 60.0, 90)])
@@ -199,8 +199,8 @@ def analysis_source_sha256():
     """Hash the source files used by this export."""
     sources = {
         "generator": __file__,
-        "baonoise.residual": res.__file__,
-        "baonoise.tolerances": tolerance_source.__file__,
+        "rfisher.residual": res.__file__,
+        "rfisher.tolerances": tolerance_source.__file__,
         "ppcal.era_view": EV.__file__,
         "ppcal.eras": E.__file__,
         "ppcal.calib": inspect.getsourcefile(calibrate),
@@ -308,7 +308,7 @@ def r_tolerances():
     """{ch: (r_tol_dilation, r_tol_growth)}.
 
     Every channel's dilation tolerance comes from the one stable table
-    (baonoise.tolerances.TOL_APERP): the stable zeta = 1 minima of the dense
+    (rfisher.tolerances.TOL_APERP): the stable zeta = 1 minima of the dense
     bias-response bank, the same convention for upper and lower band. The
     retired practice of extending ch14-26 from the completed-forecast
     ledger's single 1-on-sky-year point screened the lower band against

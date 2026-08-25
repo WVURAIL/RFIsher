@@ -5,7 +5,7 @@ This module is the ATSC / pilot-proxy ingestion adapter, not the package's
 model of frequency bands: its constants encode the one channel plan the
 vendored survey products and rate tables were recorded against, so those
 inputs can be mapped onto frequency and redshift. A forecast over arbitrary
-bands should build :class:`baonoise.scenarios.FrequencyBand` intervals
+bands should build :class:`rfisher.scenarios.FrequencyBand` intervals
 directly rather than press these channel numbers into service.
 
 A masking fraction is only meaningful next to the rule that produced it, and
@@ -14,7 +14,7 @@ the two sources here differ by up to 90x on the same channels:
 * :func:`mask_table_from_products` reads the survey products directly and takes
   the rule out of each product's own detector contract. The number and the rule
   travel together and cannot drift apart.
-* :func:`measured_mask_fractions` reads the vendored quarterly rate CSV
+* :func:`legacy_rate_fractions` reads the vendored quarterly rate CSV
   (``survey_quarterly_rates_all23.csv``, pilot-proxy
   ``data/provenance/survey_stratum_20260718/``). Its provenance is now
   identified: ``analysis/survey_composition.py`` produced it on 2026-07-18 with
@@ -26,7 +26,7 @@ the two sources here differ by up to 90x on the same channels:
   convention. Pilots were suppressed by 39-47 dB at the line on every channel
   except 30, whose pilot sits 847 Hz from fs/4 where that error self-cancels.
   The table is therefore a record of the legacy epoch, not a DTV occupancy
-  measurement; :func:`measured_mask_table` wraps it with that rule and epoch
+  measurement; :func:`legacy_rate_table` wraps it with that rule and epoch
   so the limitation is visible rather than implied. It is kept because the
   early ``out/`` numbers were built from it.
 
@@ -161,12 +161,12 @@ def channel_z_range(ch: int) -> tuple[float, float]:
             HI_REST_FREQUENCY_MHZ / lo - 1.0)
 
 
-def measured_mask_fractions(rates_csv: str | Path = DEFAULT_RATES_CSV,
-                            refused_fraction: float = REFUSED_FRACTION,
-                            rate_col: str = "hi_rate_all",
-                            weight_col: str = "n_valid_frames"
-                            ) -> dict[int, float]:
-    """Exposure-weighted mean masking fraction per ATSC channel.
+def legacy_rate_fractions(rates_csv: str | Path = DEFAULT_RATES_CSV,
+                          refused_fraction: float = REFUSED_FRACTION,
+                          rate_col: str = "hi_rate_all",
+                          weight_col: str = "n_valid_frames"
+                          ) -> dict[int, float]:
+    """Exposure-weighted legacy rate per ATSC channel.
 
     Weights each quarterly rate in ``rate_col`` by the exposure count in
     ``weight_col``, then adds the refused channels at ``refused_fraction``.
@@ -203,6 +203,16 @@ def measured_mask_fractions(rates_csv: str | Path = DEFAULT_RATES_CSV,
     for ch in REFUSED_CHANNELS:
         fractions[ch] = refused_fraction
     return dict(sorted(fractions.items()))
+
+
+def measured_mask_fractions(rates_csv: str | Path = DEFAULT_RATES_CSV,
+                            refused_fraction: float = REFUSED_FRACTION,
+                            rate_col: str = "hi_rate_all",
+                            weight_col: str = "n_valid_frames"
+                            ) -> dict[int, float]:
+    """Compatibility name for :func:`legacy_rate_fractions`."""
+    return legacy_rate_fractions(
+        rates_csv, refused_fraction, rate_col, weight_col)
 
 
 @dataclass
@@ -460,20 +470,20 @@ def mask_table_from_products(paths, refused_channels=REFUSED_CHANNELS,
         occupancy_valid=identity_valid)
 
 
-def measured_mask_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
-                        refused_fraction: float = REFUSED_FRACTION,
-                        rate_col: str = "hi_rate_all",
-                        weight_col: str = "n_valid_frames") -> MaskTable:
+def legacy_rate_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
+                      refused_fraction: float = REFUSED_FRACTION,
+                      rate_col: str = "hi_rate_all",
+                      weight_col: str = "n_valid_frames") -> MaskTable:
     """The vendored quarterly CSV, wrapped so its provenance and limits show.
 
     The rule and epoch are those of the shipped
     ``survey_quarterly_rates_all23.csv``; a caller passing another CSV with the
     same column layout inherits the same labels and should override them.
     A custom ``rate_col`` usually needs its matching ``weight_col``; see
-    :func:`measured_mask_fractions`.
+    :func:`legacy_rate_fractions`.
     """
-    fr = measured_mask_fractions(rates_csv, refused_fraction, rate_col,
-                                 weight_col)
+    fr = legacy_rate_fractions(rates_csv, refused_fraction, rate_col,
+                               weight_col)
     return MaskTable(
         fractions=fr, source="csv", rule=LEGACY_CSV_RULE,
         epoch=LEGACY_CSV_EPOCH, occupancy_valid=False,
@@ -483,6 +493,15 @@ def measured_mask_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
                f"occupancy (channel 30 excepted); refused channels "
                f"{REFUSED_CHANNELS} are the assumed {refused_fraction:.2f}, "
                f"not a rate"])
+
+
+def measured_mask_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
+                        refused_fraction: float = REFUSED_FRACTION,
+                        rate_col: str = "hi_rate_all",
+                        weight_col: str = "n_valid_frames") -> MaskTable:
+    """Compatibility name for :func:`legacy_rate_table`."""
+    return legacy_rate_table(
+        rates_csv, refused_fraction, rate_col, weight_col)
 
 
 def merge_mask_tables(*tables: MaskTable) -> MaskTable:

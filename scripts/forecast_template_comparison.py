@@ -24,8 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
-from baonoise import channels, residual_templates
-from baonoise.constants import HI_REST_FREQUENCY_MHZ
+from rfisher import channels, residual_templates
+from rfisher.constants import HI_REST_FREQUENCY_MHZ
 
 
 EVIDENCE_SCHEMA = "baonoise-forecast-completion-evidence-v2"

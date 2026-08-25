@@ -3,12 +3,9 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# The repository is RFIsher; the distribution/import name stays 'baonoise' at
-# v1.x because the shipped banks' source manifests hash src/baonoise/*.py, so
-# renaming the package would invalidate every committed bank fingerprint.
-name = "baonoise"
-version = "1.0.0"
-description = "RFIsher: RFI-masking noise-tolerance forecasts for 21cm BAO detection with RadioFisher + pilot-proxy (import name: baonoise)"
+name = "rfisher"
+version = "2.0.0"
+description = "RFIsher maps masking and contamination residuals to Fisher-forecast science costs."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -27,14 +24,16 @@ pk = ["camb"]
 test = ["pytest"]
 
 [project.scripts]
-baonoise-forecast = "baonoise.cli:forecast_main"
-baonoise-build-bank = "baonoise.cli:build_bank_main"
+rfisher-forecast = "rfisher.cli:forecast_main"
+rfisher-build-bank = "rfisher.cli:build_bank_main"
+baonoise-forecast = "rfisher.cli:legacy_forecast_main"
+baonoise-build-bank = "rfisher.cli:legacy_build_bank_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"baonoise.data" = ["*.npz", "*.csv", "*.json", "*.dat"]
+"rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

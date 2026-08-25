@@ -8,9 +8,9 @@ import time
 
 import numpy as np
 
-from baonoise import cosmologies, forecast, pkcache, survey
-from baonoise.compat import import_radiofisher
-from baonoise.resources import filesystem_data_file
+from rfisher import cosmologies, forecast, pkcache, survey
+from rfisher.compat import import_radiofisher
+from rfisher.resources import filesystem_data_file
 
 rf, rf_dir = import_radiofisher()
 print("RadioFisher backend:", rf_dir)

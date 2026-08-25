@@ -2,7 +2,7 @@
 
 Minimal usage (with the CHIME Fisher bank shipped in the package):
 
-    from baonoise import api
+    from rfisher import api
 
     fc = api.load()                              # shipped CHIME bank; no backend
     mask = {17: 0.33, 30: 0.97, 31: 0.24}        # ATSC channel -> masked frac
@@ -60,8 +60,10 @@ def scenario_from(mask=None, uniform=None, band: _scenarios.FrequencyBand =
     """Build a Scenario from either a {channel: masked_fraction} dict or a
     uniform masked fraction over an explicit :class:`FrequencyBand`.
 
-    ``mask`` also accepts a prebuilt :class:`baonoise.scenarios.Scenario`
-    (from :func:`scenarios.measured`, :func:`scenarios.at_threshold`, ...),
+    ``mask`` also accepts a prebuilt :class:`rfisher.scenarios.Scenario`
+    (from :func:`scenarios.legacy_rate_table_scenario`,
+    :func:`scenarios.survey_product_scenario`,
+    :func:`scenarios.at_threshold`, ...),
     which passes through unchanged. A Scenario already carries its own
     policy, so combining one with the other arguments here would silently
     ignore half of it; that combination is refused.
@@ -70,10 +72,10 @@ def scenario_from(mask=None, uniform=None, band: _scenarios.FrequencyBand =
     ``residual`` adds one uniform ratio to a frequency-band scenario.
 
     For a per-channel ``mask``, omitting ``excise_threshold`` uses the
-    measured-scenario default (0.5). Uniform scenarios are retained-time
+    per-channel default (0.5). Uniform scenarios are retained-time
     stress tests by default and therefore do not excise; pass an explicit
     ``excise_threshold`` to apply excision to a uniform scenario. This keeps
-    the retained-time tolerance-curve convention while ensuring that a
+    the retained-time masking-cost convention while ensuring that a
     supplied threshold is never ignored.
     """
     if (mask is None) == (uniform is None):
@@ -182,7 +184,7 @@ def required_time(fc: _forecast.Forecast, mask=None, uniform=None,
                      survey.MEAN_CALENDAR_YEAR_HOURS for 365.25-day mean
                      calendar years.
     Returns a dict with on-sky hours, on-sky years at `duty`, and the
-    penalty relative to the RFI-free survey (same target, same bins).
+    penalty relative to the uncontaminated baseline (same target, same bins).
     """
     target = _positive_scalar(target, "target")
     duty = _positive_scalar(duty, "duty")
@@ -268,14 +270,14 @@ def per_bin_error(fc: _forecast.Forecast, years: float, zbin: int,
     return fc.sigma_param_bin(sc, t, zbin, param)
 
 
-def tolerance_curve(fc: _forecast.Forecast, fracs=None,
-                    band: _scenarios.FrequencyBand = _scenarios.DTV_BAND,
-                    target: float = 5.0, zbin: int | None = None,
-                    duty: float = 1.0,
-                    hours_per_year: float = _survey.OVERVIEW_ONSKY_YEAR_HOURS):
+def masking_cost_curve(fc: _forecast.Forecast, fracs=None,
+                       band: _scenarios.FrequencyBand = _scenarios.DTV_BAND,
+                       target: float = 5.0, zbin: int | None = None,
+                       duty: float = 1.0,
+                       hours_per_year: float = _survey.OVERVIEW_ONSKY_YEAR_HOURS):
     """(fracs, years) arrays: required on-sky years (Overview
     normalization, 1 yr = 8,760 on-sky hours) vs uniform masked fraction
-    of `band`, the noise-tolerance curve."""
+    of `band`, the masking-cost curve."""
     target = _positive_scalar(target, "target")
     duty = _positive_scalar(duty, "duty")
     hours_per_year = _positive_scalar(hours_per_year, "hours_per_year")
@@ -287,6 +289,17 @@ def tolerance_curve(fc: _forecast.Forecast, fracs=None,
                                   duty=duty, hours_per_year=hours_per_year)["years"]
                     for f in fracs])
     return fracs, yrs
+
+
+def tolerance_curve(fc: _forecast.Forecast, fracs=None,
+                    band: _scenarios.FrequencyBand = _scenarios.DTV_BAND,
+                    target: float = 5.0, zbin: int | None = None,
+                    duty: float = 1.0,
+                    hours_per_year: float = _survey.OVERVIEW_ONSKY_YEAR_HOURS):
+    """Compatibility name for :func:`masking_cost_curve`."""
+    return masking_cost_curve(
+        fc, fracs=fracs, band=band, target=target, zbin=zbin, duty=duty,
+        hours_per_year=hours_per_year)
 
 
 def threshold_curve(fc: _forecast.Forecast, operating_points: dict,
@@ -303,7 +316,7 @@ def threshold_curve(fc: _forecast.Forecast, operating_points: dict,
     ``operating_points`` maps a threshold (any orderable label, e.g. eta) to
     ``{channel: (masked_fraction, residual_ratio)}``. Both halves of the cost
     move with the threshold in opposite directions, so unlike
-    :func:`tolerance_curve` this has an interior minimum: the threshold that
+    :func:`masking_cost_curve` this has an interior minimum: the threshold that
     minimises total time to the target.
 
     Returns ``{'eta': [...], 'years': [...], 'penalty': [...],

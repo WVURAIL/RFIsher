@@ -42,7 +42,7 @@ That coupling is what makes a detector threshold optimisable. Lowering the
 threshold raises f (priced here from the start) and lowers r (priced now);
 raising it does the reverse. Without the r term the forecast is monotone in f
 and its own optimum is "never mask", which is not a physical answer. See
-:mod:`baonoise.residual` for where r comes from and what in it is measured
+:mod:`rfisher.residual` for where r comes from and what in it is measured
 rather than assumed.
 
 Treating a residual as excess *variance* is the conservative reading only if
@@ -333,21 +333,21 @@ class Scenario:
 # ----------------------------------------------------------------------
 
 def clean() -> Scenario:
-    return Scenario("clean", "No masking (RFI-free)")
+    return Scenario("clean", "Uncontaminated baseline")
 
 
-def measured(rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
-             excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
-             mode: str = "time",
-             residuals: dict[int, float] | None = None,
-             residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
-             products=None, fill_missing: str = "error",
-             since: str | None = None, until: str | None = None,
-             eta: float = 1.0) -> Scenario:
-    """Fiducial: pilot-proxy exposure-weighted rates; refused ch24/30 excised.
+def _masking_scenario(
+        rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
+        excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
+        mode: str = "time", residuals: dict[int, float] | None = None,
+        residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
+        products=None, fill_missing: str = "error",
+        since: str | None = None, until: str | None = None,
+        eta: float = 1.0, _warn_legacy: bool = False) -> Scenario:
+    """Build a scenario from the legacy rate table or survey products.
 
     ``residuals`` optionally adds the contamination that survives the mask
-    (see :mod:`baonoise.residual`); omitted, the result is masking-only and
+    (see :mod:`rfisher.residual`); omitted, the result is masking-only and
     identical to every published number in ``out/``.
 
     ``products`` takes the masking fractions from survey products instead of
@@ -360,7 +360,7 @@ def measured(rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
 
     ``since``/``until`` window the product fractions to UTC months
     ``since <= YYYY-MM <= until`` (see
-    :func:`baonoise.channels.mask_table_from_products`): a forward-looking
+    :func:`rfisher.channels.mask_table_from_products`): a forward-looking
     forecast wants the epoch that still describes the sky, not a fraction
     averaged over transmitters that have since signed off. ``eta``
     rethresholds the coarse fractions at ``F > eta * mu0`` from the stored
@@ -380,17 +380,18 @@ def measured(rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
             "beside reworked product fractions — two decisions in one "
             "table; use 'omit' or cover the missing channels with products")
     kw = {} if rates_csv is None else {"rates_csv": rates_csv}
-    table = chn.measured_mask_table(refused_fraction=refused_fraction, **kw)
-    label, name = "Measured pilot-proxy masking", "measured"
-    if products is None and not table.is_occupancy_measurement:
+    table = chn.legacy_rate_table(refused_fraction=refused_fraction, **kw)
+    label, name = "Legacy detector rate table", "legacy_rate_table"
+    if products is None and _warn_legacy and not table.is_occupancy_measurement:
         warnings.warn(
-            "scenarios.measured(): the vendored rate table is the legacy "
-            "fs/2-mistuned detector epoch and does not measure DTV occupancy "
-            f"({table.epoch}); pass products=... to forecast on the detector's "
-            "own decision from corrected-epoch survey products",
+            "scenarios.measured() selected the legacy fs/2-mistuned rate "
+            "table, which does not measure DTV occupancy; use "
+            "legacy_rate_table_scenario() explicitly or pass products=... "
+            "to survey_product_scenario()",
             UserWarning, stacklevel=2)
 
     if products is not None:
+        label, name = "Survey-product mask", "survey_products"
         prod = chn.mask_table_from_products(products,
                                             refused_fraction=refused_fraction,
                                             since=since, until=until, eta=eta)
@@ -405,13 +406,13 @@ def measured(rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
         if missing and fill_missing == "csv":
             fr.update({ch: table.fractions[ch] for ch in missing})
             label += f" (products; {len(missing)} channels from CSV)"
-            name = "measured_mixed"
+            name = "survey_products_mixed"
         elif missing and fill_missing == "omit":
             label += f" (products; {len(missing)} channels omitted)"
-            name = "measured_products"
+            name = "survey_products"
         else:
             label += " (from products)"
-            name = "measured_products"
+            name = "survey_products"
         if fill_missing not in ("error", "csv", "omit"):
             raise ValueError(f"unknown fill_missing: {fill_missing!r}")
         if prod.window != "full span":
@@ -427,6 +428,65 @@ def measured(rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
                     residual_excise_threshold=residual_excise_threshold)
 
 
+def legacy_rate_table_scenario(
+        rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
+        excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
+        mode: str = "time", residuals: dict[int, float] | None = None,
+        residual_excise_threshold: float = NO_EXCISION_THRESHOLD) -> Scenario:
+    """Use the identified legacy detector rate table.
+
+    The table is retained for result reproduction. It is not a DTV occupancy
+    measurement; use :func:`survey_product_scenario` for corrected products.
+    """
+    return _masking_scenario(
+        rates_csv=rates_csv, refused_fraction=refused_fraction,
+        excise_threshold=excise_threshold, mode=mode, residuals=residuals,
+        residual_excise_threshold=residual_excise_threshold)
+
+
+def survey_product_scenario(
+        products, rates_csv=None,
+        refused_fraction: float = chn.REFUSED_FRACTION,
+        excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
+        mode: str = "time", residuals: dict[int, float] | None = None,
+        residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
+        fill_missing: str = "error", since: str | None = None,
+        until: str | None = None, eta: float = 1.0) -> Scenario:
+    """Build a masking scenario from corrected survey products."""
+    if products is None:
+        raise ValueError("survey_product_scenario requires products")
+    return _masking_scenario(
+        rates_csv=rates_csv, refused_fraction=refused_fraction,
+        excise_threshold=excise_threshold, mode=mode, residuals=residuals,
+        residual_excise_threshold=residual_excise_threshold,
+        products=products, fill_missing=fill_missing, since=since,
+        until=until, eta=eta)
+
+
+def measured(rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
+             excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
+             mode: str = "time",
+             residuals: dict[int, float] | None = None,
+             residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
+             products=None, fill_missing: str = "error",
+             since: str | None = None, until: str | None = None,
+             eta: float = 1.0) -> Scenario:
+    """Compatibility constructor for legacy tables and survey products."""
+    if products is None:
+        return _masking_scenario(
+            rates_csv=rates_csv, refused_fraction=refused_fraction,
+            excise_threshold=excise_threshold, mode=mode,
+            residuals=residuals,
+            residual_excise_threshold=residual_excise_threshold,
+            fill_missing=fill_missing, since=since, until=until, eta=eta,
+            _warn_legacy=True)
+    return survey_product_scenario(
+        products, rates_csv=rates_csv, refused_fraction=refused_fraction,
+        excise_threshold=excise_threshold, mode=mode, residuals=residuals,
+        residual_excise_threshold=residual_excise_threshold,
+        fill_missing=fill_missing, since=since, until=until, eta=eta)
+
+
 def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",
             residual: float = 0.0,
             excise_threshold: float | None = None,
@@ -438,7 +498,7 @@ def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",
     residual    : uniform residual-to-thermal ratio r left in the kept data
 
     Uniform scenarios are retained-time stress tests by default, even when
-    ``f`` exceeds the measured-scenario excision threshold. Pass
+    ``f`` exceeds the per-channel excision threshold. Pass
     ``excise_threshold=...`` to apply a threshold. Since fractions are bounded
     by one, any threshold above one also disables excision; prefer
     ``NO_EXCISION_THRESHOLD`` when expressing that policy.
@@ -495,7 +555,7 @@ def from_mask_decisions(decisions,
                         mode: str = "time", force: bool = False) -> Scenario:
     """Apply the mask only on channels where it pays.
 
-    Each :class:`baonoise.residual.MaskDecision` carries both outcomes, so a
+    Each :class:`rfisher.residual.MaskDecision` carries both outcomes, so a
     channel it declines enters the scenario unmasked (f = 0 and the *full*
     contamination) rather than being dropped. Leaving it out would quietly
     credit the forecast with contamination nobody removed.

@@ -218,6 +218,6 @@ def load_fiducial_cosmology(rf, cachefile: str | Path,
             state = "stale or unversioned" if cachefile.exists() else "missing"
             raise ModuleNotFoundError(
                 f"the requested P(k) cache is {state}: {cachefile}. "
-                "Install baonoise[pk] to regenerate a content-verified cache") \
+                "Install rfisher[pk] to regenerate a content-verified cache") \
                 from exc
     return rf.load_power_spectrum(cosmo, str(cachefile), force_load=True)

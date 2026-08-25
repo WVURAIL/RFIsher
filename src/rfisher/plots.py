@@ -1,4 +1,4 @@
-"""Publication figures for the noise-tolerance forecast.
+"""Publication figures for the CHIME BAO masking-cost study.
 
 Styling follows a validated categorical palette (CVD-checked) and quiet-chart
 specs: 2px lines, hairline solid gridlines, recessive axes, selective direct
@@ -28,7 +28,7 @@ SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
 # color follows the entity across all figures
 SCENARIO_COLORS = {
     "clean": SERIES[0],
-    "measured": SERIES[1],
+    "legacy_rate_table": SERIES[1],
     "uniform50_dtv": SERIES[2],
     "uniform75_dtv": SERIES[3],
     "uniform97_dtv": SERIES[4],
@@ -82,7 +82,7 @@ def _threshold(ax, y, label, x_text):
 def fig_significance_vs_time(curves: dict[str, tuple[np.ndarray, np.ndarray]],
                              labels: dict[str, str], outfile: Path):
     """curves: name -> (years, significance). Draw order: heaviest masking
-    first so the clean/measured pair stays on top where curves bunch."""
+    first so the baseline/reference pair stays on top where curves bunch."""
     setup_style()
     fig, ax = plt.subplots(figsize=(7.2, 4.6))
     order = list(curves)[::-1]
@@ -107,8 +107,7 @@ def fig_significance_vs_time(curves: dict[str, tuple[np.ndarray, np.ndarray]],
 
 def fig_required_time(fracs: np.ndarray, series: list[dict], outfile: Path,
                       annotate_f: float = 0.5):
-    """series: [{label, years (array), color (idx), annotate (bool),
-    measured_years (float|None)}]. Years on log axis vs masked fraction."""
+    """series: [{label, years, color, annotate, reference_years}]."""
     setup_style()
     fig, ax = plt.subplots(figsize=(7.4, 4.8))
     for k, s in enumerate(series):
@@ -121,14 +120,15 @@ def fig_required_time(fracs: np.ndarray, series: list[dict], outfile: Path,
             ax.annotate(f"{100*fracs[i]:.0f}% masked" + r" $\rightarrow$ " + f"{s['years'][i]:.1f} yr",
                         (100 * fracs[i], s["years"][i]), xytext=(12, -18),
                         textcoords="offset points", color=INK2, fontsize=9.5)
-        my = s.get("measured_years")
-        if my is not None and np.isfinite(my):
-            ax.plot([0.0], [my], "o", ms=8, color=c,
+        reference = s.get("reference_years")
+        if reference is not None and np.isfinite(reference):
+            ax.plot([0.0], [reference], "o", ms=8, color=c,
                     markeredgecolor=SURFACE, markeredgewidth=2, zorder=6,
                     clip_on=False)
-            ax.annotate(f"pilot-proxy-derived: {my:.2f} yr", (0.0, my),
-                        xytext=(9, -13), textcoords="offset points",
-                        color=INK2, fontsize=9)
+            ax.annotate(
+                f"legacy rate table: {reference:.2f} yr", (0.0, reference),
+                xytext=(9, -13), textcoords="offset points",
+                color=INK2, fontsize=9)
     ax.set_yscale("log")
     lo = min(np.nanmin(s["years"]) for s in series)
     hi = max(np.nanmax(s["years"]) for s in series)
@@ -139,7 +139,7 @@ def fig_required_time(fracs: np.ndarray, series: list[dict], outfile: Path,
     ax.set_yticklabels([f"{t:g}" for t in yticks])
     ax.set_xlabel("Masked fraction of the DTV band 470-608 MHz [%]")
     ax.set_ylabel("Required observing time [on-sky yr; 1 yr = 8,760 hr]")
-    ax.set_title("Noise tolerance: observing time to reach BAO targets\n"
+    ax.set_title("Masking cost: observing time to reach BAO targets\n"
                  "vs uniform masking of the DTV band")
     ax.legend(loc="upper left")
     return _save(fig, outfile)
@@ -217,4 +217,3 @@ def fig_perbin_significance(zc: np.ndarray, curves: dict[str, np.ndarray],
                  "Where masking bites: per-redshift-bin BAO significance")
     ax.legend(loc="upper right")
     return _save(fig, outfile)
-

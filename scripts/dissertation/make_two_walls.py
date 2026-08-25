@@ -8,11 +8,11 @@ the published artwork of the ten-channel era; this generator replaces it,
 computed from the released products for all 23 channels under one stated
 convention:
 
-* full-archive sweep of F > eta * mu0 (``baonoise.residual.threshold_sweep``),
+* full-archive sweep of F > eta * mu0 (``rfisher.residual.threshold_sweep``),
   under the package's one residual booking: a refused tau_c takes no
   ground-filter credit (``surviving_components``);
 * the kept-frame floor follows the package's one floor discipline
-  (``baonoise.residual.kept_frame_floor``): the measured null floor where at
+  (``rfisher.residual.kept_frame_floor``): the measured null floor where at
   least MIN_MEASURED_NULLS frames support it --- the verified pre-sign-on
   era on ch35 (``SIGN_ON_OFF_THROUGH``), the archive null population
   elsewhere (evidence ``measured``) --- and the sigma-implied substitute
@@ -20,7 +20,7 @@ convention:
 * the ordinate is the published plane's: the fine-credited residual over the
   stable zeta = 1 dilation tolerance of the channel's own redshift bin,
   (r_masked / 10) / tol_aperp --- the same axis as the operating-point
-  optimization, constants from ``baonoise.tolerances`` (one home, one
+  optimization, constants from ``rfisher.tolerances`` (one home, one
   convention for upper and lower band alike).
 
 Row order is the figure's: order 0 is the highest threshold and the last
@@ -58,8 +58,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from baonoise import residual as res  # noqa: E402
-from baonoise.tolerances import TOL_APERP  # noqa: E402
+from rfisher import residual as res  # noqa: E402
+from rfisher.tolerances import TOL_APERP  # noqa: E402
 
 FINE_DB = 10.0                    # measured fine-stage credit, booked as 10
 

@@ -22,8 +22,8 @@ DELTA = 2 * 390.625e3 / 128       # 6.104 kHz reference distance
 WIN = 390.625e3 / 128             # 3.05 kHz window integration width
 FIT_IN, FIT_OUT = 5e3, 12e3       # fit annulus: past the cluster, local
 
-from baonoise import products as P
-from baonoise.npzio import load_npz
+from rfisher import products as P
+from rfisher.npzio import load_npz
 PRODUCTS = P.paths()
 
 

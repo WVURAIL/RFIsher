@@ -149,7 +149,7 @@ python3 scripts/build_bank.py \
 ```
 
 The formulas live in the authenticated package module
-`src/baonoise/residual_templates.py`, not only in an unauthenticated research
+`src/rfisher/residual_templates.py`, not only in an unauthenticated research
 script. The callable object is also a JSON dictionary, so the bank records its
 family, normalization, unit amplitude, parameters, template API version, and
 formula-source SHA-256 in both `expt_overrides` and the experiment-provenance
@@ -196,7 +196,7 @@ python3 scripts/bias_tolerance.py \
 default is every redshift bin overlapping the physical 470--608 MHz DTV band.
 An explicit combined path fails if the local RadioFisher checkout is absent or
 lacks any required API. Loading any bias-response bank also reconstructs the
-runtime Bao and RadioFisher scientific-source identities and compares their
+runtime RFIsher and RadioFisher scientific-source identities and compares their
 canonical content SHA-256 values with the bank-build identities. It separately
 reconstructs the named cosmology, validates the packaged P(k) cache and its
 metadata/content digest, and reconstructs the canonical experiment and
@@ -246,7 +246,7 @@ evidence for an empirical visibility residual shape.
 
 The evidence envelope omits absolute bank/checkout paths but retains both the
 exact response-bank archive SHA-256 and the canonical Fisher-grid digest. It
-also retains clean Bao and RadioFisher commit IDs, source-content digests,
+also retains clean RFIsher and RadioFisher commit IDs, source-content digests,
 source manifests, package/backend versions, the bank build timestamp, and all
 cosmology/cache/experiment/baseline digests, overrides, and foreground
 settings. The numerical and scientific content is reproducible. The NPZ
@@ -395,7 +395,7 @@ not a replacement policy decision.
 The unversioned assets below are the frozen first release and are not
 rewritten. The reconciled release lives at
 `out/forecast_completion_20260824_reconciliation/` with the same 12 artifact
-basenames. Its four evidence ledgers were built and evaluated from clean Bao
+basenames. Its four evidence ledgers were built and evaluated from clean RFIsher
 commit `1d7de4f0329772a18320d390bbe7eab12c3d9a0c`, with `epsilon_fg=0` in every
 bank; the local `banks/` directory is not part of the release.
 
@@ -429,10 +429,10 @@ unless every PDF font resource is embedded Type 1 Latin Modern, and omits
 `CreationDate` and `ModDate`; a repeat-render regression test requires the
 PNG, PDF, table, caption, and manifest to be byte-identical.
 The manifest also points consumers to `/bank/scientific_identity` in every
-evidence file and summarizes the clean Bao build/evaluation commits, common
-Bao scientific source manifest and content digest, and clean RadioFisher
+evidence file and summarizes the clean RFIsher build/evaluation commits, common
+RFIsher scientific source manifest and content digest, and clean RadioFisher
 commit, source manifest, and content digest. The frozen scalar baseline and
-named-template banks carry different Bao commit IDs because release-only
+named-template banks carry different RFIsher commit IDs because release-only
 scripts and documentation were committed between runs; their canonical
 scientific-source digest is identical. The reconciled release uses one clean
 evaluation commit for all four ledgers. The renderer derives this note from

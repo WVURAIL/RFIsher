@@ -9,7 +9,7 @@ detector threshold something you can optimise rather than assume.
 import numpy as np
 import pytest
 
-from baonoise import residual, scenarios
+from rfisher import residual, scenarios
 
 
 # ----------------------------------------------------------------------
@@ -18,7 +18,7 @@ from baonoise import residual, scenarios
 
 def test_absent_residuals_reproduce_masking_only():
     """The regression gate for every number already in out/."""
-    sc = scenarios.measured()
+    sc = scenarios.legacy_rate_table_scenario()
     assert sc.residuals == {}
     for nu_lo, nu_hi in [(470.0, 500.0), (566.6, 591.4), (400.0, 470.0),
                          (560.0, 610.0), (700.0, 800.0)]:
@@ -109,7 +109,8 @@ def test_fourier_mode_folds_residual_too():
 
 def test_hook_stays_consistent_with_bin_factors():
     """Forecast.sigma_A_direct validates the bank path through this hook."""
-    sc = scenarios.measured(residuals={17: 0.4, 31: 0.15})
+    sc = scenarios.legacy_rate_table_scenario(
+        residuals={17: 0.4, 31: 0.15})
     w = sc.freq_weight_fn()
     nu_lo, nu_hi = 566.6, 591.4
     nn = np.linspace(nu_lo, nu_hi, 200001)
@@ -539,11 +540,12 @@ def test_stationarity_is_checked_before_resolution(tmp_path):
 # Is masking worth it?
 # ----------------------------------------------------------------------
 
-def test_mask_benefit_weighs_noise_against_data():
+def test_mask_benefit_weighs_residual_reduction_against_data():
     """Masking pays only when the contamination removed beats the time lost."""
     # 10x cleaner for 50% of the data: pays
     d = residual.mask_benefit(35, f=0.5, r_unmasked=20.0, r_masked=1.0)
-    assert d.noise_gain == pytest.approx(21.0 / 2.0)
+    assert d.residual_reduction == pytest.approx(21.0 / 2.0)
+    assert d.noise_gain == d.residual_reduction
     assert d.data_cost == pytest.approx(2.0)
     assert d.net == pytest.approx(5.25) and d.should_mask
     # the same cleaning for 99% of the data: does not

@@ -61,7 +61,7 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       # jsonschema is deliberately NOT in the `test` extra: pyproject.toml is
-      # part of BAONOISE_SOURCE_MANIFEST, so editing it would invalidate the
+      # part of RFISHER_SOURCE_MANIFEST, so editing it would invalidate the
       # working_tree_sha256 recorded in every shipped Fisher bank.
       - run: python -m pip install ".[test]" jsonschema
       - name: Render the dissertation figure and audit its fonts
@@ -117,13 +117,15 @@ jobs:
       - run: python -m pip wheel --no-deps --wheel-dir dist .
       - name: Test the installed wheel outside the checkout
         run: |
-          wheel_path=$(find "$GITHUB_WORKSPACE/dist" -name 'baonoise-*.whl' -print -quit)
-          python -m venv /tmp/baonoise-wheel-smoke
-          /tmp/baonoise-wheel-smoke/bin/python -m pip install "$wheel_path"
+          wheel_path=$(find "$GITHUB_WORKSPACE/dist" -name 'rfisher-*.whl' -print -quit)
+          python -m venv /tmp/rfisher-wheel-smoke
+          /tmp/rfisher-wheel-smoke/bin/python -m pip install "$wheel_path"
           cd /tmp
-          /tmp/baonoise-wheel-smoke/bin/python -c "import baonoise; assert baonoise.__version__ == '1.0.0'"
-          /tmp/baonoise-wheel-smoke/bin/python -m pip check
-          /tmp/baonoise-wheel-smoke/bin/baonoise-forecast --cosmology planck2018 --uniform 0.0 --band dtv
-          /tmp/baonoise-wheel-smoke/bin/baonoise-forecast --cosmology pact2025 --uniform 0.0 --band chime
-          /tmp/baonoise-wheel-smoke/bin/baonoise-build-bank --help
-          /tmp/baonoise-wheel-smoke/bin/python -c "from baonoise.fisherbank import BANK_SCHEMA_VERSION, FisherBank; from baonoise.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; assert set(BANK_NAMES) == {'planck2018', 'pact2025'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES)"
+          /tmp/rfisher-wheel-smoke/bin/python -c "import baonoise, rfisher; assert rfisher.__version__ == '2.0.0'; assert baonoise.api is rfisher.api"
+          /tmp/rfisher-wheel-smoke/bin/python -m pip check
+          /tmp/rfisher-wheel-smoke/bin/rfisher-forecast --cosmology planck2018 --uniform 0.0 --band dtv
+          /tmp/rfisher-wheel-smoke/bin/rfisher-forecast --cosmology pact2025 --uniform 0.0 --band chime
+          /tmp/rfisher-wheel-smoke/bin/rfisher-build-bank --help
+          /tmp/rfisher-wheel-smoke/bin/baonoise-forecast --version
+          /tmp/rfisher-wheel-smoke/bin/baonoise-build-bank --version
+          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.fisherbank import BANK_SCHEMA_VERSION, FisherBank; from rfisher.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; assert set(BANK_NAMES) == {'planck2018', 'pact2025'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES)"

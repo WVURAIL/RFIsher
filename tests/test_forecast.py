@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from baonoise.forecast import Forecast
+from rfisher.forecast import Forecast
 
 
 class _Bank:
@@ -70,7 +70,7 @@ def test_direct_forecast_reports_missing_radiofisher_clearly(monkeypatch):
     def missing_backend(_rf_dir=None):
         raise FileNotFoundError("not installed")
 
-    monkeypatch.setattr("baonoise.compat.import_radiofisher", missing_backend)
+    monkeypatch.setattr("rfisher.compat.import_radiofisher", missing_backend)
     with pytest.raises(RuntimeError, match="direct Fisher.*RadioFisher"):
         fc.sigma_A_direct(SCENARIO, 1.0)
 
@@ -87,13 +87,13 @@ def test_direct_forecast_reuses_stored_radiofisher_path(monkeypatch):
         assert Path(explicit) == requested
         raise LookupObserved
 
-    monkeypatch.setattr("baonoise.compat.find_radiofisher_dir", observe_lookup)
+    monkeypatch.setattr("rfisher.compat.find_radiofisher_dir", observe_lookup)
     with pytest.raises(LookupObserved):
         fc.sigma_A_direct(SCENARIO, 1.0)
 
 
 def test_direct_forecast_uses_bank_cosmology_and_matching_cache(monkeypatch):
-    from baonoise.scenarios import clean
+    from rfisher.scenarios import clean
 
     class Backend:
         def background_evolution_splines(self, cosmo):
@@ -113,9 +113,9 @@ def test_direct_forecast_uses_bank_cosmology_and_matching_cache(monkeypatch):
     backend = Backend()
     fc = Forecast(bank, backend, style="perbin_A", rf_dir=Path("/rf"))
     seen = {}
-    monkeypatch.setattr("baonoise.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
-    monkeypatch.setattr("baonoise.compat.require_backend_capabilities",
+    monkeypatch.setattr("rfisher.compat.require_backend_capabilities",
                         lambda *args, **kwargs: frozenset())
 
     def get_cosmology(name, rf, rf_dir):
@@ -127,10 +127,10 @@ def test_direct_forecast_uses_bank_cosmology_and_matching_cache(monkeypatch):
         seen["cosmo"] = cosmo
         return {"loaded": "pact"}
 
-    monkeypatch.setattr("baonoise.cosmologies.get", get_cosmology)
-    monkeypatch.setattr("baonoise.pkcache.load_fiducial_cosmology",
+    monkeypatch.setattr("rfisher.cosmologies.get", get_cosmology)
+    monkeypatch.setattr("rfisher.pkcache.load_fiducial_cosmology",
                         load_cosmology)
-    monkeypatch.setattr("baonoise.survey.chime2022_experiment",
+    monkeypatch.setattr("rfisher.survey.chime2022_experiment",
                         lambda rf, rf_dir, ttot_hours: {})
     assert fc.sigma_A_direct(clean(), 1.0) == pytest.approx(1.0)
     assert seen == {"name": "pact2025",
@@ -139,7 +139,7 @@ def test_direct_forecast_uses_bank_cosmology_and_matching_cache(monkeypatch):
 
 
 def test_direct_custom_cosmology_applies_the_banks_recorded_profile(monkeypatch):
-    from baonoise.scenarios import clean
+    from rfisher.scenarios import clean
 
     class Backend:
         @staticmethod
@@ -171,11 +171,11 @@ def test_direct_custom_cosmology_applies_the_banks_recorded_profile(monkeypatch)
         "provenance": {"experiment": {"settings": {
             "epsilon_fg": 1e-6, "k_nl0": 0.14}}}}
     fc = Forecast(bank, Backend(), style="perbin_A", rf_dir=Path("/rf"))
-    monkeypatch.setattr("baonoise.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
-    monkeypatch.setattr("baonoise.compat.require_backend_capabilities",
+    monkeypatch.setattr("rfisher.compat.require_backend_capabilities",
                         lambda *args, **kwargs: frozenset())
-    monkeypatch.setattr("baonoise.survey.chime_experiment",
+    monkeypatch.setattr("rfisher.survey.chime_experiment",
                         lambda rf, rf_dir, ttot_hours, epsilon_fg, k_nl0: {
                             "epsilon_fg": epsilon_fg, "k_nl0": k_nl0})
     custom = {
@@ -188,7 +188,7 @@ def test_direct_custom_cosmology_applies_the_banks_recorded_profile(monkeypatch)
 
 
 def test_direct_full_mask_skips_zero_weight_bins(monkeypatch):
-    from baonoise.scenarios import DTV_BAND, uniform
+    from rfisher.scenarios import DTV_BAND, uniform
 
     class Backend:
         @staticmethod
@@ -212,9 +212,9 @@ def test_direct_full_mask_skips_zero_weight_bins(monkeypatch):
         "config": "chime2022", "cosmology": "planck2018",
         "astrophysical_model_profile": "chime_overview_2022"}
     fc = Forecast(bank, Backend(), style="perbin_A", rf_dir=Path("/rf"))
-    monkeypatch.setattr("baonoise.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
-    monkeypatch.setattr("baonoise.compat.require_backend_capabilities",
+    monkeypatch.setattr("rfisher.compat.require_backend_capabilities",
                         lambda *args, **kwargs: frozenset())
     custom = {
         "h": 0.7, "omega_M_0": 0.3, "omega_b_0": 0.05,
@@ -229,13 +229,13 @@ def test_direct_forecast_fails_closed_on_missing_backend_capability(monkeypatch)
     bank = _Bank(np.eye(2), ["A", "sigma_NL"])
     bank.meta = {"config": "chime2022", "cosmology": "planck2018"}
     fc = Forecast(bank, object(), style="perbin_A", rf_dir=Path("/rf"))
-    monkeypatch.setattr("baonoise.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
 
     def reject(*_args, **_kwargs):
         raise RuntimeError("lacks required capability(s): vol_frac")
 
-    monkeypatch.setattr("baonoise.compat.require_backend_capabilities", reject)
+    monkeypatch.setattr("rfisher.compat.require_backend_capabilities", reject)
     with pytest.raises(RuntimeError, match="vol_frac"):
         fc.sigma_A_direct(SCENARIO, 1.0)
 
@@ -386,9 +386,9 @@ def test_shipped_bank_required_hours_is_unchanged_where_monotone():
     wherever the significance curve crosses the target only once."""
     from scipy.optimize import brentq
 
-    from baonoise.fisherbank import FisherBank
-    from baonoise.resources import DEFAULT_BANK
-    from baonoise.scenarios import clean
+    from rfisher.fisherbank import FisherBank
+    from rfisher.resources import DEFAULT_BANK
+    from rfisher.scenarios import clean
 
     fc = Forecast(FisherBank(DEFAULT_BANK), style="perbin_A")
     scenario = clean()

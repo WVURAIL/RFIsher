@@ -16,7 +16,7 @@ import subprocess
 
 import numpy as np
 
-from baonoise.residual_templates import FAMILIES
+from rfisher.residual_templates import FAMILIES
 
 
 COMPARISON_SCHEMA = "baonoise-forecast-template-comparison-csv-v1"
@@ -146,16 +146,16 @@ def _portable_path(path: Path) -> str:
         return path.name
 
 
-def _commit_note(bao_commits: set[str]) -> str:
-    if len(bao_commits) == 1:
+def _commit_note(rfisher_commits: set[str]) -> str:
+    if len(rfisher_commits) == 1:
         opening = (
             "The scalar baseline and named-template banks were built and "
-            "evaluated at one clean Bao commit. "
+            "evaluated at one clean RFIsher commit. "
         )
     else:
         opening = (
             "The scalar baseline and named-template banks were evaluated at "
-            "different clean Bao commits, but the canonical scientific "
+            "different clean RFIsher commits, but the canonical scientific "
             "source manifest and content digest are identical. "
         )
     return (
@@ -168,9 +168,9 @@ def _commit_note(bao_commits: set[str]) -> str:
 
 def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
     per_evidence = []
-    bao_digests = set()
-    bao_manifests = set()
-    bao_commits = set()
+    rfisher_digests = set()
+    rfisher_manifests = set()
+    rfisher_commits = set()
     radiofisher_digests = set()
     radiofisher_manifests = set()
     radiofisher_commits = set()
@@ -194,13 +194,13 @@ def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
                     raise ValueError(
                         f"{path.name} {package} build/evaluation {field} "
                         "mismatch")
-        bao = build["baonoise"]
+        rfisher = build["baonoise"]
         radiofisher = build["radiofisher"]
-        bao_digests.add(bao["working_tree_sha256"])
-        bao_manifests.add(json.dumps(
-            bao["source_manifest"], sort_keys=True, separators=(",", ":")))
-        bao_commits.update((
-            bao["git_commit"], evaluation["baonoise"]["git_commit"]))
+        rfisher_digests.add(rfisher["working_tree_sha256"])
+        rfisher_manifests.add(json.dumps(
+            rfisher["source_manifest"], sort_keys=True, separators=(",", ":")))
+        rfisher_commits.update((
+            rfisher["git_commit"], evaluation["baonoise"]["git_commit"]))
         radiofisher_digests.add(radiofisher["working_tree_sha256"])
         radiofisher_manifests.add(json.dumps(
             radiofisher["source_manifest"],
@@ -210,7 +210,7 @@ def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
             evaluation["radiofisher"]["git_commit"]))
         per_evidence.append({
             "path": _portable_path(path),
-            "baonoise_build_git_commit": bao["git_commit"],
+            "baonoise_build_git_commit": rfisher["git_commit"],
             "baonoise_evaluation_git_commit":
                 evaluation["baonoise"]["git_commit"],
             "radiofisher_build_git_commit": radiofisher["git_commit"],
@@ -218,12 +218,12 @@ def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
                 evaluation["radiofisher"]["git_commit"],
             "verified_equal": True,
         })
-    if len(bao_digests) != 1 or len(bao_manifests) != 1 \
+    if len(rfisher_digests) != 1 or len(rfisher_manifests) != 1 \
             or len(radiofisher_digests) != 1 \
             or len(radiofisher_manifests) != 1 \
             or len(radiofisher_commits) != 1:
         raise ValueError(
-            "evidence files do not share one scientific Bao/RadioFisher "
+            "evidence files do not share one RFIsher/RadioFisher "
             "content identity")
     return {
         "authoritative_identity_json_pointer":
@@ -231,9 +231,9 @@ def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
         "identity_schema": "baonoise-scientific-evaluation-identity-v1",
         "all_build_evaluation_pairs_verified_equal": True,
         "baonoise": {
-            "clean_git_commits": sorted(bao_commits),
-            "working_tree_sha256": next(iter(bao_digests)),
-            "source_manifest": json.loads(next(iter(bao_manifests))),
+            "clean_git_commits": sorted(rfisher_commits),
+            "working_tree_sha256": next(iter(rfisher_digests)),
+            "source_manifest": json.loads(next(iter(rfisher_manifests))),
         },
         "radiofisher": {
             "clean_git_commit": next(iter(radiofisher_commits)),
@@ -241,7 +241,7 @@ def _scientific_identity_summary(evidence_paths: list[Path]) -> dict:
             "source_manifest": json.loads(next(iter(radiofisher_manifests))),
         },
         "per_evidence": per_evidence,
-        "commit_note": _commit_note(bao_commits),
+        "commit_note": _commit_note(rfisher_commits),
     }
 
 
@@ -383,7 +383,8 @@ def _stable_font_subset_tags():
         PdfFile._get_subset_prefix = original
 
 
-def _render_figure(path: Path, channel_rows: list[dict]) -> None:
+def _render_figure(path: Path, channel_rows: list[dict], *,
+                   preserve_release_metadata: bool = False) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.ticker import FuncFormatter
 
@@ -462,7 +463,10 @@ def _render_figure(path: Path, channel_rows: list[dict]) -> None:
                 "Title": "Model-only residual-shape sensitivity by ATSC channel",
                 "Author": "Dylan Gormley",
                 "Subject": CAPTION,
-                "Creator": "BaoNoiseTolerance reproducible forecast renderer",
+                "Creator": (
+                    "BaoNoiseTolerance reproducible forecast renderer"
+                    if preserve_release_metadata
+                    else "RFIsher reproducible forecast renderer"),
                 "CreationDate": None,
                 "ModDate": None,
             })
@@ -577,6 +581,9 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--manifest", type=Path,
         default=Path("out/forecast_completion_release_manifest.json"))
+    parser.add_argument(
+        "--preserve-release-metadata", action="store_true",
+        help="retain the PDF Creator field used by the immutable release")
     args = parser.parse_args(argv)
 
     try:
@@ -588,7 +595,9 @@ def main(argv=None) -> int:
     except (KeyError, TypeError, ValueError, OSError) as exc:
         parser.error(str(exc))
 
-    _render_figure(args.figure, channel_rows)
+    _render_figure(
+        args.figure, channel_rows,
+        preserve_release_metadata=args.preserve_release_metadata)
     _write_tex(args.table, summary)
     args.caption.parent.mkdir(parents=True, exist_ok=True)
     args.caption.write_text(CAPTION + "\n", encoding="utf-8", newline="\n")

@@ -26,9 +26,9 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from baonoise import api, channels, residual as R, scenarios
-from baonoise.resources import DEFAULT_BANK
-from baonoise.constants import HI_REST_FREQUENCY_MHZ
+from rfisher import api, channels, residual as R, scenarios
+from rfisher.resources import DEFAULT_BANK
+from rfisher.constants import HI_REST_FREQUENCY_MHZ
 
 TAU_GRID = np.array([
     R.CHIME_FRAME_SECONDS, 1.0, 10.0, 60.0, 300.0, 900.0, 3600.0,
@@ -118,7 +118,8 @@ def main() -> int:
             lambda t: fc.significance(scenarios.clean(), t, bins=bins),
             args.target)
         h0 = fc.required_hours_metric(
-            lambda t: fc.significance(scenarios.measured(), t, bins=bins),
+            lambda t: fc.significance(
+                scenarios.legacy_rate_table_scenario(), t, bins=bins),
             args.target)
         rows = []
         for tau in TAU_GRID:
@@ -126,7 +127,8 @@ def main() -> int:
             b = R.budget_from_statistics(worst, args.delay,
                                          tau_intraday=float(tau),
                                          corr=worst_ct)
-            sc = scenarios.measured(residuals={c: b.ratio for c in dtv_chans})
+            sc = scenarios.legacy_rate_table_scenario(
+                residuals={c: b.ratio for c in dtv_chans})
             h = fc.required_hours_metric(
                 lambda t: fc.significance(sc, t, bins=bins), args.target)
             rows.append((float(tau), n, b.ratio_db, b.ratio, h,
@@ -143,7 +145,7 @@ def main() -> int:
         _, pen0, rows = sweep(bins)
         results[label] = (pen0, rows)
         print(f"--- {label} ---")
-        print(f"masking only (measured rates): penalty {pen0:.4f}")
+        print(f"masking only (legacy rate table): penalty {pen0:.4f}")
         print(f"{'tau_c':>8s} {'n_coh':>10s} {'r (dB)':>9s} {'r':>11s} "
               f"{'hours':>10s} {'penalty':>9s}")
         for lab, row in zip(TAU_LABEL, rows):
@@ -190,7 +192,7 @@ def main() -> int:
 
 def _worst_dtv_bin(bank) -> int:
     """Index of the redshift bin most fully covered by the ATSC DTV band."""
-    from baonoise import channels as chn
+    from rfisher import channels as chn
     lo_dtv, hi_dtv = chn.channel_edges(14)[0], chn.channel_edges(36)[1]
     best, frac_best = 0, -1.0
     for i in range(bank.nbins):

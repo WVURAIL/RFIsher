@@ -11,9 +11,9 @@ from typing import get_type_hints
 import numpy as np
 import pytest
 
-from baonoise import channels, fisherbank, forecast, resources, scenarios
-from baonoise.compat import find_radiofisher_dir
-from baonoise.fisherbank import (ARTIFACT_FORECAST, BANK_SCHEMA_VERSION,
+from rfisher import channels, fisherbank, forecast, resources, scenarios
+from rfisher.compat import find_radiofisher_dir
+from rfisher.fisherbank import (ARTIFACT_FORECAST, BANK_SCHEMA_VERSION,
                                  FisherBank)
 
 
@@ -25,7 +25,7 @@ EXPECTED_SHA256 = {
     resources.DEFAULT_RATES_NAME:
         "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
     resources.PRODUCTS_MANIFEST_NAME:
-        "cede0afd1dd7e79bac8f94d198645081fc014cb07eead3ca26e6128c3fbeb165",
+        "1cb845d1e8423b05d731107dc7ac9788691e7bcda15e41a1715bf1d124f7e6e9",
     resources.SYNTHETIC_BASELINE_NAME:
         "101a156d88c212781b098f89a86bfb11ada58433d5dcc5cc2fb86956c930790b",
     "cache_pk.dat":
@@ -80,7 +80,7 @@ def test_canonical_text_hash_is_newline_independent(tmp_path):
 def test_scientific_dat_resources_are_checkout_stable_lf():
     attributes = (Path(__file__).resolve().parents[1] / ".gitattributes") \
         .read_text(encoding="utf-8")
-    assert "src/baonoise/data/*.dat text eol=lf" in attributes
+    assert "src/rfisher/data/*.dat text eol=lf" in attributes
 
 
 def test_source_checkout_defaults_load_from_package_data():
@@ -90,7 +90,7 @@ def test_source_checkout_defaults_load_from_package_data():
     assert bank.meta["config"] == "chime2022"
     assert bank.meta["cosmology"] == "planck2018"
     assert bank.nbins == 15
-    assert len(channels.measured_mask_fractions()) == 23
+    assert len(channels.legacy_rate_fractions()) == 23
 
 
 def test_resource_annotations_resolve_on_supported_python():
@@ -136,7 +136,7 @@ def test_named_packaged_banks_are_strict_v2_forecasts(cosmology):
     assert bank.meta["provenance"]["cosmology"]["name"] == cosmology
 
 
-def test_named_banks_are_distinct_matched_1_0_builds():
+def test_named_banks_are_distinct_matched_2_0_builds():
     planck_resource = resources.bank_file("planck2018")
     pact_resource = resources.bank_file("pact2025")
     assert _sha256(planck_resource) != _sha256(pact_resource)
@@ -151,8 +151,8 @@ def test_named_banks_are_distinct_matched_1_0_builds():
     assert planck.paramnames == pact.paramnames
 
     root = Path(__file__).resolve().parents[1]
-    current_bao_digest = fisherbank._git_state(
-        root, **fisherbank.BAONOISE_SOURCE_MANIFEST)["working_tree_sha256"]
+    current_rfisher_digest = fisherbank._git_state(
+        root, **fisherbank.RFISHER_SOURCE_MANIFEST)["working_tree_sha256"]
     expected_caches = {
         "planck2018": "cache_pk_chime2022.dat",
         "pact2025": "cache_pk_chime2022_pact2025.dat",
@@ -164,13 +164,13 @@ def test_named_banks_are_distinct_matched_1_0_builds():
     radio_digests = set()
     for cosmology, bank in (("planck2018", planck), ("pact2025", pact)):
         provenance = bank.meta["provenance"]
-        assert provenance["baonoise"]["version"] == "1.0.0"
+        assert provenance["baonoise"]["version"] == "2.0.0"
         assert provenance["radiofisher"]["backend_version"] == "1.0.0"
         assert provenance["baonoise"]["working_tree_sha256"] \
-            == current_bao_digest
+            == current_rfisher_digest
         assert provenance["baonoise"]["source_manifest"] == {
             key: list(value) for key, value in
-            fisherbank.BAONOISE_SOURCE_MANIFEST.items()}
+            fisherbank.RFISHER_SOURCE_MANIFEST.items()}
         assert provenance["radiofisher"]["source_manifest"] == {
             key: list(value) for key, value in
             fisherbank.RADIOFISHER_SOURCE_MANIFEST.items()}
@@ -199,17 +199,17 @@ def test_packaged_pact_bank_matches_direct_backend_for_masked_bin():
         pytest.skip("direct P-ACT validation requires a RadioFisher checkout")
     bank = FisherBank(resources.PACT2025_BANK)
     calculator = forecast.Forecast(bank, style="perbin_A")
-    scenario = scenarios.measured()
+    scenario = scenarios.legacy_rate_table_scenario()
     bank_sigma = calculator.sigma_A(scenario, 1.0e4, bins=[6])
     direct_sigma = calculator.sigma_A_direct(
         scenario, 1.0e4, bins=[6])
     assert direct_sigma == pytest.approx(bank_sigma, rel=0.015)
 
 
-def test_bull_research_banks_are_matched_strict_v2_1_0_builds():
+def test_bull_research_banks_are_matched_strict_v2_2_0_builds():
     root = Path(__file__).resolve().parents[1]
-    current_bao_digest = fisherbank._git_state(
-        root, **fisherbank.BAONOISE_SOURCE_MANIFEST)["working_tree_sha256"]
+    current_rfisher_digest = fisherbank._git_state(
+        root, **fisherbank.RFISHER_SOURCE_MANIFEST)["working_tree_sha256"]
     banks = []
     radio_digests = set()
     for name, expected_sha256 in BULL_BANK_SHA256.items():
@@ -230,10 +230,10 @@ def test_bull_research_banks_are_matched_strict_v2_1_0_builds():
             "bias_HI_model": "powerlaw",
             "omega_HI_model": "powerlaw",
         }
-        assert provenance["baonoise"]["version"] == "1.0.0"
+        assert provenance["baonoise"]["version"] == "2.0.0"
         assert provenance["radiofisher"]["backend_version"] == "1.0.0"
         assert provenance["baonoise"]["working_tree_sha256"] \
-            == current_bao_digest
+            == current_rfisher_digest
         assert provenance["pk_cache"]["filename"] == "cache_pk.dat"
         assert provenance["pk_cache"]["sha256"] == EXPECTED_SHA256[
             "cache_pk.dat"]
@@ -258,7 +258,7 @@ def test_each_bull_research_bank_matches_its_recorded_direct_backend(name):
         rf_dir = find_radiofisher_dir()
     except FileNotFoundError:
         pytest.skip("direct Bull-bank validation requires a RadioFisher checkout")
-    from baonoise.compat import import_radiofisher
+    from rfisher.compat import import_radiofisher
 
     rf, rf_dir = import_radiofisher(rf_dir)
     bank = FisherBank(Path(__file__).resolve().parents[1] / "data" / name)
@@ -277,7 +277,7 @@ def test_each_bull_bank_interpolates_bin8_below_one_percent(name):
         rf_dir = find_radiofisher_dir()
     except FileNotFoundError:
         pytest.skip("Bull interpolation validation requires RadioFisher")
-    from baonoise.compat import import_radiofisher
+    from rfisher.compat import import_radiofisher
 
     rf, rf_dir = import_radiofisher(rf_dir)
     bank = FisherBank(Path(__file__).resolve().parents[1] / "data" / name)
@@ -298,24 +298,24 @@ def test_missing_packaged_data_fails_clearly():
 
 def test_defaults_work_through_a_zip_importer(tmp_path):
     """Exercise archive-backed Traversables, not only pathlib resources."""
-    package_root = Path(__file__).resolve().parents[1] / "src" / "baonoise"
-    archive = tmp_path / "baonoise-test.zip"
+    package_root = Path(__file__).resolve().parents[1] / "src" / "rfisher"
+    archive = tmp_path / "rfisher-test.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for source in package_root.rglob("*"):
             if (source.is_file() and "__pycache__" not in source.parts
                     and source.suffix != ".pyc"):
-                destination = (Path("baonoise")
+                destination = (Path("rfisher")
                                / source.relative_to(package_root))
                 zf.write(source, destination)
 
     code = f"""
 import sys
 sys.path.insert(0, {str(archive)!r})
-from baonoise import api, channels, products, resources
+from rfisher import api, channels, products, resources
 assert '.zip/' in str(resources.DEFAULT_BANK)
 forecast = api.load()
 assert forecast.bank.meta['config'] == 'chime2022'
-assert len(channels.measured_mask_fractions()) == 23
+assert len(channels.legacy_rate_fractions()) == 23
 found, missing = products.load()
 assert products.freq_id(35) == 521
 assert len(found) + len(missing) == 23
@@ -325,7 +325,7 @@ for resource_name in resources.RADIOFISHER_FILESYSTEM_NAMES:
 try:
     resources.filesystem_data_file('cache_pk.dat')
 except RuntimeError as exc:
-    assert 'install the baonoise wheel' in str(exc)
+    assert 'install the rfisher wheel' in str(exc)
 else:
     raise AssertionError('zip-imported cache unexpectedly had a filesystem path')
 result = api.required_time(forecast, uniform=0.0)
@@ -347,14 +347,17 @@ def test_built_wheel_contains_and_loads_named_banks_and_manifest(tmp_path):
          "--wheel-dir", str(wheel_dir), str(root)],
         cwd=tmp_path, text=True, capture_output=True, check=False)
     assert built.returncode == 0, built.stdout + built.stderr
-    wheel = next(wheel_dir.glob("baonoise-*.whl"))
+    wheel = next(wheel_dir.glob("rfisher-*.whl"))
     code = f"""
 import sys
 sys.path.insert(0, {str(wheel)!r})
 import baonoise
-from baonoise import products, resources
-from baonoise.fisherbank import BANK_SCHEMA_VERSION, FisherBank
-assert baonoise.__version__ == '1.0.0'
+import rfisher
+from rfisher import products, resources
+from rfisher.fisherbank import BANK_SCHEMA_VERSION, FisherBank
+assert rfisher.__version__ == '2.0.0'
+assert baonoise.__version__ == rfisher.__version__
+assert baonoise.resources is rfisher.resources
 assert products.freq_id(35) == 521
 found, missing = products.load()
 assert len(found) + len(missing) == 23

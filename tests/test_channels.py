@@ -3,8 +3,8 @@ import warnings
 
 import pytest
 
-from baonoise import channels as chn
-from baonoise import scenarios
+from rfisher import channels as chn
+from rfisher import scenarios
 
 
 # ---------------------------------------------------------------- channels
@@ -33,28 +33,28 @@ def test_scenario_rejects_non_atsc_channel():
 def test_default_rate_column_weights_cleanly():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        fr = chn.measured_mask_fractions()
+        fr = chn.legacy_rate_fractions()
     assert len(fr) == 23
     assert all(0.0 <= f <= 1.0 for f in fr.values())
 
 
 def test_frb_rate_column_with_matching_weights():
     with pytest.warns(UserWarning, match="skipped 2 row"):
-        fr = chn.measured_mask_fractions(rate_col="hi_rate_frb",
-                                         weight_col="n_frb_frames")
-    assert set(fr) == set(chn.measured_mask_fractions())
+        fr = chn.legacy_rate_fractions(rate_col="hi_rate_frb",
+                                       weight_col="n_frb_frames")
+    assert set(fr) == set(chn.legacy_rate_fractions())
     assert all(0.0 <= f <= 1.0 for f in fr.values())
     # The FRB-window rates are a different statistic than the all-frame
     # rates; identical tables would mean the weighting silently ignored
     # the requested column.
-    base = chn.measured_mask_fractions()
+    base = chn.legacy_rate_fractions()
     assert any(fr[ch] != base[ch] for ch in fr
                if ch not in chn.REFUSED_CHANNELS)
 
 
 def test_frb_table_wraps_without_crashing():
-    t = chn.measured_mask_table(rate_col="hi_rate_frb",
-                                weight_col="n_frb_frames")
+    t = chn.legacy_rate_table(rate_col="hi_rate_frb",
+                              weight_col="n_frb_frames")
     assert not t.occupancy_valid
     assert len(t.fractions) == 23
 

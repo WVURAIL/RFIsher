@@ -28,8 +28,8 @@ import argparse
 import numpy as np
 
 
-from baonoise import products as _products
-from baonoise import residual as R
+from rfisher import products as _products
+from rfisher import residual as R
 
 # The bias tolerance at the published criterion, b <= sigma (Amara &
 # Refregier 2008), binding on f-sigma-8 across the DTV redshift bins.

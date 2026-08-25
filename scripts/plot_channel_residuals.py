@@ -37,11 +37,11 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from matplotlib.lines import Line2D
 
-from baonoise import residual as R
-from baonoise import forecast, scenarios
-from baonoise.fisherbank import FisherBank
-from baonoise.resources import DEFAULT_BANK
-from baonoise.npzio import load_npz
+from rfisher import residual as R
+from rfisher import forecast, scenarios
+from rfisher.fisherbank import FisherBank
+from rfisher.resources import DEFAULT_BANK
+from rfisher.npzio import load_npz
 
 # Validated categorical slots 1-3 (all-pairs, light surface):
 #   node scripts/validate_palette.js "#2a78d6,#eb6834,#1baf7a" --pairs all
@@ -276,7 +276,7 @@ def main() -> int:
     # different detectors in one scenario. What the products contribute here
     # is the residual r, which is a property of the shelf rather than of the
     # threshold.
-    fr = dict(scenarios.measured().fractions)
+    fr = dict(scenarios.legacy_rate_table_scenario().fractions)
     kept = max(chans, key=lambda c: c["b"].ratio if c["ct"].is_measured else -1)
     kch = kept["ch"]
     cases = [

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Main driver: evaluate masking scenarios against the Fisher bank and produce
-the noise-tolerance figures, CSV tables, and a results summary (out/results.md).
+"""Evaluate masking scenarios and write masking-cost figures and tables.
 """
 from __future__ import annotations
 
@@ -12,10 +11,10 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from baonoise import channels, forecast, plots, scenarios, survey
-from baonoise.compat import import_radiofisher
-from baonoise.fisherbank import FisherBank
-from baonoise.resources import DEFAULT_BANK, bank_file
+from rfisher import channels, forecast, plots, scenarios, survey
+from rfisher.compat import import_radiofisher
+from rfisher.fisherbank import FisherBank
+from rfisher.resources import DEFAULT_BANK, bank_file
 
 DUTY = 1.0  # on-sky years at the Overview normalization (8,760 hr)
 
@@ -101,14 +100,14 @@ def main() -> None:
     # ------------------------------------------------------------ scenarios
     scen_main = {
         "clean": scenarios.clean(),
-        "measured": scenarios.measured(),
+        "legacy_rate_table": scenarios.legacy_rate_table_scenario(),
         "uniform50_dtv": scenarios.uniform(0.50, scenarios.DTV_BAND),
         "uniform75_dtv": scenarios.uniform(0.75, scenarios.DTV_BAND),
         "uniform97_dtv": scenarios.uniform(0.97, scenarios.DTV_BAND),
     }
     labels = {
-        "clean": "No masking",
-        "measured": "Pilot-proxy-derived mask",
+        "clean": "Uncontaminated baseline",
+        "legacy_rate_table": "Legacy detector rate table",
         "uniform50_dtv": "50% of DTV band masked",
         "uniform75_dtv": "75% of DTV band masked",
         "uniform97_dtv": "97% of DTV band masked",
@@ -116,9 +115,10 @@ def main() -> None:
 
     # ------------------------------------------------- table of req. times
     table_scens = dict(scen_main)
-    ms = scenarios.measured(mode="fourier")
-    ms.name, ms.label = "measured_fourier", "Measured (Fourier-mode noise convention)"
-    table_scens["measured_fourier"] = ms
+    legacy_fourier = scenarios.legacy_rate_table_scenario(mode="fourier")
+    legacy_fourier.name = "legacy_rate_table_fourier"
+    legacy_fourier.label = "Legacy detector rate table (Fourier weighting)"
+    table_scens["legacy_rate_table_fourier"] = legacy_fourier
     table_scens["uniform25_dtv"] = scenarios.uniform(0.25, scenarios.DTV_BAND)
     table_scens["uniform90_dtv"] = scenarios.uniform(0.90, scenarios.DTV_BAND)
     table_scens["uniform50_chime"] = scenarios.uniform(
@@ -159,7 +159,7 @@ def main() -> None:
     bin_targets = []
     for ib in (6, 8):
         zlo, zhi = bank.zs[ib], bank.zs[ib + 1]
-        for key in ["clean", "measured", "measured_fourier", "uniform50_dtv",
+        for key in ["clean", "legacy_rate_table", "legacy_rate_table_fourier", "uniform50_dtv",
                     "ch30_excised", "ch30_kept", "ch30_kept_fourier"]:
             sc = table_scens[key]
             h_5s = fc.required_hours_metric(
@@ -212,7 +212,7 @@ def main() -> None:
     plots.fig_significance_vs_time(curves, labels,
                                    outdir / "fig1_significance_vs_time.png")
 
-    # -------------------------------------------- fig 2: tolerance curves
+    # -------------------------------------------- fig 2: masking-cost curves
     IB = 6   # z = 1.40-1.50 bin: ch30 + the ch31-35 cluster
     fracs = np.concatenate([np.arange(0.0, 0.96, 0.05), [0.97]])
     yrs_s5, yrs_b5, yrs_da = [], [], []
@@ -226,25 +226,26 @@ def main() -> None:
             0.02, decreasing=True)))
     yrs_s5, yrs_b5, yrs_da = map(np.array, (yrs_s5, yrs_b5, yrs_da))
 
-    meas = scen_main["measured"]
-    meas_s5 = yrs(fc.required_hours(meas, 5.0))
-    meas_b5 = yrs(fc.required_hours_metric(
-        lambda t: fc.significance(meas, t, bins=[IB]), 5.0))
-    meas_da = yrs(fc.required_hours_metric(
-        lambda t: fc.sigma_param_bin(meas, t, IB, "aperp0"), 0.02,
+    legacy = scen_main["legacy_rate_table"]
+    legacy_s5 = yrs(fc.required_hours(legacy, 5.0))
+    legacy_b5 = yrs(fc.required_hours_metric(
+        lambda t: fc.significance(legacy, t, bins=[IB]), 5.0))
+    legacy_da = yrs(fc.required_hours_metric(
+        lambda t: fc.sigma_param_bin(legacy, t, IB, "aperp0"), 0.02,
         decreasing=True))
     zlo, zhi = bank.zs[IB], bank.zs[IB + 1]
     series = [
         dict(label=rf"$\sigma(D_A)\leq 2\%$ in the $z$={zlo:.2f}-{zhi:.2f} bin",
-             years=yrs_da, color=0, annotate=True, measured_years=meas_da),
+             years=yrs_da, color=0, annotate=True,
+             reference_years=legacy_da),
         dict(label=rf"BAO amplitude $S/N=5$ in the $z$={zlo:.2f}-{zhi:.2f} bin",
-             years=yrs_b5, color=1, measured_years=meas_b5),
+             years=yrs_b5, color=1, reference_years=legacy_b5),
         dict(label=r"BAO amplitude $S/N=5$, full survey", years=yrs_s5,
-             color=2, measured_years=meas_s5),
+             color=2, reference_years=legacy_s5),
     ]
     plots.fig_required_time(fracs, series,
                             outdir / "fig2_required_time_vs_masking.png")
-    with open(outdir / "tolerance_curve.csv", "w", newline="") as fh:
+    with open(outdir / "masking_cost_curve.csv", "w", newline="") as fh:
         w = csv.writer(fh, lineterminator="\n")
         w.writerow(["masked_fraction_dtv_band", "years_survey_5sig",
                     "years_bin_z145_5sig", "years_bin_z145_da2pct",
@@ -260,25 +261,25 @@ def main() -> None:
         with open(outdir / "fig31_validation.csv", "w", newline="") as fh:
             w = csv.writer(fh, lineterminator="\n")
             w.writerow(["z_center", "sigma_dv_clean_pct",
-                        "sigma_dv_representative_pct"])
+                        "sigma_dv_legacy_rate_table_pct"])
             for i, z in enumerate(bank.zc):
                 sc_cl = fc.sigma_dv_bin(scen_main["clean"], t1yr, i)
-                sc_ms = fc.sigma_dv_bin(scen_main["measured"], t1yr, i)
+                sc_ms = fc.sigma_dv_bin(scen_main["legacy_rate_table"], t1yr, i)
                 w.writerow([round(float(z), 3),
                             round(100 * sc_cl, 3) if np.isfinite(sc_cl) else "inf",
                             round(100 * sc_ms, 3) if np.isfinite(sc_ms) else "inf"])
         print("[fig31] per-bin sigma_DV/DV at 1 on-sky yr written", flush=True)
 
     # ------------------------------------------ fig 3: channel masking
-    meas = scenarios.measured()
-    plots.fig_channel_masking(meas.fractions,
+    legacy = scenarios.legacy_rate_table_scenario()
+    plots.fig_channel_masking(legacy.fractions,
                               set(channels.REFUSED_CHANNELS),
                               outdir / "fig3_channel_masking.png")
 
     # ------------------------------------------ fig 4: per-bin profile
     t2 = survey.OVERVIEW_ONSKY_YEAR_HOURS
     perbin = {}
-    for k in ["clean", "measured", "uniform50_dtv"]:
+    for k in ["clean", "legacy_rate_table", "uniform50_dtv"]:
         S = fc.per_bin_significance(scen_main[k], t2)
         with np.errstate(divide="ignore"):
             perbin[k] = np.where(S > 0, 100.0 / S, np.nan)  # sigma_A [%]
@@ -329,7 +330,7 @@ survey-level 5-sigma target ({absolute_shift:+.1f}%). Across the survey and
 both reported bin-level metrics, the largest relative change in a masking
 penalty is {max_penalty_shift:.3f}%.
 """
-    md = f"""# Noise-tolerance forecast results
+    md = f"""# Masking-cost forecast results
 
 CHIME (RadioFisher 'yCHIME' spec) BAO forecast under ATSC DTV masking.
 Times are on-sky hours / on-sky years at the Overview normalization
@@ -345,8 +346,8 @@ eps_FG=1e-6, no calibration systematics); the robust currency is the
 
 {md_table(rows, ["scenario", "label", "sig_at_2yr", "years_5sig", "time_penalty_vs_clean"])}
 
-Reading: the measured pilot-proxy masking costs the survey only
-**{100*(next(r for r in rows if r['scenario']=='measured')['time_penalty_vs_clean']-1):.0f}%
+Reading: the legacy detector rate table costs the survey only
+**{100*(next(r for r in rows if r['scenario']=='legacy_rate_table')['time_penalty_vs_clean']-1):.0f}%
 extra integration time** to any fixed BAO-amplitude target, and even masking
 50% of the whole DTV band costs
 {100*(next(r for r in rows if r['scenario']=='uniform50_dtv')['time_penalty_vs_clean']-1):.0f}%.
@@ -363,7 +364,8 @@ sigma(alpha_perp) <= 2% (a per-bin BAO distance measurement):
 
 ## The channel-30 story
 
-Channel 30 (566-572 MHz, z = 1.48-1.51) is masked ~97% of the time. Options:
+Channel 30 (566-572 MHz, z = 1.48-1.51) is modelled at a 97% masked fraction
+because the legacy table marks it refused. Options:
 
 * **Integrate through it**: recovering clean-equivalent depth in that 6 MHz
   requires x{ch30_mult:.0f} the integration time: if the survey needs T years,
@@ -378,13 +380,13 @@ Channel 30 (566-572 MHz, z = 1.48-1.51) is masked ~97% of the time. Options:
   time penalty at survey level.
 
 Excision wins by an enormous margin: throw the channel out and pay in volume,
-never in noise.
+not in retained-time depth.
 
 {fiducial_summary}
 
 ## Files
 
-required_times.csv, bin_level_targets.csv, tolerance_curve.csv,
+required_times.csv, bin_level_targets.csv, masking_cost_curve.csv,
 perbin_significance_1onskyyr.csv, fiducial_comparison.csv,
 fig1-fig4 (png + pdf).
 """

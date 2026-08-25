@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Minimal baonoise example: from a masking table to observing-time cost.
+"""Minimal RFIsher example: from a masking table to observing-time cost.
 
 Uses the CHIME Fisher bank and quarterly rates shipped inside the package.
 Runs in seconds without a RadioFisher checkout or a bank build.
 """
-from baonoise import api
+from rfisher import api
 
 fc = api.load()  # shipped CHIME bank; RadioFisher is not required
 
@@ -22,7 +22,8 @@ print(api.required_time(fc, mask, target=5.0, zbin=6))
 # Significance after 2 on-sky years at the Overview normalization
 print(f"S(2 yr) = {api.significance(fc, 2.0, mask):.1f} sigma")
 
-# Noise-tolerance curve: years to 5 sigma vs uniform DTV-band masking
-fracs, years = api.tolerance_curve(fc, fracs=[0.0, 0.25, 0.5, 0.75, 0.97])
+# Masking-cost curve: years to 5 sigma vs uniform DTV-band masking
+fracs, years = api.masking_cost_curve(
+    fc, fracs=[0.0, 0.25, 0.5, 0.75, 0.97])
 for f, y in zip(fracs, years):
     print(f"  {100*f:4.0f}% masked -> {y:6.3f} yr to 5 sigma (survey)")

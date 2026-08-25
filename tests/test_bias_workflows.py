@@ -281,7 +281,7 @@ def test_three_worlds_serializes_refused_verdicts_as_blank():
 
 
 def test_bias_workflow_rejects_an_ordinary_forecast_bank():
-    forecast_bank = ROOT / "src" / "baonoise" / "data" \
+    forecast_bank = ROOT / "src" / "rfisher" / "data" \
         / "fisher_bank_chime2022.npz"
     completed = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "bias_tolerance.py"),

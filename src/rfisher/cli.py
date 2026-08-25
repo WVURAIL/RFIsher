@@ -1,4 +1,4 @@
-"""Small supported command-line surface for forecasts and bank generation."""
+"""RFIsher commands for forecasts and bank generation."""
 from __future__ import annotations
 
 import argparse
@@ -11,10 +11,10 @@ from . import __version__, api, resources, scenarios, survey
 from .fisherbank import build_bank
 
 
-def forecast_main(argv=None) -> int:
+def forecast_main(argv=None, *, prog: str = "rfisher-forecast") -> int:
     """Evaluate one uniform masking scenario and print machine-readable JSON."""
     parser = argparse.ArgumentParser(
-        prog="baonoise-forecast",
+        prog=prog,
         description="Evaluate a uniform RFI-masking scenario from a Fisher bank.")
     parser.add_argument("--version", action="version",
                         version=f"%(prog)s {__version__}")
@@ -49,10 +49,15 @@ def forecast_main(argv=None) -> int:
     return 0
 
 
-def build_bank_main(argv=None) -> int:
+def legacy_forecast_main(argv=None) -> int:
+    """Run the forecast command through its former name."""
+    return forecast_main(argv, prog="baonoise-forecast")
+
+
+def build_bank_main(argv=None, *, prog: str = "rfisher-build-bank") -> int:
     """Generate a v2 bank without exposing the historical research scripts."""
     parser = argparse.ArgumentParser(
-        prog="baonoise-build-bank",
+        prog=prog,
         description="Generate a provenance-complete Fisher bank (slow).")
     parser.add_argument("--version", action="version",
                         version=f"%(prog)s {__version__}")
@@ -110,3 +115,8 @@ def build_bank_main(argv=None) -> int:
         config=args.config, cosmology=args.cosmology,
         expt_overrides=overrides or None)
     return 0
+
+
+def legacy_build_bank_main(argv=None) -> int:
+    """Run the bank command through its former name."""
+    return build_bank_main(argv, prog="baonoise-build-bank")

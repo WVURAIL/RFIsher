@@ -76,8 +76,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from baonoise import residual as R
-from baonoise.npzio import load_npz
+from rfisher import residual as R
+from rfisher.npzio import load_npz
 
 spec = importlib.util.spec_from_file_location(
     "ot", str(ROOT / "scripts" / "optimal_thresholds.py"))

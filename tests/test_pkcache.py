@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import pytest
 
-from baonoise import cosmologies, pkcache, resources
+from rfisher import cosmologies, pkcache, resources
 
 
 def _planck_like():

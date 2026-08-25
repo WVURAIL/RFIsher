@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from baonoise import api, fisherbank, pkcache
-from baonoise.fisherbank import (ARTIFACT_BIAS_RESPONSE, ARTIFACT_FORECAST,
+from rfisher import api, fisherbank, pkcache
+from rfisher.fisherbank import (ARTIFACT_BIAS_RESPONSE, ARTIFACT_FORECAST,
                                  BANK_SCHEMA_VERSION, FisherBank)
-from baonoise.forecast import Forecast
-from baonoise.resources import DEFAULT_BANK
+from rfisher.forecast import Forecast
+from rfisher.resources import DEFAULT_BANK
 
 
 def _write_bank(path, *, kind=ARTIFACT_FORECAST,
@@ -41,7 +41,7 @@ def _write_bank(path, *, kind=ARTIFACT_FORECAST,
                              "working_tree_sha256": digest,
                              "source_manifest": {
                                  key: list(value) for key, value in
-                                 fisherbank.BAONOISE_SOURCE_MANIFEST.items()}},
+                                 fisherbank.RFISHER_SOURCE_MANIFEST.items()}},
                 "radiofisher": {
                     "backend_id": "radiofisher", "backend_version": "1.0.0",
                     "api_version": 1,
@@ -86,7 +86,7 @@ def test_shipped_bank_matches_current_scientific_source_digest():
     """Docs, tests, and generated outputs must not enter the bank digest."""
     root = Path(__file__).resolve().parents[1]
     current = fisherbank._git_state(
-        root, **fisherbank.BAONOISE_SOURCE_MANIFEST,
+        root, **fisherbank.RFISHER_SOURCE_MANIFEST,
     )["working_tree_sha256"]
     recorded = FisherBank(DEFAULT_BANK).meta["provenance"]["baonoise"][
         "working_tree_sha256"]
@@ -94,7 +94,7 @@ def test_shipped_bank_matches_current_scientific_source_digest():
     assert FisherBank(DEFAULT_BANK).meta["provenance"]["baonoise"][
         "source_manifest"] == {
             key: list(value) for key, value in
-            fisherbank.BAONOISE_SOURCE_MANIFEST.items()}
+            fisherbank.RFISHER_SOURCE_MANIFEST.items()}
 
 
 def test_scientific_source_digest_is_checkout_newline_independent(tmp_path):
@@ -236,7 +236,7 @@ def test_bias_response_requires_pres_backend_capability(tmp_path):
 
 @pytest.mark.parametrize("cosmology", ["planck2018", "pact2025"])
 def test_shipped_banks_pass_cosmology_fingerprint_verification(cosmology):
-    from baonoise.resources import bank_file
+    from rfisher.resources import bank_file
 
     bank = FisherBank(bank_file(cosmology))
     recorded = bank.meta["provenance"]["cosmology"]

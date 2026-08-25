@@ -8,7 +8,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
-    "baonoise_test_run_forecast", ROOT / "scripts" / "run_forecast.py"
+    "rfisher_test_run_forecast", ROOT / "scripts" / "run_forecast.py"
 )
 assert SPEC is not None and SPEC.loader is not None
 run_forecast = importlib.util.module_from_spec(SPEC)

@@ -1385,10 +1385,10 @@ class MaskDecision:
     this to understand the trade at a fixed operating point.
 
     The test is not whether masking lowers the residual; it almost always
-    does) but whether the noise it removes beats the data it costs. Masking
-    a fraction f raises the noise by 1/(1-f) through lost integration, and
-    lowers it by (1+r_masked)/(1+r_unmasked) through reduced contamination.
-    The product of those is the net multiplier on effective noise power::
+    does, but whether the residual reduction beats the data it costs. Masking
+    a fraction f raises thermal noise by 1/(1-f) through lost integration and
+    lowers contamination by (1+r_masked)/(1+r_unmasked). The product of those
+    is the net multiplier on effective noise power::
 
         net = (1 + r_unmasked) / (1 + r_masked) * (1 - f)
 
@@ -1403,9 +1403,14 @@ class MaskDecision:
     r_masked: float
 
     @property
-    def noise_gain(self) -> float:
-        """Factor by which masking reduces contamination."""
+    def residual_reduction(self) -> float:
+        """Factor by which masking reduces the contamination residual."""
         return (1.0 + self.r_unmasked) / (1.0 + self.r_masked)
+
+    @property
+    def noise_gain(self) -> float:
+        """Compatibility name for :attr:`residual_reduction`."""
+        return self.residual_reduction
 
     @property
     def data_cost(self) -> float:
@@ -1415,7 +1420,7 @@ class MaskDecision:
     @property
     def net(self) -> float:
         """> 1 means masking pays; < 1 means it costs more than it saves."""
-        return float(self.noise_gain / self.data_cost)
+        return float(self.residual_reduction / self.data_cost)
 
     @property
     def should_mask(self) -> bool:
@@ -1431,7 +1436,8 @@ class MaskDecision:
     def summary(self) -> str:
         return (f"ch{self.channel:>3d}  f={self.f:.4f}  "
                 f"r {self.r_unmasked:.4g} -> {self.r_masked:.4g}  "
-                f"gain {self.noise_gain:.2f}x  cost {self.data_cost:.1f}x  "
+                f"reduction {self.residual_reduction:.2f}x  "
+                f"cost {self.data_cost:.1f}x  "
                 f"net {self.net:.3f}  "
                 f"{'MASK' if self.should_mask else 'DO NOT MASK'} "
                 f"(break-even f = {self.break_even_f:.3f})")

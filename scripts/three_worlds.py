@@ -47,9 +47,9 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from baonoise import residual as R
-from baonoise import survey
-from baonoise.npzio import load_npz
+from rfisher import residual as R
+from rfisher import survey
+from rfisher.npzio import load_npz
 
 spec = importlib.util.spec_from_file_location(
     "bt", str(ROOT / "scripts" / "bias_tolerance.py"))
@@ -68,7 +68,7 @@ EXPECTED_DENSE_GRID = np.unique(np.concatenate([
     np.logspace(0.0, 6.0, 19),
     10.0 ** np.linspace(3.5, 5.83, 8),
 ]))
-from baonoise import products as P
+from rfisher import products as P
 Z_BIN = {32: 1.4, 33: 1.4, 35: 1.3, 29: 1.5}
 YEARS = (1.0, 2.0, 3.0, 5.0, 8.0)
 PRODUCT_FIELDS = (

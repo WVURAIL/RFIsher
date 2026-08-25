@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from baonoise import fisherbank
+from rfisher import fisherbank
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def test_unknown_config_fails_before_importing_backend(monkeypatch, tmp_path):
     def unexpected_import(*_args, **_kwargs):
         raise AssertionError("backend import started before config validation")
 
-    monkeypatch.setattr("baonoise.compat.import_radiofisher", unexpected_import)
+    monkeypatch.setattr("rfisher.compat.import_radiofisher", unexpected_import)
     with pytest.raises(ValueError, match="unknown config"):
         fisherbank._init_context(
             None, tmp_path / "cache.dat", "unknown", 1e-6, 0.14)
@@ -96,7 +96,7 @@ def test_invalid_config_cosmology_pair_fails_before_backend(monkeypatch,
     def unexpected_import(*_args, **_kwargs):
         raise AssertionError("backend import started before config validation")
 
-    monkeypatch.setattr("baonoise.compat.import_radiofisher", unexpected_import)
+    monkeypatch.setattr("rfisher.compat.import_radiofisher", unexpected_import)
     with pytest.raises(ValueError, match="does not support cosmology"):
         fisherbank.build_bank(
             tmp_path / "wrong.npz", config="bull2015", cosmology="pact2025")

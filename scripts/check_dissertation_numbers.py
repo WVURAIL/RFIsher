@@ -347,7 +347,7 @@ def world_provenance_ok(rows: dict[tuple[str, int], dict],
                                          "three_worlds.py"),
         "bias_source_sha256": path_sha256(ROOT / "scripts" /
                                            "bias_tolerance.py"),
-        "residual_source_sha256": path_sha256(ROOT / "src" / "baonoise" /
+        "residual_source_sha256": path_sha256(ROOT / "src" / "rfisher" /
                                                "residual.py"),
     }
     try:
@@ -727,27 +727,28 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     ck.value("survey 5-sigma clean on-sky years", [f"{yrs['clean']:.4f}"],
              "quote out/required_times.csv years_5sig at the table's"
              " rounding")
-    ck.value("survey 5-sigma measured on-sky years",
-             [f"{yrs['measured']:.4f}"],
+    ck.value("survey 5-sigma legacy rate-table on-sky years",
+             [f"{yrs['legacy_rate_table']:.4f}"],
              "quote out/required_times.csv years_5sig at the table's"
              " rounding")
     ck.value("z=1.40-1.50 bin clean years", [f"{byrs['clean']:.3f}"],
              "quote out/bin_level_targets.csv years_bin5sig at the table's"
              " rounding")
-    ck.value("z=1.40-1.50 bin measured years", [f"{byrs['measured']:.3f}"],
+    ck.value("z=1.40-1.50 bin legacy rate-table years",
+             [f"{byrs['legacy_rate_table']:.3f}"],
              "quote out/bin_level_targets.csv years_bin5sig at the table's"
              " rounding")
-    ck.value("z=1.40-1.50 bin penalty (measured/clean years)",
-             [f"{byrs['measured'] / byrs['clean']:.3f}"],
+    ck.value("z=1.40-1.50 bin penalty (legacy/clean years)",
+             [f"{byrs['legacy_rate_table'] / byrs['clean']:.3f}"],
              "the bin penalty is the years_bin5sig ratio at 3 dp")
     # The table must also agree with itself: the quoted bin penalty has to
-    # equal quoted-measured / quoted-clean within the rounding slack of its
+    # equal quoted-legacy / quoted-clean within the rounding slack of its
     # own printed cells, whatever record the row happens to hold.
     row_pat = r" & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*)"
     clean_m = re.search(r"clean \(no DTV\)" + row_pat, ck.text)
-    meas_m = (re.search(row_pat, ck.text[clean_m.end():])
-              if clean_m else None)
-    if meas_m is None:
+    legacy_m = (re.search(row_pat, ck.text[clean_m.end():])
+                if clean_m else None)
+    if legacy_m is None:
         ck._emit("FAIL", "Table 9.1 bin penalty consistent with its years",
                  "rows not found; keep the 'clean (no DTV)' label and four"
                  " numeric columns per row")
@@ -755,16 +756,18 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
         def half_ulp(s: str) -> float:
             return 0.5 * 10.0 ** -(len(s) - s.index(".") - 1
                                    if "." in s else 0)
-        c_bin, m_bin, pen = clean_m.group(3), meas_m.group(3), meas_m.group(4)
-        lo = (float(m_bin) - half_ulp(m_bin)) / (float(c_bin)
-                                                 + half_ulp(c_bin))
-        hi = (float(m_bin) + half_ulp(m_bin)) / (float(c_bin)
-                                                 - half_ulp(c_bin))
+        c_bin = clean_m.group(3)
+        legacy_bin = legacy_m.group(3)
+        pen = legacy_m.group(4)
+        lo = (float(legacy_bin) - half_ulp(legacy_bin)) / (float(c_bin)
+                                                           + half_ulp(c_bin))
+        hi = (float(legacy_bin) + half_ulp(legacy_bin)) / (float(c_bin)
+                                                           - half_ulp(c_bin))
         ok = lo - half_ulp(pen) <= float(pen) <= hi + half_ulp(pen)
         ck._emit("PASS" if ok else "FAIL",
                  "Table 9.1 bin penalty consistent with its years",
                  "" if ok else
-                 f"quoted penalty {pen} outside {m_bin}/{c_bin} ="
+                 f"quoted penalty {pen} outside {legacy_bin}/{c_bin} ="
                  f" [{lo:.3f}, {hi:.3f}]; recompute the row from"
                  " out/bin_level_targets.csv")
 

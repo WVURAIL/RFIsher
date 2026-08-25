@@ -22,7 +22,7 @@ requires_figure_toolchain = pytest.mark.skipif(
 SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
-    "baonoise_test_render_forecast_template_assets",
+    "rfisher_test_render_forecast_template_assets",
     ROOT / "scripts" / "render_forecast_template_assets.py")
 assert SPEC is not None and SPEC.loader is not None
 renderer = importlib.util.module_from_spec(SPEC)
@@ -146,8 +146,8 @@ def test_aggregate_retains_exact_disposition_counts():
 
 
 def test_commit_note_matches_the_evaluation_history():
-    assert "one clean Bao commit" in renderer._commit_note({"a" * 40})
-    assert "different clean Bao commits" in renderer._commit_note(
+    assert "one clean RFIsher commit" in renderer._commit_note({"a" * 40})
+    assert "different clean RFIsher commits" in renderer._commit_note(
         {"a" * 40, "b" * 40})
 
 
@@ -186,6 +186,7 @@ def test_dated_renderer_reproduces_the_released_assets(tmp_path):
         "--table", str(table),
         "--caption", str(caption),
         "--manifest", str(manifest),
+        "--preserve-release-metadata",
     ]) == 0
     for generated, released in (
         (figure, DATED_RELEASE / figure.name),

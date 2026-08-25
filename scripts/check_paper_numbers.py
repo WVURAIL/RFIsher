@@ -23,8 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
 PAPER = ROOT / "paper"
-from baonoise import channels, survey
-from baonoise.constants import HI_REST_FREQUENCY_MHZ
+from rfisher import channels, survey
+from rfisher.constants import HI_REST_FREQUENCY_MHZ
 
 
 # ---------------------------------------------------------------- helpers
@@ -84,8 +84,10 @@ def main() -> int:
 
     print("-- Table 2: survey level --")
     ck.check("clean (S/N)_A at 2 yr", sig("clean"), "63.57", 2)
-    ck.check("pilot-proxy (S/N)_A at 2 yr", sig("measured"), "61.96", 2)
-    ck.check("pilot-proxy Fourier (S/N)_A", sig("measured_fourier"), "61.89", 2)
+    ck.check("legacy rate-table (S/N)_A at 2 yr",
+             sig("legacy_rate_table"), "61.96", 2)
+    ck.check("legacy rate-table Fourier (S/N)_A",
+             sig("legacy_rate_table_fourier"), "61.89", 2)
     ck.check("uniform 25% DTV (S/N)_A", sig("uniform25_dtv"), "60.98", 2)
     ck.check("uniform 50% DTV (S/N)_A", sig("uniform50_dtv"), "57.88", 2)
     ck.check("uniform 75% DTV (S/N)_A", sig("uniform75_dtv"), "53.89", 2)
@@ -94,8 +96,10 @@ def main() -> int:
     ck.check("ch30 excised (S/N)_A", sig("ch30_excised"), "63.02", 2)
     ck.check("ch30 retained (S/N)_A", sig("ch30_kept"), "63.19", 2)
     ck.check("ch30 retained Fourier (S/N)_A", sig("ch30_kept_fourier"), "60.26", 2)
-    ck.check("pilot-proxy survey penalty", pen("measured"), "1.033", 3)
-    ck.check("pilot-proxy Fourier penalty", pen("measured_fourier"), "1.034", 3)
+    ck.check("legacy rate-table survey penalty",
+             pen("legacy_rate_table"), "1.033", 3)
+    ck.check("legacy rate-table Fourier penalty",
+             pen("legacy_rate_table_fourier"), "1.034", 3)
     ck.check("uniform 25% penalty", pen("uniform25_dtv"), "1.076", 3)
     ck.check("uniform 50% penalty", pen("uniform50_dtv"), "1.152", 3)
     ck.check("uniform 75% penalty", pen("uniform75_dtv"), "1.219", 3)
@@ -111,7 +115,8 @@ def main() -> int:
 
     # prose percentages derived from the penalties
     print("-- Prose: survey penalties as percentages --")
-    ck.check("pilot-proxy penalty as per cent", 100 * (pen("measured") - 1),
+    ck.check("legacy rate-table penalty as per cent",
+             100 * (pen("legacy_rate_table") - 1),
              "3.3", 1, tex_needle="3.3 per cent")
     ck.check("uniform 50% penalty as per cent", 100 * (pen("uniform50_dtv") - 1),
              "15.2", 1, tex_needle="15.2 per cent")
@@ -130,13 +135,13 @@ def main() -> int:
     print("-- Table 3: bin level (on-sky years) --")
     for z, s, v5, vda in [
         ("1.40-1.50", "clean", "0.175", "0.315"),
-        ("1.40-1.50", "measured", "0.235", "0.421"),
-        ("1.40-1.50", "measured_fourier", "0.237", "0.424"),
+        ("1.40-1.50", "legacy_rate_table", "0.235", "0.421"),
+        ("1.40-1.50", "legacy_rate_table_fourier", "0.237", "0.424"),
         ("1.40-1.50", "uniform50_dtv", "0.350", "0.629"),
         ("1.40-1.50", "ch30_kept_fourier", "1.091", "1.963"),
         ("1.40-1.50", "ch30_excised", "0.201", "0.359"),
         ("1.60-1.70", "clean", "0.209", "0.411"),
-        ("1.60-1.70", "measured", "0.286", "0.547"),
+        ("1.60-1.70", "legacy_rate_table", "0.286", "0.547"),
     ]:
         ck.check(f"{z} {s}: 5-sigma yr", yr5(z, s), v5, 3)
         ck.check(f"{z} {s}: D_A<=2% yr", yrda(z, s), vda, 3)
@@ -144,8 +149,9 @@ def main() -> int:
              yrda("1.40-1.50", "ch30_kept"), "0.373", 3)
 
     print("-- Prose: derived factors --")
-    ck.check("worst-bin D_A factor (pilot-proxy)",
-             yrda("1.40-1.50", "measured") / yrda("1.40-1.50", "clean"),
+    ck.check("worst-bin D_A factor (legacy rate table)",
+             yrda("1.40-1.50", "legacy_rate_table")
+             / yrda("1.40-1.50", "clean"),
              "1.34", 2)
     ck.check("ch30-excision direct factor (fix #2)",
              yrda("1.40-1.50", "ch30_excised") / yrda("1.40-1.50", "clean"),
@@ -178,12 +184,12 @@ def main() -> int:
              float(fv[1.45]["sigma_dv_clean_pct"]), "0.61", 2)
     ck.check("sigma(D_V)/D_V clean z=2.43",
              float(fv[2.433]["sigma_dv_clean_pct"]), "1.03", 2)
-    ck.check("sigma(D_V)/D_V pilot-proxy z=1.45",
-             float(fv[1.45]["sigma_dv_representative_pct"]), "0.733", 3)
+    ck.check("sigma(D_V)/D_V legacy rate table z=1.45",
+             float(fv[1.45]["sigma_dv_legacy_rate_table_pct"]), "0.733", 3)
     ck.check("sigma(D_V)/D_V clean z=1.65",
              float(fv[1.65]["sigma_dv_clean_pct"]), "0.706", 3)
-    ck.check("sigma(D_V)/D_V pilot-proxy z=1.65",
-             float(fv[1.65]["sigma_dv_representative_pct"]), "0.852", 3)
+    ck.check("sigma(D_V)/D_V legacy rate table z=1.65",
+             float(fv[1.65]["sigma_dv_legacy_rate_table_pct"]), "0.852", 3)
 
     # -------------------------------------- matched-fiducial comparison
     comparison = {
@@ -212,18 +218,18 @@ def main() -> int:
         row["scenario"]: row
         for row in read_csv("foreground_sensitivity.csv")
     }
-    measured_fg = foreground["measured"]
+    legacy_fg = foreground["legacy_rate_table"]
     clean_fg_shift = 100.0 * (
-        float(measured_fg["comparison_clean_hours"])
-        / float(measured_fg["fiducial_clean_hours"]) - 1.0
+        float(legacy_fg["comparison_clean_hours"])
+        / float(legacy_fg["fiducial_clean_hours"]) - 1.0
     )
     max_fg_penalty_shift = max(
         abs(float(row["relative_penalty_shift_pct"]))
         for row in foreground.values()
     )
     print("-- Sec 5.4: Bull-2015 foreground comparison --")
-    ck.check("Bull measured worst-bin D_A penalty",
-             float(measured_fg["fiducial_worst_da_penalty"]),
+    ck.check("Bull legacy rate-table worst-bin D_A penalty",
+             float(legacy_fg["fiducial_worst_da_penalty"]),
              "1.67", 2)
     ck.check("Bull uniform-50 survey penalty",
              float(foreground["uniform50_dtv"]["fiducial_penalty"]),

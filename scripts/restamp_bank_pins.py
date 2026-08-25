@@ -11,8 +11,8 @@ files and changes nothing.
 
 A byte pin certifies identity, not freshness: re-signing whatever bytes
 sit at the bank paths would happily bless a bank built from an outdated
-source tree. Before touching the pins, each bank's recorded baonoise and
-RadioFisher ``working_tree_sha256`` is therefore compared against the
+source tree. Before touching the pins, each bank's recorded RFIsher and
+RadioFisher ``working_tree_sha256`` values are compared against the
 current checkouts, and the script refuses on any mismatch (or if no
 RadioFisher checkout is discoverable). ``--allow-stale-provenance``
 proceeds anyway, printing every mismatch.
@@ -33,9 +33,9 @@ TESTS = ROOT / "tests" / "test_resources.py"
 # pin anchor in tests/test_resources.py -> bank file in the checkout
 BANKS = {
     "resources.DEFAULT_BANK_NAME:":
-        "src/baonoise/data/fisher_bank_chime2022.npz",
+        "src/rfisher/data/fisher_bank_chime2022.npz",
     "resources.PACT2025_BANK_NAME:":
-        "src/baonoise/data/fisher_bank_chime2022_pact2025.npz",
+        "src/rfisher/data/fisher_bank_chime2022_pact2025.npz",
     '"fisher_bank_bull2015_planck2013_epsfg1e-6.npz":':
         "data/fisher_bank_bull2015_planck2013_epsfg1e-6.npz",
     '"fisher_bank_bull2015_planck2013_epsfg1e-5.npz":':
@@ -55,8 +55,8 @@ def stale_provenance() -> tuple[list[str], dict]:
     exactly as ``find_radiofisher_dir`` does (env RADIOFISHER_DIR overrides).
     A missing checkout is a hard error, not a skipped check.
     """
-    from baonoise import fisherbank
-    from baonoise.compat import find_radiofisher_dir
+    from rfisher import fisherbank
+    from rfisher.compat import find_radiofisher_dir
 
     try:
         radiofisher_root = find_radiofisher_dir()
@@ -69,7 +69,7 @@ def stale_provenance() -> tuple[list[str], dict]:
 
     current = {
         "baonoise": fisherbank._git_state(
-            ROOT, **fisherbank.BAONOISE_SOURCE_MANIFEST)
+            ROOT, **fisherbank.RFISHER_SOURCE_MANIFEST)
             ["working_tree_sha256"],
         "radiofisher": fisherbank._git_state(
             radiofisher_root, **fisherbank.RADIOFISHER_SOURCE_MANIFEST)
