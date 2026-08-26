@@ -15,17 +15,15 @@ import tempfile
 import numpy as np
 
 from .. import __version__
+from ..pilotproxy import (FINE_BINS, PRODUCT_SCHEMA_NAME,
+                          PRODUCT_SCHEMA_REVISION, PRODUCT_SCHEMA_TOKEN,
+                          SOURCE_EVENT_KEY_SCHEMA)
 from ..preparation import prepare_threshold_family
 from ..thresholds import (ALWAYS_MASKED_Q16, MAX_MULTIPLIER_Q16,
                           Q16_SCALE)
 
 
 RESIDUAL_SCORE_BUNDLE_SCHEMA = "rfisher_residual_score_bundle_v1"
-PRODUCT_SCHEMA_NAME = "pilotproxy_per_pilot_product"
-PRODUCT_SCHEMA_REVISION = 5
-PRODUCT_SCHEMA_TOKEN = "pilotproxy_per_pilot_product_v5"
-SOURCE_EVENT_KEY_SCHEMA = "pilotproxy_namespaced_source_event_key_v1"
-FINE_BINS = 256
 _PRODUCER_SCHEMA = "rfisher_residual_score_producer_v1"
 _PRODUCER_FILES = {
     "src/rfisher/residual_scores/bundle.py": Path(__file__).resolve(),

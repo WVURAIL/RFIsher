@@ -108,6 +108,18 @@ Every choice and its evidence state is listed in the
 prepared-array example is in
 [`examples/threshold_selection.py`](examples/threshold_selection.py).
 
+Before using a new archive cohort, run the acceptance gate on its per-pilot
+directory:
+
+```bash
+rfisher-check-archive /path/to/run/_per_pilot
+```
+
+The gate requires exactly channels 14-36 at their registered frequency IDs,
+one current v5 product per channel, common detector and weight-bank identities,
+enabled exact fine powers, complete acquisition provenance, and closed frame
+and sample accounting. It refuses partial or mixed cohorts.
+
 ## Shipped reference result
 
 The reference application reproduces the CHIME Overview BAO forecast before
@@ -162,6 +174,7 @@ The command-line entry points are:
 rfisher-forecast --uniform 0.25
 rfisher-forecast --cosmology pact2025 --uniform 0.25
 rfisher-build-bank --help
+rfisher-check-archive --help
 ```
 
 RadioFisher is needed only to build a bank or perform direct backend

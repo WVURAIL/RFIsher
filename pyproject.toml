@@ -26,6 +26,7 @@ test = ["jsonschema", "pytest", "ruff"]
 [project.scripts]
 rfisher-forecast = "rfisher.cli:forecast_main"
 rfisher-build-bank = "rfisher.cli:build_bank_main"
+rfisher-check-archive = "rfisher.archive_acceptance:main"
 
 [project.urls]
 Documentation = "https://github.com/WVURAIL/RFIsher/tree/main/docs"

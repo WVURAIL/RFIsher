@@ -49,6 +49,7 @@ import numpy as np
 
 from ._validation import positive_scalar
 from .npzio import load_npz
+from .pilotproxy import coarse_reject_mask, is_current_product
 from .constants import HI_REST_FREQUENCY_MHZ
 
 from .resources import DEFAULT_RATES_CSV
@@ -277,15 +278,12 @@ def mask_table_from_products(paths, refused_channels=REFUSED_CHANNELS,
     carry no unit timestamps cannot be windowed and are refused when a window
     is requested.
 
-    ``eta`` recomputes the coarse fractions at the threshold
-    ``F > eta * mu0`` from the product's stored statistic instead of
-    reporting the shipped ``reject_mask`` (the deployed ``eta = 1``
-    zero-excess rule). The deployed rule fires on faint residual signal even
-    where a transmitter has signed off, so an epoch window alone cannot
-    lower those channels' fractions; the threshold can. Requires
-    ``fstat_raw`` and ``mu0`` in every product and ``stage='coarse'``; the
-    recomputation is recorded in the table's rule so an ``eta != 1`` table
-    can never be mistaken for the detector's own decision.
+    ``eta`` recomputes the coarse fractions from the product's decision
+    coordinates instead of reporting the shipped ``reject_mask``. Current v5
+    products use an exact integer comparison against the norm-corrected null;
+    legacy products use ``F > eta * mu0``. The recomputation is recorded in
+    the table's rule so an ``eta != 1`` table can never be mistaken for the
+    detector's own decision.
 
     ``stage`` picks which decision to report, and the returned table names it,
     because the pipeline makes more than one and they differ by two orders of
@@ -343,13 +341,7 @@ def mask_table_from_products(paths, refused_channels=REFUSED_CHANNELS,
                 valid = valid & (month <= until)
         rule = None
         if eta != 1.0:
-            if "fstat_raw" not in d or "mu0" not in d:
-                raise ValueError(
-                    f"{Path(p).name} carries no fstat_raw/mu0, so its "
-                    f"fractions cannot be rethresholded; drop eta or "
-                    f"regenerate the product with the statistic")
-            rejected = (d["fstat_raw"][:, 0]
-                        > eta * float(np.asarray(d["mu0"]).ravel()[0]))
+            rejected = coarse_reject_mask(d, eta)
         elif stage == "coarse":
             rejected = d["reject_mask"][:, 0].astype(bool)
         elif stage == "fine":
@@ -373,8 +365,12 @@ def mask_table_from_products(paths, refused_channels=REFUSED_CHANNELS,
         fractions[ch] = float(rejected[valid].mean())
         n_frames[ch] = int(valid.sum())
         if eta != 1.0:
-            rule = (f"F > {eta:g}*mu0 (rethresholded from fstat_raw; "
-                    f"deployed decision is F > mu0)")
+            if is_current_product(d):
+                rule = (f"Q > {eta:g} (rethresholded from exact integer "
+                        "power terms; deployed decision is Q > 1)")
+            else:
+                rule = (f"F > {eta:g}*mu0 (rethresholded from fstat_raw; "
+                        f"deployed decision is F > mu0)")
         elif stage == "fine":
             try:
                 pfa = float(_scalar_text(d["fine_p_fa"], "fine_p_fa"))

@@ -13,13 +13,16 @@ rather than an input.
 
 The residual chain
 ------------------
-The pilot-proxy survey products report, per frame, ``snr_shelf_db``: the DTV
-shelf power relative to system noise in the DTV bandwidth, inferred from the
-pilot via the frozen proxy relation
+PilotProxy survey products report the DTV shelf power relative to system noise
+in the DTV bandwidth. Legacy products call it ``snr_shelf_db``. Current v5
+products call it ``estimated_data_shelf_snr_db`` and derive it from exact
+integer powers after correcting the quantized-weight null point. In both cases
+the shelf conversion includes
 
     snr_shelf_db = pnr_bin_db + pilot_below_data_db - 10 log10(B_DTV / bin_enbw)
 
-(a fixed -21.636 dB offset for the deployed geometry). Four terms take that to
+and v5 also subtracts 10 log10 of the pilot capture efficiency. The deployed
+geometry has unit capture efficiency and a -21.636 dB offset. Four terms take that to
 the residual an analysis actually sees:
 
 1. **Transmitter-on shelf.** What is there when nothing is done. Measured.
@@ -70,6 +73,7 @@ import numpy as np
 
 from .constants import CHIME_FRAME_SECONDS
 from .npzio import load_npz
+from .pilotproxy import residual_product_view
 from .selection_policy import value as _policy_value
 
 # Delay-filter suppression of the DTV shelf, dB, as a function of which BAO
@@ -267,11 +271,12 @@ def _on_epoch(d, off_through: str | None, trim_percentile: float | None,
     restricts to the regime the residual budget is actually about, since the
     bursts are exactly what the detector flags and removes.
     """
-    valid = d["valid"][:, 0].astype(bool)
-    rejected = d["reject_mask"][:, 0].astype(bool)
-    shelf = d["snr_shelf_db"][:, 0]
-    unit = d["frame_unit_index"]
-    t0 = d["unit_time0_ctime"]
+    view = residual_product_view(d)
+    valid = view.valid
+    rejected = view.rejected
+    shelf = view.shelf_db
+    unit = view.frame_unit_index
+    t0 = view.unit_time0_ctime
 
     on = valid & rejected & np.isfinite(shelf)
     if off_through is not None or off_from is not None:
@@ -357,11 +362,12 @@ def shelf_statistics(npz_path: str | Path, off_through: str | None = None,
     ground filter and double-counts that power in the coherence term.
     """
     d = load_npz(npz_path)
-    valid = d["valid"][:, 0].astype(bool)
-    rejected = d["reject_mask"][:, 0].astype(bool)
-    shelf = d["snr_shelf_db"][:, 0]
-    unit = d["frame_unit_index"]
-    t0 = d["unit_time0_ctime"]
+    view = residual_product_view(d)
+    valid = view.valid
+    rejected = view.rejected
+    shelf = view.shelf_db
+    unit = view.frame_unit_index
+    t0 = view.unit_time0_ctime
     month = _month_of(t0)[unit]
 
     if off_through is not None or off_from is not None:
@@ -386,9 +392,9 @@ def shelf_statistics(npz_path: str | Path, off_through: str | None = None,
             10.0 ** (shelf[on] / 10.0), unit[on], t0)
 
     return ShelfStatistics(
-        channel=int(d["physical_channel"][0]),
-        freq_id=int(d["freq_id"][0]),
-        nu_mhz=float(d["chime_frequency_hz"][0]) / 1e6,
+        channel=view.physical_channel,
+        freq_id=view.freq_id,
+        nu_mhz=view.chime_frequency_hz / 1e6,
         n_valid=int(valid.sum()),
         n_kept=int((valid & ~rejected).sum()),
         on_shelf_db=on_db,
@@ -851,6 +857,12 @@ def masked_residual(stats: ShelfStatistics, gain: float,
 class FloorProvenance:
     """Where a channel's sensitivity floor actually comes from.
 
+    The kept-sliver argument below applies only to legacy products. Current
+    v5 products normalize by the exact weight norms before forming the shelf,
+    and report a finite shelf only for positive excess, which is also the
+    rejected population. For v5, ``reported_db`` is therefore unavailable;
+    ``sigma_implied_db`` remains a stated detector-sensitivity substitute.
+
     Two constants govern every floor in these products and they are not the
     same number:
 
@@ -896,6 +908,7 @@ class FloorProvenance:
     sigma_null: float
     sigma_spread: float
     sigma_implied_db: float
+    basis: str = "legacy_kept_sliver"
 
     @property
     def agreement_db(self) -> float:
@@ -912,11 +925,17 @@ class FloorProvenance:
 
     @property
     def mu0_determined(self) -> bool:
+        if self.basis != "legacy_kept_sliver":
+            return False
         return bool(np.isfinite(self.reported_db)
                     and abs(self.agreement_db) < self.MU0_AGREEMENT_DB)
 
     @property
     def verdict(self) -> str:
+        if self.basis == "v5_positive_excess":
+            return ("unavailable: v5 shelf values exist only for rejected "
+                    "positive-excess frames, so kept frames cannot report a "
+                    "sensitivity floor")
         if self.mu0 < 1.0:
             return ("unavailable: mu0 < 1, so 1 < F <= mu0 is empty for any "
                     "dataset and no frame can set a floor")
@@ -949,6 +968,8 @@ def null_scale(f_kept: np.ndarray, mu0: float) -> tuple[float, float]:
     channel is masked so heavily that the kept frames cannot characterise the
     null, and the scale should be treated as indicative rather than measured.
     """
+    if np.asarray(f_kept).size == 0:
+        return float("nan"), float("nan")
     ests = [(mu0 - float(np.percentile(f_kept, p))) / z
             for p, z in NULL_SCALE_PROBES]
     ests = [e for e in ests if e > 0.0]
@@ -962,35 +983,51 @@ def floor_provenance(npz_path: str | Path,
                      ) -> FloorProvenance:
     """Trace a channel's reported floor back to the constant that fixes it."""
     d = load_npz(npz_path)
-    valid = d["valid"][:, 0].astype(bool)
-    rejected = d["reject_mask"][:, 0].astype(bool)
-    F = d["fstat_raw"][:, 0]
-    shelf = d["snr_shelf_db"][:, 0]
-    mu0 = float(d["mu0"][0])
+    view = residual_product_view(d)
+    valid = view.valid
+    rejected = view.rejected
+    F = view.statistic
+    shelf = view.shelf_db
+    mu0 = view.null_level
 
-    if not np.array_equal(rejected[valid], F[valid] > mu0):
-        raise ValueError("product's reject_mask is not the rule F > mu0; "
+    if not np.array_equal(rejected, view.rejected_at_multiplier(1.0)):
+        raise ValueError("product's reject_mask is not the rule declared by "
+                         "the deployed coarse contract; "
                          "the provenance argument below does not apply")
 
-    # Read the shelf offset off the product rather than assuming it, then check
-    # that the level really is 10log10(F - 1) shifted by it.
-    offset = (float(d["pilot_below_data_db"])
-              - 10.0 * np.log10(float(d["dtv_bandwidth_hz"])
-                                / float(d["bin_enbw_hz"])))
+    offset = view.shelf_offset_db
     lev = valid & np.isfinite(shelf)
-    if lev.sum():
+    if lev.sum() and not view.is_current:
         resid = shelf[lev] - (10.0 * np.log10(F[lev] - 1.0) + offset)
         if not np.all(np.abs(resid) < 1e-6):
             raise ValueError("product's shelf is not 10log10(F-1) + offset; "
                              "the provenance argument below does not apply")
 
     kept = valid & ~rejected
-    sliver = kept & lev                       # exactly the frames 1 < F <= mu0
+    sliver = kept & lev
     sigma, spread = null_scale(F[kept], mu0)
 
+    if view.is_current:
+        return FloorProvenance(
+            channel=view.physical_channel,
+            freq_id=view.freq_id,
+            mu0=1.0,
+            n_kept=int(kept.sum()),
+            n_sliver=0,
+            n_masked_without_level=int((valid & rejected & ~lev).sum()),
+            shelf_offset_db=offset,
+            reported_db=float("nan"),
+            mu0_implied_db=float("-inf"),
+            sigma_null=sigma,
+            sigma_spread=spread,
+            sigma_implied_db=(10.0 * np.log10(sigma) + offset
+                              if sigma > 0.0 else float("nan")),
+            basis="v5_positive_excess",
+        )
+
     return FloorProvenance(
-        channel=int(d["physical_channel"][0]),
-        freq_id=int(d["freq_id"][0]),
+        channel=view.physical_channel,
+        freq_id=view.freq_id,
         mu0=mu0,
         n_kept=int(kept.sum()),
         n_sliver=int(sliver.sum()),
@@ -1471,7 +1508,7 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
                     tau_intraday=None, floor_db=None,
                     min_kept: int = MIN_THRESHOLD_SWEEP_KEPT_FRAMES,
                     off_from=None):
-    """(eta, f, kept-shelf dB, r, net) as the coarse threshold F > eta*mu0 moves.
+    """(eta, f, kept-shelf dB, r, net) as the coarse threshold moves.
 
     This is what the framework exists to compute: the detector's operating
     point mapped onto a science decision. Frames with no pilot detection have
@@ -1480,7 +1517,10 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
     The off epoch is ``off_through`` for a sign-on channel or ``off_from``
     for a sign-off channel (at most one).
 
-    ``floor_db`` supplies that bound explicitly when the product cannot: on a
+    ``floor_db`` supplies that bound explicitly when the product cannot. A v5
+    product reports a finite shelf only for rejected positive-excess frames,
+    so its kept frames cannot supply a floor unless an off epoch provides a
+    measured false-positive population. On a legacy
     channel whose mu0 < 1 the interval 1 < F <= mu0 is empty and no kept frame
     carries a level (see :func:`floor_provenance`), so there is nothing to
     take a percentile of. The caller states the substitute (the natural one
@@ -1490,19 +1530,18 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
     fabricated one.
     """
     d = load_npz(npz_path)
-    valid = d["valid"][:, 0].astype(bool)
-    shelf = d["snr_shelf_db"][:, 0]
-    F = d["fstat_raw"][:, 0]
-    mu0 = float(d["mu0"][0])
-    t0 = d["unit_time0_ctime"]
-    month = _month_of(t0)[d["frame_unit_index"]]
+    view = residual_product_view(d)
+    valid = view.valid
+    shelf = view.shelf_db
+    t0 = view.unit_time0_ctime
+    month = _month_of(t0)[view.frame_unit_index]
 
     if off_through is not None or off_from is not None:
         on_t, off_t = _epoch_time_masks(month, off_through, off_from)
         on = valid & on_t
         off = valid & off_t
     else:
-        on, off = valid, valid & ~d["reject_mask"][:, 0].astype(bool)
+        on, off = valid, valid & ~view.rejected
     fin_off = off & np.isfinite(shelf)
     if on.sum() < MIN_REFERENCE_SWEEP_FRAMES:
         return []
@@ -1544,12 +1583,12 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
         ])
     out = []
     for eta in etas:
-        keep = on & (F <= eta * mu0)
+        keep = on & ~view.rejected_at_multiplier(eta)
         if keep.sum() < min_kept:
             continue
         f = 1.0 - keep.sum() / on.sum()
         kept_lin = float(lin[keep].mean())
-        dec = mask_benefit(int(d["physical_channel"][0]), f, r_un, r_of(kept_lin))
+        dec = mask_benefit(view.physical_channel, f, r_un, r_of(kept_lin))
         out.append(dict(eta=float(eta), f=f,
                         kept_shelf_db=10.0 * np.log10(max(kept_lin, 1e-30)),
                         r_unmasked=r_un, r_masked=dec.r_masked,
