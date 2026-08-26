@@ -191,6 +191,14 @@ Masking cost alone is monotone: remove less data and the time penalty falls.
 It cannot select a detector threshold because it does not say how dirty the
 retained data are. Threshold selection requires the contamination-residual
 term described in [contamination-residuals.md](contamination-residuals.md).
+Latest-era preparation packages that information as one complete
+residual-score histogram per candidate `rho`. The selector takes those
+histograms and the science tolerance, derives `f` from the bin counts, and
+evaluates `(1 + r_var) / (1 - f)` over feasible `(rho, eta)` pairs with at
+least 30 retained frames. A fixed 2% cost plateau avoids a spurious choice on
+a flat surface. If no variance-residual totals are present, the selector uses
+`1 / (1 - f)` and does not treat the systematic residual as an estimate of
+variance.
 
 The masking calculation also does not include:
 

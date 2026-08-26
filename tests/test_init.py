@@ -25,6 +25,7 @@ PUBLIC_MODULES = (
     "resources",
     "scenarios",
     "survey",
+    "thresholds",
 )
 
 

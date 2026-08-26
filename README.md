@@ -61,6 +61,36 @@ Coherent contamination is a bias problem, not simply extra variance. The
 dedicated bias-response workflow propagates it through a `_Pres` Fisher row
 and refuses unsupported or numerically unstable evaluations.
 
+Threshold selection has a narrow boundary. Latest-era preparation rejects
+invalid frames, verifies that the era is stable, handles correlation, and
+applies the science transfer calibration. It then emits one complete
+residual-score histogram for each candidate rank `rho`. Each histogram records
+the usable bulk size. Each bin carries a frame count and a calibrated additive
+systematic-residual total, plus a variance-residual total when that quantity is
+measured.
+
+`thresholds.optimize_threshold` takes only `histograms_by_rho` and
+`science_tolerance`. It derives the frame count and masked fraction, ignores
+candidates retaining fewer than 30 frames, and evaluates
+`(1 + r_var) / (1 - f)` subject to `r_sys <= science_tolerance`. Within 2% of
+the minimum cost it prefers more systematic margin, then less masking, lower
+`rho`, and lower `eta`. The result also reports the normalized rank
+`rho / (bulk_size + 1)`. Without variance totals, the objective is the
+masking-only cost `1 / (1 - f)`; the systematic residual is not reused as a
+variance estimate. Era dates and other provenance stay with the prepared
+product as metadata rather than selector inputs.
+
+The histogram does not depend on the adopted systematic-budget factor. A
+smaller `zeta` sensitivity run reuses the same histograms and changes only
+`science_tolerance`.
+
+The selector core is implemented. The tracked survey products predate the
+prepared-histogram exporter, so their historical threshold rows are not
+relabeled as outputs of this interface. The preparation project must export
+an accepted histogram family before this becomes the operational path. A
+small prepared-array example is in
+[`examples/threshold_selection.py`](examples/threshold_selection.py).
+
 ## Shipped reference result
 
 The reference application reproduces the CHIME Overview BAO forecast before
@@ -87,7 +117,7 @@ the full inputs, results, and caveats.
 - [Masking cost](docs/masking-cost.md) — retained-time and excision models,
   weighting conventions, and mask-product provenance.
 - [Contamination residuals](docs/contamination-residuals.md) — variance and
-  bias paths, coherence, threshold decisions, and refusal rules.
+  bias paths, histogram threshold selection, coherence, and refusal rules.
 - [CHIME/BAO reference application](docs/chime-bao-application.md) — fiducial
   configuration, headline results, inputs, and application-specific caveats.
 - [Reproducibility](docs/reproducibility.md) — installation, verification,

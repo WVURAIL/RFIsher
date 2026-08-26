@@ -29,6 +29,7 @@ _SUBMODULES = (
     "resources",
     "scenarios",
     "survey",
+    "thresholds",
     "tolerances",
 )
 

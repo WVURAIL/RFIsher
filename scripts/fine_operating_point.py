@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""The joint (rho, multiplier) operating point of the fine decision, derived.
+"""Archive prototype for the joint fine-stage operating point.
+
+This reference calculation predates the prepared-histogram boundary. It
+keeps raw-product preparation and selection together so its published rows
+remain reproducible. Current operating calculations should prepare one
+latest-era residual-score histogram per rank and call
+``rfisher.thresholds.optimize_threshold``.
 
 The fine decision has two knobs: the rank rho (which order statistic of
 the null bulk anchors the bar) and the multiplier m (how far above it the

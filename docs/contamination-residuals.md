@@ -38,6 +38,70 @@ This construction is not conservative for coherent contamination. A coherent
 term can bias a fitted parameter even when its variance contribution appears
 small; that case uses the bias-response path described below.
 
+## Threshold selection boundary
+
+Threshold selection uses two inputs for one channel:
+
+1. `histograms_by_rho`, built from the channel's latest stable era; and
+2. `science_tolerance`, the accepted systematic-residual level.
+
+Preparation happens before selection. It removes invalid frames, verifies
+that the chosen era is stable, handles residual correlation, applies the
+proxy-to-science transfer calibration, and emits one complete residual-score
+histogram for each candidate rank `rho`. Each histogram covers the same frame
+population and records the common usable bulk size. Its bins are bounded by
+candidate `eta` values, with a final overflow bin, and each bin carries:
+
+- the number of frames;
+- the sum of calibrated systematic-residual contributions; and
+- the sum of calibrated variance-residual contributions, when measured.
+
+The rank `rho` is one-based. All accepted frames have the same duration and
+exposure, so count fractions are exposure fractions. Across ranks, the frame
+population, bulk size, full systematic total, and optional variance basis and
+total must agree.
+Candidate `eta` grids may differ by rank; every supplied pair is evaluated
+without interpolation.
+
+The selector does not need a separate sample count. For a candidate `eta`, it
+sums the bins at or below that boundary:
+
+```text
+N = sum(all bin counts)
+f = 1 - N_kept / N
+r_sys = sum(kept systematic totals) / N_kept
+r_var = sum(kept variance totals) / N_kept
+```
+
+It evaluates every supplied `(rho, eta)` pair with a supported retained
+population and compares
+
+```text
+(1 + r_var) / (1 - f)
+```
+
+subject to `r_sys <= science_tolerance`. Candidates retaining fewer than 30
+frames are not evaluated. Among points within 2% of the minimum cost, the
+selector prefers lower `r_sys`, less masking, lower `rho`, then lower `eta`.
+It reports both `rho` and `rho / (bulk_size + 1)`. If the histograms do not
+contain variance totals, the objective is the masking-only cost
+`1 / (1 - f)`. The systematic residual still enforces the tolerance; it is
+not substituted for the missing variance term.
+
+The stored residual totals must be additive: a retained prefix sum divided by
+its frame count must already be the calibrated residual for that subset. If
+correlation or transfer must be estimated again after masking, preparation
+must do that work before producing the histogram; the compressed selector
+cannot infer it.
+
+Era start and end dates, rejected-frame counts, and source provenance remain
+metadata on the prepared product. They are needed to reproduce and audit the
+calibration, but they are not inputs to `thresholds.optimize_threshold`.
+`residual.threshold_sweep` and the raw-product scripts retain their role as
+preparation and reference paths; they are not the pure selection boundary.
+The prepared histograms can be reused across systematic-budget choices:
+testing a smaller `zeta` changes only `science_tolerance`.
+
 ## Residual budget
 
 The released scalar budget maps a pilot-proxy survey product to `r` through
@@ -149,8 +213,9 @@ variance model only when
 net = (1 + r_unmasked) / (1 + r_masked) * (1 - f) > 1.
 ```
 
-`residual.mask_benefit` evaluates this decision per channel, and
-`residual.threshold_sweep` follows it as the detector threshold moves.
+`residual.mask_benefit` evaluates this decision per channel. The raw-product
+`residual.threshold_sweep` reference path follows it as the detector threshold
+moves; prepared operating-point selection uses `thresholds.optimize_threshold`.
 
 At the deployed `F > mu0` decision for the two channels with a measurable
 transmitter-off epoch:

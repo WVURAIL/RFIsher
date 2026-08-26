@@ -7,6 +7,8 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
+from rfisher import thresholds
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ppcal = ModuleType("ppcal")
@@ -38,6 +40,10 @@ finally:
             sys.modules.pop(name, None)
         else:
             sys.modules[name] = previous
+
+
+def test_cost_plateau_matches_the_selector():
+    assert calibrated.PLATEAU == thresholds.COST_PLATEAU
 
 
 def test_load_channels_filters_before_full_load(tmp_path, monkeypatch):

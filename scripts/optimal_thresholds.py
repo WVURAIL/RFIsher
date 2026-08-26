@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""The threshold the forecast selects, per channel.
+"""Archive screening thresholds selected from raw survey products.
+
+This reference calculation keeps raw-product preparation and selection
+together so its published rows remain reproducible. Current operating
+calculations should prepare latest-era residual-score histograms and call
+``rfisher.thresholds.optimize_threshold``.
 
 This is the closing move of the framework: minimize the survey-time cost
 
@@ -47,13 +52,14 @@ import numpy as np
 
 
 from rfisher import residual as R
+from rfisher.thresholds import COST_PLATEAU
 
 # Stable zeta = 1 tolerances (scripts/bias_tolerance.py --zeta 1.0), one home.
 from rfisher.tolerances import TOL_APERP, TOL_FS8
 FINE_DB = 10.0                       # measured fine-stage credit, 9.4-10.0 dB
 DEPLOYED_DELAY_DB = 11.4             # CHIME's 200 ns cut; NOT booked in the
                                      # verdicts; shown as a labeled scenario.
-PLATEAU = 1.02                       # "within 2% of optimal" tie-break window
+PLATEAU = COST_PLATEAU
 
 from rfisher import products as _products
 from rfisher.npzio import load_npz

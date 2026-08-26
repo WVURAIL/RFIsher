@@ -13,17 +13,22 @@ instrument builders, and direct-validation paths remain CHIME/BAO-specific.
 
 ## Data flow
 
-The maintained workflow is:
+The target selector workflow is:
 
-1. A detector project produces masked-time fractions and, when available,
-   contamination-residual measurements with provenance.
-2. `Scenario` maps those quantities onto physical frequency intervals.
-3. Each forecast bin receives a surviving-volume fraction and an effective
+1. A detector project produces per-frame scores and residual measurements.
+2. Latest-era preparation rejects invalid frames, verifies stability, handles
+   correlation, applies the science transfer calibration, and emits one
+   complete residual-score histogram per candidate rank `rho`.
+3. `thresholds.optimize_threshold` takes those histograms and a science
+   tolerance, then selects the `(rho, eta)` operating point.
+4. The selected mask fraction and residual enter a `Scenario`, which maps
+   them onto physical frequency intervals.
+5. Each forecast bin receives a surviving-volume fraction and an effective
    integration-time factor.
-4. A Fisher bank supplies the matrix at the requested effective time.
-5. The forecast layer marginalizes the declared BAO parameters and reports a
+6. A Fisher bank supplies the matrix at the requested effective time.
+7. The forecast layer marginalizes the declared BAO parameters and reports a
    target significance, uncertainty, or time-to-target.
-6. The bias-response workflow evaluates coherent contamination separately.
+8. The bias-response workflow evaluates coherent contamination separately.
 
 This separation is deliberate. Detector design and survey-product generation
 belong in pilot-proxy; the Fisher calculation belongs in RadioFisher; RFIsher
@@ -38,7 +43,8 @@ them.
 | `scenarios` | Frequency intervals, masking fractions, residual ratios, and excision policy |
 | `fisherbank` | Versioned forecast and bias-response banks with interpolation |
 | `forecast` | BAO marginalization, significance curves, and time inversion |
-| `residual` | Contamination-residual statistics, coherence, budgets, and policy decisions |
+| `residual` | Raw-product statistics, coherence, budgets, and reference threshold sweeps |
+| `thresholds` | Pure `(rho, eta)` selection from calibrated residual-score histograms |
 | `products` | External survey-product registry and path resolution |
 | `channels` | ATSC channel and physical-frequency conversion |
 | `survey` and `layout` | CHIME experiment definition, bins, time conventions, and baselines |
@@ -47,6 +53,56 @@ them.
 
 The preferred import namespace is `rfisher`. The earlier namespace remains a
 compatibility surface for existing banks, scripts, and downstream consumers.
+
+## Threshold boundary
+
+The pure threshold selector has two inputs: `histograms_by_rho` and
+`science_tolerance`. A histogram is complete for one candidate `rho`: its bins
+cover every prepared frame, including the overflow above the last candidate
+`eta`. Each bin records its count and calibrated systematic-residual total.
+It may also record a calibrated variance-residual total. The histogram carries
+the usable bulk size, which validates `rho` and gives the comparable rank
+fraction `rho / (bulk_size + 1)`.
+
+`rho` is a one-based rank. Every accepted frame must have the same duration and
+exposure, so a fraction of frame counts is also the masked-exposure fraction.
+Across ranks, the family must describe the same frame population, common bulk
+size, full systematic total, and variance basis and total when present. The
+selector rejects the family when those checkable invariants disagree.
+Each rank may supply its own ordered `eta` grid. The selector compares the
+recorded `(rho, eta)` pairs directly and does not interpolate a rectangular
+surface.
+
+For each `(rho, eta)`, the selector sums the retained bins. It derives the
+frame count, masked fraction `f`, retained systematic residual `r_sys`, and,
+when present, retained variance residual `r_var`. A candidate must retain at
+least 30 frames, and feasible points satisfy `r_sys <= science_tolerance`. The
+cost is
+
+```text
+(1 + r_var) / (1 - f).
+```
+
+If variance totals are absent, the selector minimizes the masking-only cost
+`1 / (1 - f)`. It does not treat `r_sys` as `r_var`.
+Among points within 2% of the minimum cost, selection prefers lower `r_sys`,
+less masking, lower `rho`, then lower `eta`, so mapping order cannot change the
+result.
+
+The residual totals are sufficient statistics only when they are additive:
+their retained prefix sum divided by the retained count must equal the
+calibrated residual for that subset. A correlation or transfer model that must
+be refit after masking belongs in preparation and cannot use this compressed
+form.
+
+Frame validity, era choice, stability tests, correlation treatment, and
+proxy-to-science transfer calibration belong to preparation. Era dates,
+rejected-frame counts, and source identities remain product metadata. They do
+not become selector arguments. `residual.threshold_sweep` and the raw-product
+scripts remain preparation and reference paths rather than the pure selector.
+The selector core implements this boundary, but the tracked survey products
+predate the external histogram exporter. Their existing operating-point rows
+remain historical results until preparation emits an accepted family.
 
 ## Fisher-bank contract
 
