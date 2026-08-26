@@ -97,6 +97,38 @@ fields, and their floating fine summary cannot reproduce the integer
 comparison. Rerun detector processing with the exact fields retained before
 attempting an operational fine-threshold export.
 
+Build the versioned residual-score interchange bundle from a current v5
+per-pilot product with:
+
+```bash
+PYTHONPATH=src python3 scripts/build_residual_score_bundle.py 844.npz \
+  --selected-frames accepted.npy \
+  --anchor-bin "${ANCHOR_BIN}" \
+  --designated-half-width "${DESIGNATED_HALF_WIDTH}" \
+  --bulk-mask null-bulk.npy \
+  --output 844-residual-scores.npz
+```
+
+Both NPY inputs must be explicit boolean vectors. The driver does not infer an
+era selection, pilot anchor, width, guard, or null bulk from the product. It
+validates the local v5 exact-power, timing, source-scope, and acquisition
+provenance contract without importing the producing package. Historical f9
+rehearsal products predate the complete per-unit provenance and are refused as
+final inputs. An existing output is also refused unless `--overwrite` is
+given.
+
+The bundle manifest records the package version and labeled SHA-256 digests of
+the exact scorer sources. Loading under a different scorer is refused, even if
+the outer bundle was rewritten with a self-consistent content digest. Rebuild
+the bundle from its recorded source product instead of relabeling it.
+
+Reload the authenticated bundle with
+`rfisher.residual_scores.load_residual_score_bundle`. Its
+`prepare_threshold_family` method supplies the exact all-rank boundaries and
+stored frame metadata to strict preparation after the caller provides the
+additive systematic and variance residuals, calibration evidence, era state,
+and stability settings.
+
 `preparation.prepare_threshold_family` expects already accepted rows from the
 latest era. It requires every rank through the minimum valid bulk count,
 derives each exact Q16 candidate grid, and splits the rows at the calendar
@@ -104,11 +136,15 @@ midpoint. Its support span is elapsed time between the earliest and latest row
 in each half; 270 elapsed days does not mean 270 days with observations.
 `assess_histogram_stability` only compares supplied half-histograms.
 
-The resulting drift check is deterministic. Operational use remains blocked
-until the per-half retained-frame floor and both drift limits are derived and
-block-based uncertainty is shown to fit inside those limits. An explicit
-screening selection retains its claim status, source identity, and policy
-digest alongside the numerical result.
+Without a block plan, the resulting drift check is deterministic and supports
+screening only. Operational preparation also records acquisition or
+sidereal-day block IDs, a minimum block count per half, seed, replicate count,
+and one-sided interval coverage. It resamples whole blocks within each half and
+requires the surface-maximum cost and systematic-residual ratio bounds to fit
+inside the caller-declared limits. The per-half retained-frame floor and both
+limits still require scientific justification. An explicit screening
+selection retains its claim status, source identity, and policy digest
+alongside the numerical result.
 
 ## Rebuild the shipped banks
 

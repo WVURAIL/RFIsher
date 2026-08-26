@@ -1,6 +1,7 @@
 import datetime as dt
 import hashlib
 import json
+import time
 
 import numpy as np
 import pytest
@@ -79,6 +80,63 @@ def _family(stability=None, transfer="measured", correlation="measured",
     return preparation.PreparedThresholdFamily(**values)
 
 
+def _block_family(*, block_size=4, keep_blocks=5, block_count=10,
+                  systematic=1.0, cost_limit=10.0, residual_limit=10.0,
+                  seed=31, replicates=200, coverage=0.8,
+                  singleton_blocks=False, order=None,
+                  masked_requirement=2 * Q16, block_unit="acquisition",
+                  shared_block_labels=False):
+    requirements = []
+    times = []
+    blocks = []
+    for half, offset in (("early", 0), ("late", 100)):
+        for block in range(block_count):
+            for row in range(block_size):
+                requirements.append(
+                    1 if block < keep_blocks else masked_requirement)
+                times.append((offset + block * block_size + row) * 86400.0)
+                suffix = f"-{row}" if singleton_blocks else ""
+                prefix = "" if shared_block_labels else f"{half}-"
+                blocks.append(f"{prefix}{block}{suffix}")
+    n_rows = len(requirements)
+    if order is None:
+        order = np.arange(n_rows)
+    order = np.asarray(order)
+    requirements = np.asarray(requirements, dtype=object)[order].tolist()
+    times = np.asarray(times)[order]
+    blocks = np.asarray(blocks)[order].tolist()
+    residuals = (np.full(n_rows, systematic) if np.isscalar(systematic)
+                 else np.asarray(systematic))[order]
+    acquisitions = (blocks if block_unit == "acquisition" else
+                    np.arange(n_rows)[order])
+    return preparation.prepare_threshold_family(
+        {1: requirements}, residuals,
+        frame_times=times,
+        acquisition_ids=acquisitions,
+        exposure_seconds=np.ones(n_rows),
+        source_id=SOURCE_ID,
+        era_label="test era",
+        latest_era=True,
+        additive_residuals=True,
+        score=_evidence(),
+        correlation=_evidence(),
+        transfer=_evidence(),
+        max_cost_ratio=cost_limit,
+        max_systematic_residual_ratio=residual_limit,
+        minimum_half_retained_frames=10,
+        minimum_observed_months=1,
+        minimum_span_days=10.0,
+        stability_block_ids=blocks,
+        stability_resampling=preparation.BlockResamplingPlan(
+            block_unit=block_unit,
+            seed=seed,
+            replicates=replicates,
+            interval_coverage=coverage,
+            minimum_blocks_per_half=5,
+        ),
+    )
+
+
 def test_candidate_rank_grid_covers_every_supported_order_statistic():
     assert preparation.candidate_rho_values(4) == (1, 2, 3, 4)
     with pytest.raises(ValueError, match="positive"):
@@ -118,6 +176,333 @@ def test_identical_candidate_surfaces_pass_the_drift_screen():
     assert result.maximum_cost_ratio == pytest.approx(1.0)
     assert result.maximum_systematic_residual_ratio == pytest.approx(1.0)
     assert result.maximum_masked_fraction_difference == pytest.approx(0.0)
+
+
+def test_whole_blocks_preserve_dependence_in_the_upper_bound():
+    grouped = _block_family()
+    independent = _block_family(singleton_blocks=True)
+    grouped_bound = grouped.stability.block_uncertainty
+    independent_bound = independent.stability.block_uncertainty
+    assert grouped_bound.passed
+    assert independent_bound.passed
+    assert (grouped_bound.maximum_cost_ratio_upper_bound
+            > independent_bound.maximum_cost_ratio_upper_bound)
+
+
+def test_block_surface_matches_direct_frame_resampling():
+    q2 = 2 * Q16
+    q3 = 3 * Q16
+    patterns = {
+        1: (1, 1, 1, q2, q2, q3),
+        2: (1, 1, 1, q2, q3, q3),
+    }
+    requirements = {1: [], 2: []}
+    blocks = []
+    times = []
+    for half, offset in (("early", 0), ("late", 100)):
+        for block in range(6):
+            blocks.extend([f"{half}-{block}"] * 6)
+            times.extend((offset + block * 6 + row) * 86400.0
+                         for row in range(6))
+            for rho, pattern in patterns.items():
+                requirements[rho].extend(pattern)
+    n_rows = len(blocks)
+    systematic = 0.5 + 0.1 * (np.arange(n_rows) % 7)
+    variance = 0.2 + 0.05 * (np.arange(n_rows) % 5)
+    plan = preparation.BlockResamplingPlan(
+        "acquisition", seed=17, replicates=40,
+        interval_coverage=0.5, minimum_blocks_per_half=5)
+    family = preparation.prepare_threshold_family(
+        requirements, systematic,
+        variance_residuals=variance,
+        frame_times=times,
+        acquisition_ids=blocks,
+        exposure_seconds=np.ones(n_rows),
+        source_id=SOURCE_ID,
+        era_label="test era",
+        latest_era=True,
+        additive_residuals=True,
+        score=_evidence(),
+        correlation=_evidence(),
+        transfer=_evidence(),
+        max_cost_ratio=100.0,
+        max_systematic_residual_ratio=100.0,
+        minimum_half_retained_frames=5,
+        minimum_observed_months=1,
+        minimum_span_days=20.0,
+        stability_block_ids=blocks,
+        stability_resampling=plan,
+    )
+
+    early_labels = [f"early-{index}" for index in range(6)]
+    late_labels = [f"late-{index}" for index in range(6)]
+    block_rows = {
+        label: np.flatnonzero(np.asarray(blocks) == label)
+        for label in early_labels + late_labels
+    }
+    rng = np.random.default_rng(plan.seed)
+    probability = np.full(6, 1.0 / 6.0)
+    early_draws = rng.multinomial(6, probability, size=plan.replicates)
+    late_draws = rng.multinomial(6, probability, size=plan.replicates)
+    candidates = []
+    for rho, values in requirements.items():
+        for candidate in preparation.candidate_multiplier_q16_values(values):
+            if sum(value <= candidate for value in values) >= 30:
+                candidates.append((rho, candidate))
+
+    cost_maxima = []
+    systematic_maxima = []
+    for early_draw, late_draw in zip(early_draws, late_draws):
+        early_rows = np.concatenate([
+            np.tile(block_rows[label], count)
+            for label, count in zip(early_labels, early_draw) if count
+        ])
+        late_rows = np.concatenate([
+            np.tile(block_rows[label], count)
+            for label, count in zip(late_labels, late_draw) if count
+        ])
+        cost_ratios = []
+        systematic_ratios = []
+        for rho, candidate in candidates:
+            requirement = np.asarray(requirements[rho], dtype=object)
+            early_kept = early_rows[requirement[early_rows] <= candidate]
+            late_kept = late_rows[requirement[late_rows] <= candidate]
+            assert len(early_kept) >= 5
+            assert len(late_kept) >= 5
+            early_cost = ((1.0 + variance[early_kept].mean())
+                          / (len(early_kept) / len(early_rows)))
+            late_cost = ((1.0 + variance[late_kept].mean())
+                         / (len(late_kept) / len(late_rows)))
+            early_systematic = systematic[early_kept].mean()
+            late_systematic = systematic[late_kept].mean()
+            cost_ratios.append(max(early_cost, late_cost)
+                               / min(early_cost, late_cost))
+            systematic_ratios.append(
+                max(early_systematic, late_systematic)
+                / min(early_systematic, late_systematic))
+        cost_maxima.append(max(cost_ratios))
+        systematic_maxima.append(max(systematic_ratios))
+
+    index = int(np.ceil(plan.interval_coverage * plan.replicates)) - 1
+    expected_cost = max(
+        family.stability.maximum_cost_ratio,
+        sorted(cost_maxima)[index])
+    expected_systematic = max(
+        family.stability.maximum_systematic_residual_ratio,
+        sorted(systematic_maxima)[index])
+    result = family.stability.block_uncertainty
+    assert result.method.endswith("surface_maximum_upper_percentile")
+    assert result.points_checked == len(candidates)
+    assert result.maximum_cost_ratio_upper_bound == pytest.approx(expected_cost)
+    assert (result.maximum_systematic_residual_ratio_upper_bound
+            == pytest.approx(expected_systematic))
+
+
+def test_block_sweep_scaling_is_subquadratic():
+    def run(candidate_count):
+        n_half = 4096
+        half_requirements = np.arange(n_half) % candidate_count + 1
+        requirements = np.concatenate(
+            (half_requirements, half_requirements)).tolist()
+        frame_times = np.concatenate((
+            np.arange(n_half, dtype=float),
+            2 * n_half + np.arange(n_half, dtype=float),
+        )) * 86400.0
+        blocks = []
+        for half in ("early", "late"):
+            blocks.extend(
+                f"{half}-{index // 32}" for index in range(n_half))
+        rows = np.arange(2 * n_half)
+        return preparation.prepare_threshold_family(
+            {1: requirements}, 0.5 + 0.01 * (rows % 7),
+            variance_residuals=0.2 + 0.01 * (rows % 5),
+            frame_times=frame_times,
+            acquisition_ids=blocks,
+            exposure_seconds=np.ones(2 * n_half),
+            source_id=SOURCE_ID,
+            era_label="scaling test",
+            latest_era=True,
+            additive_residuals=True,
+            score=_evidence(),
+            correlation=_evidence(),
+            transfer=_evidence(),
+            max_cost_ratio=100.0,
+            max_systematic_residual_ratio=100.0,
+            minimum_half_retained_frames=5,
+            minimum_observed_months=1,
+            minimum_span_days=1.0,
+            stability_block_ids=blocks,
+            stability_resampling=preparation.BlockResamplingPlan(
+                "acquisition", seed=12, replicates=16,
+                interval_coverage=0.5, minimum_blocks_per_half=5),
+        )
+
+    run(32)
+    elapsed = {128: [], 4096: []}
+    points_checked = {}
+    for _ in range(3):
+        for candidate_count in elapsed:
+            started = time.perf_counter()
+            family = run(candidate_count)
+            elapsed[candidate_count].append(time.perf_counter() - started)
+            points_checked[candidate_count] = (
+                family.stability.block_uncertainty.points_checked)
+    assert points_checked[128] == 128
+    assert points_checked[4096] > 4000
+    ratio = float(np.median(elapsed[4096]) / np.median(elapsed[128]))
+    assert ratio < 4.0, f"32x candidates took {ratio:.3f}x"
+
+
+def test_block_resampling_refuses_insufficient_blocks():
+    family = _block_family(block_count=4, keep_blocks=2, block_size=10)
+    result = family.stability.block_uncertainty
+    assert result.status == "refused_insufficient_blocks"
+    assert result.early_blocks == 4
+    assert result.minimum_blocks_per_half == 5
+
+
+def test_block_plan_has_no_hidden_tail_or_support_default():
+    with pytest.raises(ValueError, match="at least two"):
+        preparation.BlockResamplingPlan(
+            "acquisition", seed=1, replicates=100,
+            interval_coverage=0.8, minimum_blocks_per_half=1)
+    with pytest.raises(ValueError, match="do not resolve"):
+        preparation.BlockResamplingPlan(
+            "acquisition", seed=1, replicates=10,
+            interval_coverage=0.95, minimum_blocks_per_half=5)
+
+
+def test_block_resampling_refuses_insufficient_successes():
+    requirements = []
+    times = []
+    blocks = []
+    for half, offset in (("early", 0), ("late", 100)):
+        for block in range(10):
+            rows = 20 if block == 0 else 2
+            for row in range(rows):
+                requirements.append(1 if block == 0 else 2 * Q16)
+                times.append((offset + block + row / 100) * 86400.0)
+                blocks.append(f"{half}-{block}")
+    n_rows = len(requirements)
+    family = preparation.prepare_threshold_family(
+        {1: requirements}, np.ones(n_rows),
+        frame_times=times,
+        acquisition_ids=blocks,
+        exposure_seconds=np.ones(n_rows),
+        source_id=SOURCE_ID,
+        era_label="test era",
+        latest_era=True,
+        additive_residuals=True,
+        score=_evidence(),
+        correlation=_evidence(),
+        transfer=_evidence(),
+        max_cost_ratio=100.0,
+        max_systematic_residual_ratio=100.0,
+        minimum_half_retained_frames=10,
+        minimum_observed_months=1,
+        minimum_span_days=5.0,
+        stability_block_ids=blocks,
+        stability_resampling=preparation.BlockResamplingPlan(
+            "acquisition", seed=8, replicates=100,
+            interval_coverage=0.8, minimum_blocks_per_half=5),
+    )
+    result = family.stability.block_uncertainty
+    assert result.status == "refused_insufficient_resamples"
+    assert result.replicates_succeeded == 45
+    assert result.minimum_successful_replicates == 80
+
+
+def test_block_resampling_is_reproducible_and_row_order_independent():
+    first = _block_family(seed=61)
+    order = np.random.default_rng(4).permutation(80)
+    shuffled = _block_family(seed=61, order=order)
+    assert first.stability.block_uncertainty == shuffled.stability.block_uncertainty
+
+
+def test_zero_systematic_residual_has_unit_ratio_bound():
+    family = _block_family(
+        keep_blocks=10, systematic=0.0,
+        cost_limit=1.0, residual_limit=1.0)
+    result = family.stability.block_uncertainty
+    assert result.passed
+    assert result.maximum_cost_ratio_upper_bound == pytest.approx(1.0)
+    assert (result.maximum_systematic_residual_ratio_upper_bound
+            == pytest.approx(1.0))
+
+
+def test_one_sided_zero_residual_draw_refuses_a_finite_bound():
+    residuals = ([10.0] * 4 + [0.0] * 36) * 2
+    family = _block_family(
+        keep_blocks=10, systematic=residuals,
+        cost_limit=2.0, residual_limit=100.0,
+        seed=9, replicates=100)
+    result = family.stability.block_uncertainty
+    assert result.status == "refused_unbounded"
+    assert result.maximum_systematic_residual_ratio_upper_bound is None
+    json.dumps(family.metadata(), allow_nan=False)
+
+
+def test_block_resampling_keeps_the_always_masked_sentinel():
+    family = _block_family(
+        masked_requirement=thresholds.ALWAYS_MASKED_Q16)
+    assert family.stability.block_uncertainty.passed
+
+
+def test_acquisition_blocks_must_match_acquisition_partition():
+    with pytest.raises(ValueError, match="must match acquisition_ids"):
+        preparation.prepare_threshold_family(
+            {1: [1] * 40}, np.zeros(40),
+            frame_times=np.arange(40) * 86400.0,
+            acquisition_ids=range(40),
+            exposure_seconds=np.ones(40),
+            source_id=SOURCE_ID,
+            era_label="test era",
+            latest_era=True,
+            additive_residuals=True,
+            score=_evidence(),
+            correlation=_evidence(),
+            transfer=_evidence(),
+            max_cost_ratio=1.0,
+            max_systematic_residual_ratio=1.0,
+            minimum_half_retained_frames=10,
+            minimum_observed_months=1,
+            minimum_span_days=5.0,
+            stability_block_ids=[index // 2 for index in range(40)],
+            stability_resampling=preparation.BlockResamplingPlan(
+                "acquisition", seed=8, replicates=100,
+                interval_coverage=0.8, minimum_blocks_per_half=5),
+        )
+
+
+def test_sidereal_day_blocks_are_supplied_independently():
+    family = _block_family(block_unit="sidereal_day")
+    assert family.stability.block_uncertainty.block_unit == "sidereal_day"
+    assert family.stability.block_uncertainty.passed
+
+
+def test_resampling_block_must_not_cross_the_calendar_split():
+    family = _block_family(shared_block_labels=True)
+    result = family.stability.block_uncertainty
+    assert result.status == "refused_split_blocks"
+
+
+def test_block_surface_uses_selector_support_ordering():
+    family = _block_family(keep_blocks=1)
+    assert family.stability.points_skipped == 1
+    assert family.stability.points_checked == 1
+    assert family.stability.block_uncertainty.points_checked == 1
+    assert family.stability.block_uncertainty.passed
+
+
+def test_failed_block_bound_refuses_even_a_screening_selection():
+    family = _block_family(cost_limit=1.5)
+    result = family.stability.block_uncertainty
+    assert result.status == "refused_uncertainty"
+    assert result.maximum_cost_ratio_upper_bound > 1.5
+    with pytest.raises(preparation.PreparationRefused,
+                       match="block uncertainty refused_uncertainty"):
+        preparation.select_prepared_threshold(
+            family, 2.0, allow_screening=True)
 
 
 def test_mask_and_cost_drift_refuses_the_surface():
@@ -215,6 +600,9 @@ def test_stability_requires_matching_ranks_and_grids():
 def test_global_open_decisions_prevent_an_operational_label():
     family = _family()
     assert family.status == "screening"
+    assert not any("block-resampled" in reason for reason in family.refusals(
+        allow_screening=True))
+    assert any("block-resampled" in reason for reason in family.refusals())
     with pytest.raises(preparation.PreparationRefused,
                        match="unresolved operating decisions"):
         preparation.select_prepared_threshold(family, 0.15)

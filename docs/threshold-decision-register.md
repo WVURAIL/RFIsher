@@ -91,14 +91,18 @@ selector-evaluable `(rho, multiplier_q16)` pair and does not receive `zeta`.
 | Minimum retained frames per half | unset | open | Early and late residual precision needs its own derivation. Candidate sensitivity values are 15, 30, 50, and 100; the pooled selector floor is not a justification. |
 | Maximum early/late cost ratio | unset | open | It must reflect a science-materiality margin. Candidate sensitivity values are 1.02, 1.05, and 1.10. |
 | Maximum early/late systematic-residual ratio | unset | open | It must come from transfer uncertainty or a residual-budget allocation. Candidate sensitivity values are 1.05, 1.10, and 1.20. |
-| Block-based uncertainty | unset | open | An operational stability statement needs an interval that accounts for dependence within acquisitions or days and lies inside both adopted drift limits. |
+| Block-based uncertainty evidence | unset | open | The preparation path can resample acquisition or sidereal-day blocks separately within each era half and bound the maximum ratio on the complete candidate surface. No block unit, minimum block count, seed, replicate count, coverage, or per-channel result has been adopted yet. |
 
-The implemented calculation is a deterministic point-estimate drift screen,
-not an equivalence test. It returns `refused_unconfigured` until the per-half
-floor and both drift limits are declared. Even after those values are chosen,
-passing the screen cannot support an operational equivalence claim until the
-block-based uncertainty requirement is implemented. Schuirmann motivates the
-need for declared equivalence margins
+The deterministic point-estimate drift screen remains available for screening
+compatibility. It returns `refused_unconfigured` until the per-half floor and
+both drift limits are declared. Operational evidence also requires a
+`BlockResamplingPlan` and aligned frame block IDs. Every resample must retain
+the declared per-half frame floor at every selector-evaluable point. A block
+that crosses the calendar split, too few blocks, too few successful resamples,
+or either surface-wide upper bound above its declared margin is a structured
+refusal. The replicate count must resolve the requested upper tail, and at
+least `ceil(coverage * replicates)` draws must support the complete surface.
+Schuirmann motivates the need for declared equivalence margins
 ([1987](https://doi.org/10.1007/BF01068419)); Künsch motivates resampling whole
 dependent blocks ([1989](https://doi.org/10.1214/aos/1176347265)).
 
@@ -246,8 +250,10 @@ It refuses:
   open, or conditional.
 
 Required open decisions include the per-half retained-frame floor, both drift
-limits, block-based uncertainty, designated-set calibration, false-alarm and
-recovery targets, and the remaining correlation and transfer validation.
+limits, designated-set calibration, false-alarm and recovery targets, and the
+remaining correlation and transfer validation. Block unit, minimum blocks,
+seed, replicate count, and coverage remain explicit run controls that need a
+recorded justification rather than library defaults.
 Conditional evidence can be used only with `allow_screening=True`. The
 returned selection then carries `claim_status="screening"`, its source
 identity, and the policy digest; the option cannot upgrade its evidence.

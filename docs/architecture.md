@@ -52,7 +52,7 @@ them.
 | `forecast` | BAO marginalization, significance curves, and time inversion |
 | `residual` | Raw-product statistics, coherence, budgets, and reference threshold sweeps |
 | `thresholds` | Pure `(rho, eta)` selection from calibrated residual-score histograms |
-| `preparation` | Q16 family construction, deterministic drift screening, and evidence-bearing refusal |
+| `preparation` | Q16 family construction, early/late drift evidence, and evidence-bearing refusal |
 | `selection_policy` | Versioned decision values, rationales, sensitivity values, and digest |
 | `products` | External survey-product registry and path resolution |
 | `channels` | ATSC channel and physical-frequency conversion |
@@ -119,11 +119,15 @@ calendar split, support accounting, histogram construction, and drift screen.
 `assess_histogram_stability` is the lower-level comparison only: it does not
 split rows or establish that the supplied halves came from one era.
 
-The current early/late check compares point estimates against declared drift
-limits. It is deterministic and is not a statistical equivalence test.
-Operational use also requires a derived per-half support rule and block-based
-uncertainty whose interval lies inside the declared margins. Those decisions
-remain open. The strict wrapper also refuses stale policy identity, a
+The early/late point screen remains a deterministic screening path, not a
+statistical equivalence test. Operational evidence additionally supplies
+aligned acquisition or sidereal-day block IDs and a `BlockResamplingPlan`.
+Whole blocks are resampled separately within each half, and a one-sided upper
+percentile of the maximum ratio over the full candidate surface must lie
+inside both declared margins. The block unit, minimum block count, seed,
+replicate count, coverage, per-half retained-frame floor, and both margins are
+explicit caller choices recorded with the prepared product. The strict wrapper
+also refuses stale policy identity, a
 non-latest era, invalid or unequal-exposure frames, mask-dependent non-additive
 residual corrections, and inadequate score, correlation, or science-transfer
 evidence. A permitted screening selection returns `claim_status="screening"`

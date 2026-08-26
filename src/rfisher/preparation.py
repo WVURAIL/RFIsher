@@ -1,8 +1,9 @@
 """Evidence gates for prepared residual-score histogram families."""
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 import datetime as dt
 import hashlib
 import json
@@ -100,6 +101,85 @@ class EraHalfSupport:
 
 
 @dataclass(frozen=True)
+class BlockResamplingPlan:
+    """Caller-declared block resampling controls."""
+
+    block_unit: str
+    seed: int
+    replicates: int
+    interval_coverage: float
+    minimum_blocks_per_half: int
+
+    def __post_init__(self):
+        if self.block_unit not in {"acquisition", "sidereal_day"}:
+            raise ValueError(
+                "block_unit must be 'acquisition' or 'sidereal_day'")
+        if isinstance(self.seed, bool) or not isinstance(self.seed, Integral):
+            raise TypeError("seed must be an integer")
+        if int(self.seed) < 0:
+            raise ValueError("seed must be non-negative")
+        if (isinstance(self.replicates, bool)
+                or not isinstance(self.replicates, Integral)):
+            raise TypeError("replicates must be an integer")
+        if int(self.replicates) <= 0:
+            raise ValueError("replicates must be positive")
+        if (isinstance(self.minimum_blocks_per_half, bool)
+                or not isinstance(self.minimum_blocks_per_half, Integral)):
+            raise TypeError("minimum_blocks_per_half must be an integer")
+        if int(self.minimum_blocks_per_half) < 2:
+            raise ValueError("minimum_blocks_per_half must be at least two")
+        if (isinstance(self.interval_coverage, bool)
+                or not isinstance(self.interval_coverage, Real)):
+            raise TypeError("interval_coverage must be a number")
+        coverage = float(self.interval_coverage)
+        if not math.isfinite(coverage) or not 0.0 < coverage < 1.0:
+            raise ValueError("interval_coverage must be finite and in (0, 1)")
+        object.__setattr__(self, "seed", int(self.seed))
+        object.__setattr__(self, "replicates", int(self.replicates))
+        object.__setattr__(self, "minimum_blocks_per_half",
+                           int(self.minimum_blocks_per_half))
+        object.__setattr__(self, "interval_coverage", coverage)
+        if self.replicates < self.minimum_tail_replicates:
+            raise ValueError(
+                "replicates do not resolve the requested interval coverage")
+
+    @property
+    def minimum_tail_replicates(self) -> int:
+        tail_resolution = math.ceil(
+            1.0 / (1.0 - self.interval_coverage) - 1e-12)
+        return max(2, int(tail_resolution))
+
+    @property
+    def minimum_successful_replicates(self) -> int:
+        return int(math.ceil(self.interval_coverage * self.replicates))
+
+
+@dataclass(frozen=True)
+class BlockStabilityAssessment:
+    """Surface-wide upper bounds from stratified whole-block resampling."""
+
+    status: str
+    reason: str
+    method: str
+    block_unit: str
+    seed: int
+    replicates_requested: int
+    replicates_succeeded: int
+    minimum_successful_replicates: int
+    interval_coverage: float
+    minimum_blocks_per_half: int
+    early_blocks: int
+    late_blocks: int
+    points_checked: int
+    maximum_cost_ratio_upper_bound: float | None
+    maximum_systematic_residual_ratio_upper_bound: float | None
+
+    @property
+    def passed(self) -> bool:
+        return self.status == "passed"
+
+
+@dataclass(frozen=True)
 class StabilityAssessment:
     """Deterministic early/late drift screen for a candidate surface."""
 
@@ -121,6 +201,7 @@ class StabilityAssessment:
     minimum_observed_months: int
     minimum_span_days: float
     minimum_half_retained_frames: int | None
+    block_uncertainty: BlockStabilityAssessment | None = None
 
     @property
     def passed(self) -> bool:
@@ -451,6 +532,296 @@ def _half_support(times, acquisitions) -> EraHalfSupport:
     )
 
 
+def _frame_block_ids(values, size: int):
+    if isinstance(values, (str, bytes)):
+        raise TypeError("stability_block_ids must be a sequence")
+    try:
+        items = tuple(values)
+    except TypeError as exc:
+        raise TypeError("stability_block_ids must be a sequence") from exc
+    if len(items) != size:
+        raise ValueError("stability_block_ids must match systematic_residuals")
+    checked = []
+    for value in items:
+        if isinstance(value, bool):
+            raise TypeError("stability_block_ids must contain strings or integers")
+        if isinstance(value, Integral):
+            checked.append(("integer", int(value)))
+        elif isinstance(value, str):
+            checked.append(("string", value))
+        else:
+            raise TypeError(
+                "stability_block_ids must contain strings or integers")
+    return tuple(checked)
+
+
+def _same_partition(left, right) -> bool:
+    left_to_right = {}
+    right_to_left = {}
+    for left_value, right_value in zip(left, right):
+        if (left_value in left_to_right
+                and left_to_right[left_value] != right_value):
+            return False
+        if (right_value in right_to_left
+                and right_to_left[right_value] != left_value):
+            return False
+        left_to_right[left_value] = right_value
+        right_to_left[right_value] = left_value
+    return True
+
+
+def _block_labels(block_ids, mask):
+    return tuple(sorted({value for value, keep in zip(block_ids, mask) if keep}))
+
+
+def _sorted_half_rows(
+        requirements, candidates, systematic, variance, mask,
+        block_ids, labels,
+):
+    label_index = {value: index for index, value in enumerate(labels)}
+    rows = np.flatnonzero(mask)
+    ordered_rows = np.asarray(sorted(
+        rows,
+        key=lambda index: (
+            requirements[index], block_ids[index], systematic[index],
+            -1.0 if variance is None else variance[index])),
+        dtype=np.int64)
+    ordered_requirements = tuple(requirements[index] for index in ordered_rows)
+    groups = np.fromiter(
+        (label_index[block_ids[index]] for index in ordered_rows),
+        dtype=np.int64, count=len(ordered_rows))
+    stops = np.fromiter(
+        (bisect_right(ordered_requirements, candidate)
+         for candidate in candidates),
+        dtype=np.int64, count=len(candidates))
+    return (
+        groups,
+        systematic[ordered_rows],
+        None if variance is None else variance[ordered_rows],
+        stops,
+    )
+
+
+def _weighted_prefixes(draws, groups, systematic, variance):
+    weights = draws[:, groups]
+    counts = np.cumsum(weights, axis=1)
+    systematic_sums = np.cumsum(weights * systematic[None, :], axis=1)
+    variance_sums = (None if variance is None else np.cumsum(
+        weights * variance[None, :], axis=1))
+    return counts, systematic_sums, variance_sums
+
+
+def _prefix_metrics(prefixes, stops, minimum_kept):
+    counts, systematic_sums, variance_sums = prefixes
+    columns = stops - 1
+    total = counts[:, -1]
+    kept = counts[:, columns]
+    systematic = systematic_sums[:, columns]
+    variance = (None if variance_sums is None else
+                variance_sums[:, columns])
+    valid = kept >= minimum_kept
+    kept_safe = np.where(valid, kept, 1)
+    kept_fraction = kept_safe / total[:, None]
+    systematic_mean = systematic / kept_safe
+    variance_mean = (None if variance is None else variance / kept_safe)
+    cost = ((1.0 if variance_mean is None else 1.0 + variance_mean)
+            / kept_fraction)
+    systematic_mean = np.where(valid, systematic_mean, np.nan)
+    cost = np.where(valid, cost, np.nan)
+    return systematic_mean, cost, valid
+
+
+def _symmetric_ratio_array(left, right):
+    valid = ~np.isnan(left) & ~np.isnan(right)
+    low = np.minimum(left, right)
+    high = np.maximum(left, right)
+    ratio = np.full(left.shape, np.nan, dtype=float)
+    both_zero = valid & (high == 0.0)
+    one_zero = valid & (low == 0.0) & ~both_zero
+    positive = valid & (low > 0.0)
+    ratio[both_zero] = 1.0
+    ratio[one_zero] = math.inf
+    ratio[positive] = high[positive] / low[positive]
+    return ratio, valid
+
+
+def _upper_order_statistic(values, coverage: float) -> float:
+    ordered = np.sort(np.asarray(values, dtype=float))
+    index = max(0, int(math.ceil(coverage * ordered.size)) - 1)
+    return float(ordered[index])
+
+
+def _block_stability_assessment(
+        requirements, systematic, variance, early_mask, block_ids,
+        plan: BlockResamplingPlan, stability: StabilityAssessment,
+) -> BlockStabilityAssessment:
+    method = "stratified_whole_block_surface_maximum_upper_percentile"
+    early_labels = _block_labels(block_ids, early_mask)
+    late_labels = _block_labels(block_ids, ~early_mask)
+    common = dict(
+        method=method,
+        block_unit=plan.block_unit,
+        seed=plan.seed,
+        replicates_requested=plan.replicates,
+        minimum_successful_replicates=plan.minimum_successful_replicates,
+        interval_coverage=plan.interval_coverage,
+        minimum_blocks_per_half=plan.minimum_blocks_per_half,
+        early_blocks=len(early_labels),
+        late_blocks=len(late_labels),
+        points_checked=stability.points_checked,
+        maximum_cost_ratio_upper_bound=None,
+        maximum_systematic_residual_ratio_upper_bound=None,
+    )
+    if set(early_labels) & set(late_labels):
+        return BlockStabilityAssessment(
+            status="refused_split_blocks",
+            reason="a resampling block crosses the calendar split",
+            replicates_succeeded=0,
+            **common,
+        )
+    if (len(early_labels) < plan.minimum_blocks_per_half
+            or len(late_labels) < plan.minimum_blocks_per_half):
+        return BlockStabilityAssessment(
+            status="refused_insufficient_blocks",
+            reason=(f"each era half needs {plan.minimum_blocks_per_half} "
+                    f"{plan.block_unit} blocks by caller declaration"),
+            replicates_succeeded=0,
+            **common,
+        )
+
+    candidates_by_rho = {}
+    for rho, values in requirements.items():
+        candidates = candidate_multiplier_q16_values(values)
+        ordered = sorted(values)
+        selected = [
+            candidate for candidate in candidates
+            if bisect_right(ordered, candidate) >= MIN_RETAINED_FRAMES
+        ]
+        if selected:
+            candidates_by_rho[rho] = tuple(selected)
+    points = sum(len(values) for values in candidates_by_rho.values())
+    if points != stability.points_checked:
+        raise RuntimeError("block resampling candidate surface does not match screen")
+
+    rng = np.random.default_rng(plan.seed)
+    early_draws = rng.multinomial(
+        len(early_labels), np.full(len(early_labels), 1.0 / len(early_labels)),
+        size=plan.replicates)
+    late_draws = rng.multinomial(
+        len(late_labels), np.full(len(late_labels), 1.0 / len(late_labels)),
+        size=plan.replicates)
+    successful = np.ones(plan.replicates, dtype=bool)
+    maximum_cost = np.zeros(plan.replicates, dtype=float)
+    maximum_systematic = np.zeros(plan.replicates, dtype=float)
+
+    maximum_prefix_cells = 1_000_000
+    minimum_kept = int(stability.minimum_half_retained_frames)
+    for rho in sorted(candidates_by_rho):
+        rank_candidates = candidates_by_rho[rho]
+        early_rows = _sorted_half_rows(
+            requirements[rho], rank_candidates, systematic, variance,
+            early_mask, block_ids, early_labels)
+        late_rows = _sorted_half_rows(
+            requirements[rho], rank_candidates, systematic, variance,
+            ~early_mask, block_ids, late_labels)
+        frame_columns = len(early_rows[0]) + len(late_rows[0])
+        replicate_batch = max(
+            1, min(plan.replicates,
+                   maximum_prefix_cells // frame_columns))
+        for replica_start in range(0, plan.replicates, replicate_batch):
+            replica_stop = min(
+                plan.replicates, replica_start + replicate_batch)
+            replica_slice = slice(replica_start, replica_stop)
+            early_prefixes = _weighted_prefixes(
+                early_draws[replica_slice], *early_rows[:3])
+            late_prefixes = _weighted_prefixes(
+                late_draws[replica_slice], *late_rows[:3])
+            candidate_batch = max(
+                1, min(256, maximum_prefix_cells
+                       // (replica_stop - replica_start)))
+            for candidate_start in range(
+                    0, len(rank_candidates), candidate_batch):
+                candidate_stop = min(
+                    len(rank_candidates), candidate_start + candidate_batch)
+                candidate_slice = slice(candidate_start, candidate_stop)
+                early_systematic, early_cost, early_valid = _prefix_metrics(
+                    early_prefixes, early_rows[3][candidate_slice],
+                    minimum_kept)
+                late_systematic, late_cost, late_valid = _prefix_metrics(
+                    late_prefixes, late_rows[3][candidate_slice],
+                    minimum_kept)
+                cost_ratio, cost_valid = _symmetric_ratio_array(
+                    early_cost, late_cost)
+                systematic_ratio, systematic_valid = _symmetric_ratio_array(
+                    early_systematic, late_systematic)
+                chunk_valid = (early_valid & late_valid & cost_valid
+                               & systematic_valid).all(axis=1)
+                successful[replica_slice] &= chunk_valid
+                maximum_cost[replica_slice] = np.maximum(
+                    maximum_cost[replica_slice],
+                    np.max(np.where(
+                        cost_valid, cost_ratio, -math.inf), axis=1))
+                maximum_systematic[replica_slice] = np.maximum(
+                    maximum_systematic[replica_slice],
+                    np.max(np.where(
+                        systematic_valid, systematic_ratio, -math.inf),
+                        axis=1))
+
+    succeeded = int(successful.sum())
+    if succeeded < plan.minimum_successful_replicates:
+        return BlockStabilityAssessment(
+            status="refused_insufficient_resamples",
+            reason=(f"{succeeded} of {plan.replicates} resamples retain every "
+                    f"candidate; need {plan.minimum_successful_replicates}"),
+            replicates_succeeded=succeeded,
+            **common,
+        )
+
+    maximum_cost[~successful] = math.inf
+    maximum_systematic[~successful] = math.inf
+    cost_bound = max(
+        float(stability.maximum_cost_ratio),
+        _upper_order_statistic(maximum_cost, plan.interval_coverage))
+    systematic_bound = max(
+        float(stability.maximum_systematic_residual_ratio),
+        _upper_order_statistic(maximum_systematic, plan.interval_coverage))
+    measured = dict(common)
+    measured.update(
+        replicates_succeeded=succeeded,
+        maximum_cost_ratio_upper_bound=cost_bound,
+        maximum_systematic_residual_ratio_upper_bound=systematic_bound,
+    )
+    if not math.isfinite(cost_bound) or not math.isfinite(systematic_bound):
+        unbounded = dict(measured)
+        if not math.isfinite(cost_bound):
+            unbounded["maximum_cost_ratio_upper_bound"] = None
+        if not math.isfinite(systematic_bound):
+            unbounded["maximum_systematic_residual_ratio_upper_bound"] = None
+        return BlockStabilityAssessment(
+            status="refused_unbounded",
+            reason="the requested percentile has no finite surface-wide bound",
+            **unbounded,
+        )
+    failures = []
+    if cost_bound > float(stability.cost_ratio_limit):
+        failures.append(
+            f"cost-ratio upper bound {cost_bound:.6g} exceeds "
+            f"{stability.cost_ratio_limit:.6g}")
+    if systematic_bound > float(stability.systematic_residual_ratio_limit):
+        failures.append(
+            f"systematic-residual-ratio upper bound {systematic_bound:.6g} "
+            f"exceeds {stability.systematic_residual_ratio_limit:.6g}")
+    if failures:
+        return BlockStabilityAssessment(
+            status="refused_uncertainty", reason="; ".join(failures),
+            **measured)
+    return BlockStabilityAssessment(
+        status="passed",
+        reason="surface-wide upper bounds are within both declared limits",
+        **measured,
+    )
+
+
 def prepare_threshold_family(
         required_multiplier_q16_by_rho,
         systematic_residuals,
@@ -471,12 +842,14 @@ def prepare_threshold_family(
         variance_residuals=None,
         minimum_observed_months: int | None = None,
         minimum_span_days: float | None = None,
+        stability_block_ids=None,
+        stability_resampling: BlockResamplingPlan | None = None,
 ) -> PreparedThresholdFamily:
     """Build a complete family from accepted latest-era Q16 boundaries.
 
     Era discovery and invalid-frame bookkeeping stay outside this function.
     This boundary derives the candidate grids, calendar split, support counts,
-    histograms, and deterministic drift screen from the supplied frame rows.
+    histograms, and drift evidence from the supplied frame rows.
     """
     requirements = _ranked_requirements(required_multiplier_q16_by_rho)
     bulk_size = max(requirements)
@@ -514,6 +887,19 @@ def prepare_threshold_family(
         raise TypeError("acquisition_ids must contain hashable values") from exc
     if any(len(values) != size for values in requirements.values()):
         raise ValueError("all ranks must describe the same frame population")
+    if (stability_block_ids is None) != (stability_resampling is None):
+        raise ValueError(
+            "stability_block_ids and stability_resampling must be supplied together")
+    if (stability_resampling is not None
+            and not isinstance(stability_resampling, BlockResamplingPlan)):
+        raise TypeError("stability_resampling must be BlockResamplingPlan")
+    block_ids = (None if stability_block_ids is None else
+                 _frame_block_ids(stability_block_ids, size))
+    if (block_ids is not None
+            and stability_resampling.block_unit == "acquisition"
+            and not _same_partition(acquisitions, block_ids)):
+        raise ValueError(
+            "acquisition stability blocks must match acquisition_ids")
     if not np.equal(exposure, exposure[0]).all():
         raise ValueError("accepted frames must have equal exposure")
     start = float(times.min())
@@ -560,6 +946,13 @@ def prepare_threshold_family(
         minimum_span_days=minimum_span_days,
         minimum_half_retained_frames=minimum_half_retained_frames,
     )
+    if block_ids is not None and stability.passed:
+        stability = replace(
+            stability,
+            block_uncertainty=_block_stability_assessment(
+                requirements, systematic, variance, early_mask, block_ids,
+                stability_resampling, stability),
+        )
     return PreparedThresholdFamily(
         histograms_by_rho=pooled,
         source_id=source_id,
@@ -680,6 +1073,14 @@ class PreparedThresholdFamily:
         if not self.stability.passed:
             out.append(f"within-era stability {self.stability.status}: "
                        f"{self.stability.reason}")
+        elif (self.stability.block_uncertainty is not None
+              and not self.stability.block_uncertainty.passed):
+            uncertainty = self.stability.block_uncertainty
+            out.append(f"within-era block uncertainty {uncertainty.status}: "
+                       f"{uncertainty.reason}")
+        elif (not allow_screening
+              and self.stability.block_uncertainty is None):
+            out.append("within-era stability has no block-resampled upper bound")
         if not allow_screening:
             unresolved = selection_policy.blockers(
                 selection_policy.OPERATIONAL_REQUIRED_IDS)
@@ -771,7 +1172,8 @@ def select_prepared_threshold(
 __all__ = [
     "PreparationRefused", "rho_from_cfar_rank", "candidate_rho_values",
     "candidate_multiplier_q16_values",
-    "EraHalfSupport", "StabilityAssessment", "CalibrationEvidence",
+    "EraHalfSupport", "BlockResamplingPlan", "BlockStabilityAssessment",
+    "StabilityAssessment", "CalibrationEvidence",
     "PreparedThresholdFamily", "PreparedThresholdSelection",
     "assess_histogram_stability", "prepare_threshold_family",
     "select_prepared_threshold",

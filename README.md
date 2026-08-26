@@ -85,9 +85,10 @@ provenance stay with the prepared product as metadata rather than selector
 inputs.
 
 `preparation.select_prepared_threshold` is the evidence-bearing entry point.
-It verifies the latest-era, validity, equal-exposure, additivity, deterministic
-early/late drift, score, correlation, transfer, and decision-digest records
-before calling the two-input numerical kernel. A screening selection carries
+It verifies the latest-era, validity, equal-exposure, additivity, early/late
+drift, block-resampled upper bounds for an operational claim, score,
+correlation, transfer, and decision-digest records before calling the two-input
+numerical kernel. A screening selection carries
 its `claim_status`, source identity, and policy digest with the numerical
 result; permission to screen cannot produce an operational label.
 
