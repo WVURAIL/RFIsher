@@ -16,6 +16,9 @@ objective that already selected the coarse eta*:
 
 evaluated on the survey products' stored per-bin ``fstat_fine``, the data
 the kernel repo notes were kept precisely so these quantiles are computable.
+This is a floating archive prototype. The retained products do not contain
+the exact ``uint64`` fine powers needed to build an operational Q16 family;
+that requires a new product run and the prepared-family interface.
 
 The anchor is measured rather than assumed. The products' ``fine_designated_bins``
 is the nominal [0] scaffolding ("per-channel anchors were unmeasured before
@@ -42,8 +45,8 @@ frames book their measured shelf where one exists and undetected frames
 book the disciplined kept-frame floor (``residual.kept_frame_floor``:
 >=30-null bar, off-era epochs, stated sigma substitute below the bar),
 statistics and the correlation time are era-restricted per the epoch
-maps, and the measured fine-stage credit (9.4--10.0 dB,
-booked FINE_DB) divides the aggregate ratio, the same convention as
+maps, and the rounded fine-stage screening credit divides the aggregate ratio,
+the same convention as
 ``optimal_thresholds.py``, so the two tables are directly comparable.
 ``r_nocredit`` reports the bare-floor booking alongside.
 
@@ -64,9 +67,10 @@ Selection order (every stage is data or a named ordering):
      bar inside the measured staircase; no tail extrapolation), then
      largest headroom |B| - rho, then smallest rho, then smallest m.
 
-The rho grid is every integer in [|B|/2, |B|]; the per-rank ridge is
-written out (out/fine_ridge.csv) so Rohling's 0.75N-0.9N radar optimum
-serves as a cross-check rather than an input.
+The historical rho grid is every integer in [|B|/2, |B|]. The prepared
+family instead evaluates every supported rank. The per-rank ridge is written
+out (out/fine_ridge.csv) so Rohling's 0.75N-0.9N radar optimum serves as a
+cross-check rather than an input.
 
     python3 scripts/fine_operating_point.py
 """
@@ -83,34 +87,54 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 
 from rfisher import residual as R
+from rfisher import selection_policy
 from rfisher.npzio import load_npz
+from rfisher.thresholds import MULTIPLIER_ONE
 
 spec = importlib.util.spec_from_file_location(
     "ot", str(ROOT / "scripts" / "optimal_thresholds.py"))
 ot = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ot)
 
-TOL = ot.TOL_APERP
+TOL = ot.REPORT_TOLERANCES
 FINE_DB = ot.FINE_DB
 PLATEAU = ot.PLATEAU
+PRIMARY_ZETA = ot.PRIMARY_ZETA
 ETAS = ot.ETAS                       # reuse the coarse multiplier grid
 PRODUCTS = dict(ot.DEFAULT_PRODUCTS)   # resolved by the products manifest
 
-HALF = 2                             # designated half-width = guard (chapter)
-LF = 256
+HALF = int(selection_policy.value(
+    "archive_reference.designated_half_width_bins"))
 MIN_KEPT = R.MIN_THRESHOLD_SWEEP_KEPT_FRAMES
-MIN_COHORT = 100
+MIN_COHORT = int(selection_policy.value(
+    "archive_reference.minimum_diagnostic_cohort_frames"))
+RANK_LOWER_FRACTION = float(selection_policy.value(
+    "archive_reference.fine_rank_lower_fraction"))
+ANCHOR_ESTIMATOR = str(selection_policy.value(
+    "archive_reference.fine_anchor_estimator"))
+RECENT_CALENDAR_YEARS = int(selection_policy.value(
+    "archive_reference.recent_calendar_years"))
+EARLIEST_RECENT_YEAR = int(selection_policy.value(
+    "archive_reference.earliest_recent_year"))
+TIE_MULTIPLIER_TARGET = float(selection_policy.value(
+    "archive_reference.fine_tie_multiplier_target"))
+TIE_ROUND_DIGITS = int(selection_policy.value(
+    "archive_reference.fine_tie_round_digits"))
 INF = float("inf")
 
 
-def window(anchor):
-    return sorted({(anchor + k) % LF for k in range(-HALF, HALF + 1)})
+def window(anchor, fine_bins):
+    return sorted({(anchor + k) % fine_bins
+                   for k in range(-HALF, HALF + 1)})
 
 
 def _anchor_of(ff, rej, quiet):
     """Argmax of the per-bin median excess of coarse-detected frames over
     coarse-quiet frames (static structure common to both cohorts cancels);
     plain median argmax when no usable quiet cohort exists."""
+    if ANCHOR_ESTIMATOR != (
+            "rejected_minus_quiet_median_excess_with_median_fallback"):
+        raise RuntimeError("fine anchor estimator is not defined")
     if rej.sum() >= MIN_COHORT and quiet.sum() >= MIN_COHORT:
         exc = np.median(ff[rej], axis=0) - np.median(ff[quiet], axis=0)
         return int(np.argmax(exc)), "rej_minus_quiet"
@@ -140,6 +164,7 @@ def channel_tables(path):
     d = load_npz(path)
     valid = d["valid"][:, 0].astype(bool)
     ff = d["fstat_fine"]
+    fine_bins = int(ff.shape[1])
     fin = np.isfinite(ff).all(axis=1)
     on = valid & fin                          # clause (iv): live rows
     rej = d["reject_mask"][:, 0].astype(bool)
@@ -153,15 +178,17 @@ def channel_tables(path):
 
     anchor, method, early, late = measure_anchor(ff, on & rej, on & ~rej,
                                                  cal_lo)
-    desg = set(window(anchor))
+    desg = set(window(anchor, fine_bins))
     for a in (early, late):
         if a is not None:
-            desg |= set(window(a))
+            desg |= set(window(a, fine_bins))
     census = set(int(c) for c in d["fine_census_excluded_bins"])
     desg_arr = np.array(sorted(desg))
-    bulk = np.array([b for b in range(0, LF, 2) if b not in desg | census])
-    enbw = float(d["bin_enbw_hz"]) / LF
-    offset_hz = (anchor if anchor < LF // 2 else anchor - LF) * enbw
+    bulk = np.array([b for b in range(0, fine_bins, 2)
+                     if b not in desg | census])
+    enbw = float(d["bin_enbw_hz"]) / fine_bins
+    offset_hz = (anchor if anchor < fine_bins // 2
+                 else anchor - fine_bins) * enbw
 
     # One booking and one floor discipline for the whole package: statistics
     # and the correlation time are evaluated on the channel's own epoch
@@ -187,7 +214,8 @@ def channel_tables(path):
     return dict(
         on=on, rej=rej, shelf=shelf, yr=yr, cal_lo=cal_lo,
         anchor=anchor, anchor_method=method, anchor_early=early,
-        anchor_late=late, offset_hz=offset_hz, n_bulk=len(bulk),
+        anchor_late=late, offset_hz=offset_hz, fine_bins=fine_bins,
+        n_bulk=len(bulk),
         n_desg=len(desg_arr),
         maxD=ff[:, desg_arr].max(axis=1),
         srt=np.sort(ff[:, bulk], axis=1),
@@ -214,16 +242,19 @@ def optimize_channel(ch, path):
     maxD, srt = tab["maxD"][on], tab["srt"][on]
     rej_on, yr_on = tab["rej"][on], tab["yr"][on]
     lo = tab["cal_lo"][on]
-    era_from = max(int(tab["yr"].max()) - 2, 2018)
+    era_from = max(
+        int(tab["yr"].max()) - RECENT_CALENDAR_YEARS + 1,
+        EARLIEST_RECENT_YEAR)
     n_bulk = tab["n_bulk"]
-    rhos = np.arange(n_bulk // 2, n_bulk + 1)
+    first_rank = max(1, int(np.floor(RANK_LOWER_FRACTION * n_bulk)))
+    rhos = np.arange(first_rank, n_bulk + 1)
     tol = TOL[ch]
     out = {"ch": ch, "mu0": tab["prov"].mu0, "tau_bound": tab["tau_bound"],
            "tol_aperp": tol, "era_from": era_from, "bases": {}, "ridge": [],
            **{k: tab[k] for k in ("anchor", "anchor_method", "anchor_early",
-                                  "anchor_late", "offset_hz", "n_bulk",
-                                  "n_desg")}}
-    if tab["n_on"] < 50:
+                                  "anchor_late", "offset_hz", "fine_bins",
+                                  "n_bulk", "n_desg")}}
+    if tab["n_on"] < R.MIN_REFERENCE_SWEEP_FRAMES:
         return out
 
     m_grid = np.asarray(ETAS)
@@ -276,14 +307,14 @@ def optimize_channel(ch, path):
             best = min(plateau, key=lambda c: (
                 c["worst_era"] if c["era_stable"] else INF,
                 c["best_era"],                    # all-inf: least-bad half
-                round(abs(c["m"] - 1.0), 9),      # stage 4: named orderings
+                round(abs(c["m"] - TIE_MULTIPLIER_TARGET), TIE_ROUND_DIGITS),
                 -(n_bulk - c["rho"]), c["rho"], c["m"]))
             fired_b = fired_cache[best["rho"]][:, best["j"]]
             recent = yr_on >= era_from
             best = {k: v for k, v in best.items() if k != "j"}
             rec.update(best, headroom=n_bulk - best["rho"],
                        quantile=best["rho"] / (n_bulk + 1),
-                       multiplier_q16=int(round(best["m"] * 2 ** 16)),
+                       multiplier_q16=int(round(best["m"] * MULTIPLIER_ONE)),
                        margin=tol / best["r_fine"],
                        f_recent=(float(fired_b[recent].mean())
                                  if recent.sum() >= MIN_COHORT
@@ -316,12 +347,15 @@ def main(argv=None):
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    print(f"objective: min (1+r)/(1-f)  s.t.  r_fine <= r_tol(alpha_perp), "
-          f"zeta = 1;  rho grid = [|B|/2, |B|]\n"
-          f"selection: era-stable feasibility -> cost plateau (2%) -> "
-          f"minimax era-half cost -> m nearest 1 -> max headroom\n"
+    print(f"objective: min (1+r)/(1-f)  s.t.  r_fine <= "
+          f"r_tol({ot.REPORT_TOLERANCE_TARGET}), zeta = {PRIMARY_ZETA:g}; "
+          f"rho grid = [{RANK_LOWER_FRACTION:g}|B|, |B|]\n"
+          f"selection: half-screen feasibility -> cost plateau "
+          f"({100 * (PLATEAU - 1):g}%) -> "
+          f"minimax era-half cost -> m nearest {TIE_MULTIPLIER_TARGET:g} "
+          f"-> max headroom\n"
           f"designated window: union of per-era measured anchors +/- {HALF}; "
-          f"credit = measured {FINE_DB:.0f} dB (aggregate)\n")
+          f"credit = rounded {FINE_DB:.0f} dB screening scenario\n")
     hdr = (f"{'ch':>4} {'basis':>10} {'anch':>5} {'offHz':>7} {'|D|':>4} "
            f"{'|B|':>4} {'rho*':>5} {'m*':>6} {'f':>7} {'r_fine':>9} "
            f"{'cost':>6} {'worstE':>7} {'eraOK':>6} {'recent':>7} {'cov':>6}")
@@ -357,8 +391,10 @@ def main(argv=None):
                                  "n_bulk")},
                              **{k: rec.get(k) for k in CSV_REC}})
         if res.get("anchor_early") is not None and res.get("anchor_late") is not None:
-            dr = min((res["anchor_early"] - res["anchor_late"]) % LF,
-                     (res["anchor_late"] - res["anchor_early"]) % LF)
+            fine_bins = res["fine_bins"]
+            dr = min(
+                (res["anchor_early"] - res["anchor_late"]) % fine_bins,
+                (res["anchor_late"] - res["anchor_early"]) % fine_bins)
             if dr > HALF:
                 print(f"     !! anchor era-drift: early {res['anchor_early']}"
                       f" vs late {res['anchor_late']} -> union window")

@@ -77,6 +77,39 @@ The archived and current pilot-proxy products can share filename patterns
 while using different schemas. Confirm the intended product set before a
 threshold, coherence, or dissertation calculation.
 
+Audit every threshold choice and its evidence state with:
+
+```bash
+python scripts/threshold_decisions.py
+python scripts/threshold_decisions.py --check-operational
+```
+
+The operational check remains nonzero while any required calibration choice
+is provisional, open, or conditional. A prepared histogram family embeds the
+full decision snapshot and digest; a family made under a different snapshot
+is refused.
+
+The strict preparation path requires the minimum Q16 multiplier that keeps
+each accepted frame at every supported rank. Those boundaries must be derived
+from the exact per-frame target, lower-reference, and upper-reference
+`fine_power_u64` terms. The current archived products do not contain those
+fields, and their floating fine summary cannot reproduce the integer
+comparison. Rerun detector processing with the exact fields retained before
+attempting an operational fine-threshold export.
+
+`preparation.prepare_threshold_family` expects already accepted rows from the
+latest era. It requires every rank through the minimum valid bulk count,
+derives each exact Q16 candidate grid, and splits the rows at the calendar
+midpoint. Its support span is elapsed time between the earliest and latest row
+in each half; 270 elapsed days does not mean 270 days with observations.
+`assess_histogram_stability` only compares supplied half-histograms.
+
+The resulting drift check is deterministic. Operational use remains blocked
+until the per-half retained-frame floor and both drift limits are derived and
+block-based uncertainty is shown to fit inside those limits. An explicit
+screening selection retains its claim status, source identity, and policy
+digest alongside the numerical result.
+
 ## Rebuild the shipped banks
 
 The supported entry point displays the strict bank-builder surface:

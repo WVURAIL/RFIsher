@@ -1,6 +1,7 @@
 """Select detector thresholds from calibrated residual-score histograms."""
 from __future__ import annotations
 
+from bisect import bisect_left
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import math
@@ -8,12 +9,21 @@ from numbers import Integral, Real
 
 import numpy as np
 
-MIN_RETAINED_FRAMES = 30
-COST_PLATEAU = 1.02
+from .selection_policy import value as _policy_value
 
-__all__ = ["MIN_RETAINED_FRAMES", "COST_PLATEAU",
+MIN_RETAINED_FRAMES = int(
+    _policy_value("selection.minimum_retained_frames"))
+COST_PLATEAU = float(_policy_value("selection.cost_plateau_ratio"))
+MULTIPLIER_Q = 16
+MULTIPLIER_ONE = 1 << MULTIPLIER_Q
+MAX_MULTIPLIER_Q16 = (1 << 64) - 1
+ALWAYS_MASKED_Q16 = 1 << 64
+
+__all__ = ["MIN_RETAINED_FRAMES", "COST_PLATEAU", "MULTIPLIER_Q",
+           "MULTIPLIER_ONE", "MAX_MULTIPLIER_Q16", "ALWAYS_MASKED_Q16",
            "ResidualScoreHistogram", "ThresholdPoint",
            "ThresholdOptimization", "build_residual_score_histogram",
+           "build_q16_residual_score_histogram",
            "optimize_threshold"]
 
 
@@ -58,6 +68,25 @@ def _count_tuple(values) -> tuple[int, ...]:
     return tuple(out)
 
 
+def _q16_tuple(values, name: str) -> tuple[int, ...]:
+    if isinstance(values, (str, bytes)):
+        raise TypeError(f"{name} must be a sequence of integers")
+    try:
+        items = tuple(values)
+    except TypeError as exc:
+        raise TypeError(f"{name} must be a sequence of integers") from exc
+    out = []
+    for value in items:
+        if isinstance(value, bool) or not isinstance(value, Integral):
+            raise TypeError(f"{name} must contain only integers")
+        q16 = int(value)
+        if not 1 <= q16 <= MAX_MULTIPLIER_Q16:
+            raise ValueError(
+                f"{name} must be between 1 and {MAX_MULTIPLIER_Q16}")
+        out.append(q16)
+    return tuple(out)
+
+
 def _science_tolerance(value) -> float:
     if isinstance(value, bool) or not isinstance(value, Real):
         raise TypeError("science_tolerance must be a number")
@@ -86,11 +115,13 @@ class ResidualScoreHistogram:
     usable bulk.
 
     ``counts[j]`` covers scores above the previous boundary and at or below
-    ``candidate_eta[j]``. The final count is the overflow above the last
-    boundary. Residual arrays contain calibrated additive totals in the same
-    bins. Their prefix sum divided by the retained count must be the calibrated
-    residual for that retained population. A calibration that must be rerun
-    after masking cannot use this compressed form.
+    ``candidate_eta[j]``. For an exact family,
+    ``candidate_multiplier_q16[j]`` is authoritative and ``candidate_eta`` is
+    only its floating display value. The final count is the overflow above the
+    last boundary. Residual arrays contain calibrated additive totals in the
+    same bins. Their prefix sum divided by the retained count must be the
+    calibrated residual for that retained population. A calibration that must
+    be rerun after masking cannot use this compressed form.
     """
 
     bulk_size: int
@@ -98,6 +129,7 @@ class ResidualScoreHistogram:
     counts: tuple[int, ...]
     systematic_residual_sums: tuple[float, ...]
     variance_residual_sums: tuple[float, ...] | None = None
+    candidate_multiplier_q16: tuple[int, ...] | None = None
 
     def __post_init__(self):
         bulk_size = _positive_integer(self.bulk_size, "bulk_size")
@@ -108,17 +140,28 @@ class ResidualScoreHistogram:
         variance = (None if self.variance_residual_sums is None else
                     _float_tuple(self.variance_residual_sums,
                                  "variance_residual_sums"))
+        q16 = (None if self.candidate_multiplier_q16 is None else
+               _q16_tuple(self.candidate_multiplier_q16,
+                          "candidate_multiplier_q16"))
 
         if not eta:
             raise ValueError("candidate_eta must not be empty")
-        if any(right <= left for left, right in zip(eta, eta[1:])):
-            raise ValueError("candidate_eta must be strictly increasing")
         if len(counts) != len(eta) + 1:
             raise ValueError("counts must include one overflow bin")
         if len(systematic) != len(counts):
             raise ValueError("systematic_residual_sums must match counts")
         if variance is not None and len(variance) != len(counts):
             raise ValueError("variance_residual_sums must match counts")
+        if q16 is not None:
+            if len(q16) != len(eta):
+                raise ValueError("candidate_multiplier_q16 must match candidate_eta")
+            if any(right <= left for left, right in zip(q16, q16[1:])):
+                raise ValueError("candidate_multiplier_q16 must be strictly increasing")
+            expected = tuple(value / MULTIPLIER_ONE for value in q16)
+            if eta != expected:
+                raise ValueError("candidate_eta must exactly match Q16 multipliers")
+        elif any(right <= left for left, right in zip(eta, eta[1:])):
+            raise ValueError("candidate_eta must be strictly increasing")
         if sum(counts) == 0:
             raise ValueError("the histogram must contain at least one frame")
         for index, count in enumerate(counts):
@@ -132,6 +175,7 @@ class ResidualScoreHistogram:
         object.__setattr__(self, "counts", counts)
         object.__setattr__(self, "systematic_residual_sums", systematic)
         object.__setattr__(self, "variance_residual_sums", variance)
+        object.__setattr__(self, "candidate_multiplier_q16", q16)
 
     @property
     def frame_count(self) -> int:
@@ -146,6 +190,7 @@ class ThresholdPoint:
     bulk_size: int
     rank_fraction: float
     eta: float
+    multiplier_q16: int | None
     frame_count: int
     kept_frames: int
     masked_frames: int
@@ -173,9 +218,9 @@ def build_residual_score_histogram(
         scores: Sequence[float],
         systematic_residuals: Sequence[float],
         candidate_eta: Sequence[float],
-        *,
-        bulk_size: int,
-        variance_residuals: Sequence[float] | None = None,
+    *,
+    bulk_size: int,
+    variance_residuals: Sequence[float] | None = None,
 ) -> ResidualScoreHistogram:
     """Bin prepared per-frame scores and calibrated residual contributions."""
     bulk_size = _positive_integer(bulk_size, "bulk_size")
@@ -241,6 +286,91 @@ def build_residual_score_histogram(
     )
 
 
+def build_q16_residual_score_histogram(
+        required_multiplier_q16: Sequence[int],
+        systematic_residuals: Sequence[float],
+        candidate_multiplier_q16: Sequence[int],
+        *,
+        bulk_size: int,
+        variance_residuals: Sequence[float] | None = None,
+) -> ResidualScoreHistogram:
+    """Bin exact per-frame Q16 decision boundaries.
+
+    ``ALWAYS_MASKED_Q16`` is the overflow sentinel for a frame that cannot be
+    kept by any deployable multiplier. A frame is kept when the selected
+    multiplier is at least its required value.
+    """
+    bulk_size = _positive_integer(bulk_size, "bulk_size")
+    candidates = _q16_tuple(
+        candidate_multiplier_q16, "candidate_multiplier_q16")
+    if not candidates:
+        raise ValueError("candidate_multiplier_q16 must not be empty")
+    if any(right <= left for left, right in zip(candidates, candidates[1:])):
+        raise ValueError("candidate_multiplier_q16 must be strictly increasing")
+    if isinstance(required_multiplier_q16, (str, bytes)):
+        raise TypeError("required_multiplier_q16 must be a sequence of integers")
+    try:
+        requirements = tuple(required_multiplier_q16)
+    except TypeError as exc:
+        raise TypeError(
+            "required_multiplier_q16 must be a sequence of integers") from exc
+    if not requirements:
+        raise ValueError("required_multiplier_q16 must not be empty")
+    checked = []
+    for value in requirements:
+        if isinstance(value, bool) or not isinstance(value, Integral):
+            raise TypeError("required_multiplier_q16 must contain only integers")
+        requirement = int(value)
+        if not 1 <= requirement <= ALWAYS_MASKED_Q16:
+            raise ValueError(
+                "required_multiplier_q16 contains an invalid decision boundary")
+        checked.append(requirement)
+
+    systematic = np.asarray(systematic_residuals)
+    variance = (None if variance_residuals is None else
+                np.asarray(variance_residuals))
+    for values, name in ((systematic, "systematic_residuals"),
+                         (variance, "variance_residuals")):
+        if values is None:
+            continue
+        if values.ndim != 1:
+            raise ValueError(f"{name} must be one-dimensional")
+        if not np.issubdtype(values.dtype, np.number):
+            raise TypeError(f"{name} must contain only numbers")
+        if np.issubdtype(values.dtype, np.complexfloating):
+            raise TypeError(f"{name} must contain only real numbers")
+        if values.size != len(checked):
+            raise ValueError(f"{name} must match required_multiplier_q16")
+        values = values.astype(float, copy=False)
+        if not np.isfinite(values).all() or (values < 0.0).any():
+            raise ValueError(f"{name} must be non-negative and finite")
+        if name == "systematic_residuals":
+            systematic = values
+        else:
+            variance = values
+
+    bins = np.fromiter(
+        (bisect_left(candidates, value) for value in checked),
+        dtype=np.int64, count=len(checked))
+    size = len(candidates) + 1
+    counts = np.bincount(bins, minlength=size)
+    systematic_sums = np.bincount(
+        bins, weights=systematic, minlength=size)
+    variance_sums = (None if variance is None else
+                     np.bincount(bins, weights=variance, minlength=size))
+    return ResidualScoreHistogram(
+        bulk_size=bulk_size,
+        candidate_eta=tuple(value / MULTIPLIER_ONE for value in candidates),
+        candidate_multiplier_q16=candidates,
+        counts=tuple(int(value) for value in counts),
+        systematic_residual_sums=tuple(float(value)
+                                       for value in systematic_sums),
+        variance_residual_sums=(
+            None if variance_sums is None else
+            tuple(float(value) for value in variance_sums)),
+    )
+
+
 def _same_total(left: float, right: float) -> bool:
     scale = max(abs(left), abs(right), 1.0)
     return math.isclose(left, right, rel_tol=1e-10, abs_tol=1e-12 * scale)
@@ -261,7 +391,8 @@ def optimize_threshold(
     are one-based ranks. This function derives masking and retained residuals
     only from the prepared histograms. Each rank may use its own candidate
     ``eta`` grid. Points within two percent of the minimum cost prefer lower
-    systematic residual, less masking, lower ``rho``, then lower ``eta``.
+    systematic residual, less masking, lower ``rho``, then the lower exact
+    multiplier (or lower ``eta`` for a legacy floating histogram).
     """
     tolerance = _science_tolerance(science_tolerance)
     if not isinstance(histograms_by_rho, Mapping):
@@ -325,6 +456,9 @@ def optimize_threshold(
                 bulk_size=bulk_size,
                 rank_fraction=rho / (bulk_size + 1),
                 eta=eta,
+                multiplier_q16=(
+                    None if histogram.candidate_multiplier_q16 is None else
+                    histogram.candidate_multiplier_q16[index]),
                 frame_count=frame_count,
                 kept_frames=kept,
                 masked_frames=masked,
@@ -344,7 +478,10 @@ def optimize_threshold(
         selected = min(
             near,
             key=lambda point: (point.systematic_residual,
-                               point.masked_fraction, point.rho, point.eta))
+                               point.masked_fraction, point.rho,
+                               (point.multiplier_q16
+                                if point.multiplier_q16 is not None
+                                else point.eta)))
     else:
         selected = None
     if selected is not None:

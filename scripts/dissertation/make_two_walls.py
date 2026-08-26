@@ -19,7 +19,7 @@ convention:
   below the bar (evidence ``stated``, drawn dashed by the figure);
 * the ordinate is the published plane's: the fine-credited residual over the
   stable zeta = 1 dilation tolerance of the channel's own redshift bin,
-  (r_masked / 10) / tol_aperp --- the same axis as the operating-point
+  (r_masked / 10**(FINE_DB/10)) / tol_aperp --- the same axis as the operating-point
   optimization, constants from ``rfisher.tolerances`` (one home, one
   convention for upper and lower band alike).
 
@@ -59,9 +59,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from rfisher import residual as res  # noqa: E402
+from rfisher import selection_policy  # noqa: E402
 from rfisher.tolerances import TOL_APERP  # noqa: E402
 
-FINE_DB = 10.0                    # measured fine-stage credit, booked as 10
+FINE_DB = float(selection_policy.value("transfer.fine_stage_credit_db"))
+FINE_CREDIT = 10.0 ** (FINE_DB / 10.0)
 
 
 def sweep_channel(path):
@@ -102,7 +104,7 @@ def main() -> int:
                 channel=ch, evidence=evidence,
                 tau_bound=int(tau_bound), order=i,
                 masked_fraction=f"{r['f']:.8g}",
-                r_over_rtol=f"{(r['r_masked'] / FINE_DB) / tol:.6g}"))
+                r_over_rtol=f"{(r['r_masked'] / FINE_CREDIT) / tol:.6g}"))
         end = out_rows[-1]
         print(f"ch{ch}: {evidence}{', tau bound' if tau_bound else ''}, "
               f"{len(rows)} sweep points, "

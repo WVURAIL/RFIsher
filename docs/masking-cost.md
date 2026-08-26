@@ -192,13 +192,29 @@ It cannot select a detector threshold because it does not say how dirty the
 retained data are. Threshold selection requires the contamination-residual
 term described in [contamination-residuals.md](contamination-residuals.md).
 Latest-era preparation packages that information as one complete
-residual-score histogram per candidate `rho`. The selector takes those
+residual-score histogram for every rank supported by every accepted frame.
+The candidate boundaries are exact Q16 multipliers derived from the detector
+comparison, not a floating or geometric `eta` grid. The selector takes those
 histograms and the science tolerance, derives `f` from the bin counts, and
 evaluates `(1 + r_var) / (1 - f)` over feasible `(rho, eta)` pairs with at
 least 30 retained frames. A fixed 2% cost plateau avoids a spurious choice on
 a flat surface. If no variance-residual totals are present, the selector uses
 `1 / (1 - f)` and does not treat the systematic residual as an estimate of
 variance.
+
+The 30-frame floor and 2% plateau are provisional project policies, not
+universal statistical constants. Their rationales and required sensitivity
+runs are recorded in
+[threshold-decision-register.md](threshold-decision-register.md).
+The separate early/late retained-frame floor is still open and must be derived
+from the precision required of the drift calculation. Passing the current
+deterministic drift screen is not an equivalence result; operational use also
+requires block-based uncertainty and adopted drift limits.
+
+The current archive lacks the exact per-frame fine-power fields needed to
+construct the Q16 candidate family. Historical masking results remain valid
+for their stated rules, but they cannot be relabeled as strict prepared-family
+selections without a detector rerun.
 
 The masking calculation also does not include:
 

@@ -35,19 +35,34 @@ import numpy as np
 
 
 from rfisher import residual as R
+from rfisher import selection_policy
 from rfisher.plots import (
     CRITICAL, GRID, INK, INK2, MUTED, SERIES, SURFACE, _save, setup_style)
 import matplotlib.pyplot as plt
 
 # Stable zeta = 1 tolerances on the binding dilation, alpha_perp, per z bin
 # (one home: rfisher.tolerances). The figure shows the first-measured block.
-from rfisher.tolerances import TOL_APERP
-CHANNELS = tuple(range(27, 37))
+from rfisher.tolerances import TOL_APERP, TOL_FS8
+CHANNELS = tuple(sorted(TOL_FS8))
 # fs8 tolerance relative to alpha_perp's, per bin, drawn as a band because
 # the ratio differs between the two z bins the five channels occupy.
-FS8_REL = (0.00156 / 0.0352, 0.00153 / 0.0156)     # (0.044, 0.098)
+_FS8_RATIOS = tuple(TOL_FS8[ch] / TOL_APERP[ch] for ch in CHANNELS)
+FS8_REL = (min(_FS8_RATIOS), max(_FS8_RATIOS))
 
-FINE_DB = 10.0                                     # measured 9.4-10.0
+FINE_DB = float(selection_policy.value("transfer.fine_stage_credit_db"))
+REPORT_TOLERANCE_TARGET = str(selection_policy.value(
+    "archive_reference.operating_point_tolerance_target"))
+_TOLERANCE_TABLES = {"aperp": TOL_APERP, "fs8": TOL_FS8}
+if REPORT_TOLERANCE_TARGET not in _TOLERANCE_TABLES:
+    raise RuntimeError("report tolerance target is not defined")
+REPORT_TOLERANCES = _TOLERANCE_TABLES[REPORT_TOLERANCE_TARGET]
+PRIMARY_ZETA = float(selection_policy.value(
+    "science.systematic_budget.primary_zeta"))
+_TARGET_LABELS = {"aperp": "transverse dilation", "fs8": "growth rate"}
+REPORT_TOLERANCE_LABEL = _TARGET_LABELS[REPORT_TOLERANCE_TARGET]
+(_LINEAR_START, _LINEAR_STOP, _LINEAR_COUNT,
+ _GEOMETRIC_START, _GEOMETRIC_STOP, _GEOMETRIC_COUNT) = (
+    selection_policy.value("archive_reference.two_walls_eta_grid"))
 ERA_POINTS = Path(__file__).resolve().parent / "dissertation" / "data" \
     / "bao_era_points.csv"
 from rfisher import products as P
@@ -73,9 +88,13 @@ def channel_curve(ch, p):
     (kept_frame_floor / surviving_components inside threshold_sweep).
     """
     floor_db, evidence = R.kept_frame_floor(p)
-    etas = np.concatenate([np.linspace(1.0, 1.8, 17), np.geomspace(2, 300, 12)])
+    etas = np.concatenate([
+        np.linspace(_LINEAR_START, _LINEAR_STOP, int(_LINEAR_COUNT)),
+        np.geomspace(_GEOMETRIC_START, _GEOMETRIC_STOP,
+                     int(_GEOMETRIC_COUNT)),
+    ])
     sweep = R.threshold_sweep(p, etas=etas, floor_db=floor_db)
-    tol = TOL_APERP[ch]
+    tol = REPORT_TOLERANCES[ch]
     pts = [(row["f"], row["r_masked"] / 10 ** (FINE_DB / 10) / tol,
             row["eta"]) for row in sweep]
     corr = R.correlation_time(p)
@@ -98,7 +117,8 @@ def main(argv=None):
     ax.axhline(1.0, color=INK, lw=1.3, zorder=5)
     ax.axvline(1.0, color=INK, lw=1.3, zorder=5)
     ax.annotate("the bias wall: kept data too dirty "
-                r"($r = r_{\rm tol}$, transverse dilation, $\zeta = 1$)",
+                rf"($r = r_{{\rm tol}}$, {REPORT_TOLERANCE_LABEL}, "
+                rf"$\zeta = {PRIMARY_ZETA:g}$)",
                 xy=(0.02, 1.0), xytext=(0, 5), textcoords="offset points",
                 fontsize=9, color=INK, va="bottom")
     ax.annotate("the occupancy wall: nothing left to keep",

@@ -9,7 +9,7 @@ minimise the survey-time cost
     T / T_clean = (1 + r) / (1 - f)
 
 over the threshold family ``F > eta * mu``, subject to the bias tolerance
-``r <= r_tol``, with the measured fine-stage sensitivity credit applied to
+``r <= r_tol``, with the rounded fine-stage screening credit applied to
 the bound.  ``r`` grows with ``eta`` and ``f`` shrinks with it, so the
 minimum is interior wherever the residual is large enough to matter -- and
 where it is not, no masking pays and the tolerance alone sets the ceiling.
@@ -37,7 +37,8 @@ bases are available and they do not agree:
 * the sigma-implied level, the excess a threshold sitting at the null centre
   can actually resolve.  Defensible everywhere, including the channels where
   mu0 < 1 leaves the sliver empty for any dataset.
-* the p90 shelf of the channel's own quietest era: a measurement taken on
+* the registered upper shelf percentile of the channel's own quietest era:
+  a measurement taken on
   frames the transmitter was demonstrably off for, and the *highest* of the
   three, so the most conservative.
 
@@ -130,6 +131,8 @@ except ImportError as exc:                # pragma: no cover - setup guidance
         f"underlying import error: {exc}") from exc
 
 from rfisher import residual as res  # noqa: E402
+from rfisher import selection_policy  # noqa: E402
+from rfisher import thresholds as threshold_rules  # noqa: E402
 from rfisher import tolerances as tolerance_source  # noqa: E402
 
 from ppcal import era_view as EV, eras as E  # noqa: E402
@@ -138,10 +141,13 @@ from ppcal.products import Channel, load_all, product_paths  # noqa: E402
 from rfisher.tolerances import TOL_APERP as TOL_APERP_STABLE  # noqa: E402
 from channel_tolerances import channel_tolerances  # noqa: E402
 
-ETA_GRID = np.concatenate([[1.0], np.geomspace(1.01, 60.0, 90)])
-FRAME_S = 16384 * 2.56e-6
-FINE_DB = 10.0        # measured fine-stage credit, 9.4-10.0 dB (MC verified)
-PLATEAU = 1.02        # "within 2% of optimal" tie-break, smallest eta wins
+_ETA_POINT, _ETA_START, _ETA_STOP, _ETA_COUNT = selection_policy.value(
+    "archive_reference.calibrated_eta_geometric_segment")
+ETA_GRID = np.concatenate([
+    [_ETA_POINT], np.geomspace(_ETA_START, _ETA_STOP, int(_ETA_COUNT))])
+FRAME_S = res.CHIME_FRAME_SECONDS
+FINE_DB = float(selection_policy.value("transfer.fine_stage_credit_db"))
+PLATEAU = threshold_rules.COST_PLATEAU
 ERA_POINT_FIELDS = (
     "channel", "era", "eta_basis", "masked_fraction", "r_over_rtol",
     "best_cost_masked_fraction", "best_cost_r_over_rtol", "tau_seconds",
@@ -200,6 +206,8 @@ def analysis_source_sha256():
     sources = {
         "generator": __file__,
         "rfisher.residual": res.__file__,
+        "rfisher.selection_policy": selection_policy.__file__,
+        "rfisher.thresholds": threshold_rules.__file__,
         "rfisher.tolerances": tolerance_source.__file__,
         "ppcal.era_view": EV.__file__,
         "ppcal.eras": E.__file__,
@@ -207,7 +215,7 @@ def analysis_source_sha256():
         "ppcal.products": inspect.getsourcefile(Channel),
         "channel_tolerances": inspect.getsourcefile(channel_tolerances),
     }
-    digest = hashlib.sha256(b"calibrated-era-source-v1\0")
+    digest = hashlib.sha256(b"calibrated-era-source-v2\0")
     for label, path in sorted(sources.items()):
         if not path:
             raise ValueError(f"source path unavailable for {label}")
@@ -229,7 +237,7 @@ def product_identity(path):
 
 def eta1_row(rows):
     matches = [row for row in rows
-               if np.isclose(row["eta_mu"], 1.0, rtol=0.0, atol=1e-12)]
+               if row["eta_mu"] == float(_ETA_POINT)]
     if len(matches) != 1:
         raise ValueError("the calibrated eta_mu=1 row is unavailable")
     return matches[0]
@@ -327,12 +335,16 @@ def r_tolerances():
 def sweep(c, segs, fmask, mu, tau):
     """Threshold sweep over the latest era on the calibrated ``mu`` scale."""
     scale = mu / c.mu0
-    floor_db, floor_era, n_floor = EV.quiet_era_floor_db(c, segs)
+    floor_policy = selection_policy.quiet_floor_kwargs()
+    floor_percentile = float(floor_policy["percentile"])
+    floor_label = f"p{floor_percentile:g}"
+    floor_db, floor_era, n_floor = EV.quiet_era_floor_db(
+        c, segs, **floor_policy)
     if np.isfinite(floor_db):
-        note = "floor from era %s (%d frames, p90 %.2f dB)" % (
-            floor_era, n_floor, floor_db)
+        note = "floor from era %s (%d frames, %s %.2f dB)" % (
+            floor_era, n_floor, floor_label, floor_db)
         floor_info = {
-            "floor_basis": "quiet_era_p90",
+            "floor_basis": "quiet_era_" + floor_label,
             "floor_era": floor_era,
             "floor_frames": int(n_floor),
             "floor_db": float(floor_db),
@@ -364,7 +376,8 @@ def sweep(c, segs, fmask, mu, tau):
     for r in rows:
         r["eta_mu"] = r["eta"] / scale
         r["r_fine"] = r["r_masked"] / credit
-        r["penalty"] = (1.0 + r["r_fine"]) / max(1.0 - r["f"], 1e-12)
+        r["penalty"] = ((1.0 + r["r_fine"]) / (1.0 - r["f"])
+                        if r["f"] < 1.0 else float("inf"))
     return rows, note, floor_info
 
 
@@ -407,7 +420,7 @@ def main(argv=None):
           % ("ch", "z range", "r_tol_dil", "r_tol_gro", "eta_cost", "mask",
              "penalty", "r/r_dil", "eta_feas", "mask", "tau"))
     for c in sorted(load_channels(args.products, only), key=lambda c: c.ch):
-        segs = E.segment(c)
+        segs = E.segment(c, **selection_policy.era_kwargs())
         fmask = E.final_era_frame_mask(c, segs)
         cal = calibrate(c, fmask, segs[-1].label, 0)
         dil, gro, z_lo, z_hi, published = tol.get(

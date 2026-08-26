@@ -30,17 +30,45 @@ import numpy as np
 
 from rfisher import products as _products
 from rfisher import residual as R
+from rfisher import selection_policy
+from rfisher.tolerances import TOL_APERP, TOL_FS8
 
-# The bias tolerance at the published criterion, b <= sigma (Amara &
-# Refregier 2008), binding on f-sigma-8 across the DTV redshift bins.
-R_TOL = 1.5e-3
-
-# Measured coherent-integration gain of the fine axis over the coarse axis,
-# from the Monte-Carlo characterisation through the deployed geometry
-# (scalloping, window maximum, finite-P_fa thresholds included). The ideal
-# sqrt(L) bound is 10.5 dB; the measured range is quoted here instead, because
-# a projection should not spend gain the implementation has not demonstrated.
-FINE_GAIN_DB = (9.4, 10.0)
+# The rounded screening credit and its lower development sensitivity check.
+_FINE_CREDIT = selection_policy.decision("transfer.fine_stage_credit_db")
+FINE_GAIN_DB = float(_FINE_CREDIT.value)
+FINE_SENSITIVITY_DB = tuple(
+    float(value) for value in _FINE_CREDIT.sensitivity_values
+    if float(value) != FINE_GAIN_DB)
+DEFAULT_CHANNELS = tuple(int(value) for value in selection_policy.value(
+    "archive_reference.floor_projection_channels"))
+TOLERANCE_TARGET = str(selection_policy.value(
+    "archive_reference.floor_projection_tolerance_target"))
+_TOLERANCE_TABLES = {"aperp": TOL_APERP, "fs8": TOL_FS8}
+if TOLERANCE_TARGET not in _TOLERANCE_TABLES:
+    raise RuntimeError("floor-projection tolerance target is not defined")
+TOLERANCES = _TOLERANCE_TABLES[TOLERANCE_TARGET]
+PRIMARY_ZETA = float(selection_policy.value(
+    "science.systematic_budget.primary_zeta"))
+PROJECTION_SCENARIOS = tuple(selection_policy.value(
+    "archive_reference.floor_projection_scenarios"))
+PERSISTENCE_REFERENCE_CHANNEL = int(selection_policy.value(
+    "archive_reference.floor_projection_persistence_reference_channel"))
+_PROJECTION_LABELS = {
+    "coarse": "coarse (now)",
+    "fine": "+fine stage",
+    "fine_plus_bao_peak1": "+fine +1st peak",
+    "fine_plus_bao_peak2": "+fine +2nd peak",
+}
+_PROJECTION_CREDITS = {
+    "coarse": 0.0,
+    "fine": FINE_GAIN_DB,
+    "fine_plus_bao_peak1": (
+        FINE_GAIN_DB + R.DELAY_SUPPRESSION_DB["bao_peak1"]),
+    "fine_plus_bao_peak2": (
+        FINE_GAIN_DB + R.DELAY_SUPPRESSION_DB["bao_peak2"]),
+}
+if any(key not in _PROJECTION_CREDITS for key in PROJECTION_SCENARIOS):
+    raise RuntimeError("floor-projection scenario is not defined")
 
 
 def channel_state(npz):
@@ -61,13 +89,15 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--products", nargs="+",
                     default=[p for _c, p in sorted(_products.paths(
-                        channels=(32, 33, 34, 35, 36),
+                        channels=DEFAULT_CHANNELS,
                         announce=False).items())])
     args = ap.parse_args(argv)
 
-    print(f"bias tolerance r_tol = {R_TOL:.3g}  (zeta = 1, Amara & Refregier)")
-    print(f"fine-stage gain over coarse: {FINE_GAIN_DB[0]}-{FINE_GAIN_DB[1]} dB "
-          f"(measured rather than the {10.5:.1f} dB ideal)\n")
+    checks = ", ".join(f"{value:g}" for value in FINE_SENSITIVITY_DB)
+    print(f"bias tolerance: channel-specific {TOLERANCE_TARGET}, "
+          f"zeta = {PRIMARY_ZETA:g}")
+    print(f"fine-stage credit: {FINE_GAIN_DB:g} dB rounded screening scenario; "
+          f"development checks: {checks} dB\n")
 
     measured, unmeasured = [], []
     for path in args.products:
@@ -76,18 +106,20 @@ def main(argv=None):
             (st, corr, gain))
 
     print("MEASURED FLOORS: these carry verdicts")
-    print(f"  {'ch':>3} {'tau_c':>14} {'gain':>10} {'coarse (now)':>14} "
-          f"{'+fine stage':>16} {'+fine +1st peak':>17} {'+fine +2nd peak':>17}")
+    scenario_header = " ".join(
+        f"{_PROJECTION_LABELS[key]:>17}" for key in PROJECTION_SCENARIOS)
+    print(f"  {'ch':>3} {'tau_c':>14} {'gain':>10} {scenario_header}")
     for st, corr, gain in measured:
+        tolerance = TOLERANCES[st.channel]
         row = [f"  {st.channel:3d}"]
         tau = (f"{corr.tau_for_budget/60:.0f} min" if corr.tau_for_budget < 3600
                else f"{corr.tau_for_budget/3600:.1f} h")
         row.append(f"{tau + ('' if corr.quality == 'measured' else '*'):>14}")
         row.append(f"{gain:10.4g}")
-        for extra in (0.0, FINE_GAIN_DB[1], FINE_GAIN_DB[1] + 3.6,
-                      FINE_GAIN_DB[1] + 8.2):
+        for scenario in PROJECTION_SCENARIOS:
+            extra = _PROJECTION_CREDITS[scenario]
             r = r_at(st.floor_db, gain, extra)
-            mark = "PASS" if r <= R_TOL else f"x{r/R_TOL:,.0f}"
+            mark = "PASS" if r <= tolerance else f"x{r/tolerance:,.0f}"
             row.append(f"{r:8.3g} {mark:>7s}")
         print(" ".join(row))
     print("  * tau_c is a bound (refused or bounded-above), so the row is a "
@@ -95,29 +127,42 @@ def main(argv=None):
 
     print("\nUNMEASURED FLOORS: no verdict is available")
     for st, corr, gain in unmeasured:
-        need = 10.0 * np.log10(R_TOL / gain)
+        tolerance = TOLERANCES[st.channel]
+        need = 10.0 * np.log10(tolerance / gain)
         print(f"  ch{st.channel}: no null population ({st.n_off_frames} frames). "
               f"Would need a floor below {need:.1f} dB to clear the tolerance "
               f"at the present gain of {gain:.4g}.")
 
     # ---- the other lever: tau_c ----------------------------------------
+    reference = next(
+        (row for row in measured
+         if row[0].channel == PERSISTENCE_REFERENCE_CHANNEL), None)
+    if reference is None:
+        print(f"\nChannel {PERSISTENCE_REFERENCE_CHANNEL} is unavailable; "
+              "the data-derived persistence bound cannot be shown.")
+        return 0
+    tau_reference = reference[1].tau_for_budget
+    tau_minutes = tau_reference / 60.0
     print("\nTHE OTHER LEVER. Two channels sit at the sidereal cap because "
-          "tau_c was refused.\nSubstituting the one bound that was measured "
-          "(ch33, tau_c <= 5 min) in place of the cap:")
-    tau33 = 300.0
-    n33 = R.n_coh_from_correlation_time(tau33)
+          "tau_c was refused.\nSubstituting the measured upper bound from "
+          f"channel {PERSISTENCE_REFERENCE_CHANNEL} "
+          f"(tau_c <= {tau_minutes:g} min) in place of the cap:")
     for st, corr, gain in measured:
-        if corr.quality == "measured" or corr.tau_for_budget <= tau33:
+        if (corr.quality == "measured"
+                or corr.tau_for_budget <= tau_reference):
             continue
         # The what-if books through the shared discipline: on a refused
         # channel the assumed timescale narrows the cap but the invalidated
-        # split stays uncredited (all power at n_coh(tau33)).
+        # split stays uncredited at the reference timescale.
         g2 = sum(f * n for f, n in
-                 R.surviving_components(st, corr, tau_intraday=tau33))
-        for label, extra in (("as-is", 0.0), ("+fine", FINE_GAIN_DB[1])):
+                 R.surviving_components(
+                     st, corr, tau_intraday=tau_reference))
+        tolerance = TOLERANCES[st.channel]
+        for label, extra in (("as-is", 0.0), ("+fine", FINE_GAIN_DB)):
             r = r_at(st.floor_db, g2, extra)
-            mark = "PASS" if r <= R_TOL else f"x{r/R_TOL:,.0f} over"
-            print(f"  ch{st.channel} with tau_c <= 5 min, {label:6s}: "
+            mark = "PASS" if r <= tolerance else f"x{r/tolerance:,.0f} over"
+            print(f"  ch{st.channel} with tau_c <= {tau_minutes:g} min, "
+                  f"{label:6s}: "
                   f"gain {g2:9.4g}  r = {r:9.3g}  {mark}")
     print("\nThat substitution is a what-if rather than a measurement. It is listed "
           "because it identifies\nwhich open item moves the verdict most: on "

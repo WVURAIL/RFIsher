@@ -12,7 +12,7 @@ chapter's DELAY_SUPPRESSION_DB.
 Verdicts are quoted at the minimum-residual operating point (eta = 1,
 product-basis floors, fine-stage credit) for the threshold-feasible
 channels and the tau_c-hostage ch29. Tolerances are the per-parameter
-minima over the entries that survive the +/-10% stability gate.
+minima over the entries that survive the registered response-stability gate.
 Sign-off channels use their transmitter-on eras.
 
 The four bias-response banks are not shipped. Build matched strict-v2,
@@ -48,7 +48,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 
 from rfisher import residual as R
+from rfisher import selection_policy
 from rfisher import survey
+from rfisher.channels import channel_z_range
 from rfisher.npzio import load_npz
 
 spec = importlib.util.spec_from_file_location(
@@ -56,21 +58,54 @@ spec = importlib.util.spec_from_file_location(
 bt = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bt)
 
+_WORLD_SPECS = {
+    "none": ("no filter (Fig. 31 baseline)",
+             "fisher_bank_chime2022_pres_dense.npz", "none", None),
+    "peak1": ("55 ns, preserves 1st peak",
+              "fisher_bank_chime2022_pres_kfg22_dense.npz",
+              "bao_peak1", 22.0),
+    "peak2": ("110 ns, preserves 2nd peak",
+              "fisher_bank_chime2022_pres_kfg44_dense.npz",
+              "bao_peak2", 44.0),
+    "deployed": ("200 ns, CHIME's cut",
+                 "fisher_bank_chime2022_pres_kfg80_dense.npz",
+                 "aggressive_200ns", 80.0),
+}
+WORLD_KEYS = tuple(selection_policy.value(
+    "archive_reference.three_worlds_scenarios"))
+if any(key not in _WORLD_SPECS for key in WORLD_KEYS):
+    raise RuntimeError("three-worlds response scenario is not defined")
 WORLDS = [
-    ("none",   "no filter (Fig. 31 baseline)", "fisher_bank_chime2022_pres_dense.npz", 0.0),
-    ("peak1",  "55 ns, preserves 1st peak",    "fisher_bank_chime2022_pres_kfg22_dense.npz", 3.6),
-    ("peak2",  "110 ns, preserves 2nd peak",   "fisher_bank_chime2022_pres_kfg44_dense.npz", 8.2),
-    ("deployed", "200 ns, CHIME's cut",        "fisher_bank_chime2022_pres_kfg80_dense.npz", 11.4),
+    (key, _WORLD_SPECS[key][0], _WORLD_SPECS[key][1],
+     R.DELAY_SUPPRESSION_DB[_WORLD_SPECS[key][2]])
+    for key in WORLD_KEYS
 ]
-FINE_DB = 10.0
-PARAMS = ("aperp", "apar", "fs8")
+WORLD_KFG = {key: _WORLD_SPECS[key][3] for key in WORLD_KEYS}
+FINE_DB = float(selection_policy.value("transfer.fine_stage_credit_db"))
+STABILITY_FRACTION = float(selection_policy.value(
+    "science.response_stability.time_fraction"))
+MAXIMUM_TOLERANCE_RATIO = float(selection_policy.value(
+    "science.response_stability.maximum_tolerance_ratio"))
+PARAMS = tuple(selection_policy.value(
+    "archive_reference.three_worlds_parameters"))
+(_GRID1_START, _GRID1_STOP, _GRID1_COUNT,
+ _GRID2_START, _GRID2_STOP, _GRID2_COUNT) = selection_policy.value(
+    "archive_reference.three_worlds_response_grid")
 EXPECTED_DENSE_GRID = np.unique(np.concatenate([
-    np.logspace(0.0, 6.0, 19),
-    10.0 ** np.linspace(3.5, 5.83, 8),
+    np.logspace(_GRID1_START, _GRID1_STOP, int(_GRID1_COUNT)),
+    10.0 ** np.linspace(_GRID2_START, _GRID2_STOP, int(_GRID2_COUNT)),
 ]))
 from rfisher import products as P
-Z_BIN = {32: 1.4, 33: 1.4, 35: 1.3, 29: 1.5}
-YEARS = (1.0, 2.0, 3.0, 5.0, 8.0)
+CHANNELS = tuple(int(value) for value in selection_policy.value(
+    "archive_reference.three_worlds_channels"))
+Z_BIN = {
+    ch: float(np.floor(channel_z_range(ch)[0] * 10.0) / 10.0)
+    for ch in CHANNELS
+}
+POSITIVE_EXCESS_ETA = float(selection_policy.value(
+    "archive_reference.positive_excess_eta"))
+YEARS = tuple(float(value) for value in selection_policy.value(
+    "archive_reference.forecast_year_grid"))
 PRODUCT_FIELDS = (
     "product_file", "product_sha256", "floor_epoch", "floor_frames",
     "floor_db", "floor_evidence", "tau_quality", "tau_reason",
@@ -128,6 +163,7 @@ def bank_identity(path, bank):
         "bias_source_sha256": file_sha256(ROOT / "scripts" /
                                            "bias_tolerance.py"),
         "residual_source_sha256": file_sha256(R.__file__),
+        "selection_policy_sha256": selection_policy.sha256(),
         "bank_file": Path(path).name,
         "bank_sha256": file_sha256(path),
         "bank_schema": bank.meta["schema_version"],
@@ -157,8 +193,9 @@ def stable_minima(bank):
             t = yr * survey.OVERVIEW_ONSKY_YEAR_HOURS
             dth, sig = bt.bias_per_unit_r(bank.F(ib, t), names)
             for p in PARAMS:
-                drift, nsign = bt.stability(bank, ib, t, names, p)
-                if drift <= 1.2 and nsign == 1:
+                drift, nsign = bt.stability(
+                    bank, ib, t, names, p, frac=STABILITY_FRACTION)
+                if drift <= MAXIMUM_TOLERANCE_RATIO and nsign == 1:
                     vals[p].append(sig[p] / abs(dth[p]))
                 else:
                     refused += 1
@@ -178,7 +215,8 @@ def eta1_population(p, ch):
             for t in d["unit_time0_ctime"]
         ])[d["frame_unit_index"]]
         on &= unit_month < off_from
-    keep = on & (d["fstat_raw"][:, 0] <= float(d["mu0"][0]))
+    keep = on & (
+        d["fstat_raw"][:, 0] <= POSITIVE_EXCESS_ETA * float(d["mu0"][0]))
     return int(keep.sum()), int(on.sum())
 
 
@@ -190,7 +228,8 @@ def channel_r_eta1(p, ch):
     floor_db, floor_evidence = R.kept_frame_floor(p)
     floor_epoch, floor_frames = floor_details(p, ch)
     sweep = R.threshold_sweep(
-        p, etas=np.array([1.0]), floor_db=floor_db, off_from=off_from)
+        p, etas=np.array([POSITIVE_EXCESS_ETA]), floor_db=floor_db,
+        off_from=off_from)
     corr = R.correlation_time(p, off_from=off_from)
     return {
         "r_fine": (sweep[0]["r_masked"] / 10 ** (FINE_DB / 10)
@@ -257,10 +296,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     banks = {}
-    kfg_by_world = {"none": None, "peak1": 22.0, "peak2": 44.0,
-                    "deployed": 80.0}
     for key, _, filename, _ in WORLDS:
-        expected_kfg = kfg_by_world[key]
+        expected_kfg = WORLD_KFG[key]
         kfg = "" if expected_kfg is None else f" --kfg-fac {expected_kfg:g}"
         command = (
             "python scripts/build_bank.py --config chime2022 "

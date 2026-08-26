@@ -126,6 +126,7 @@ def test_world_provenance_rejects_changed_inputs():
         ("product_sha256", "0" * 64),
         ("floor_epoch", "unknown"),
         ("generator_sha256", "0" * 64),
+        ("selection_policy_sha256", "0" * 64),
     ):
         rows = {item: dict(row) for item, row in original.items()}
         rows[("none", 35)][key] = value

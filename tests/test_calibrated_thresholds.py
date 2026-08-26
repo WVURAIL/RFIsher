@@ -7,7 +7,7 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
-from rfisher import thresholds
+from rfisher import selection_policy, thresholds
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +44,11 @@ finally:
 
 def test_cost_plateau_matches_the_selector():
     assert calibrated.PLATEAU == thresholds.COST_PLATEAU
+
+
+def test_screening_credit_comes_from_the_decision_register():
+    assert calibrated.FINE_DB == selection_policy.value(
+        "transfer.fine_stage_credit_db")
 
 
 def test_load_channels_filters_before_full_load(tmp_path, monkeypatch):

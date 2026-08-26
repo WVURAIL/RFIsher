@@ -49,6 +49,8 @@ import re
 import sys
 from pathlib import Path
 
+from rfisher import selection_policy
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
 FIGURE_DATA = ROOT / "scripts" / "dissertation" / "data"
@@ -349,6 +351,7 @@ def world_provenance_ok(rows: dict[tuple[str, int], dict],
                                            "bias_tolerance.py"),
         "residual_source_sha256": path_sha256(ROOT / "src" / "rfisher" /
                                                "residual.py"),
+        "selection_policy_sha256": selection_policy.sha256(),
     }
     try:
         for (world, ch), row in rows.items():

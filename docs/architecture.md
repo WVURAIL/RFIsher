@@ -15,20 +15,27 @@ instrument builders, and direct-validation paths remain CHIME/BAO-specific.
 
 The target selector workflow is:
 
-1. A detector project produces per-frame scores and residual measurements.
-2. Latest-era preparation rejects invalid frames, verifies stability, handles
-   correlation, applies the science transfer calibration, and emits one
-   complete residual-score histogram per candidate rank `rho`.
-3. `thresholds.optimize_threshold` takes those histograms and a science
-   tolerance, then selects the `(rho, eta)` operating point.
-4. The selected mask fraction and residual enter a `Scenario`, which maps
+1. A detector project produces exact per-frame fine-power terms and residual
+   measurements. Era discovery and invalid-frame bookkeeping retain only the
+   accepted rows from the latest station and receiver state.
+2. Conditioning turns the exact integer decision into the minimum Q16
+   multiplier that keeps each frame at each supported one-based rank.
+3. `preparation.prepare_threshold_family` requires every rank supported by
+   every accepted frame. It derives the exact Q16 multiplier grids, splits the
+   era at its calendar midpoint, builds pooled and early/late histograms, and
+   runs the deterministic drift screen.
+4. `preparation.select_prepared_threshold` verifies the evidence and calls
+   `thresholds.optimize_threshold`, which takes the histograms and science
+   tolerance and selects the `(rho, eta)` operating point. The returned claim
+   retains the source identity and policy digest.
+5. The selected mask fraction and residual enter a `Scenario`, which maps
    them onto physical frequency intervals.
-5. Each forecast bin receives a surviving-volume fraction and an effective
+6. Each forecast bin receives a surviving-volume fraction and an effective
    integration-time factor.
-6. A Fisher bank supplies the matrix at the requested effective time.
-7. The forecast layer marginalizes the declared BAO parameters and reports a
+7. A Fisher bank supplies the matrix at the requested effective time.
+8. The forecast layer marginalizes the declared BAO parameters and reports a
    target significance, uncertainty, or time-to-target.
-8. The bias-response workflow evaluates coherent contamination separately.
+9. The bias-response workflow evaluates coherent contamination separately.
 
 This separation is deliberate. Detector design and survey-product generation
 belong in pilot-proxy; the Fisher calculation belongs in RadioFisher; RFIsher
@@ -45,6 +52,8 @@ them.
 | `forecast` | BAO marginalization, significance curves, and time inversion |
 | `residual` | Raw-product statistics, coherence, budgets, and reference threshold sweeps |
 | `thresholds` | Pure `(rho, eta)` selection from calibrated residual-score histograms |
+| `preparation` | Q16 family construction, deterministic drift screening, and evidence-bearing refusal |
+| `selection_policy` | Versioned decision values, rationales, sensitivity values, and digest |
 | `products` | External survey-product registry and path resolution |
 | `channels` | ATSC channel and physical-frequency conversion |
 | `survey` and `layout` | CHIME experiment definition, bins, time conventions, and baselines |
@@ -59,18 +68,24 @@ compatibility surface for existing banks, scripts, and downstream consumers.
 The pure threshold selector has two inputs: `histograms_by_rho` and
 `science_tolerance`. A histogram is complete for one candidate `rho`: its bins
 cover every prepared frame, including the overflow above the last candidate
-`eta`. Each bin records its count and calibrated systematic-residual total.
-It may also record a calibrated variance-residual total. The histogram carries
-the usable bulk size, which validates `rho` and gives the comparable rank
-fraction `rho / (bulk_size + 1)`.
+multiplier. Each bin records its count and calibrated systematic-residual
+total. It may also record a calibrated variance-residual total. The histogram
+carries the usable bulk size, which validates `rho` and gives the comparable
+rank fraction `rho / (bulk_size + 1)`.
 
-`rho` is a one-based rank. Every accepted frame must have the same duration and
-exposure, so a fraction of frame counts is also the masked-exposure fraction.
-Across ranks, the family must describe the same frame population, common bulk
-size, full systematic total, and variance basis and total when present. The
-selector rejects the family when those checkable invariants disagree.
-Each rank may supply its own ordered `eta` grid. The selector compares the
-recorded `(rho, eta)` pairs directly and does not interpolate a rectangular
+`rho` is a one-based rank. A strict prepared family contains every rank from
+one through the minimum valid bulk count across the accepted rows; omitting a
+supported rank is refused. Every accepted frame must have the same exposure,
+so a fraction of frame counts is also the masked-exposure fraction. Across
+ranks, the family must describe the same frame population, common bulk size,
+full systematic total, and variance basis and total when present.
+
+The detector comparison uses an integer Q16 multiplier. Preparation records
+the minimum Q16 value that keeps each frame without converting the exact
+rational decision to a floating ratio. Each rank's grid begins at Q16 integer
+one and includes every unique deployable decision boundary observed for that
+rank. The displayed `eta` is the exact integer divided by `65536`; selection
+uses the recorded integer boundary and does not interpolate a rectangular
 surface.
 
 For each `(rho, eta)`, the selector sums the retained bins. It derives the
@@ -95,14 +110,34 @@ calibrated residual for that subset. A correlation or transfer model that must
 be refit after masking belongs in preparation and cannot use this compressed
 form.
 
-Frame validity, era choice, stability tests, correlation treatment, and
-proxy-to-science transfer calibration belong to preparation. Era dates,
+Frame validity, era choice, correlation treatment, and proxy-to-science
+transfer calibration begin outside the numerical selector. Era dates,
 rejected-frame counts, and source identities remain product metadata. They do
-not become selector arguments. `residual.threshold_sweep` and the raw-product
-scripts remain preparation and reference paths rather than the pure selector.
-The selector core implements this boundary, but the tracked survey products
-predate the external histogram exporter. Their existing operating-point rows
-remain historical results until preparation emits an accepted family.
+not become inputs to `thresholds.optimize_threshold`.
+`prepare_threshold_family` receives accepted latest-era rows and performs the
+calendar split, support accounting, histogram construction, and drift screen.
+`assess_histogram_stability` is the lower-level comparison only: it does not
+split rows or establish that the supplied halves came from one era.
+
+The current early/late check compares point estimates against declared drift
+limits. It is deterministic and is not a statistical equivalence test.
+Operational use also requires a derived per-half support rule and block-based
+uncertainty whose interval lies inside the declared margins. Those decisions
+remain open. The strict wrapper also refuses stale policy identity, a
+non-latest era, invalid or unequal-exposure frames, mask-dependent non-additive
+residual corrections, and inadequate score, correlation, or science-transfer
+evidence. A permitted screening selection returns `claim_status="screening"`
+with its source identity and policy digest.
+
+The current survey archive lacks the exact per-frame fine-power terms needed
+to reconstruct the Q16 decision boundaries. Its floating summary cannot be
+promoted to this strict contract; the detector processing must be rerun with
+the exact fields retained.
+
+The numerical values and unresolved decisions are in the
+[threshold decision register](threshold-decision-register.md). The pure
+selector remains available as a numerical kernel; it does not by itself prove
+that preparation occurred.
 
 ## Fisher-bank contract
 

@@ -22,6 +22,25 @@ PARAMETERS = [
 ]
 
 
+def test_paper_defaults_come_from_the_decision_register():
+    assert bt.DEFAULT_ZETA == bt.selection_policy.value(
+        "science.systematic_budget.primary_zeta")
+    assert bt.DEFAULT_STABILITY_FRACTION == bt.selection_policy.value(
+        "science.response_stability.time_fraction")
+    assert bt.DEFAULT_MAXIMUM_TOLERANCE_RATIO == bt.selection_policy.value(
+        "science.response_stability.maximum_tolerance_ratio")
+    assert bt.FISHER_CONDITION_LIMIT == bt.selection_policy.value(
+        "science.response_solver.maximum_condition_number")
+    assert bt.FISHER_NULLSPACE_RTOL == bt.selection_policy.value(
+        "science.response_solver.relative_nullspace_cutoff")
+    assert bt.DEFAULT_ESTIMATOR == bt.selection_policy.value(
+        "science.response_solver.default_estimator")
+    assert bt.DEFAULT_TIME_SCALING == bt.selection_policy.value(
+        "science.response_solver.default_time_scaling")
+    assert bt.DEFAULT_YEARS == bt.selection_policy.value(
+        "archive_reference.bias_year_grid")
+
+
 class Bank:
     def __init__(self):
         matrix = np.diag(np.linspace(4.0, 16.0, len(PARAMETERS)))

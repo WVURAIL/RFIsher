@@ -12,7 +12,7 @@ This is the closing move of the framework: minimize the survey-time cost
 
 over the coarse threshold family F > eta * mu0, subject to the bias-tolerance
 constraint r <= r_tol on the binding acoustic dilation (alpha_perp, zeta = 1),
-with the fine stage's measured sensitivity credit applied to the bound.
+with the fine stage's rounded screening credit applied to the bound.
 
 Selection discipline:
 
@@ -52,24 +52,46 @@ import numpy as np
 
 
 from rfisher import residual as R
+from rfisher import selection_policy
 from rfisher.thresholds import COST_PLATEAU
 
 # Stable zeta = 1 tolerances (scripts/bias_tolerance.py --zeta 1.0), one home.
 from rfisher.tolerances import TOL_APERP, TOL_FS8
-FINE_DB = 10.0                       # measured fine-stage credit, 9.4-10.0 dB
-DEPLOYED_DELAY_DB = 11.4             # CHIME's 200 ns cut; NOT booked in the
-                                     # verdicts; shown as a labeled scenario.
+REPORT_TOLERANCE_TARGET = str(selection_policy.value(
+    "archive_reference.operating_point_tolerance_target"))
+_TOLERANCE_TABLES = {"aperp": TOL_APERP, "fs8": TOL_FS8}
+if REPORT_TOLERANCE_TARGET not in _TOLERANCE_TABLES:
+    raise RuntimeError("report tolerance target is not defined")
+REPORT_TOLERANCES = _TOLERANCE_TABLES[REPORT_TOLERANCE_TARGET]
+POSITIVE_EXCESS_ETA = float(selection_policy.value(
+    "archive_reference.positive_excess_eta"))
+PRIMARY_ZETA = float(selection_policy.value(
+    "science.systematic_budget.primary_zeta"))
+FINE_DB = float(selection_policy.value("transfer.fine_stage_credit_db"))
+DEPLOYED_DELAY_DB = R.DELAY_SUPPRESSION_DB["aggressive_200ns"]
 PLATEAU = COST_PLATEAU
+RECENT_CALENDAR_YEARS = int(selection_policy.value(
+    "archive_reference.recent_calendar_years"))
+EARLIEST_RECENT_YEAR = int(selection_policy.value(
+    "archive_reference.earliest_recent_year"))
+MIN_DIAGNOSTIC_COHORT = int(selection_policy.value(
+    "archive_reference.minimum_diagnostic_cohort_frames"))
 
 from rfisher import products as _products
 from rfisher.npzio import load_npz
 
 DEFAULT_PRODUCTS = _products.paths()
 
+_FINE_START, _FINE_STOP, _FINE_STEP = selection_policy.value(
+    "archive_reference.coarse_eta_fine_segment")
+_MID_START, _MID_STOP, _MID_STEP = selection_policy.value(
+    "archive_reference.coarse_eta_mid_segment")
+_TAIL_START, _TAIL_STOP, _TAIL_COUNT = selection_policy.value(
+    "archive_reference.coarse_eta_geometric_segment")
 ETAS = np.unique(np.concatenate([
-    np.arange(1.00, 1.101, 0.01),          # fine grid at the knee
-    np.arange(1.10, 2.01, 0.05),
-    np.geomspace(2.0, 300.0, 16),
+    np.arange(_FINE_START, _FINE_STOP + 0.1 * _FINE_STEP, _FINE_STEP),
+    np.arange(_MID_START, _MID_STOP + 0.1 * _MID_STEP, _MID_STEP),
+    np.geomspace(_TAIL_START, _TAIL_STOP, int(_TAIL_COUNT)),
 ]))
 
 
@@ -80,7 +102,7 @@ def recent_f(path, eta, mu0, year_from):
     t = d["unit_time0_ctime"][d["frame_unit_index"]]
     yr = np.array([dt.datetime.utcfromtimestamp(x).year for x in t])
     m = v & (yr >= year_from)
-    if m.sum() < 100:
+    if m.sum() < MIN_DIAGNOSTIC_COHORT:
         return float("nan")
     return float((F[m] > eta * mu0).mean())
 
@@ -88,11 +110,12 @@ def recent_f(path, eta, mu0, year_from):
 def optimize(path, ch):
     prov = R.floor_provenance(path)
     corr = R.correlation_time(path)
-    tol = TOL_APERP[ch]
+    tol = REPORT_TOLERANCES[ch]
     d = load_npz(path)
     t = d["unit_time0_ctime"]
     yr_max = dt.datetime.utcfromtimestamp(float(t.max())).year
-    era_from = max(yr_max - 2, 2018)
+    era_from = max(
+        yr_max - RECENT_CALENDAR_YEARS + 1, EARLIEST_RECENT_YEAR)
 
     floor_db, floor_evidence = R.kept_frame_floor(path)
     out = {"ch": ch, "mu0": prov.mu0, "tau_bound": corr.quality != "measured",
@@ -115,7 +138,8 @@ def optimize(path, ch):
             pmin = min(r["penalty"] for r in feas)
             best = min((r for r in feas if r["penalty"] <= PLATEAU * pmin),
                        key=lambda r: r["eta"])
-            at1 = rows[0] if rows and abs(rows[0]["eta"] - 1.0) < 1e-9 else None
+            at1 = (rows[0] if rows
+                   and rows[0]["eta"] == POSITIVE_EXCESS_ETA else None)
             rec.update(
                 eta=best["eta"], F_thresh=best["eta"] * prov.mu0,
                 f=best["f"], r_fine=best["r_fine"],
@@ -149,8 +173,9 @@ def main(argv=None):
     results = [optimize(p, ch) for ch, p in sorted(products.items())
                if ch in TOL_FS8]
 
-    print(f"objective: min (1+r)/(1-f)  s.t.  r_fine <= r_tol(alpha_perp), "
-          f"zeta = 1, fine stage {FINE_DB:.0f} dB\n")
+    print(f"objective: min (1+r)/(1-f)  s.t.  r_fine <= "
+          f"r_tol({REPORT_TOLERANCE_TARGET}), zeta = {PRIMARY_ZETA:g}, "
+          f"fine stage {FINE_DB:.0f} dB\n")
     hdr = (f"{'ch':>3} {'basis':>10} {'eta*':>6} {'F>':>10} {'f*':>7} "
            f"{'r_fine':>9} {'margin':>7} {'cost':>6} {'@eta=1':>7} "
            f"{'recent f':>9} {'fs8+delay':>9}")

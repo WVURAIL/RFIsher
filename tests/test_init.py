@@ -20,10 +20,12 @@ PUBLIC_MODULES = (
     "incumbent",
     "layout",
     "pkcache",
+    "preparation",
     "products",
     "residual",
     "resources",
     "scenarios",
+    "selection_policy",
     "survey",
     "thresholds",
 )

@@ -61,34 +61,50 @@ Coherent contamination is a bias problem, not simply extra variance. The
 dedicated bias-response workflow propagates it through a `_Pres` Fisher row
 and refuses unsupported or numerically unstable evaluations.
 
-Threshold selection has a narrow boundary. Latest-era preparation rejects
-invalid frames, verifies that the era is stable, handles correlation, and
-applies the science transfer calibration. It then emits one complete
-residual-score histogram for each candidate rank `rho`. Each histogram records
-the usable bulk size. Each bin carries a frame count and a calibrated additive
-systematic-residual total, plus a variance-residual total when that quantity is
-measured.
+Threshold selection has a narrow boundary. Era discovery and invalid-frame
+bookkeeping happen first. `preparation.prepare_threshold_family` then takes the
+accepted latest-era rows, derives every rank supported by every row, uses the
+exact Q16 decision boundaries, splits the era at its calendar midpoint, and
+builds the pooled and early/late histograms. Each bin carries a frame count and
+a calibrated additive systematic-residual total, plus a variance-residual
+total when that quantity is measured.
+
+The detector field `cfar_rank` is zero-based. The selector uses the one-based
+order-statistic rank `rho = cfar_rank + 1`.
 
 `thresholds.optimize_threshold` takes only `histograms_by_rho` and
 `science_tolerance`. It derives the frame count and masked fraction, ignores
 candidates retaining fewer than 30 frames, and evaluates
 `(1 + r_var) / (1 - f)` subject to `r_sys <= science_tolerance`. Within 2% of
 the minimum cost it prefers more systematic margin, then less masking, lower
-`rho`, and lower `eta`. The result also reports the normalized rank
-`rho / (bulk_size + 1)`. Without variance totals, the objective is the
-masking-only cost `1 / (1 - f)`; the systematic residual is not reused as a
-variance estimate. Era dates and other provenance stay with the prepared
-product as metadata rather than selector inputs.
+`rho`, and lower `eta`. The result reports the exact Q16 multiplier, its
+displayed `eta`, and the normalized rank `rho / (bulk_size + 1)`. Without
+variance totals, the objective is the masking-only cost `1 / (1 - f)`; the
+systematic residual is not reused as a variance estimate. Era dates and other
+provenance stay with the prepared product as metadata rather than selector
+inputs.
+
+`preparation.select_prepared_threshold` is the evidence-bearing entry point.
+It verifies the latest-era, validity, equal-exposure, additivity, deterministic
+early/late drift, score, correlation, transfer, and decision-digest records
+before calling the two-input numerical kernel. A screening selection carries
+its `claim_status`, source identity, and policy digest with the numerical
+result; permission to screen cannot produce an operational label.
 
 The histogram does not depend on the adopted systematic-budget factor. A
 smaller `zeta` sensitivity run reuses the same histograms and changes only
 `science_tolerance`.
 
-The selector core is implemented. The tracked survey products predate the
-prepared-histogram exporter, so their historical threshold rows are not
-relabeled as outputs of this interface. The preparation project must export
-an accepted histogram family before this becomes the operational path. A
-small prepared-array example is in
+The selector and preparation contracts are implemented, but the current
+archive does not contain the exact per-frame fine-power fields needed to
+derive the Q16 decision boundaries. It must be rerun before this path can make
+an operational fine-threshold product. Block-based drift uncertainty,
+per-half support, drift limits, designated-set calibration, false-alarm and
+recovery targets, and visibility-domain transfer evidence also remain open or
+conditional. An accepted operational family therefore does not yet exist.
+Every choice and its evidence state is listed in the
+[threshold decision register](docs/threshold-decision-register.md). A small
+prepared-array example is in
 [`examples/threshold_selection.py`](examples/threshold_selection.py).
 
 ## Shipped reference result
@@ -118,6 +134,8 @@ the full inputs, results, and caveats.
   weighting conventions, and mask-product provenance.
 - [Contamination residuals](docs/contamination-residuals.md) — variance and
   bias paths, histogram threshold selection, coherence, and refusal rules.
+- [Threshold decision register](docs/threshold-decision-register.md) — every
+  operating choice, rationale, evidence state, and sensitivity value.
 - [CHIME/BAO reference application](docs/chime-bao-application.md) — fiducial
   configuration, headline results, inputs, and application-specific caveats.
 - [Reproducibility](docs/reproducibility.md) — installation, verification,

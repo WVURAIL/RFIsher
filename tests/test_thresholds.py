@@ -137,6 +137,38 @@ def test_builder_bins_variance_residuals():
     assert histogram.variance_residual_sums == pytest.approx((3.0, 7.0, 5.0))
 
 
+def test_q16_builder_keeps_frames_at_the_exact_boundary():
+    q16 = thresholds.MULTIPLIER_ONE
+    histogram = thresholds.build_q16_residual_score_histogram(
+        [1, q16, 2 * q16, thresholds.ALWAYS_MASKED_Q16],
+        [1.0, 2.0, 3.0, 4.0],
+        [1, q16, 2 * q16],
+        bulk_size=1,
+        variance_residuals=[4.0, 3.0, 2.0, 1.0],
+    )
+    assert histogram.candidate_multiplier_q16 == (1, q16, 2 * q16)
+    assert histogram.counts == (1, 1, 1, 1)
+    assert histogram.systematic_residual_sums == (1.0, 2.0, 3.0, 4.0)
+    assert histogram.variance_residual_sums == (4.0, 3.0, 2.0, 1.0)
+
+
+def test_q16_builder_preserves_boundaries_that_share_a_float_display():
+    first = (1 << 63) - 1
+    second = 1 << 63
+    assert first / thresholds.MULTIPLIER_ONE == (
+        second / thresholds.MULTIPLIER_ONE)
+    histogram = thresholds.build_q16_residual_score_histogram(
+        [first] * 30 + [second] * 30,
+        [1.0] * 60,
+        [first, second],
+        bulk_size=1,
+    )
+    assert histogram.candidate_multiplier_q16 == (first, second)
+    result = thresholds.optimize_threshold({1: histogram}, 1.0)
+    assert [point.kept_frames for point in result.points] == [30, 60]
+    assert [point.multiplier_q16 for point in result.points] == [first, second]
+
+
 @pytest.mark.parametrize("field", ["scores", "systematic_residuals",
                                     "variance_residuals"])
 def test_builder_rejects_complex_values(field):

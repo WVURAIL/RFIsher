@@ -54,7 +54,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import __version__, channels, cosmologies, pkcache, survey
+from rfisher import (__version__, channels, cosmologies, pkcache,
+                     selection_policy, survey)
 from rfisher.compat import (import_radiofisher,
                              require_backend_capabilities)
 from rfisher.constants import HI_REST_FREQUENCY_MHZ
@@ -89,8 +90,26 @@ TIME_SCALINGS = (
 
 REPORT_SCHEMA = "baonoise-bias-tolerance-v1"
 JSON_FORMATS = ("legacy", "complete-v1")
-FISHER_CONDITION_LIMIT = 1e12
-FISHER_NULLSPACE_RTOL = np.sqrt(np.finfo(float).eps)
+FISHER_CONDITION_LIMIT = float(selection_policy.value(
+    "science.response_solver.maximum_condition_number"))
+FISHER_NULLSPACE_RTOL = float(selection_policy.value(
+    "science.response_solver.relative_nullspace_cutoff"))
+DEFAULT_YEARS = tuple(float(value) for value in selection_policy.value(
+    "archive_reference.bias_year_grid"))
+DEFAULT_ZETA = float(selection_policy.value(
+    "science.systematic_budget.primary_zeta"))
+DEFAULT_STABILITY_FRACTION = float(selection_policy.value(
+    "science.response_stability.time_fraction"))
+DEFAULT_MAXIMUM_TOLERANCE_RATIO = float(selection_policy.value(
+    "science.response_stability.maximum_tolerance_ratio"))
+DEFAULT_ESTIMATOR = str(selection_policy.value(
+    "science.response_solver.default_estimator"))
+DEFAULT_TIME_SCALING = str(selection_policy.value(
+    "science.response_solver.default_time_scaling"))
+if DEFAULT_ESTIMATOR not in ESTIMATORS:
+    raise RuntimeError("default response estimator is not defined")
+if DEFAULT_TIME_SCALING not in TIME_SCALINGS:
+    raise RuntimeError("default response time scaling is not defined")
 
 # The per-bin parameter set is identical to the one the forecast marginalises
 # over: {A, sigma_NL, aperp, apar, bs8, fs8}. Keeping b_HI, f and sigma8tot
@@ -399,7 +418,8 @@ def bias_per_unit_r(F, names):
     return dict(zip(kept, dtheta)), dict(zip(kept, sigma))
 
 
-def stability(bank, ib, t_hours, names, param, frac=0.10):
+def stability(bank, ib, t_hours, names, param,
+              frac=DEFAULT_STABILITY_FRACTION):
     """Historical +/-frac stability tuple used by existing research scripts."""
     vals, signs = [], []
     for scale in (1.0 - frac, 1.0, 1.0 + frac):
@@ -873,11 +893,11 @@ def evaluate_raw(estimator, ibin: int, t_hours: float, param: str,
 
 
 def evaluate_fisher_point(estimator, ibin: int, t_hours: float, param: str,
-                          *, zeta: float = 1.0,
+                          *, zeta: float = DEFAULT_ZETA,
                           time_scaling: str = NOISE_NORMALIZED_AT_EACH_TIME,
                           reference_hours: float | None = None,
-                          stability_fraction: float = 0.10,
-                          max_drift: float = 1.2,
+                          stability_fraction: float = DEFAULT_STABILITY_FRACTION,
+                          max_drift: float = DEFAULT_MAXIMUM_TOLERANCE_RATIO,
                           enforce_bank_bounds: bool = True) -> dict:
     """Evaluate and gate one requested Fisher point, retaining all evidence."""
     if not np.isfinite(t_hours) or t_hours <= 0.0:
@@ -1170,28 +1190,30 @@ def main(argv=None):
         help="strict-v2 unit-P_res bias-response bank (not shipped; exact "
              f"build prerequisite: {DEFAULT_BUILD_COMMAND})")
     ap.add_argument("--estimator", choices=ESTIMATORS,
-                    default=PERBIN_APPENDIX_A)
+                    default=DEFAULT_ESTIMATOR)
     ap.add_argument("--time-scaling", choices=TIME_SCALINGS,
-                    default=NOISE_NORMALIZED_AT_EACH_TIME)
+                    default=DEFAULT_TIME_SCALING)
     ap.add_argument(
         "--reference-years", type=float,
         help="reference time for fixed_physical_at_reference_time, in "
              "8,760-hour Overview on-sky years")
     ap.add_argument("--radiofisher-dir", type=Path)
-    ap.add_argument("--zeta", type=float, default=0.3,
+    ap.add_argument("--zeta", type=float, default=DEFAULT_ZETA,
                     help="admissible bias as a fraction of the statistical error")
     ap.add_argument(
         "--params", nargs="+",
         help="targets (default: aperp apar fs8 for per-bin; DV F fs8 for "
              "combined)")
     ap.add_argument("--years", nargs="+", type=float,
-                    default=[0.25, 1.0, 5.0, 10.0])
+                    default=DEFAULT_YEARS)
     ap.add_argument(
         "--bins", nargs="+", type=int,
         help="zero-based bank-bin indices (default: every bin overlapping "
              "the 470--608 MHz DTV band)")
-    ap.add_argument("--stability-fraction", type=float, default=0.10)
-    ap.add_argument("--max-drift", type=float, default=1.2,
+    ap.add_argument("--stability-fraction", type=float,
+                    default=DEFAULT_STABILITY_FRACTION)
+    ap.add_argument("--max-drift", type=float,
+                    default=DEFAULT_MAXIMUM_TOLERANCE_RATIO,
                     help="largest tolerance ratio across the +/- time "
                          "perturbation before refusal")
     ap.add_argument("--json", type=Path)
@@ -1229,7 +1251,7 @@ def main(argv=None):
             "perbin_appendix_a/noise_normalized_at_each_time calculation; "
             "use --json-format complete-v1 for this request")
     if (args.json_format == "legacy"
-            and args.stability_fraction != 0.10):
+            and args.stability_fraction != DEFAULT_STABILITY_FRACTION):
         ap.error(
             "--json-format legacy has the historical fixed +/-10% stability "
             "test; use --json-format complete-v1 to change "

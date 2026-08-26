@@ -42,26 +42,36 @@ small; that case uses the bias-response path described below.
 
 Threshold selection uses two inputs for one channel:
 
-1. `histograms_by_rho`, built from the channel's latest stable era; and
+1. `histograms_by_rho`, built from the channel's accepted latest-era rows; and
 2. `science_tolerance`, the accepted systematic-residual level.
 
-Preparation happens before selection. It removes invalid frames, verifies
-that the chosen era is stable, handles residual correlation, applies the
-proxy-to-science transfer calibration, and emits one complete residual-score
-histogram for each candidate rank `rho`. Each histogram covers the same frame
+Era discovery, invalid-frame bookkeeping, residual correlation, and the
+proxy-to-science transfer calibration happen before family construction.
+`preparation.prepare_threshold_family` takes the accepted latest-era rows,
+derives the exact candidate grids, splits the rows at the calendar midpoint,
+builds pooled and early/late histograms, and runs the deterministic drift
+screen. The evidence-bearing wrapper refuses missing or failed conditioning
+before it calls the numerical selector. Each histogram covers the same frame
 population and records the common usable bulk size. Its bins are bounded by
-candidate `eta` values, with a final overflow bin, and each bin carries:
+candidate Q16 multipliers, with a final overflow bin, and each bin carries:
 
 - the number of frames;
 - the sum of calibrated systematic-residual contributions; and
 - the sum of calibrated variance-residual contributions, when measured.
 
-The rank `rho` is one-based. All accepted frames have the same duration and
-exposure, so count fractions are exposure fractions. Across ranks, the frame
-population, bulk size, full systematic total, and optional variance basis and
-total must agree.
-Candidate `eta` grids may differ by rank; every supplied pair is evaluated
-without interpolation.
+The rank `rho` is one-based. A strict family contains every rank from one
+through the minimum valid bulk count across all accepted frames. All accepted
+frames have equal exposure, so count fractions are exposure fractions. Across
+ranks, the frame population, bulk size, full systematic total, and optional
+variance basis and total must agree.
+
+The per-frame score is the minimum Q16 multiplier that keeps the frame under
+the exact integer detector comparison. This represents zero-reference cases
+without division. For each rank, the candidate grid starts at Q16 integer one
+and includes every unique deployable required value. `eta` is reported as the
+integer divided by `65536`; the integer remains the authoritative boundary.
+The grids may differ by rank, and every recorded pair is evaluated without
+interpolation.
 
 The selector does not need a separate sample count. For a candidate `eta`, it
 sums the bins at or below that boundary:
@@ -83,24 +93,41 @@ population and compares
 subject to `r_sys <= science_tolerance`. Candidates retaining fewer than 30
 frames are not evaluated. Among points within 2% of the minimum cost, the
 selector prefers lower `r_sys`, less masking, lower `rho`, then lower `eta`.
-It reports both `rho` and `rho / (bulk_size + 1)`. If the histograms do not
-contain variance totals, the objective is the masking-only cost
+It reports `rho`, `rho / (bulk_size + 1)`, the exact Q16 multiplier, and its
+displayed `eta`. If the histograms do not contain variance totals, the
+objective is the masking-only cost
 `1 / (1 - f)`. The systematic residual still enforces the tolerance; it is
 not substituted for the missing variance term.
 
 The stored residual totals must be additive: a retained prefix sum divided by
 its frame count must already be the calibrated residual for that subset. If
 correlation or transfer must be estimated again after masking, preparation
-must do that work before producing the histogram; the compressed selector
-cannot infer it.
+must evaluate the candidate on the time-ordered data instead; the compressed
+histogram cannot represent that calibration.
 
 Era start and end dates, rejected-frame counts, and source provenance remain
 metadata on the prepared product. They are needed to reproduce and audit the
 calibration, but they are not inputs to `thresholds.optimize_threshold`.
-`residual.threshold_sweep` and the raw-product scripts retain their role as
-preparation and reference paths; they are not the pure selection boundary.
-The prepared histograms can be reused across systematic-budget choices:
-testing a smaller `zeta` changes only `science_tolerance`.
+`prepare_threshold_family` performs the calendar split from the supplied frame
+times. `assess_histogram_stability` only compares already-built halves; it does
+not establish their origin. The prepared histograms can be reused across
+systematic-budget choices: testing a smaller `zeta` changes only
+`science_tolerance`.
+
+The early/late check is a deterministic point-estimate drift screen, not an
+equivalence test. The cost-ratio limit, systematic-residual-ratio limit, and
+per-half retained-frame floor are unset. Operational use additionally needs
+block-based uncertainty whose interval lies inside the adopted drift limits.
+Current unity shelf-to-science transfer remains conditional. It can enter the
+strict wrapper only with `allow_screening=True`; the returned selection keeps
+the screening claim, source identity, and policy digest.
+
+The current survey archive does not retain the exact per-frame fine-power
+fields needed to derive the Q16 boundaries. Its floating summary is
+insufficient for strict preparation, so an operational fine-threshold product
+requires a detector rerun with those fields retained. See the
+[threshold decision register](threshold-decision-register.md) for every
+current value, justification class, sensitivity value, and open decision.
 
 ## Residual budget
 
@@ -152,10 +179,10 @@ by about 7 dB, and then counts the same power again in coherence.
 
 ## Correlation time
 
-`residual.correlation_time` estimates the contamination-residual correlation
-time from a thermal-noise-corrected, same-sidereal-day structure function of
-acquisition-mean shelf power. It reads the `(1 - 1/e)` crossing and uses a
-day-block bootstrap.
+`residual.correlation_time` estimates a shelf-persistence time from a
+thermal-noise-corrected, same-sidereal-day structure function of
+acquisition-mean linear shelf power. It reads the `(1 - 1/e)` crossing and
+uses a day-block bootstrap.
 
 Each acquisition mean carries estimation variance `V_fast / n_frames`. That
 term is subtracted from squared differences so sparse acquisitions do not
@@ -176,6 +203,14 @@ frames carry 99.5% and 91.4% of the linear variance, respectively, so the
 estimated moment is controlled by the trim boundary. A refusal receives no
 ground-filter credit; the fallback carries all shelf power at the one-sidereal-
 day cap and is labeled `[BOUND]`.
+
+The crossing is an e-folding time only under an approximately
+single-exponential autocorrelation model. The released conversion
+`n_coh = tau / frame_time` is a rectangular coherent-block screening model,
+not a general integrated-autocorrelation result. An operational variance
+transfer requires an integrated autocorrelation or direct block-sum
+measurement and cadence-matched coverage tests. Raw pair counts do not supply
+that validation because each acquisition appears in many pairs.
 
 ## Time-scaling families
 

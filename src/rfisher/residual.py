@@ -40,12 +40,12 @@ the residual an analysis actually sees:
 
 Integration scaling
 -------------------
-Thermal noise averages down; a residual only averages down over its own
-correlation time. If a surviving component decorrelates on timescale tau_c it
-is amplified relative to thermal noise by ``n_coh = tau_c / T_frame``, the
-number of frames per correlation time, and that amplification is
-*independent of total integration time*, so the residual-to-noise ratio
-saturates rather than growing without bound.
+Thermal noise averages down; a correlated residual averages down more slowly.
+The released screen models a surviving component as rectangular coherent
+blocks and therefore uses ``n_coh = tau_c / T_frame``. This is a declared
+screening model, not the general result for an autocorrelation function. An
+operational variance correction needs an integrated autocorrelation estimate
+or a direct measurement from block sums.
 
 tau_c is bounded above rather than free. Anything correlated for longer than a
 sidereal day is m = 0 within each day and is already removed by term 3, so
@@ -69,6 +69,7 @@ from pathlib import Path
 import numpy as np
 
 from .npzio import load_npz
+from .selection_policy import value as _policy_value
 
 # Delay-filter suppression of the DTV shelf, dB, as a function of which BAO
 # feature the filter must preserve. Derived from the k_par <-> delay relation
@@ -90,10 +91,12 @@ DELAY_SUPPRESSION_DB = {
 # bound the help that *could* be claimed if the filter were modelled on both
 # sides. Note the direction: claiming nothing makes every residual larger,
 # which is the conservative direction for a contamination budget.
-DEFAULT_DELAY_KEY = "none"
+DEFAULT_DELAY_KEY = str(_policy_value("transfer.delay_suppression.default_key"))
+if DEFAULT_DELAY_KEY not in DELAY_SUPPRESSION_DB:
+    raise RuntimeError("default delay scenario is not defined")
 
 CHIME_FRAME_SECONDS = 16384 * 2.56e-6   # 41.94304 ms
-SIDEREAL_DAY = 86164.0905               # s
+SIDEREAL_DAY = float(_policy_value("correlation.sidereal_day_seconds"))
 
 # Hard cap on the residual correlation time. Anything correlated for longer
 # than a sidereal day is m = 0 within each day and is removed by the
@@ -106,7 +109,14 @@ MAX_TAU_C_SECONDS = SIDEREAL_DAY
 # Thinner populations (ch31's floor stood on 2 frames, ch28's on 6) sample the
 # null tail rather than characterise it; below the bar the floor falls back to
 # the sigma-implied substitute and is labelled stated evidence.
-MIN_MEASURED_NULLS = 30
+DEFAULT_FLOOR_PERCENTILE = float(_policy_value("floor.upper_percentile"))
+DEFAULT_TRIM_PERCENTILE = float(
+    _policy_value("correlation.primary_trim_percentile"))
+MIN_MEASURED_NULLS = int(_policy_value("floor.minimum_null_frames"))
+MIN_SHELF_SPLIT_FRAMES = int(
+    _policy_value("floor.minimum_shelf_split_frames"))
+MIN_ACQUISITION_FRAMES = int(
+    _policy_value("correlation.minimum_frames_per_acquisition"))
 
 # Channels whose transmitter has a verified off epoch in the archive, mapped
 # to the last YYYY-MM of that epoch. The off era supplies a *measured*
@@ -285,7 +295,8 @@ def _nested_split(lin, unit, t0):
     bounds = np.flatnonzero(np.diff(key_s)) + 1
     parts = list(zip(np.split(lin_s, bounds), np.split(day_s, bounds),
                      np.split(unit_s, bounds)))
-    groups = [(g, dd[0], uu[0]) for g, dd, uu in parts if g.size >= 2]
+    groups = [(g, dd[0], uu[0]) for g, dd, uu in parts
+              if g.size >= MIN_ACQUISITION_FRAMES]
     if not groups:
         return (np.nan,) * 4 + (0, 0, np.nan, None)
 
@@ -316,8 +327,8 @@ def _nested_split(lin, unit, t0):
 
 
 def shelf_statistics(npz_path: str | Path, off_through: str | None = None,
-                     floor_percentile: float = 90.0,
-                     trim_percentile: float | None = 90.0,
+                     floor_percentile: float = DEFAULT_FLOOR_PERCENTILE,
+                     trim_percentile: float | None = DEFAULT_TRIM_PERCENTILE,
                      off_from: str | None = None) -> ShelfStatistics:
     """Measure the residual chain's data-driven terms from a survey product.
 
@@ -370,7 +381,7 @@ def shelf_statistics(npz_path: str | Path, off_through: str | None = None,
 
     dc = interday = intraday = fast = float("nan")
     n_units = n_days = 0
-    if on.sum() > 10:
+    if on.sum() >= MIN_SHELF_SPLIT_FRAMES:
         dc, interday, intraday, fast, n_units, n_days, _, _ = _nested_split(
             10.0 ** (shelf[on] / 10.0), unit[on], t0)
 
@@ -395,13 +406,39 @@ def shelf_statistics(npz_path: str | Path, off_through: str | None = None,
 # The intra-day correlation time
 # ----------------------------------------------------------------------
 
-# Lag bins for the same-day structure function, seconds. The short end is set
-# by the acquisition cadence (pairs closer than ~5 min are rare); the long end
-# by the sidereal-day boundary, past which inter-day drift contaminates.
+# These reproduce the released screen. Their evidence state and sensitivity
+# values live in selection_policy; none is an unnamed quality threshold.
 STRUCTURE_LAG_EDGES = np.array(
-    [0.0, 300.0, 900.0, 1800.0, 2700.0, 3600.0, 5400.0, 7200.0, 14400.0, 28800.0])
-PLATEAU_LAG_SECONDS = 7200.0     # lags beyond this estimate the full variance
-TRIM_PROBES = (75.0, 90.0, 95.0)
+    _policy_value("correlation.lag_edges_seconds"), dtype=float)
+PLATEAU_LAG_SECONDS = float(
+    _policy_value("correlation.plateau_start_seconds"))
+TRIM_PROBES = tuple(float(value) for value in
+                    _policy_value("correlation.trim_probes"))
+MIN_STRUCTURE_PAIRS_PER_BIN = int(
+    _policy_value("correlation.minimum_pairs_per_lag_bin"))
+MIN_POPULATED_LAG_BINS = int(
+    _policy_value("correlation.minimum_populated_lag_bins"))
+STRUCTURE_CROSSING_FRACTION = float(
+    _policy_value("correlation.crossing_fraction"))
+MIN_CORRELATION_FRAMES = int(
+    _policy_value("correlation.minimum_selected_frames"))
+MIN_CORRELATION_DAYS = int(
+    _policy_value("correlation.minimum_sidereal_days"))
+MIN_CORRELATION_PAIRS = int(
+    _policy_value("correlation.minimum_same_day_pairs"))
+MAX_TRIM_SPREAD = float(
+    _policy_value("correlation.maximum_trim_spread"))
+CORRELATION_BOOTSTRAP_REPLICATES = int(
+    _policy_value("correlation.bootstrap_replicates"))
+CORRELATION_BOOTSTRAP_SEED = int(
+    _policy_value("correlation.bootstrap_seed"))
+CORRELATION_BOOTSTRAP_PERCENTILES = tuple(
+    float(value) for value in
+    _policy_value("correlation.bootstrap_interval_percentiles"))
+MIN_BOOTSTRAP_SUCCESSES = int(
+    _policy_value("correlation.minimum_bootstrap_successes"))
+MIN_BOOTSTRAP_SUCCESS_FRACTION = float(
+    _policy_value("correlation.minimum_bootstrap_success_fraction"))
 
 
 @dataclass
@@ -504,7 +541,7 @@ def _same_day_structure(groups, v_fast_abs, edges=STRUCTURE_LAG_EDGES,
     centers, values, counts = [], [], []
     for a, b in zip(edges[:-1], edges[1:]):
         m = (lags >= a) & (lags < b)
-        if m.sum() >= 40:
+        if m.sum() >= MIN_STRUCTURE_PAIRS_PER_BIN:
             centers.append(0.5 * (a + b))
             values.append(float(D[m].mean()))
             counts.append(int(m.sum()))
@@ -514,9 +551,10 @@ def _same_day_structure(groups, v_fast_abs, edges=STRUCTURE_LAG_EDGES,
 
 def _tau_from_structure(centers, values, plateau):
     """Lag at which D reaches (1 - 1/e) of its plateau, linearly interpolated."""
-    if not np.isfinite(plateau) or plateau <= 0 or centers.size < 3:
+    if (not np.isfinite(plateau) or plateau <= 0
+            or centers.size < MIN_POPULATED_LAG_BINS):
         return np.nan
-    target = (1.0 - 1.0 / np.e) * plateau
+    target = STRUCTURE_CROSSING_FRACTION * plateau
     if values.max() < target:
         return np.nan
     k = int(np.argmax(values >= target))
@@ -530,7 +568,7 @@ def _tau_from_structure(centers, values, plateau):
 
 def _measure_at_trim(d, off_through, trim, off_from=None):
     on, shelf, unit, t0 = _on_epoch(d, off_through, trim, off_from=off_from)
-    if on.sum() < 100:
+    if on.sum() < MIN_CORRELATION_FRAMES:
         return None
     split = _nested_split(10.0 ** (shelf[on] / 10.0), unit[on], t0)
     if split[-1] is None:
@@ -545,10 +583,13 @@ def _measure_at_trim(d, off_through, trim, off_from=None):
 
 
 def correlation_time(npz_path: str | Path, off_through: str | None = None,
-                     trim_percentile: float = 90.0,
-                     trim_probes=TRIM_PROBES, max_trim_spread: float = 2.0,
-                     min_days: int = 100, min_pairs: int = 200,
-                     n_boot: int = 200, seed: int = 20260807,
+                     trim_percentile: float = DEFAULT_TRIM_PERCENTILE,
+                     trim_probes=TRIM_PROBES,
+                     max_trim_spread: float = MAX_TRIM_SPREAD,
+                     min_days: int = MIN_CORRELATION_DAYS,
+                     min_pairs: int = MIN_CORRELATION_PAIRS,
+                     n_boot: int = CORRELATION_BOOTSTRAP_REPLICATES,
+                     seed: int = CORRELATION_BOOTSTRAP_SEED,
                      off_from: str | None = None) -> CorrelationTime:
     """Measure the intra-day correlation time, or refuse and say why.
 
@@ -650,15 +691,20 @@ def correlation_time(npz_path: str | Path, off_through: str | None = None,
         t = _tau_from_structure(c, v, pl)
         if np.isfinite(t):
             boots.append(t)
-    if len(boots) < max(20, n_boot // 10):
+    minimum_successes = max(
+        MIN_BOOTSTRAP_SUCCESSES,
+        int(np.ceil(MIN_BOOTSTRAP_SUCCESS_FRACTION * n_boot)))
+    if len(boots) < minimum_successes:
         return refuse("bootstrap did not converge", trim_spread, surv_spread,
                       main["n_days"], main["n_pairs"], main["plateau_frac"])
     boots = np.array(boots)
 
     return CorrelationTime(
         channel=channel, tau_c=float(main["tau"]),
-        tau_lo=float(np.percentile(boots, 16)),
-        tau_hi=float(np.percentile(boots, 84)),
+        tau_lo=float(np.percentile(
+            boots, CORRELATION_BOOTSTRAP_PERCENTILES[0])),
+        tau_hi=float(np.percentile(
+            boots, CORRELATION_BOOTSTRAP_PERCENTILES[1])),
         plateau_fraction=float(main["plateau_frac"]),
         n_days=int(main["n_days"]), n_pairs=int(main["n_pairs"]),
         trim_spread=trim_spread, surviving_spread=surv_spread,
@@ -862,7 +908,7 @@ class FloorProvenance:
     # sliver at the 90th percentile, plus sampling noise on thin slivers. A
     # decibel and a half is loose enough for a starved channel and far tighter
     # than anything a floor that tracked the sky would satisfy.
-    MU0_AGREEMENT_DB = 1.5
+    MU0_AGREEMENT_DB = float(_policy_value("floor.mu0_agreement_db"))
 
     @property
     def mu0_determined(self) -> bool:
@@ -885,8 +931,13 @@ class FloorProvenance:
 # Quantile probes for the null scale, and the standard-normal deviates they
 # correspond to *in the full null*; the kept sample is its lower half, so the
 # p-th percentile of the kept frames is the (p/2)-th percentile of the null.
-NULL_SCALE_PROBES = ((32.0, 1.0000), (5.0, 1.9600), (0.3, 2.9677))
-MIN_THRESHOLD_SWEEP_KEPT_FRAMES = 30
+NULL_SCALE_PROBES = tuple(
+    (float(percentile), float(deviate))
+    for percentile, deviate in _policy_value("floor.null_scale_probes"))
+MIN_THRESHOLD_SWEEP_KEPT_FRAMES = int(
+    _policy_value("selection.minimum_retained_frames"))
+MIN_REFERENCE_SWEEP_FRAMES = int(
+    _policy_value("preparation.minimum_reference_sweep_frames"))
 
 
 def null_scale(f_kept: np.ndarray, mu0: float) -> tuple[float, float]:
@@ -907,7 +958,8 @@ def null_scale(f_kept: np.ndarray, mu0: float) -> tuple[float, float]:
 
 
 def floor_provenance(npz_path: str | Path,
-                     floor_percentile: float = 90.0) -> FloorProvenance:
+                     floor_percentile: float = DEFAULT_FLOOR_PERCENTILE
+                     ) -> FloorProvenance:
     """Trace a channel's reported floor back to the constant that fixes it."""
     d = load_npz(npz_path)
     valid = d["valid"][:, 0].astype(bool)
@@ -946,7 +998,8 @@ def floor_provenance(npz_path: str | Path,
         shelf_offset_db=offset,
         reported_db=(float(np.percentile(shelf[sliver], floor_percentile))
                      if sliver.sum() else float("nan")),
-        mu0_implied_db=10.0 * np.log10(abs(mu0 - 1.0)) + offset,
+        mu0_implied_db=(10.0 * np.log10(abs(mu0 - 1.0)) + offset
+                        if mu0 != 1.0 else float("-inf")),
         sigma_null=sigma, sigma_spread=spread,
         sigma_implied_db=10.0 * np.log10(sigma / mu0) + offset,
     )
@@ -954,7 +1007,8 @@ def floor_provenance(npz_path: str | Path,
 
 def kept_frame_floor(npz_path: str | Path, off_through: str | None = None,
                      off_from: str | None = None,
-                     floor_percentile: float = 90.0) -> tuple[float, str]:
+                     floor_percentile: float = DEFAULT_FLOOR_PERCENTILE
+                     ) -> tuple[float, str]:
     """``(floor_db, evidence)`` under the package's one floor discipline.
 
     The kept-frame bound is *measured* where a null population of at least
@@ -1030,12 +1084,11 @@ def budget_from_statistics(stats: ShelfStatistics, delay_key: str = DEFAULT_DELA
 
 def n_coh_from_correlation_time(tau_c_seconds: float,
                                 frame_seconds: float = CHIME_FRAME_SECONDS) -> float:
-    """Frames per residual correlation time.
+    """Rectangular coherent-block variance factor used by the screen.
 
-    This is the whole integration-scaling model in one number. ``tau_c`` at the
-    frame scale gives 1 (residual behaves as thermal noise); ``tau_c`` of an
-    hour gives ~8.6e4, i.e. +49 dB, which is what makes a slowly-varying
-    residual dangerous even when it is far below the per-frame noise.
+    ``tau_c`` at the frame scale gives 1; an hour gives about 8.6e4. This is
+    exact for the declared block model. It must not be relabeled as an
+    integrated-autocorrelation estimate for an arbitrary process.
     """
     if frame_seconds <= 0:
         raise ValueError("frame_seconds must be positive")
@@ -1071,8 +1124,8 @@ def surviving_components(stats: ShelfStatistics, corr: CorrelationTime,
 
 
 def residuals_from_products(paths, off_through=None, delay_key=DEFAULT_DELAY_KEY,
-                            floor_percentile: float = 90.0,
-                            trim_percentile: float = 90.0,
+                            floor_percentile: float = DEFAULT_FLOOR_PERCENTILE,
+                            trim_percentile: float = DEFAULT_TRIM_PERCENTILE,
                             off_from=None, **ct_kwargs):
     """Per-channel ``{channel: r}`` plus the statistics and correlation times.
 
@@ -1104,8 +1157,8 @@ def residuals_from_products(paths, off_through=None, delay_key=DEFAULT_DELAY_KEY
 
 def budget_from_products(npz_path: str | Path, off_through: str | None = None,
                          delay_key: str = DEFAULT_DELAY_KEY,
-                         floor_percentile: float = 90.0,
-                         trim_percentile: float = 90.0,
+                         floor_percentile: float = DEFAULT_FLOOR_PERCENTILE,
+                         trim_percentile: float = DEFAULT_TRIM_PERCENTILE,
                          off_from: str | None = None,
                          **ct_kwargs):
     """One call: shelf statistics, correlation time, and the assembled budget.
@@ -1453,7 +1506,8 @@ def mask_benefit(channel, f, r_unmasked, r_masked) -> MaskDecision:
 
 
 def threshold_sweep(npz_path, off_through=None, etas=None,
-                    delay_key=DEFAULT_DELAY_KEY, floor_percentile=90.0,
+                    delay_key=DEFAULT_DELAY_KEY,
+                    floor_percentile=DEFAULT_FLOOR_PERCENTILE,
                     tau_intraday=None, floor_db=None,
                     min_kept: int = MIN_THRESHOLD_SWEEP_KEPT_FRAMES,
                     off_from=None):
@@ -1490,7 +1544,7 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
     else:
         on, off = valid, valid & ~d["reject_mask"][:, 0].astype(bool)
     fin_off = off & np.isfinite(shelf)
-    if on.sum() < 50:
+    if on.sum() < MIN_REFERENCE_SWEEP_FRAMES:
         return []
     if floor_db is None:
         # The internal floor obeys the same bar as kept_frame_floor: a null
@@ -1522,7 +1576,12 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
 
     r_un = r_of(float(lin[on].mean()))
     if etas is None:
-        etas = np.concatenate([[1.0], np.geomspace(1.05, 500.0, 24)])
+        point, start, stop, count = _policy_value(
+            "archive_reference.raw_eta_grid")
+        etas = np.concatenate([
+            [float(point)],
+            np.geomspace(float(start), float(stop), int(count)),
+        ])
     out = []
     for eta in etas:
         keep = on & (F <= eta * mu0)
