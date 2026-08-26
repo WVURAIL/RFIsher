@@ -61,7 +61,7 @@ ERA_PRODUCT_PINS = {
          "9f3e63e5ad81ba39d085abe5f725cc5c53d9d7a175724158c6d84230f7e1a38f"),
 }
 ERA_SOURCE_PIN = (
-    "a6a8bafebab00aad326bc7056c7d6ec16a289064f938732449b1b884c2c995e7")
+    "5c92cea44fa00c495a71a304467614f978c2af16e67d0c6881890d89d21c893e")
 ERA_PRODUCT_SCHEMA = "pilotproxy_detector_datatrawl_v3"
 ERA_VALUE_PINS = {
     32: {
@@ -93,16 +93,16 @@ ERA_VALUE_PINS = {
 }
 WORLD_BANK_PINS = {
     "none": ("fisher_bank_chime2022_pres_dense.npz",
-             "70e1be4ae7141fb735be3ff96430c6c264e86a4e52d2b3acdc0ce945db24e744",
+             "1717cd3b73089b9c0510bdc12d08b8536961da93fc7218df13eb8e133ffe2288",
              None),
     "peak1": ("fisher_bank_chime2022_pres_kfg22_dense.npz",
-              "7e834c8f4b5e19b4bbac472f25f2a69ea2805f7aa49ea148657fcc7a3e4b14bf",
+              "b112825024aa294216432b08eddd225ea5a2480cf59004885e190fcb4aaa0e8a",
               22.0),
     "peak2": ("fisher_bank_chime2022_pres_kfg44_dense.npz",
-              "d93e671f4ff8d4bbd65494174ddb8a1b24cd0d7606774f6aebe5b1745719a95b",
+              "f57fc323617b05852086499c964c4326f390fb5c6338a645ebfb0efb2185069a",
               44.0),
     "deployed": ("fisher_bank_chime2022_pres_kfg80_dense.npz",
-                  "51d209c38df6aada3bc1094b715d89d4fcb94b240414dc745fb14a05b65e0dd4",
+                  "e201e3517510305041a894dc1ea16d027cf4a53ed14cd2cd5b60d6a2f43c86a6",
                   80.0),
 }
 WORLD_PRODUCT_PINS = {
@@ -113,9 +113,9 @@ WORLD_PRODUCT_PINS = {
          "5bc12254565cc414e6e72d7e3217c8d51c4f9bc92f41b62d2be59037abd86c83"),
     35: ERA_PRODUCT_PINS[35],
 }
-WORLD_SOURCE_COMMIT = "7f772492a83ac130315544446d0b09379c07e599"
+WORLD_SOURCE_COMMIT = "abba22a2c2a489a712ea0f21f794139a987935cf"
 WORLD_SOURCE_SHA256 = (
-    "b94bfb2426bfcc7b40c32f567b167fb52905e3db97967d2158647dd72f9db281")
+    "4cc1bcd4662e3026b4ea5f5565aad8853814bbdb12b8cd0fbe006fbf04fb7bb4")
 WORLD_BACKEND_COMMIT = "f6bc9ea0972028ce30472dd21b25d4b21b7068c0"
 WORLD_BACKEND_SHA256 = (
     "efad0173be49d51679cf98071ccd1dfccd386dc9b2774e202164086347a4c2cf")
@@ -123,7 +123,7 @@ WORLD_SUPPRESSION_DB = {
     "none": 0.0, "peak1": 3.6, "peak2": 8.2, "deployed": 11.4,
 }
 WORLD_ROWS_SHA256 = (
-    "90b2c542b60eb5ef27737d546837a7f11e2f9e3b5535e28d5466b1579169d01e")
+    "a10ae66dd4ea76a9997770e4dd8973a4bd225e09013f7b1b41bd4766119e3a01")
 
 
 # ---------------------------------------------------------------- normalize
