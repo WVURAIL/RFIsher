@@ -26,13 +26,13 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import api, channels, residual as R, scenarios
+from rfisher import api, channels, residual, scenarios
 from rfisher.resources import DEFAULT_BANK
-from rfisher.constants import HI_REST_FREQUENCY_MHZ
+from rfisher.constants import CHIME_FRAME_SECONDS, HI_REST_FREQUENCY_MHZ
 
 TAU_GRID = np.array([
-    R.CHIME_FRAME_SECONDS, 1.0, 10.0, 60.0, 300.0, 900.0, 3600.0,
-    4 * 3600.0, 12 * 3600.0, R.MAX_TAU_C_SECONDS,
+    CHIME_FRAME_SECONDS, 1.0, 10.0, 60.0, 300.0, 900.0, 3600.0,
+    4 * 3600.0, 12 * 3600.0, residual.MAX_TAU_C_SECONDS,
 ])
 TAU_LABEL = ["frame", "1 s", "10 s", "1 min", "5 min", "15 min", "1 hr",
              "4 hr", "12 hr", "1 sid.day"]
@@ -50,8 +50,8 @@ def main() -> int:
                     help="percentile of the null-epoch shelf used as the "
                          "kept-frame bound (default 90; 50 is the median "
                          "floor and is not a bound)")
-    ap.add_argument("--delay", default=R.DEFAULT_DELAY_KEY,
-                    choices=sorted(R.DELAY_SUPPRESSION_DB),
+    ap.add_argument("--delay", default=residual.DEFAULT_DELAY_KEY,
+                    choices=sorted(residual.DELAY_SUPPRESSION_DB),
                     help="which BAO feature the delay filter must preserve")
     ap.add_argument("--tau-intraday", type=float, default=None,
                     help="fix the intra-day correlation time [s] instead of "
@@ -69,9 +69,9 @@ def main() -> int:
     print("MEASURED TERMS (from the survey products)")
     print("=" * 72)
     for p in args.npz:
-        st = R.shelf_statistics(p, off_through=args.off_through,
-                                floor_percentile=args.floor_percentile)
-        ct = R.correlation_time(p, off_through=args.off_through)
+        st = residual.shelf_statistics(p, off_through=args.off_through,
+                                       floor_percentile=args.floor_percentile)
+        ct = residual.correlation_time(p, off_through=args.off_through)
         stats.append(st)
         corrs.append(ct)
         print(st.summary())
@@ -85,13 +85,13 @@ def main() -> int:
 
     print("=" * 72)
     print(f"CHAIN (delay = {args.delay}, "
-          f"{R.DELAY_SUPPRESSION_DB[args.delay]:.1f} dB)")
+          f"{residual.DELAY_SUPPRESSION_DB[args.delay]:.1f} dB)")
     print("=" * 72)
     worst = max(usable, key=lambda s: s.floor_db)
     worst_ct = corrs[stats.index(worst)]
     tau_star = (args.tau_intraday if args.tau_intraday
                 else worst_ct.tau_for_budget)
-    print(R.budget_from_statistics(
+    print(residual.budget_from_statistics(
         worst, args.delay, tau_intraday=tau_star, corr=worst_ct,
         tau_measured=(worst_ct.is_measured and not args.tau_intraday)).chain())
     print()
@@ -123,10 +123,9 @@ def main() -> int:
             args.target)
         rows = []
         for tau in TAU_GRID:
-            n = R.n_coh_from_correlation_time(float(tau))
-            b = R.budget_from_statistics(worst, args.delay,
-                                         tau_intraday=float(tau),
-                                         corr=worst_ct)
+            n = residual.n_coh_from_correlation_time(float(tau))
+            b = residual.budget_from_statistics(
+                worst, args.delay, tau_intraday=float(tau), corr=worst_ct)
             sc = scenarios.legacy_rate_table_scenario(
                 residuals={c: b.ratio for c in dtv_chans})
             h = fc.required_hours_metric(
@@ -192,8 +191,8 @@ def main() -> int:
 
 def _worst_dtv_bin(bank) -> int:
     """Index of the redshift bin most fully covered by the ATSC DTV band."""
-    from rfisher import channels as chn
-    lo_dtv, hi_dtv = chn.channel_edges(14)[0], chn.channel_edges(36)[1]
+    lo_dtv, hi_dtv = (
+        channels.channel_edges(14)[0], channels.channel_edges(36)[1])
     best, frac_best = 0, -1.0
     for i in range(bank.nbins):
         nu_lo = HI_REST_FREQUENCY_MHZ / (1.0 + bank.zs[i + 1])

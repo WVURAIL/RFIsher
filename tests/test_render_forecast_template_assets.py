@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 
+import matplotlib
 import pytest
 
 
@@ -19,6 +20,9 @@ _MISSING_TOOLS = [t for t in FIGURE_TOOLCHAIN if shutil.which(t) is None]
 requires_figure_toolchain = pytest.mark.skipif(
     bool(_MISSING_TOOLS),
     reason="dissertation figure audit needs: " + ", ".join(_MISSING_TOOLS))
+requires_release_renderer = pytest.mark.skipif(
+    matplotlib.__version__ != "3.11.1",
+    reason="frozen release assets require Matplotlib 3.11.1")
 SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -170,6 +174,7 @@ def test_dated_manifest_is_complete_and_self_consistent():
 
 
 @requires_figure_toolchain
+@requires_release_renderer
 def test_dated_renderer_reproduces_the_released_assets(tmp_path):
     figure = tmp_path / "forecast_completion_channel_tolerances.png"
     table = tmp_path / "forecast_completion_template_summary.tex"

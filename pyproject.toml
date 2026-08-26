@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rfisher"
-version = "2.0.0"
+version = "3.0.0"
 description = "RFIsher maps masking and contamination residuals to Fisher-forecast science costs."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,19 +21,30 @@ dependencies = [
 # cosmology package on anyone who just wanted to run a forecast.
 [project.optional-dependencies]
 pk = ["camb"]
-test = ["pytest"]
+test = ["jsonschema", "pytest", "ruff"]
 
 [project.scripts]
 rfisher-forecast = "rfisher.cli:forecast_main"
 rfisher-build-bank = "rfisher.cli:build_bank_main"
-baonoise-forecast = "rfisher.cli:legacy_forecast_main"
-baonoise-build-bank = "rfisher.cli:legacy_build_bank_main"
+
+[project.urls]
+Documentation = "https://github.com/WVURAIL/RFIsher/tree/main/docs"
+Issues = "https://github.com/WVURAIL/RFIsher/issues"
+Repository = "https://github.com/WVURAIL/RFIsher"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = false
 
 [tool.setuptools.package-data]
 "rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E9", "F", "N"]
+ignore = ["N802", "N803", "N806", "N816", "N818"]

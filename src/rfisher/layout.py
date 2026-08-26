@@ -90,30 +90,3 @@ def build_nx_file(outfile: str | Path, ncyl: int = 5, nfeed: int = 256,
     outfile.parent.mkdir(parents=True, exist_ok=True)
     np.savetxt(outfile, np.column_stack([x, n_x]))
     return outfile
-
-
-def ensure_chime_nx(data_dir: str | Path,
-                    layout: str = "bull2015") -> Path:
-    """Return an RFIsher-owned CHIME n(x) path, generating it if needed.
-
-    layout='bull2015'  : 5 cyl x 256 feeds, 80 m  (RadioFisher paper spec)
-    layout='asbuilt'   : 4 cyl x 256 feeds, 22 m spacing, 78 m instrumented
-
-    RadioFisher's historical root-level ``array_config`` directory is not an
-    input. Forecast adapters bind Bull-2015 explicitly to RFIsher's packaged
-    synthetic table, so an unrelated checkout file cannot change the science.
-    """
-    if layout not in LAYOUTS:
-        raise ValueError(f"unknown layout: {layout}; choose from {sorted(LAYOUTS)}")
-    data_dir = Path(data_dir)
-    spec = LAYOUTS[layout]
-    if layout == "bull2015":
-        out = data_dir / "nx_CHIME_800_synth.dat"
-    else:
-        out = data_dir / "nx_CHIME_800_asbuilt.dat"
-    if not out.exists():
-        build_nx_file(
-            out, ncyl=spec.ncyl, nfeed=spec.nfeed,
-            cyl_spacing=spec.cyl_spacing_m, cyl_length=spec.cyl_length_m,
-            ddish=spec.cylinder_width_m)
-    return out

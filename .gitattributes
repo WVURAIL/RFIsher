@@ -7,6 +7,7 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.cff text eol=lf
+requirements/*.txt text eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf
 out/*.csv text eol=lf
@@ -24,3 +25,7 @@ out/forecast_completion_*.json text eol=lf
 out/forecast_completion_*.csv text eol=lf
 out/forecast_completion_*.tex text eol=lf
 out/forecast_completion_*.txt text eol=lf
+out/forecast_completion_*/*.json text eol=lf
+out/forecast_completion_*/*.csv text eol=lf
+out/forecast_completion_*/*.tex text eol=lf
+out/forecast_completion_*/*.txt text eol=lf

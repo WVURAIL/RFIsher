@@ -119,7 +119,7 @@ import numpy as np  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from ppcal import era_view as _probe  # noqa: F401
+    from ppcal import era_view  # noqa: F401
 except ImportError as exc:                # pragma: no cover - setup guidance
     raise SystemExit(
         "this script reads per-pilot products through the calibration package "
@@ -130,24 +130,23 @@ except ImportError as exc:                # pragma: no cover - setup guidance
         "  export PP_SRC=~/rail/pilot-proxy/src\n"
         f"underlying import error: {exc}") from exc
 
-from rfisher import residual as res  # noqa: E402
+from rfisher import residual  # noqa: E402
 from rfisher import selection_policy  # noqa: E402
-from rfisher import thresholds as threshold_rules  # noqa: E402
-from rfisher import tolerances as tolerance_source  # noqa: E402
+from rfisher import thresholds  # noqa: E402
+from rfisher import tolerances  # noqa: E402
+from rfisher.constants import CHIME_FRAME_SECONDS  # noqa: E402
 
-from ppcal import era_view as EV, eras as E  # noqa: E402
+from ppcal import eras  # noqa: E402
 from ppcal.calib import calibrate  # noqa: E402
 from ppcal.products import Channel, load_all, product_paths  # noqa: E402
-from rfisher.tolerances import TOL_APERP as TOL_APERP_STABLE  # noqa: E402
 from channel_tolerances import channel_tolerances  # noqa: E402
 
 _ETA_POINT, _ETA_START, _ETA_STOP, _ETA_COUNT = selection_policy.value(
     "archive_reference.calibrated_eta_geometric_segment")
 ETA_GRID = np.concatenate([
     [_ETA_POINT], np.geomspace(_ETA_START, _ETA_STOP, int(_ETA_COUNT))])
-FRAME_S = res.CHIME_FRAME_SECONDS
 FINE_DB = float(selection_policy.value("transfer.fine_stage_credit_db"))
-PLATEAU = threshold_rules.COST_PLATEAU
+PLATEAU = thresholds.COST_PLATEAU
 ERA_POINT_FIELDS = (
     "channel", "era", "eta_basis", "masked_fraction", "r_over_rtol",
     "best_cost_masked_fraction", "best_cost_r_over_rtol", "tau_seconds",
@@ -156,14 +155,6 @@ ERA_POINT_FIELDS = (
     "product_sha256", "product_schema", "detector_version",
     "generator_sha256", "analysis_source_sha256",
 )
-CAP_ALIAS_STEMS = (
-    "eta_cost", "mask_cost", "penalty_cost", "r_cost", "r_unmasked",
-    "r_floor", "eta_dilation", "mask_dilation", "penalty_dilation",
-    "r_dilation", "eta_growth", "mask_growth", "penalty_growth",
-    "r_growth",
-)
-
-
 def load_channels(directory, only=None):
     """Load all channels, or only the requested physical channels."""
     if only is None:
@@ -205,12 +196,12 @@ def analysis_source_sha256():
     """Hash the source files used by this export."""
     sources = {
         "generator": __file__,
-        "rfisher.residual": res.__file__,
+        "rfisher.residual": residual.__file__,
         "rfisher.selection_policy": selection_policy.__file__,
-        "rfisher.thresholds": threshold_rules.__file__,
-        "rfisher.tolerances": tolerance_source.__file__,
-        "ppcal.era_view": EV.__file__,
-        "ppcal.eras": E.__file__,
+        "rfisher.thresholds": thresholds.__file__,
+        "rfisher.tolerances": tolerances.__file__,
+        "ppcal.era_view": era_view.__file__,
+        "ppcal.eras": eras.__file__,
         "ppcal.calib": inspect.getsourcefile(calibrate),
         "ppcal.products": inspect.getsourcefile(Channel),
         "channel_tolerances": inspect.getsourcefile(channel_tolerances),
@@ -241,12 +232,6 @@ def eta1_row(rows):
     if len(matches) != 1:
         raise ValueError("the calibrated eta_mu=1 row is unavailable")
     return matches[0]
-
-
-def add_cap_aliases(rec):
-    """Keep the calibration table's established column names."""
-    for stem in CAP_ALIAS_STEMS:
-        rec[f"{stem}_cap"] = rec.get(f"{stem}_adopted", "")
 
 
 def era_point_record(rec):
@@ -326,9 +311,9 @@ def r_tolerances():
     derived = channel_tolerances()
     out = {}
     for ch, rec in derived.items():
-        dil = TOL_APERP_STABLE.get(ch, rec["aperp"])
+        dil = tolerances.TOL_APERP.get(ch, rec["aperp"])
         out[ch] = (dil, rec["fs8"], rec["z_low"], rec["z_high"],
-                   ch in TOL_APERP_STABLE)
+                   ch in tolerances.TOL_APERP)
     return out
 
 
@@ -338,7 +323,7 @@ def sweep(c, segs, fmask, mu, tau):
     floor_policy = selection_policy.quiet_floor_kwargs()
     floor_percentile = float(floor_policy["percentile"])
     floor_label = f"p{floor_percentile:g}"
-    floor_db, floor_era, n_floor = EV.quiet_era_floor_db(
+    floor_db, floor_era, n_floor = era_view.quiet_era_floor_db(
         c, segs, **floor_policy)
     if np.isfinite(floor_db):
         note = "floor from era %s (%d frames, %s %.2f dB)" % (
@@ -351,7 +336,7 @@ def sweep(c, segs, fmask, mu, tau):
         }
     else:
         try:
-            fp = res.floor_provenance(c.path)
+            fp = residual.floor_provenance(c.path)
             floor_db = fp.sigma_implied_db
             note = ("floor substituted: sigma-implied %.2f dB (no quiet era)"
                     % floor_db)
@@ -367,9 +352,10 @@ def sweep(c, segs, fmask, mu, tau):
                 "floor_frames": "", "floor_db": "",
             }
     try:
-        with EV.era_product_view(c, fmask) as view:
-            rows = res.threshold_sweep(view, etas=ETA_GRID * scale,
-                                       tau_intraday=tau, floor_db=floor_db)
+        with era_view.era_product_view(c, fmask) as view:
+            rows = residual.threshold_sweep(
+                view, etas=ETA_GRID * scale,
+                tau_intraday=tau, floor_db=floor_db)
     except Exception as exc:                       # noqa: BLE001
         return [], "sweep failed: %s" % exc, floor_info
     credit = 10.0 ** (FINE_DB / 10.0)
@@ -420,8 +406,8 @@ def main(argv=None):
           % ("ch", "z range", "r_tol_dil", "r_tol_gro", "eta_cost", "mask",
              "penalty", "r/r_dil", "eta_feas", "mask", "tau"))
     for c in sorted(load_channels(args.products, only), key=lambda c: c.ch):
-        segs = E.segment(c, **selection_policy.era_kwargs())
-        fmask = E.final_era_frame_mask(c, segs)
+        segs = eras.segment(c, **selection_policy.era_kwargs())
+        fmask = eras.final_era_frame_mask(c, segs)
         cal = calibrate(c, fmask, segs[-1].label, 0)
         dil, gro, z_lo, z_hi, published = tol.get(
             c.ch, (float("nan"),) * 2 + (float("nan"),) * 2 + (False,))
@@ -433,8 +419,8 @@ def main(argv=None):
                    analysis_source_sha256=source_digest,
                    **product_identity(c.path))
         try:
-            with EV.era_product_view(c, fmask) as view:
-                corr = res.correlation_time(view)
+            with era_view.era_product_view(c, fmask) as view:
+                corr = residual.correlation_time(view)
             rec["tau_seconds"] = float(corr.tau_for_budget)
             rec["tau_measured"] = bool(corr.is_measured)
             rec["tau_quality"] = corr.quality
@@ -445,7 +431,7 @@ def main(argv=None):
             rec["tau_reason"] = str(exc)
         rec["residual_basis"] = residual_basis(rec["tau_quality"])
 
-        for tag, tau in (("adopted", None), ("thermal", FRAME_S)):
+        for tag, tau in (("adopted", None), ("thermal", CHIME_FRAME_SECONDS)):
             s, note, floor_info = sweep(c, segs, fmask, cal.mu, tau)
             rec.update(floor_info)
             if note:
@@ -483,8 +469,6 @@ def main(argv=None):
                     rec["penalty_" + pre] = pick["penalty"]
                     rec["r_" + pre] = pick["r_fine"]
 
-        add_cap_aliases(rec)
-
         def num(key, fmt):
             v = rec.get(key, "")
             return (fmt % v) if isinstance(v, float) else "-"
@@ -521,11 +505,6 @@ def main(argv=None):
             "penalty_dilation_adopted", "r_dilation_adopted",
             "eta_growth_adopted", "mask_growth_adopted",
             "penalty_growth_adopted", "r_growth_adopted",
-            "eta_cost_cap", "mask_cost_cap", "penalty_cost_cap",
-            "r_cost_cap", "r_unmasked_cap", "r_floor_cap",
-            "eta_dilation_cap", "mask_dilation_cap",
-            "penalty_dilation_cap", "r_dilation_cap", "eta_growth_cap",
-            "mask_growth_cap", "penalty_growth_cap", "r_growth_cap",
             "r_unmasked_thermal",
             "r_floor_thermal", "eta_dilation_thermal", "mask_dilation_thermal",
             "penalty_dilation_thermal", "r_dilation_thermal",

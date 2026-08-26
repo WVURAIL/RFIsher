@@ -19,12 +19,9 @@ replacement path, and until then its bridge status is recorded, not hidden.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import csv
 from collections import defaultdict
-import hashlib
 from pathlib import Path
-import string
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,36 +31,8 @@ import style
 DATA = Path(__file__).resolve().parent / "data"
 
 
-def _stable_subset_prefix(charset) -> str:
-    """Return a repeatable PDF font-subset tag."""
-    glyphs = "\0".join(sorted(str(name) for name in charset))
-    value = int.from_bytes(
-        hashlib.sha256(glyphs.encode("utf-8")).digest()[:8], "big")
-    letters = []
-    for _ in range(6):
-        value, index = divmod(value, 26)
-        letters.append(string.ascii_uppercase[index])
-    return "".join(letters) + "+"
-
-
-@contextlib.contextmanager
-def _stable_pdf_subset_tags():
-    """Use content-based tags where Matplotlib exposes its PDF hook."""
-    from matplotlib.backends.backend_pdf import PdfFile
-
-    original = vars(PdfFile).get("_get_subset_prefix")
-    if original is None:
-        yield
-        return
-    PdfFile._get_subset_prefix = staticmethod(_stable_subset_prefix)
-    try:
-        yield
-    finally:
-        PdfFile._get_subset_prefix = original
-
-
 def _save_pdf(fig, path: Path, *, title: str) -> Path:
-    with _stable_pdf_subset_tags():
+    with style.stable_pdf_subset_tags():
         return style.save(fig, path, title=title)
 
 

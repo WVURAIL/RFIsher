@@ -13,15 +13,13 @@ from rfisher import cli, scenarios, survey
 @pytest.mark.parametrize(
     "entrypoint,program",
     [(cli.forecast_main, "rfisher-forecast"),
-     (cli.build_bank_main, "rfisher-build-bank"),
-     (cli.legacy_forecast_main, "baonoise-forecast"),
-     (cli.legacy_build_bank_main, "baonoise-build-bank")],
+     (cli.build_bank_main, "rfisher-build-bank")],
 )
 def test_cli_version_matches_the_release(entrypoint, program, capsys):
     with pytest.raises(SystemExit) as excinfo:
         entrypoint(["--version"])
     assert excinfo.value.code == 0
-    assert capsys.readouterr().out == f"{program} 2.0.0\n"
+    assert capsys.readouterr().out == f"{program} 3.0.0\n"
 
 
 @pytest.mark.parametrize("config,cosmology", [

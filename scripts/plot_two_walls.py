@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 
 
-from rfisher import residual as R
+from rfisher import residual
 from rfisher import selection_policy
 from rfisher.plots import (
     CRITICAL, GRID, INK, INK2, MUTED, SERIES, SURFACE, _save, setup_style)
@@ -65,8 +65,8 @@ REPORT_TOLERANCE_LABEL = _TARGET_LABELS[REPORT_TOLERANCE_TARGET]
     selection_policy.value("archive_reference.two_walls_eta_grid"))
 ERA_POINTS = Path(__file__).resolve().parent / "dissertation" / "data" \
     / "bao_era_points.csv"
-from rfisher import products as P
-PATHS = P.paths(channels=CHANNELS)
+from rfisher import products
+PATHS = products.paths(channels=CHANNELS)
 # Story channels in color: ch33 (the one basis-sensitive feasible channel),
 # ch32 and ch35 (the reconciliation's two instructive removals), ch29 (the
 # tau_c-hostage contrast); everything else gray.
@@ -87,17 +87,17 @@ def channel_curve(ch, p):
     Floor and residual booking follow the package's one discipline
     (kept_frame_floor / surviving_components inside threshold_sweep).
     """
-    floor_db, evidence = R.kept_frame_floor(p)
+    floor_db, evidence = residual.kept_frame_floor(p)
     etas = np.concatenate([
         np.linspace(_LINEAR_START, _LINEAR_STOP, int(_LINEAR_COUNT)),
         np.geomspace(_GEOMETRIC_START, _GEOMETRIC_STOP,
                      int(_GEOMETRIC_COUNT)),
     ])
-    sweep = R.threshold_sweep(p, etas=etas, floor_db=floor_db)
+    sweep = residual.threshold_sweep(p, etas=etas, floor_db=floor_db)
     tol = REPORT_TOLERANCES[ch]
     pts = [(row["f"], row["r_masked"] / 10 ** (FINE_DB / 10) / tol,
             row["eta"]) for row in sweep]
-    corr = R.correlation_time(p)
+    corr = residual.correlation_time(p)
     return dict(ch=ch, pts=pts, stated_floor=(evidence == "stated"),
                 tau_bound=(corr.quality != "measured"))
 

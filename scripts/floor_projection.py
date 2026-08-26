@@ -28,8 +28,8 @@ import argparse
 import numpy as np
 
 
-from rfisher import products as _products
-from rfisher import residual as R
+from rfisher import products
+from rfisher import residual
 from rfisher import selection_policy
 from rfisher.tolerances import TOL_APERP, TOL_FS8
 
@@ -63,20 +63,20 @@ _PROJECTION_CREDITS = {
     "coarse": 0.0,
     "fine": FINE_GAIN_DB,
     "fine_plus_bao_peak1": (
-        FINE_GAIN_DB + R.DELAY_SUPPRESSION_DB["bao_peak1"]),
+        FINE_GAIN_DB + residual.DELAY_SUPPRESSION_DB["bao_peak1"]),
     "fine_plus_bao_peak2": (
-        FINE_GAIN_DB + R.DELAY_SUPPRESSION_DB["bao_peak2"]),
+        FINE_GAIN_DB + residual.DELAY_SUPPRESSION_DB["bao_peak2"]),
 }
 if any(key not in _PROJECTION_CREDITS for key in PROJECTION_SCENARIOS):
     raise RuntimeError("floor-projection scenario is not defined")
 
 
 def channel_state(npz):
-    st = R.shelf_statistics(npz)
-    corr = R.correlation_time(npz)
+    st = residual.shelf_statistics(npz)
+    corr = residual.correlation_time(npz)
     # One booking for the whole package: a refused tau_c takes no
     # ground-filter credit (see residual.surviving_components).
-    gain = sum(f * n for f, n in R.surviving_components(st, corr))
+    gain = sum(f * n for f, n in residual.surviving_components(st, corr))
     return st, corr, gain
 
 
@@ -88,7 +88,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--products", nargs="+",
-                    default=[p for _c, p in sorted(_products.paths(
+                    default=[p for _c, p in sorted(products.paths(
                         channels=DEFAULT_CHANNELS,
                         announce=False).items())])
     args = ap.parse_args(argv)
@@ -155,7 +155,7 @@ def main(argv=None):
         # channel the assumed timescale narrows the cap but the invalidated
         # split stays uncredited at the reference timescale.
         g2 = sum(f * n for f, n in
-                 R.surviving_components(
+                 residual.surviving_components(
                      st, corr, tau_intraday=tau_reference))
         tolerance = TOLERANCES[st.channel]
         for label, extra in (("as-is", 0.0), ("+fine", FINE_GAIN_DB)):

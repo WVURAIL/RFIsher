@@ -45,12 +45,12 @@ def _render_figures(path: Path, hash_seed: str) -> None:
 def test_stable_subset_prefix_uses_glyph_content():
     sys.path.insert(0, str(FIGURE_DIR))
     try:
-        import figures
+        import style
     finally:
         sys.path.pop(0)
 
-    first = figures._stable_subset_prefix(["alpha", "beta", "gamma"])
-    second = figures._stable_subset_prefix(["gamma", "alpha", "beta"])
+    first = style.stable_subset_prefix(["alpha", "beta", "gamma"])
+    second = style.stable_subset_prefix(["gamma", "alpha", "beta"])
     assert first == second
     assert re.fullmatch(r"[A-Z]{6}\+", first)
 

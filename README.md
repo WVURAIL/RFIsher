@@ -153,7 +153,6 @@ git clone https://github.com/WVURAIL/RFIsher
 cd RFIsher
 python -m pip install -e ".[test]"
 python -m pytest tests/ -q
-python scripts/verify_bank.py
 python scripts/check_paper_numbers.py
 ```
 
@@ -166,8 +165,9 @@ rfisher-build-bank --help
 ```
 
 RadioFisher is needed only to build a bank or perform direct backend
-validation. See [reproducibility](docs/reproducibility.md) for the pinned
-checkout and exact commands.
+validation. After installing the pinned checkout, run
+`python scripts/verify_bank.py`. See
+[reproducibility](docs/reproducibility.md) for the exact setup.
 
 ## Project boundary
 

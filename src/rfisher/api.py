@@ -45,7 +45,7 @@ def load(bank: str | Path | None = None, *, cosmology: str | None = None,
     rf = None
     resolved_rf_dir = None
     if style == "shared_A" or rf_dir is not None:
-        from .compat import import_radiofisher
+        from .backend import import_radiofisher
         rf, resolved_rf_dir = import_radiofisher(rf_dir)
     return _forecast.Forecast(b, rf, style=style, rf_dir=resolved_rf_dir)
 
@@ -291,17 +291,6 @@ def masking_cost_curve(fc: _forecast.Forecast, fracs=None,
     return fracs, yrs
 
 
-def tolerance_curve(fc: _forecast.Forecast, fracs=None,
-                    band: _scenarios.FrequencyBand = _scenarios.DTV_BAND,
-                    target: float = 5.0, zbin: int | None = None,
-                    duty: float = 1.0,
-                    hours_per_year: float = _survey.OVERVIEW_ONSKY_YEAR_HOURS):
-    """Compatibility name for :func:`masking_cost_curve`."""
-    return masking_cost_curve(
-        fc, fracs=fracs, band=band, target=target, zbin=zbin, duty=duty,
-        hours_per_year=hours_per_year)
-
-
 def threshold_curve(fc: _forecast.Forecast, operating_points: dict,
                     target: float = 5.0, zbin: int | None = None,
                     duty: float = 1.0, mode: str = "time",
@@ -319,24 +308,24 @@ def threshold_curve(fc: _forecast.Forecast, operating_points: dict,
     :func:`masking_cost_curve` this has an interior minimum: the threshold that
     minimises total time to the target.
 
-    Returns ``{'eta': [...], 'years': [...], 'penalty': [...],
-    'best_eta': ..., 'best_years': ...}``. A threshold whose residual makes
-    the target unreachable yields ``inf`` rather than being dropped, so the
-    caller can see where the wall is.
+    Returns ``{'thresholds': [...], 'years': [...], 'penalty': [...],
+    'best_threshold': ..., 'best_years': ...}``. A threshold whose residual
+    makes the target unreachable yields ``inf`` rather than being dropped, so
+    the caller can see where the wall is.
     """
     target = _positive_scalar(target, "target")
     duty = _positive_scalar(duty, "duty")
     hours_per_year = _positive_scalar(hours_per_year, "hours_per_year")
-    etas = sorted(operating_points)
+    thresholds = sorted(operating_points)
     zbin = None if zbin is None else _zbin_index(fc, zbin)
     bins = None if zbin is None else [zbin]
     clean_hours = fc.required_hours_metric(
         lambda t: fc.significance(_scenarios.clean(), t, bins=bins), target)
 
     years, penalty = [], []
-    for eta in etas:
+    for threshold in thresholds:
         sc = _scenarios.at_threshold(
-            operating_points[eta], eta=eta, mode=mode,
+            operating_points[threshold], threshold_label=threshold, mode=mode,
             excise_threshold=excise_threshold,
             residual_excise_threshold=residual_excise_threshold)
         h = fc.required_hours_metric(
@@ -348,12 +337,12 @@ def threshold_curve(fc: _forecast.Forecast, operating_points: dict,
 
     years = np.asarray(years)
     ibest = int(np.argmin(years)) if np.any(np.isfinite(years)) else -1
-    best_eta = etas[ibest] if ibest >= 0 else None
-    if isinstance(best_eta, np.generic):
-        best_eta = best_eta.item()
-    return dict(eta=np.asarray(etas), years=years,
+    best_threshold = thresholds[ibest] if ibest >= 0 else None
+    if isinstance(best_threshold, np.generic):
+        best_threshold = best_threshold.item()
+    return dict(thresholds=np.asarray(thresholds), years=years,
                 penalty=np.asarray(penalty),
-                best_eta=best_eta,
+                best_threshold=best_threshold,
                 best_years=(float(years[ibest]) if ibest >= 0 else np.inf),
                 target_sigma=target,
                 zbin="survey" if zbin is None else int(zbin))

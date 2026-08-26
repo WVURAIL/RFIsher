@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-import bias_tolerance as bt
+import bias_tolerance
 from rfisher import survey
 
 
@@ -199,12 +199,12 @@ def main(argv=None) -> int:
         parser.error("--zeta must be positive and finite")
 
     try:
-        bank = bt.load_bias_bank(
+        bank = bias_tolerance.load_bias_bank(
             args.bank, expected_epsilon_fg=0.0,
             rf_dir=args.radiofisher_dir)
     except ValueError as exc:
         parser.error(str(exc))
-    bins = bt.dtv_bin_indices(bank) if args.all_dtv_bins else [
+    bins = bias_tolerance.dtv_bin_indices(bank) if args.all_dtv_bins else [
         6 if args.bin is None else args.bin]
     if (not bins or len(set(bins)) != len(bins)
             or any(ibin < 0 or ibin >= bank.nbins for ibin in bins)):
@@ -219,26 +219,26 @@ def main(argv=None) -> int:
             f"need {grid_low:g}-{grid_high:g} hours, have "
             f"{bank.t_grid[0]:g}-{bank.t_grid[-1]:g}")
 
-    perbin = bt.PerBinAppendixAEstimator(bank)
-    combined = bt.OverviewCombinedMultibinEstimator(
+    perbin = bias_tolerance.PerBinAppendixAEstimator(bank)
+    combined = bias_tolerance.OverviewCombinedMultibinEstimator(
         bank, rf_dir=args.radiofisher_dir)
     reference_hours = (
         args.reference_years * survey.OVERVIEW_ONSKY_YEAR_HOURS)
     common = dict(
         bank=bank, bank_path=args.bank, bins=bins, zeta=args.zeta,
         stability_fraction=0.10, max_drift=1.2)
-    perbin_noise = bt.build_report(
+    perbin_noise = bias_tolerance.build_report(
         estimator=perbin, years=[args.reference_years],
         params=["aperp", "apar", "fs8"],
-        time_scaling=bt.NOISE_NORMALIZED_AT_EACH_TIME,
+        time_scaling=bias_tolerance.NOISE_NORMALIZED_AT_EACH_TIME,
         reference_hours=None, **common)
-    combined_noise = bt.build_report(
+    combined_noise = bias_tolerance.build_report(
         estimator=combined, years=args.years, params=["DV", "F", "fs8"],
-        time_scaling=bt.NOISE_NORMALIZED_AT_EACH_TIME,
+        time_scaling=bias_tolerance.NOISE_NORMALIZED_AT_EACH_TIME,
         reference_hours=None, **common)
-    combined_fixed = bt.build_report(
+    combined_fixed = bias_tolerance.build_report(
         estimator=combined, years=args.years, params=["DV", "F", "fs8"],
-        time_scaling=bt.FIXED_PHYSICAL_AT_REFERENCE_TIME,
+        time_scaling=bias_tolerance.FIXED_PHYSICAL_AT_REFERENCE_TIME,
         reference_hours=reference_hours, **common)
 
     ledgers = {
@@ -263,12 +263,13 @@ def main(argv=None) -> int:
         "schema": EVIDENCE_SCHEMA,
         "schema_version": 2,
         "implementation": {
-            "bias_tolerance_sha256": _file_sha256(Path(bt.__file__)),
+            "bias_tolerance_sha256": _file_sha256(
+                Path(bias_tolerance.__file__)),
             "evidence_runner_sha256": _file_sha256(Path(__file__)),
             "build_bank_wrapper_sha256": _file_sha256(
                 Path(__file__).with_name("build_bank.py")),
             "evidence_schema_sha256": _file_sha256(EVIDENCE_SCHEMA_PATH),
-            "report_schema": bt.REPORT_SCHEMA,
+            "report_schema": bias_tolerance.REPORT_SCHEMA,
         },
         "bank": bank_report,
         "reproducibility": {

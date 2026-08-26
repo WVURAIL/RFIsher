@@ -11,7 +11,10 @@ chapter.  This file also fixes the semantic palette and common line/axis rules.
 """
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import shutil
+import string
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -50,6 +53,34 @@ SERIES = [MEASURED, MODEL, CONDITIONAL, PURPLE, GOLD, PENDING]
 # The date identifies the frozen dissertation-export interface revision; it is
 # not intended to represent the wall-clock time of a local rebuild.
 PDF_METADATA_DATE = datetime(2026, 8, 12, tzinfo=timezone.utc)
+
+
+def stable_subset_prefix(charset) -> str:
+    """Return a repeatable PDF font-subset tag from glyph content."""
+    glyphs = "\0".join(sorted(str(name) for name in charset))
+    value = int.from_bytes(
+        hashlib.sha256(glyphs.encode("utf-8")).digest()[:8], "big")
+    letters = []
+    for _ in range(6):
+        value, index = divmod(value, 26)
+        letters.append(string.ascii_uppercase[index])
+    return "".join(letters) + "+"
+
+
+@contextlib.contextmanager
+def stable_pdf_subset_tags():
+    """Use content-based tags when Matplotlib exposes its PDF hook."""
+    from matplotlib.backends.backend_pdf import PdfFile
+
+    original = vars(PdfFile).get("_get_subset_prefix")
+    if original is None:
+        yield
+        return
+    PdfFile._get_subset_prefix = staticmethod(stable_subset_prefix)
+    try:
+        yield
+    finally:
+        PdfFile._get_subset_prefix = original
 
 
 def configure(*, require_tex: bool = True) -> None:

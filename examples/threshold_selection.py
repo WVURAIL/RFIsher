@@ -7,7 +7,7 @@ import numpy as np
 from rfisher.preparation import (CalibrationEvidence,
                                  prepare_threshold_family,
                                  select_prepared_threshold)
-from rfisher.thresholds import ALWAYS_MASKED_Q16, MULTIPLIER_ONE
+from rfisher.thresholds import ALWAYS_MASKED_Q16, Q16_SCALE
 
 
 def artifact_digest(label):
@@ -31,8 +31,8 @@ for year in (2024, 2025):
         stamps.extend([stamp] * 5)
 
 frame_count = len(stamps)
-pattern = [1, MULTIPLIER_ONE, 2 * MULTIPLIER_ONE,
-           ALWAYS_MASKED_Q16, MULTIPLIER_ONE]
+pattern = [1, Q16_SCALE, 2 * Q16_SCALE,
+           ALWAYS_MASKED_Q16, Q16_SCALE]
 requirements = pattern * (frame_count // len(pattern))
 
 # These drift values demonstrate the interface; they are not adopted limits.

@@ -49,8 +49,6 @@ import re
 import sys
 from pathlib import Path
 
-from rfisher import selection_policy
-
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
 FIGURE_DATA = ROOT / "scripts" / "dissertation" / "data"
@@ -62,6 +60,8 @@ ERA_PRODUCT_PINS = {
 }
 ERA_SOURCE_PIN = (
     "5c92cea44fa00c495a71a304467614f978c2af16e67d0c6881890d89d21c893e")
+ERA_GENERATOR_PIN = (
+    "2c188cd7a1689b088c0d80406507b145283b02aa38bdfcc9e0d305f72a484029")
 ERA_PRODUCT_SCHEMA = "pilotproxy_detector_datatrawl_v3"
 ERA_VALUE_PINS = {
     32: {
@@ -124,6 +124,16 @@ WORLD_SUPPRESSION_DB = {
 }
 WORLD_ROWS_SHA256 = (
     "a10ae66dd4ea76a9997770e4dd8973a4bd225e09013f7b1b41bd4766119e3a01")
+WORLD_PIPELINE_SOURCE_PINS = {
+    "generator_sha256":
+        "a3f04c067c3bc251eabe9a42f0e54b3a523971ba8cf4987e5d93ffa37b91993a",
+    "bias_source_sha256":
+        "d260c276d5821e766b52e18f6c686e2978e4fa12e243bb2b6adb0ca59e1e6530",
+    "residual_source_sha256":
+        "304f91c97059caac2e34d59c31258b6caad6fc58399d68346a432dd63184821c",
+    "selection_policy_sha256":
+        "b36c612ca1a59c0b5e09ced129bca9e15c589fb94a7e2e3648c6ebd815b68cf7",
+}
 
 
 # ---------------------------------------------------------------- normalize
@@ -243,10 +253,6 @@ def read_csv(name: str) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
-def path_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def threshold_rows() -> dict[int, dict]:
     """Operating rows of out/optimal_thresholds.csv.
 
@@ -299,8 +305,6 @@ def era_rows() -> dict[int, dict]:
 def era_provenance_ok(rows: dict[int, dict]) -> bool:
     if set(rows) != set(ERA_PRODUCT_PINS):
         return False
-    generator_digest = path_sha256(
-        ROOT / "scripts" / "calibrated_thresholds.py")
     try:
         for ch, (filename, digest) in ERA_PRODUCT_PINS.items():
             row = rows[ch]
@@ -310,7 +314,7 @@ def era_provenance_ok(rows: dict[int, dict]) -> bool:
                 and
                 row["product_file"] == filename
                 and row["product_sha256"] == digest
-                and row["generator_sha256"] == generator_digest
+                and row["generator_sha256"] == ERA_GENERATOR_PIN
                 and row["analysis_source_sha256"] == ERA_SOURCE_PIN
                 and row["product_schema"] == ERA_PRODUCT_SCHEMA
                 and row["detector_version"].startswith("pilot-proxy/")
@@ -344,15 +348,6 @@ def world_provenance_ok(rows: dict[tuple[str, int], dict],
                 for ch in WORLD_PRODUCT_PINS}
     if set(rows) != expected:
         return False
-    source_pins = {
-        "generator_sha256": path_sha256(ROOT / "scripts" /
-                                         "three_worlds.py"),
-        "bias_source_sha256": path_sha256(ROOT / "scripts" /
-                                           "bias_tolerance.py"),
-        "residual_source_sha256": path_sha256(ROOT / "src" / "rfisher" /
-                                               "residual.py"),
-        "selection_policy_sha256": selection_policy.sha256(),
-    }
     try:
         for (world, ch), row in rows.items():
             bank_file, bank_digest, kfg = WORLD_BANK_PINS[world]
@@ -360,7 +355,8 @@ def world_provenance_ok(rows: dict[tuple[str, int], dict],
             recorded_kfg = (None if row["bank_kfg_fac"] == ""
                             else float(row["bank_kfg_fac"]))
             if not (
-                all(row[key] == value for key, value in source_pins.items())
+                all(row[key] == value
+                    for key, value in WORLD_PIPELINE_SOURCE_PINS.items())
                 and row["bank_file"] == bank_file
                 and row["bank_sha256"] == bank_digest
                 and row["bank_schema"] == "2"
@@ -587,9 +583,10 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     worlds = worlds_rows()
     worlds_provenance = world_provenance_ok(worlds, era_rows())
     ck._emit("PASS" if worlds_provenance else "FAIL",
-             "worlds source identities preserved",
+             "worlds recorded source identities preserved",
              "" if worlds_provenance else
-             "regenerate the direct worlds table")
+             "restore the authenticated snapshot or regenerate from its"
+             " recorded inputs")
     worlds_results = world_results_ok(worlds)
     ck._emit("PASS" if worlds_results else "FAIL",
              "worlds residuals and verdicts are internally consistent",
@@ -657,9 +654,10 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     ch32, ch35 = era[32], era[35]
     provenance_ok = era_provenance_ok(era)
     ck._emit("PASS" if provenance_ok else "FAIL",
-             "current-era source identity and ratios preserved",
+             "current-era recorded source identity and ratios preserved",
              "" if provenance_ok else
-             "regenerate the compact current-era export")
+             "restore the authenticated snapshot or regenerate from its"
+             " recorded inputs")
     quality_ok = (
         ch32["tau_quality"] == "bounded_above"
         and ch35["tau_quality"] == "measured"

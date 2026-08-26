@@ -52,13 +52,12 @@ case: a slice whose r reaches it is dropped rather than integrated through.
 """
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass, field
 from numbers import Integral
 
 import numpy as np
 
-from . import channels as chn
+from . import channels
 from ._validation import real_scalar
 from .constants import (CHIME_FREQUENCY_MAX_MHZ, CHIME_FREQUENCY_MIN_MHZ,
                         HI_REST_FREQUENCY_MHZ)
@@ -162,7 +161,8 @@ class FrequencyBand:
 
 
 DTV_BAND = FrequencyBand(
-    "dtv", chn.ATSC_CH14_LOWER_EDGE, chn.ATSC_DTV_UPPER_EDGE, label="DTV")
+    "dtv", channels.ATSC_CH14_LOWER_EDGE, channels.ATSC_DTV_UPPER_EDGE,
+    label="DTV")
 CHIME_BAND = FrequencyBand(
     "chime", CHIME_FREQUENCY_MIN_MHZ, CHIME_FREQUENCY_MAX_MHZ, label="CHIME")
 
@@ -245,7 +245,7 @@ class Scenario:
     def _physical_slices(self):
         """Yield non-overlapping ``(lo, hi, weight, excised)`` slices."""
         for ch in set(self.fractions) | set(self.residuals):
-            lo, hi = chn.channel_edges(ch)
+            lo, hi = channels.channel_edges(ch)
             yield lo, hi, self.keep_weight(ch), self.is_excised(ch)
         for band in set(self.frequency_fractions) | set(self.frequency_residuals):
             yield (band.nu_min_mhz, band.nu_max_mhz,
@@ -348,13 +348,13 @@ def clean() -> Scenario:
 
 
 def _masking_scenario(
-        rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
+        rates_csv=None, refused_fraction: float = channels.REFUSED_FRACTION,
         excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
         mode: str = "time", residuals: dict[int, float] | None = None,
         residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
         products=None, fill_missing: str = "error",
         since: str | None = None, until: str | None = None,
-        eta: float = 1.0, _warn_legacy: bool = False) -> Scenario:
+        eta: float = 1.0) -> Scenario:
     """Build a scenario from the legacy rate table or survey products.
 
     ``residuals`` optionally adds the contamination that survives the mask
@@ -391,21 +391,14 @@ def _masking_scenario(
             "beside reworked product fractions — two decisions in one "
             "table; use 'omit' or cover the missing channels with products")
     kw = {} if rates_csv is None else {"rates_csv": rates_csv}
-    table = chn.legacy_rate_table(refused_fraction=refused_fraction, **kw)
+    table = channels.legacy_rate_table(
+        refused_fraction=refused_fraction, **kw)
     label, name = "Legacy detector rate table", "legacy_rate_table"
-    if products is None and _warn_legacy and not table.is_occupancy_measurement:
-        warnings.warn(
-            "scenarios.measured() selected the legacy fs/2-mistuned rate "
-            "table, which does not measure DTV occupancy; use "
-            "legacy_rate_table_scenario() explicitly or pass products=... "
-            "to survey_product_scenario()",
-            UserWarning, stacklevel=2)
-
     if products is not None:
         label, name = "Survey-product mask", "survey_products"
-        prod = chn.mask_table_from_products(products,
-                                            refused_fraction=refused_fraction,
-                                            since=since, until=until, eta=eta)
+        prod = channels.mask_table_from_products(
+            products, refused_fraction=refused_fraction,
+            since=since, until=until, eta=eta)
         missing = sorted(set(table.fractions) - set(prod.fractions))
         if missing and fill_missing == "error":
             raise ValueError(
@@ -441,7 +434,7 @@ def _masking_scenario(
 
 
 def legacy_rate_table_scenario(
-        rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
+        rates_csv=None, refused_fraction: float = channels.REFUSED_FRACTION,
         excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
         mode: str = "time", residuals: dict[int, float] | None = None,
         residual_excise_threshold: float = NO_EXCISION_THRESHOLD) -> Scenario:
@@ -458,7 +451,7 @@ def legacy_rate_table_scenario(
 
 def survey_product_scenario(
         products, rates_csv=None,
-        refused_fraction: float = chn.REFUSED_FRACTION,
+        refused_fraction: float = channels.REFUSED_FRACTION,
         excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
         mode: str = "time", residuals: dict[int, float] | None = None,
         residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
@@ -473,30 +466,6 @@ def survey_product_scenario(
         residual_excise_threshold=residual_excise_threshold,
         products=products, fill_missing=fill_missing, since=since,
         until=until, eta=eta)
-
-
-def measured(rates_csv=None, refused_fraction: float = chn.REFUSED_FRACTION,
-             excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
-             mode: str = "time",
-             residuals: dict[int, float] | None = None,
-             residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
-             products=None, fill_missing: str = "error",
-             since: str | None = None, until: str | None = None,
-             eta: float = 1.0) -> Scenario:
-    """Compatibility constructor for legacy tables and survey products."""
-    if products is None:
-        return _masking_scenario(
-            rates_csv=rates_csv, refused_fraction=refused_fraction,
-            excise_threshold=excise_threshold, mode=mode,
-            residuals=residuals,
-            residual_excise_threshold=residual_excise_threshold,
-            fill_missing=fill_missing, since=since, until=until, eta=eta,
-            _warn_legacy=True)
-    return survey_product_scenario(
-        products, rates_csv=rates_csv, refused_fraction=refused_fraction,
-        excise_threshold=excise_threshold, mode=mode, residuals=residuals,
-        residual_excise_threshold=residual_excise_threshold,
-        fill_missing=fill_missing, since=since, until=until, eta=eta)
 
 
 def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",
@@ -539,7 +508,7 @@ def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",
 
 
 def at_threshold(per_channel: dict[int, tuple[float, float]],
-                 eta=None,
+                 threshold_label=None,
                  excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
                  residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
                  mode: str = "time") -> Scenario:
@@ -553,10 +522,12 @@ def at_threshold(per_channel: dict[int, tuple[float, float]],
     """
     fr = {int(c): float(v[0]) for c, v in per_channel.items()}
     rs = {int(c): float(v[1]) for c, v in per_channel.items()}
-    eta_text = None if eta is None else str(eta)
-    tag = "" if eta_text is None else f" (eta={eta_text})"
+    threshold_text = (None if threshold_label is None
+                      else str(threshold_label))
+    tag = ("" if threshold_text is None
+           else f" (threshold={threshold_text})")
     name, label = _mode_identity(
-        f"threshold{'' if eta_text is None else f'_{eta_text}'}",
+        f"threshold{'' if threshold_text is None else f'_{threshold_text}'}",
         f"Detector operating point{tag}", mode)
     return Scenario(name, label,
                     fractions=fr, residuals=rs,

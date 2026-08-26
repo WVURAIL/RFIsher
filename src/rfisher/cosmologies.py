@@ -14,8 +14,6 @@
 from __future__ import annotations
 
 import copy
-from numbers import Real
-
 import numpy as np
 
 from ._validation import nonnegative_scalar, positive_scalar

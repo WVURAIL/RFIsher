@@ -250,7 +250,7 @@ def test_synthetic_bundle_reloads_and_enters_preparation(tmp_path):
     assert loaded.manifest["calibration"]["anchor_bin"] == 0
     producer = loaded.manifest["producer"]
     assert producer["package"] == "rfisher"
-    assert producer["package_version"] == "2.0.0"
+    assert producer["package_version"] == "3.0.0"
     assert set(producer["source_files"]) == {
         "src/rfisher/residual_scores/bundle.py",
         "src/rfisher/thresholds.py",

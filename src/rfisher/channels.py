@@ -205,16 +205,6 @@ def legacy_rate_fractions(rates_csv: str | Path = DEFAULT_RATES_CSV,
     return dict(sorted(fractions.items()))
 
 
-def measured_mask_fractions(rates_csv: str | Path = DEFAULT_RATES_CSV,
-                            refused_fraction: float = REFUSED_FRACTION,
-                            rate_col: str = "hi_rate_all",
-                            weight_col: str = "n_valid_frames"
-                            ) -> dict[int, float]:
-    """Compatibility name for :func:`legacy_rate_fractions`."""
-    return legacy_rate_fractions(
-        rates_csv, refused_fraction, rate_col, weight_col)
-
-
 @dataclass
 class MaskTable:
     """Per-channel masked fractions, carrying the rule that produced them.
@@ -495,15 +485,6 @@ def legacy_rate_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
                f"not a rate"])
 
 
-def measured_mask_table(rates_csv: str | Path = DEFAULT_RATES_CSV,
-                        refused_fraction: float = REFUSED_FRACTION,
-                        rate_col: str = "hi_rate_all",
-                        weight_col: str = "n_valid_frames") -> MaskTable:
-    """Compatibility name for :func:`legacy_rate_table`."""
-    return legacy_rate_table(
-        rates_csv, refused_fraction, rate_col, weight_col)
-
-
 def merge_mask_tables(*tables: MaskTable) -> MaskTable:
     """Refuse to merge tables from different detectors. There is no valid
     merge: a forecast half from one stage and half from another is not a
@@ -548,10 +529,3 @@ def compare_mask_tables(a: MaskTable, b: MaskTable) -> list[tuple]:
         lo, hi = min(x, y), max(x, y)
         out.append((ch, x, y, (hi / lo) if lo > 0 else float("inf")))
     return sorted(out, key=lambda r: -r[3])
-
-
-def dtv_band(fractions: dict[int, float]) -> tuple[float, float]:
-    """Frequency range [MHz] spanned by the channels in a mask table."""
-    lo = min(channel_edges(ch)[0] for ch in fractions)
-    hi = max(channel_edges(ch)[1] for ch in fractions)
-    return lo, hi

@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from rfisher import fisherbank, residual_templates as templates
-from rfisher.compat import find_radiofisher_dir
+from rfisher import fisherbank, residual_templates
+from rfisher.backend import find_radiofisher_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 BIAS_SPEC = importlib.util.spec_from_file_location(
@@ -20,9 +20,9 @@ bias_tolerance = importlib.util.module_from_spec(BIAS_SPEC)
 BIAS_SPEC.loader.exec_module(bias_tolerance)
 
 
-@pytest.mark.parametrize("family", templates.FAMILIES)
+@pytest.mark.parametrize("family", residual_templates.FAMILIES)
 def test_named_templates_are_unit_normalized_callable_json(family):
-    template = templates.make_template(family)
+    template = residual_templates.make_template(family)
     k = np.array([[0.01], [0.10], [0.30]])
     u = np.array([[-1.0, 0.0, 1.0]])
     noise = np.full((3, 3), 7.0)
@@ -32,9 +32,9 @@ def test_named_templates_are_unit_normalized_callable_json(family):
     assert isinstance(template, dict)
     assert template["amplitude"] == 1.0
     assert template["normalization"] == "thermal_noise_at_evaluation_time"
-    assert template["template_api_version"] == templates.TEMPLATE_API_VERSION
+    assert template["template_api_version"] == residual_templates.TEMPLATE_API_VERSION
     assert template["implementation_sha256"] \
-        == templates.implementation_sha256()
+        == residual_templates.implementation_sha256()
     assert values.shape == noise.shape
     assert np.all(np.isfinite(values))
     assert np.all((values >= 0.0) & (values <= noise))
@@ -42,7 +42,7 @@ def test_named_templates_are_unit_normalized_callable_json(family):
 
 
 def test_noise_shaped_is_exactly_the_scalar_unit_response():
-    template = templates.make_template(templates.NOISE_SHAPED)
+    template = residual_templates.make_template(residual_templates.NOISE_SHAPED)
     noise = np.arange(1.0, 7.0).reshape(2, 3)
     assert np.array_equal(
         template(np.ones((2, 1)), np.ones((1, 3)), noise, noise * 2), noise)
@@ -50,18 +50,18 @@ def test_noise_shaped_is_exactly_the_scalar_unit_response():
 
 def test_template_parameters_refuse_unknown_or_duplicate_inputs():
     with pytest.raises(ValueError, match="does not accept"):
-        templates.make_template(templates.LOW_KPARALLEL, {"typo": 1.0})
+        residual_templates.make_template(residual_templates.LOW_KPARALLEL, {"typo": 1.0})
     with pytest.raises(ValueError, match="duplicated"):
-        templates.parse_parameter_assignments(["slope=1", "slope=2"])
+        residual_templates.parse_parameter_assignments(["slope=1", "slope=2"])
 
 
 def test_loaded_metadata_fails_closed_if_formula_identity_changes():
-    metadata = json.loads(json.dumps(templates.make_template(
-        templates.LOW_KPARALLEL)))
-    assert templates.validate_template_metadata(metadata) == metadata
+    metadata = json.loads(json.dumps(residual_templates.make_template(
+        residual_templates.LOW_KPARALLEL)))
+    assert residual_templates.validate_template_metadata(metadata) == metadata
     metadata["implementation_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="authenticated implementation"):
-        templates.validate_template_metadata(metadata)
+        residual_templates.validate_template_metadata(metadata)
 
 
 def test_named_template_builds_authenticated_response_bank_end_to_end(
@@ -71,8 +71,8 @@ def test_named_template_builds_authenticated_response_bank_end_to_end(
     except FileNotFoundError:
         pytest.skip("end-to-end template build requires RadioFisher")
 
-    template = templates.make_template(
-        templates.LOW_KPARALLEL,
+    template = residual_templates.make_template(
+        residual_templates.LOW_KPARALLEL,
         {"k_parallel_scale_mpc_inv": 0.04})
     output = tmp_path / "named-template-response.npz"
     fisherbank.build_bank(
@@ -86,8 +86,8 @@ def test_named_template_builds_authenticated_response_bank_end_to_end(
         "P_res"]
     assert "_Pres" in bank.paramnames
     assert bank.artifact_kind == fisherbank.ARTIFACT_BIAS_RESPONSE
-    assert templates.validate_template_metadata(recorded) == dict(template)
-    assert templates.validate_template_metadata(provenance_record) \
+    assert residual_templates.validate_template_metadata(recorded) == dict(template)
+    assert residual_templates.validate_template_metadata(provenance_record) \
         == dict(template)
     assert bank.meta["provenance"]["baonoise"]["working_tree_sha256"] \
         == fisherbank._git_state(
@@ -115,4 +115,4 @@ def test_named_template_builds_authenticated_response_bank_end_to_end(
 
 def test_no_empirical_or_sidereal_family_is_fabricated():
     assert not any("empirical" in family or "sidereal" in family
-                   for family in templates.FAMILIES)
+                   for family in residual_templates.FAMILIES)

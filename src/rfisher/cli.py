@@ -11,10 +11,10 @@ from . import __version__, api, resources, scenarios, survey
 from .fisherbank import build_bank
 
 
-def forecast_main(argv=None, *, prog: str = "rfisher-forecast") -> int:
+def forecast_main(argv=None) -> int:
     """Evaluate one uniform masking scenario and print machine-readable JSON."""
     parser = argparse.ArgumentParser(
-        prog=prog,
+        prog="rfisher-forecast",
         description="Evaluate a uniform RFI-masking scenario from a Fisher bank.")
     parser.add_argument("--version", action="version",
                         version=f"%(prog)s {__version__}")
@@ -49,15 +49,10 @@ def forecast_main(argv=None, *, prog: str = "rfisher-forecast") -> int:
     return 0
 
 
-def legacy_forecast_main(argv=None) -> int:
-    """Run the forecast command through its former name."""
-    return forecast_main(argv, prog="baonoise-forecast")
-
-
-def build_bank_main(argv=None, *, prog: str = "rfisher-build-bank") -> int:
+def build_bank_main(argv=None) -> int:
     """Generate a v2 bank without exposing the historical research scripts."""
     parser = argparse.ArgumentParser(
-        prog=prog,
+        prog="rfisher-build-bank",
         description="Generate a provenance-complete Fisher bank (slow).")
     parser.add_argument("--version", action="version",
                         version=f"%(prog)s {__version__}")
@@ -115,8 +110,3 @@ def build_bank_main(argv=None, *, prog: str = "rfisher-build-bank") -> int:
         config=args.config, cosmology=args.cosmology,
         expt_overrides=overrides or None)
     return 0
-
-
-def legacy_build_bank_main(argv=None) -> int:
-    """Run the bank command through its former name."""
-    return build_bank_main(argv, prog="baonoise-build-bank")

@@ -34,9 +34,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .constants import CHIME_FRAME_SECONDS
 from .npzio import load_npz
 
-FRAME_SECONDS = 16384 * 2.56e-6           # 41.94304 ms, upgraded backend
 MAD_TO_SIGMA = 1.4826
 DEFAULT_MAD_K = 1.8                       # CHIME overview paper, sec 3.2.3
 
@@ -261,7 +261,8 @@ def compare_flaggers(npz_path, mad_k: float = DEFAULT_MAD_K,
         n_blocks=len(blocks),
         block_med_frames=float(np.median(sizes)) if len(sizes) else 0.0,
         block_max_frames=int(sizes.max()) if len(sizes) else 0,
-        block_max_seconds=float(sizes.max() * FRAME_SECONDS) if len(sizes) else 0.0,
+        block_max_seconds=(
+            float(sizes.max() * CHIME_FRAME_SECONDS) if len(sizes) else 0.0),
         sk_n_accum=n_accum,
         sk_median=float(np.median(sk_values)) if sk_values.size else float("nan"),
     )

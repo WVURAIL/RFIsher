@@ -47,16 +47,16 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import residual as R
+from rfisher import residual
 from rfisher import selection_policy
 from rfisher import survey
 from rfisher.channels import channel_z_range
 from rfisher.npzio import load_npz
 
-spec = importlib.util.spec_from_file_location(
-    "bt", str(ROOT / "scripts" / "bias_tolerance.py"))
-bt = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(bt)
+bias_tolerance_spec = importlib.util.spec_from_file_location(
+    "bias_tolerance", str(ROOT / "scripts" / "bias_tolerance.py"))
+bias_tolerance = importlib.util.module_from_spec(bias_tolerance_spec)
+bias_tolerance_spec.loader.exec_module(bias_tolerance)
 
 _WORLD_SPECS = {
     "none": ("no filter (Fig. 31 baseline)",
@@ -77,7 +77,7 @@ if any(key not in _WORLD_SPECS for key in WORLD_KEYS):
     raise RuntimeError("three-worlds response scenario is not defined")
 WORLDS = [
     (key, _WORLD_SPECS[key][0], _WORLD_SPECS[key][1],
-     R.DELAY_SUPPRESSION_DB[_WORLD_SPECS[key][2]])
+     residual.DELAY_SUPPRESSION_DB[_WORLD_SPECS[key][2]])
     for key in WORLD_KEYS
 ]
 WORLD_KFG = {key: _WORLD_SPECS[key][3] for key in WORLD_KEYS}
@@ -95,7 +95,7 @@ EXPECTED_DENSE_GRID = np.unique(np.concatenate([
     np.logspace(_GRID1_START, _GRID1_STOP, int(_GRID1_COUNT)),
     10.0 ** np.linspace(_GRID2_START, _GRID2_STOP, int(_GRID2_COUNT)),
 ]))
-from rfisher import products as P
+from rfisher import products
 CHANNELS = tuple(int(value) for value in selection_policy.value(
     "archive_reference.three_worlds_channels"))
 Z_BIN = {
@@ -141,9 +141,9 @@ def write_rows(path, rows):
 
 
 def floor_details(path, ch):
-    off_through = R.SIGN_ON_OFF_THROUGH.get(ch)
-    off_from = R.SIGN_OFF_FROM.get(ch)
-    stats = R.shelf_statistics(
+    off_through = residual.SIGN_ON_OFF_THROUGH.get(ch)
+    off_from = residual.SIGN_OFF_FROM.get(ch)
+    stats = residual.shelf_statistics(
         path, off_through=off_through, off_from=off_from)
     if off_through is not None:
         epoch = f"through {off_through}"
@@ -162,7 +162,7 @@ def bank_identity(path, bank):
         "generator_sha256": file_sha256(__file__),
         "bias_source_sha256": file_sha256(ROOT / "scripts" /
                                            "bias_tolerance.py"),
-        "residual_source_sha256": file_sha256(R.__file__),
+        "residual_source_sha256": file_sha256(residual.__file__),
         "selection_policy_sha256": selection_policy.sha256(),
         "bank_file": Path(path).name,
         "bank_sha256": file_sha256(path),
@@ -191,9 +191,9 @@ def stable_minima(bank):
         refused = 0
         for yr in YEARS:
             t = yr * survey.OVERVIEW_ONSKY_YEAR_HOURS
-            dth, sig = bt.bias_per_unit_r(bank.F(ib, t), names)
+            dth, sig = bias_tolerance.bias_per_unit_r(bank.F(ib, t), names)
             for p in PARAMS:
-                drift, nsign = bt.stability(
+                drift, nsign = bias_tolerance.stability(
                     bank, ib, t, names, p, frac=STABILITY_FRACTION)
                 if drift <= MAXIMUM_TOLERANCE_RATIO and nsign == 1:
                     vals[p].append(sig[p] / abs(dth[p]))
@@ -208,7 +208,7 @@ def eta1_population(p, ch):
     d = load_npz(p)
     valid = d["valid"][:, 0].astype(bool)
     on = valid.copy()
-    off_from = R.SIGN_OFF_FROM.get(ch)
+    off_from = residual.SIGN_OFF_FROM.get(ch)
     if off_from is not None:
         unit_month = np.array([
             dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m")
@@ -223,14 +223,14 @@ def eta1_population(p, ch):
 def channel_r_eta1(p, ch):
     """Fine-stage residual at eta = 1, product-basis floor (as in the
     optimizer): the minimum-residual point of the threshold family."""
-    off_from = R.SIGN_OFF_FROM.get(ch)
+    off_from = residual.SIGN_OFF_FROM.get(ch)
     n_kept, n_valid = eta1_population(p, ch)
-    floor_db, floor_evidence = R.kept_frame_floor(p)
+    floor_db, floor_evidence = residual.kept_frame_floor(p)
     floor_epoch, floor_frames = floor_details(p, ch)
-    sweep = R.threshold_sweep(
+    sweep = residual.threshold_sweep(
         p, etas=np.array([POSITIVE_EXCESS_ETA]), floor_db=floor_db,
         off_from=off_from)
-    corr = R.correlation_time(p, off_from=off_from)
+    corr = residual.correlation_time(p, off_from=off_from)
     return {
         "r_fine": (sweep[0]["r_masked"] / 10 ** (FINE_DB / 10)
                    if sweep else None),
@@ -256,7 +256,7 @@ def unavailable_row(world, suppression_db, ch, tau_capped, status,
         tau_capped=tau_capped, residual_status=status,
         n_eta1_kept=result["n_eta1_kept"],
         n_eta1_valid=result["n_eta1_valid"],
-        min_eta1_kept=R.MIN_THRESHOLD_SWEEP_KEPT_FRAMES, r_fine=None,
+        min_eta1_kept=residual.MIN_THRESHOLD_SWEEP_KEPT_FRAMES, r_fine=None,
         **bank_info,
         **{field: result[field] for field in PRODUCT_FIELDS},
         **{f"tol_{p}": tolerances[p] for p in PARAMS},
@@ -305,7 +305,7 @@ def main(argv=None):
             f"{kfg} --dense-knee --out data/{filename}"
         )
         try:
-            bank = bt.load_bias_bank(
+            bank = bias_tolerance.load_bias_bank(
                 args.bank_dir / filename, build_command=command,
                 expected_kfg_fac=expected_kfg, expected_epsilon_fg=0.0)
             validate_world_bank(bank)
@@ -314,7 +314,7 @@ def main(argv=None):
             ap.error(f"{exc}\nBuild the exact prerequisite with:\n  {command}")
 
     rows = []
-    paths = P.paths(channels=sorted(Z_BIN))
+    paths = products.paths(channels=sorted(Z_BIN))
     missing_products = sorted(set(Z_BIN) - set(paths))
     if missing_products:
         ap.error(
@@ -363,7 +363,8 @@ def main(argv=None):
                              residual_status=result["residual_status"],
                              n_eta1_kept=result["n_eta1_kept"],
                              n_eta1_valid=result["n_eta1_valid"],
-                             min_eta1_kept=R.MIN_THRESHOLD_SWEEP_KEPT_FRAMES,
+                             min_eta1_kept=(
+                                 residual.MIN_THRESHOLD_SWEEP_KEPT_FRAMES),
                              r_fine=r,
                              **bank_info,
                              **{field: result[field]

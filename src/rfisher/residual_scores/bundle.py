@@ -14,10 +14,10 @@ import tempfile
 
 import numpy as np
 
-from .. import __version__ as PACKAGE_VERSION
+from .. import __version__
 from ..preparation import prepare_threshold_family
 from ..thresholds import (ALWAYS_MASKED_Q16, MAX_MULTIPLIER_Q16,
-                          MULTIPLIER_ONE)
+                          Q16_SCALE)
 
 
 RESIDUAL_SCORE_BUNDLE_SCHEMA = "rfisher_residual_score_bundle_v1"
@@ -84,7 +84,7 @@ def _producer_record() -> dict[str, object]:
     return {
         "schema_version": _PRODUCER_SCHEMA,
         "package": "rfisher",
-        "package_version": PACKAGE_VERSION,
+        "package_version": __version__,
         "source_files": files,
         "source_sha256": digest.hexdigest(),
     }
@@ -291,7 +291,7 @@ def required_multipliers_for_frame(
             boundaries.append(ALWAYS_MASKED_Q16)
             continue
         designated_num, designated_den = designated_maximum
-        numerator_product = designated_num * MULTIPLIER_ONE * rank_den
+        numerator_product = designated_num * Q16_SCALE * rank_den
         denominator_product = rank_num * designated_den
         boundary = ((numerator_product + denominator_product - 1)
                     // denominator_product)
@@ -580,7 +580,7 @@ def _manifest(source, arrays, *, anchor_bin, designated_half_width,
             "method": "exact_fine_order_statistic_q16_keep_boundary",
             "rho_indexing": "one_based",
             "supported_rho_count": int(arrays["rho"].size),
-            "multiplier_scale": MULTIPLIER_ONE,
+            "multiplier_scale": Q16_SCALE,
             "always_masked_value": str(ALWAYS_MASKED_Q16),
             "sentinel_encoding": "zero_q16_plus_little_endian_rank_bitset",
         },
@@ -886,7 +886,7 @@ def _validate_manifest(manifest, arrays):
             != "exact_fine_order_statistic_q16_keep_boundary"
             or score.get("rho_indexing") != "one_based"
             or score.get("supported_rho_count") != int(arrays["rho"].size)
-            or score.get("multiplier_scale") != MULTIPLIER_ONE
+            or score.get("multiplier_scale") != Q16_SCALE
             or score.get("always_masked_value") != str(ALWAYS_MASKED_Q16)
             or score.get("sentinel_encoding")
             != "zero_q16_plus_little_endian_rank_bitset"):

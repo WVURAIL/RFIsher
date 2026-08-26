@@ -15,8 +15,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ -n "$(git status --porcelain -- pyproject.toml src/rfisher)" ]; then
-  echo "WARNING: pyproject/src/rfisher not clean; the banks will stamp a" >&2
-  echo "         dirty tree. Commit or stash first for a release re-stamp." >&2
+  echo "ERROR: pyproject/src/rfisher must be clean before rebuilding banks." >&2
+  echo "Commit the source cleanup first; dirty banks fail release provenance." >&2
+  exit 1
 fi
 
 WORK=${1:-$(mktemp -d)}
@@ -63,13 +64,13 @@ python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022_pact
 # agreement) must pass first.
 python -m pytest tests/test_resources.py -q \
   --deselect tests/test_resources.py::test_packaged_data_bytes_are_unchanged \
-  --deselect tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_2_0_builds
+  --deselect tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_v3_builds
 
 python scripts/restamp_bank_pins.py
 python scripts/check_paper_numbers.py
 python -m pytest -q \
   tests/test_resources.py::test_packaged_data_bytes_are_unchanged \
-  tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_2_0_builds
+  tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_v3_builds
 echo "ALL SHIPPED BANKS REBUILT, VERIFIED, AND RE-PINNED (workdir: $WORK)"
 echo "foreground_sensitivity.csv regenerated and paper-number gate passed."
 echo "Now: commit banks + pins together as the re-stamp commit."

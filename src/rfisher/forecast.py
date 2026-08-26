@@ -140,7 +140,7 @@ class Forecast:
                 f"bank artifact_kind={bank_kind!r}; Forecast requires "
                 f"{ARTIFACT_FORECAST!r}")
         if rf is not None and getattr(rf, "__file__", None):
-            from .compat import bind_radiofisher
+            from .backend import bind_radiofisher
             rf_dir = bind_radiofisher(rf, rf_dir)
         self.bank = bank
         self.rf = rf
@@ -300,7 +300,7 @@ class Forecast:
         import io
 
         from . import cosmologies, pkcache, survey
-        from .compat import (DIRECT_MASK_CAPABILITIES, bind_radiofisher,
+        from .backend import (DIRECT_MASK_CAPABILITIES, bind_radiofisher,
                              import_radiofisher, require_backend_capabilities)
 
         rf = self.rf

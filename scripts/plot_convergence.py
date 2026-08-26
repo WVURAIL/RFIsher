@@ -41,9 +41,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from rfisher import incumbent as I
-from rfisher import products as _products
-from rfisher import residual as R
+from rfisher import incumbent
+from rfisher import products
+from rfisher import residual
 from rfisher import survey
 from rfisher.npzio import load_npz
 
@@ -72,11 +72,11 @@ def style():
 
 
 def load_bias_tools():
-    spec = importlib.util.spec_from_file_location(
-        "bt", str(ROOT / "scripts" / "bias_tolerance.py"))
-    bt = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(bt)
-    return bt
+    bias_tolerance_spec = importlib.util.spec_from_file_location(
+        "bias_tolerance", str(ROOT / "scripts" / "bias_tolerance.py"))
+    bias_tolerance = importlib.util.module_from_spec(bias_tolerance_spec)
+    bias_tolerance_spec.loader.exec_module(bias_tolerance)
+    return bias_tolerance
 
 
 def _require_floor(st):
@@ -89,7 +89,7 @@ def _require_floor(st):
     magnitude.
     """
     if not np.isfinite(st.floor_db):
-        raise R.NoMeasuredFloor(
+        raise residual.NoMeasuredFloor(
             f"ch{st.channel} has no null population; its masked residual is "
             f"unmeasured. Run this on a channel with a transmitter-off epoch, "
             f"or state a substituted floor explicitly.")
@@ -97,15 +97,15 @@ def _require_floor(st):
 
 
 def policy_table(npz):
-    st = R.shelf_statistics(npz)
-    corr = R.correlation_time(npz)
+    st = residual.shelf_statistics(npz)
+    corr = residual.correlation_time(npz)
     # One booking for the whole package: a refused tau_c takes no
     # ground-filter credit (see residual.surviving_components).
-    gain = sum(f * n for f, n in R.surviving_components(st, corr))
+    gain = sum(f * n for f, n in residual.surviving_components(st, corr))
     d = load_npz(npz)
     valid = d["valid"][:, 0].astype(bool)
     f_dep = float(d["reject_mask"][valid, 0].astype(bool).mean())
-    res = {r.name: r for r in I.compare_flaggers(npz)[0]}
+    res = {r.name: r for r in incumbent.compare_flaggers(npz)[0]}
     ch = lambda db: 10.0 ** (db / 10.0) * gain          # noqa: E731
     return [
         ("keep everything", ch(st.on_shelf_db), 0.0),
@@ -119,16 +119,17 @@ def policy_table(npz):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--npz", default=_products.paths(channels=(33,), announce=False).get(33))
+    ap.add_argument("--npz", default=products.paths(
+        channels=(33,), announce=False).get(33))
     ap.add_argument("--bank", default=str(ROOT / "data" /
                                           "fisher_bank_chime2022_pres_dense.npz"))
     ap.add_argument("--out", type=Path, default=Path("out"))
     args = ap.parse_args(argv)
-    bt = load_bias_tools()
-    print(f"time_scaling={bt.NOISE_NORMALIZED_AT_EACH_TIME}  "
+    bias_tolerance = load_bias_tools()
+    print(f"time_scaling={bias_tolerance.NOISE_NORMALIZED_AT_EACH_TIME}  "
           "(this figure intentionally does not hold physical power fixed)")
     try:
-        bank = bt.load_bias_bank(
+        bank = bias_tolerance.load_bias_bank(
             args.bank, expected_kfg_fac=None, expected_epsilon_fg=0.0)
     except ValueError as exc:
         ap.error(str(exc))
@@ -142,7 +143,7 @@ def main(argv=None):
     hours = yrs * survey.OVERVIEW_ONSKY_YEAR_HOURS
 
     def sig_and_slope(t):
-        dth, sig = bt.bias_per_unit_r(bank.F(ib, t), names)
+        dth, sig = bias_tolerance.bias_per_unit_r(bank.F(ib, t), names)
         return sig["fs8"], abs(dth["fs8"])
 
     sig_clean = np.array([sig_and_slope(t)[0] for t in hours])

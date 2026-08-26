@@ -10,7 +10,7 @@ rendered PDFs.
 | bao_policy_case.csv | curated snapshot (channel-33 residual-policy comparison; from the pilot-proxy summary export) |
 | bao_convergence.csv | LEGACY BRIDGE recovered from the published vector artwork; replacement path: direct fixed-target tolerance calculation via the Pres research bank |
 | bao_two_walls.csv | regenerated from the survey products by make_two_walls.py under the reconciled conventions (bridge retired; all 23 channels, evidence + tau columns) |
-| bao_era_points.csv | compact export from calibrated_thresholds.py --era-points; channel 32 preserves its five-minute upper bound and channel 35 its measured coherence |
+| bao_era_points.csv | authenticated pre-v3 export from calibrated_thresholds.py --era-points; channel 32 preserves its five-minute upper bound and channel 35 its measured coherence |
 
 The convergence bridge reproduces the published curve exactly.  It remains
 identified as a bridge until its direct regeneration lands.
@@ -24,3 +24,9 @@ PP_ANALYSIS=/path/to/pilot-proxy/analysis PP_SRC=/path/to/pilot-proxy/src python
 Each row records the product filename, product SHA-256, detector schema and
 version, combined analysis-source SHA-256, floor basis, raw residuals, and
 dilation tolerance used to derive the quoted ratios.
+
+The generator and analysis hashes identify the source state that produced this
+snapshot. They intentionally do not follow cleanup-only changes in the current
+tree. Until the archived per-pilot products are available again, verify these
+recorded hashes and values rather than restamping the CSV. A future rerun must
+write a new authenticated snapshot from its actual inputs.

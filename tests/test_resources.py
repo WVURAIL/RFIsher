@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from rfisher import channels, fisherbank, forecast, resources, scenarios
-from rfisher.compat import find_radiofisher_dir
+from rfisher.backend import find_radiofisher_dir
 from rfisher.fisherbank import (ARTIFACT_FORECAST, BANK_SCHEMA_VERSION,
                                  FisherBank)
 
@@ -25,7 +25,7 @@ EXPECTED_SHA256 = {
     resources.DEFAULT_RATES_NAME:
         "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
     resources.PRODUCTS_MANIFEST_NAME:
-        "1cb845d1e8423b05d731107dc7ac9788691e7bcda15e41a1715bf1d124f7e6e9",
+        "051e00d4ef8a3d1ee1eb82872ac9cd27bd1fa14bec65d8958d9d002b7ada769d",
     resources.SYNTHETIC_BASELINE_NAME:
         "101a156d88c212781b098f89a86bfb11ada58433d5dcc5cc2fb86956c930790b",
     "cache_pk.dat":
@@ -136,7 +136,7 @@ def test_named_packaged_banks_are_strict_v2_forecasts(cosmology):
     assert bank.meta["provenance"]["cosmology"]["name"] == cosmology
 
 
-def test_named_banks_are_distinct_matched_2_0_builds():
+def test_named_banks_are_distinct_matched_v3_builds():
     planck_resource = resources.bank_file("planck2018")
     pact_resource = resources.bank_file("pact2025")
     assert _sha256(planck_resource) != _sha256(pact_resource)
@@ -164,7 +164,7 @@ def test_named_banks_are_distinct_matched_2_0_builds():
     radio_digests = set()
     for cosmology, bank in (("planck2018", planck), ("pact2025", pact)):
         provenance = bank.meta["provenance"]
-        assert provenance["baonoise"]["version"] == "2.0.0"
+        assert provenance["baonoise"]["version"] == "3.0.0"
         assert provenance["radiofisher"]["backend_version"] == "1.0.0"
         assert provenance["baonoise"]["working_tree_sha256"] \
             == current_rfisher_digest
@@ -206,7 +206,7 @@ def test_packaged_pact_bank_matches_direct_backend_for_masked_bin():
     assert direct_sigma == pytest.approx(bank_sigma, rel=0.015)
 
 
-def test_bull_research_banks_are_matched_strict_v2_2_0_builds():
+def test_bull_research_banks_are_matched_strict_v2_v3_builds():
     root = Path(__file__).resolve().parents[1]
     current_rfisher_digest = fisherbank._git_state(
         root, **fisherbank.RFISHER_SOURCE_MANIFEST)["working_tree_sha256"]
@@ -230,7 +230,7 @@ def test_bull_research_banks_are_matched_strict_v2_2_0_builds():
             "bias_HI_model": "powerlaw",
             "omega_HI_model": "powerlaw",
         }
-        assert provenance["baonoise"]["version"] == "2.0.0"
+        assert provenance["baonoise"]["version"] == "3.0.0"
         assert provenance["radiofisher"]["backend_version"] == "1.0.0"
         assert provenance["baonoise"]["working_tree_sha256"] \
             == current_rfisher_digest
@@ -258,7 +258,7 @@ def test_each_bull_research_bank_matches_its_recorded_direct_backend(name):
         rf_dir = find_radiofisher_dir()
     except FileNotFoundError:
         pytest.skip("direct Bull-bank validation requires a RadioFisher checkout")
-    from rfisher.compat import import_radiofisher
+    from rfisher.backend import import_radiofisher
 
     rf, rf_dir = import_radiofisher(rf_dir)
     bank = FisherBank(Path(__file__).resolve().parents[1] / "data" / name)
@@ -277,7 +277,7 @@ def test_each_bull_bank_interpolates_bin8_below_one_percent(name):
         rf_dir = find_radiofisher_dir()
     except FileNotFoundError:
         pytest.skip("Bull interpolation validation requires RadioFisher")
-    from rfisher.compat import import_radiofisher
+    from rfisher.backend import import_radiofisher
 
     rf, rf_dir = import_radiofisher(rf_dir)
     bank = FisherBank(Path(__file__).resolve().parents[1] / "data" / name)
@@ -349,15 +349,14 @@ def test_built_wheel_contains_and_loads_named_banks_and_manifest(tmp_path):
     assert built.returncode == 0, built.stdout + built.stderr
     wheel = next(wheel_dir.glob("rfisher-*.whl"))
     code = f"""
+import importlib.util
 import sys
 sys.path.insert(0, {str(wheel)!r})
-import baonoise
 import rfisher
 from rfisher import products, resources
 from rfisher.fisherbank import BANK_SCHEMA_VERSION, FisherBank
-assert rfisher.__version__ == '2.0.0'
-assert baonoise.__version__ == rfisher.__version__
-assert baonoise.resources is rfisher.resources
+assert rfisher.__version__ == '3.0.0'
+assert importlib.util.find_spec('baonoise') is None
 assert products.freq_id(35) == 521
 found, missing = products.load()
 assert len(found) + len(missing) == 23

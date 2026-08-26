@@ -8,8 +8,7 @@ residual template carried by its response bank.
 ## Estimators
 
 `scripts/bias_tolerance.py` exposes two estimator names. The name is written to
-every complete-v1 JSON report; there is no implicit mode selected from the
-bank.
+every versioned JSON report; there is no implicit mode selected from the bank.
 
 ### `perbin_appendix_a`
 
@@ -20,9 +19,9 @@ alone, and reports targets in the remaining
 convention, `DV` is also available as the logarithmic combination
 `-(2/3 aperp + 1/3 apar)`. The minus sign is required because `aperp` and
 `apar` describe coordinate dilation in the inverse direction from the
-physical distance perturbation. The historical
-`split`, `bias_per_unit_r`, `condition`, and `stability` functions remain
-available with unchanged signatures for the existing figure scripts.
+physical distance perturbation. The Appendix-A numerical helpers
+`bias_per_unit_r` and `stability` remain available for the existing figure
+scripts; the report CLI now emits only the versioned schema and refusal ledger.
 
 ### `overview_combined_multibin`
 
@@ -106,12 +105,10 @@ square root of its positive diagonal element. This makes the null-mode test
 invariant to a mere change of parameter units; the report records the
 preconditioner and its scale range.
 
-Complete-v1 refuses both `t < t_min` and `t > t_max`, including a lower or
+The report refuses both `t < t_min` and `t > t_max`, including a lower or
 upper stability perturbation that crosses either edge. Such a perturbation is
 retained with `bank_time_grid_position` equal to `below_minimum` or
-`above_maximum` and `failure_reason=outside_bank_time_grid`. The legacy JSON
-path retains the historical behavior: its below-grid `t^2` continuation and
-above-grid cap are unchanged for existing consumers.
+`above_maximum` and `failure_reason=outside_bank_time_grid`.
 
 The refusal gate is applied to `r_tolerance_current_noise_ratio`, before the
 deterministic `t/t_ref` conversion. This tests numerical movement and response
@@ -174,7 +171,6 @@ PYTHONPATH=src python3 scripts/bias_tolerance.py \
   --estimator perbin_appendix_a \
   --time-scaling noise_normalized_at_each_time \
   --zeta 1 --years 0.25 1 5 10 \
-  --json-format complete-v1 \
   --json out/perbin_noise_normalized.json
 ```
 
@@ -188,7 +184,6 @@ python3 scripts/bias_tolerance.py \
   --time-scaling fixed_physical_at_reference_time \
   --reference-years 1 --zeta 1 \
   --params DV F fs8 --years 0.25 1 5 10 \
-  --json-format complete-v1 \
   --json out/combined_fixed_physical.json
 ```
 
@@ -474,18 +469,8 @@ window-function coupling. Each remains explicitly
 
 ## JSON contract
 
-For backward compatibility, `--json-format legacy` remains the default. It
-preserves the original top-level `{zeta, bank, bins}` shape and represents only
-the historical `perbin_appendix_a` plus
-`noise_normalized_at_each_time` calculation with its fixed 10% perturbation.
-Existing commands and JSON consumers therefore do not silently switch
-semantics. Select `--json-format complete-v1` explicitly for either new
-estimator, either named time-family provenance record, adjustable stability
-perturbations, or the complete refusal ledger.
-
 The versioned output identifier is `baonoise-bias-tolerance-v1`; its
-machine-readable schema is `docs/bias-tolerance.schema.json`. Complete-v1 JSON
-is emitted with
+machine-readable schema is `docs/bias-tolerance.schema.json`. JSON is emitted with
 `allow_nan=False`: unavailable or refused quantities are `null`, never the
 non-standard tokens `NaN` or `Infinity`.
 

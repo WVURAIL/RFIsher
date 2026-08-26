@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from bisect import bisect_left
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 from numbers import Integral, Real
 
@@ -14,21 +14,19 @@ from .selection_policy import value as _policy_value
 MIN_RETAINED_FRAMES = int(
     _policy_value("selection.minimum_retained_frames"))
 COST_PLATEAU = float(_policy_value("selection.cost_plateau_ratio"))
-MULTIPLIER_Q = 16
-MULTIPLIER_ONE = 1 << MULTIPLIER_Q
+Q16_FRACTION_BITS = 16
+Q16_SCALE = 1 << Q16_FRACTION_BITS
 MAX_MULTIPLIER_Q16 = (1 << 64) - 1
 ALWAYS_MASKED_Q16 = 1 << 64
 
-__all__ = ["MIN_RETAINED_FRAMES", "COST_PLATEAU", "MULTIPLIER_Q",
-           "MULTIPLIER_ONE", "MAX_MULTIPLIER_Q16", "ALWAYS_MASKED_Q16",
+__all__ = ["MIN_RETAINED_FRAMES", "COST_PLATEAU", "Q16_FRACTION_BITS",
+           "Q16_SCALE", "MAX_MULTIPLIER_Q16", "ALWAYS_MASKED_Q16",
            "ResidualScoreHistogram", "ThresholdPoint",
-           "ThresholdOptimization", "build_residual_score_histogram",
-           "build_q16_residual_score_histogram",
+           "ThresholdOptimization", "build_q16_residual_score_histogram",
            "optimize_threshold"]
 
 
-def _float_tuple(values, name: str, *,
-                 positive: bool = False) -> tuple[float, ...]:
+def _float_tuple(values, name: str) -> tuple[float, ...]:
     if isinstance(values, (str, bytes)):
         raise TypeError(f"{name} must be a sequence of numbers")
     try:
@@ -42,9 +40,7 @@ def _float_tuple(values, name: str, *,
         number = float(value)
         if not math.isfinite(number):
             raise ValueError(f"{name} must contain only finite values")
-        if positive and number <= 0.0:
-            raise ValueError(f"{name} must contain only positive values")
-        if not positive and number < 0.0:
+        if number < 0.0:
             raise ValueError(f"{name} must contain only non-negative values")
         out.append(number)
     return tuple(out)
@@ -114,54 +110,43 @@ class ResidualScoreHistogram:
     optimization must describe the same accepted frame population and common
     usable bulk.
 
-    ``counts[j]`` covers scores above the previous boundary and at or below
-    ``candidate_eta[j]``. For an exact family,
-    ``candidate_multiplier_q16[j]`` is authoritative and ``candidate_eta`` is
-    only its floating display value. The final count is the overflow above the
-    last boundary. Residual arrays contain calibrated additive totals in the
-    same bins. Their prefix sum divided by the retained count must be the
+    ``counts[j]`` covers exact scores above the previous boundary and at or
+    below ``candidate_multiplier_q16[j]``. ``candidate_eta`` is the derived
+    floating display of that exact grid. The final count is the overflow above
+    the last boundary. Residual arrays contain calibrated additive totals in
+    the same bins. Their prefix sum divided by the retained count must be the
     calibrated residual for that retained population. A calibration that must
     be rerun after masking cannot use this compressed form.
     """
 
     bulk_size: int
-    candidate_eta: tuple[float, ...]
+    candidate_multiplier_q16: tuple[int, ...]
     counts: tuple[int, ...]
     systematic_residual_sums: tuple[float, ...]
     variance_residual_sums: tuple[float, ...] | None = None
-    candidate_multiplier_q16: tuple[int, ...] | None = None
+    candidate_eta: tuple[float, ...] = field(init=False)
 
     def __post_init__(self):
         bulk_size = _positive_integer(self.bulk_size, "bulk_size")
-        eta = _float_tuple(self.candidate_eta, "candidate_eta", positive=True)
+        q16 = _q16_tuple(
+            self.candidate_multiplier_q16, "candidate_multiplier_q16")
         counts = _count_tuple(self.counts)
         systematic = _float_tuple(
             self.systematic_residual_sums, "systematic_residual_sums")
         variance = (None if self.variance_residual_sums is None else
                     _float_tuple(self.variance_residual_sums,
                                  "variance_residual_sums"))
-        q16 = (None if self.candidate_multiplier_q16 is None else
-               _q16_tuple(self.candidate_multiplier_q16,
-                          "candidate_multiplier_q16"))
-
-        if not eta:
-            raise ValueError("candidate_eta must not be empty")
-        if len(counts) != len(eta) + 1:
+        if not q16:
+            raise ValueError("candidate_multiplier_q16 must not be empty")
+        if len(counts) != len(q16) + 1:
             raise ValueError("counts must include one overflow bin")
         if len(systematic) != len(counts):
             raise ValueError("systematic_residual_sums must match counts")
         if variance is not None and len(variance) != len(counts):
             raise ValueError("variance_residual_sums must match counts")
-        if q16 is not None:
-            if len(q16) != len(eta):
-                raise ValueError("candidate_multiplier_q16 must match candidate_eta")
-            if any(right <= left for left, right in zip(q16, q16[1:])):
-                raise ValueError("candidate_multiplier_q16 must be strictly increasing")
-            expected = tuple(value / MULTIPLIER_ONE for value in q16)
-            if eta != expected:
-                raise ValueError("candidate_eta must exactly match Q16 multipliers")
-        elif any(right <= left for left, right in zip(eta, eta[1:])):
-            raise ValueError("candidate_eta must be strictly increasing")
+        if any(right <= left for left, right in zip(q16, q16[1:])):
+            raise ValueError(
+                "candidate_multiplier_q16 must be strictly increasing")
         if sum(counts) == 0:
             raise ValueError("the histogram must contain at least one frame")
         for index, count in enumerate(counts):
@@ -171,11 +156,12 @@ class ResidualScoreHistogram:
                 raise ValueError("an empty bin cannot carry variance residual")
 
         object.__setattr__(self, "bulk_size", bulk_size)
-        object.__setattr__(self, "candidate_eta", eta)
+        object.__setattr__(self, "candidate_multiplier_q16", q16)
+        object.__setattr__(
+            self, "candidate_eta", tuple(value / Q16_SCALE for value in q16))
         object.__setattr__(self, "counts", counts)
         object.__setattr__(self, "systematic_residual_sums", systematic)
         object.__setattr__(self, "variance_residual_sums", variance)
-        object.__setattr__(self, "candidate_multiplier_q16", q16)
 
     @property
     def frame_count(self) -> int:
@@ -189,8 +175,7 @@ class ThresholdPoint:
     rho: int
     bulk_size: int
     rank_fraction: float
-    eta: float
-    multiplier_q16: int | None
+    multiplier_q16: int
     frame_count: int
     kept_frames: int
     masked_frames: int
@@ -200,6 +185,12 @@ class ThresholdPoint:
     tolerance_fraction: float
     cost: float
     feasible: bool
+    eta: float = field(init=False)
+
+    def __post_init__(self):
+        q16 = _q16_tuple((self.multiplier_q16,), "multiplier_q16")[0]
+        object.__setattr__(self, "multiplier_q16", q16)
+        object.__setattr__(self, "eta", q16 / Q16_SCALE)
 
 
 @dataclass(frozen=True)
@@ -212,78 +203,6 @@ class ThresholdOptimization:
     points: tuple[ThresholdPoint, ...]
     selected: ThresholdPoint | None
     status: str
-
-
-def build_residual_score_histogram(
-        scores: Sequence[float],
-        systematic_residuals: Sequence[float],
-        candidate_eta: Sequence[float],
-    *,
-    bulk_size: int,
-    variance_residuals: Sequence[float] | None = None,
-) -> ResidualScoreHistogram:
-    """Bin prepared per-frame scores and calibrated residual contributions."""
-    bulk_size = _positive_integer(bulk_size, "bulk_size")
-    eta = _float_tuple(candidate_eta, "candidate_eta", positive=True)
-    if not eta:
-        raise ValueError("candidate_eta must not be empty")
-    if any(right <= left for left, right in zip(eta, eta[1:])):
-        raise ValueError("candidate_eta must be strictly increasing")
-
-    score = np.asarray(scores)
-    systematic = np.asarray(systematic_residuals)
-    variance = (None if variance_residuals is None else
-                np.asarray(variance_residuals))
-    for values, name in ((score, "scores"),
-                         (systematic, "systematic_residuals")):
-        if values.ndim != 1:
-            raise ValueError(f"{name} must be one-dimensional")
-        if not np.issubdtype(values.dtype, np.number):
-            raise TypeError(f"{name} must contain only numbers")
-        if np.issubdtype(values.dtype, np.complexfloating):
-            raise TypeError(f"{name} must contain only real numbers")
-    if variance is not None:
-        if variance.ndim != 1:
-            raise ValueError("variance_residuals must be one-dimensional")
-        if not np.issubdtype(variance.dtype, np.number):
-            raise TypeError("variance_residuals must contain only numbers")
-        if np.issubdtype(variance.dtype, np.complexfloating):
-            raise TypeError("variance_residuals must contain only real numbers")
-    if score.size == 0:
-        raise ValueError("scores must not be empty")
-    if systematic.shape != score.shape:
-        raise ValueError("systematic_residuals must match scores")
-    if variance is not None and variance.shape != score.shape:
-        raise ValueError("variance_residuals must match scores")
-
-    score = score.astype(float, copy=False)
-    systematic = systematic.astype(float, copy=False)
-    variance = None if variance is None else variance.astype(float, copy=False)
-    if not np.isfinite(score).all() or (score < 0.0).any():
-        raise ValueError("scores must be non-negative and finite")
-    if not np.isfinite(systematic).all() or (systematic < 0.0).any():
-        raise ValueError("systematic_residuals must be non-negative and finite")
-    if variance is not None and (
-            not np.isfinite(variance).all() or (variance < 0.0).any()):
-        raise ValueError("variance_residuals must be non-negative and finite")
-
-    bins = np.searchsorted(np.asarray(eta), score, side="left")
-    size = len(eta) + 1
-    counts = np.bincount(bins, minlength=size)
-    systematic_sums = np.bincount(
-        bins, weights=systematic, minlength=size)
-    variance_sums = (None if variance is None else
-                     np.bincount(bins, weights=variance, minlength=size))
-    return ResidualScoreHistogram(
-        bulk_size=bulk_size,
-        candidate_eta=eta,
-        counts=tuple(int(value) for value in counts),
-        systematic_residual_sums=tuple(float(value)
-                                       for value in systematic_sums),
-        variance_residual_sums=(
-            None if variance_sums is None else
-            tuple(float(value) for value in variance_sums)),
-    )
 
 
 def build_q16_residual_score_histogram(
@@ -360,7 +279,6 @@ def build_q16_residual_score_histogram(
                      np.bincount(bins, weights=variance, minlength=size))
     return ResidualScoreHistogram(
         bulk_size=bulk_size,
-        candidate_eta=tuple(value / MULTIPLIER_ONE for value in candidates),
         candidate_multiplier_q16=candidates,
         counts=tuple(int(value) for value in counts),
         systematic_residual_sums=tuple(float(value)
@@ -390,9 +308,9 @@ def optimize_threshold(
     residual calibration, and equal-exposure frame construction. Mapping keys
     are one-based ranks. This function derives masking and retained residuals
     only from the prepared histograms. Each rank may use its own candidate
-    ``eta`` grid. Points within two percent of the minimum cost prefer lower
+    multiplier grid. Points within two percent of the minimum cost prefer lower
     systematic residual, less masking, lower ``rho``, then the lower exact
-    multiplier (or lower ``eta`` for a legacy floating histogram).
+    multiplier.
     """
     tolerance = _science_tolerance(science_tolerance)
     if not isinstance(histograms_by_rho, Mapping):
@@ -438,7 +356,8 @@ def optimize_threshold(
         kept = 0
         systematic_sum = 0.0
         variance_sum = 0.0
-        for index, eta in enumerate(histogram.candidate_eta):
+        for index, multiplier_q16 in enumerate(
+                histogram.candidate_multiplier_q16):
             kept += histogram.counts[index]
             systematic_sum += histogram.systematic_residual_sums[index]
             if has_variance:
@@ -455,10 +374,7 @@ def optimize_threshold(
                 rho=rho,
                 bulk_size=bulk_size,
                 rank_fraction=rho / (bulk_size + 1),
-                eta=eta,
-                multiplier_q16=(
-                    None if histogram.candidate_multiplier_q16 is None else
-                    histogram.candidate_multiplier_q16[index]),
+                multiplier_q16=multiplier_q16,
                 frame_count=frame_count,
                 kept_frames=kept,
                 masked_frames=masked,
@@ -479,9 +395,7 @@ def optimize_threshold(
             near,
             key=lambda point: (point.systematic_residual,
                                point.masked_fraction, point.rho,
-                               (point.multiplier_q16
-                                if point.multiplier_q16 is not None
-                                else point.eta)))
+                               point.multiplier_q16))
     else:
         selected = None
     if selected is not None:

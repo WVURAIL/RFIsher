@@ -53,37 +53,6 @@ def test_env_dirs_searched_first(tmp_path, monkeypatch):
     assert found[33] == str(a / "552.npz")
 
 
-def test_legacy_env_dir_is_a_fallback(tmp_path, monkeypatch):
-    legacy = tmp_path / "legacy"
-    legacy.mkdir()
-    (legacy / "552.npz").write_bytes(b"legacy")
-    m, l = _write(tmp_path, {
-        "channels": {"33": {"freq_id": 552}}})
-    monkeypatch.delenv(products.ENV_DIRS, raising=False)
-    monkeypatch.setenv(products.LEGACY_ENV_DIRS, str(legacy))
-
-    found, _ = products.load(m, l)
-
-    assert found[33] == str(legacy / "552.npz")
-
-
-def test_preferred_env_dir_overrides_legacy(tmp_path, monkeypatch):
-    preferred = tmp_path / "preferred"
-    legacy = tmp_path / "legacy"
-    preferred.mkdir()
-    legacy.mkdir()
-    (preferred / "552.npz").write_bytes(b"preferred")
-    (legacy / "552.npz").write_bytes(b"legacy")
-    m, l = _write(tmp_path, {
-        "channels": {"33": {"freq_id": 552}}})
-    monkeypatch.setenv(products.ENV_DIRS, str(preferred))
-    monkeypatch.setenv(products.LEGACY_ENV_DIRS, str(legacy))
-
-    found, _ = products.load(m, l)
-
-    assert found[33] == str(preferred / "552.npz")
-
-
 def test_repo_manifest_registers_all_23():
     manifest = json.loads(products.MANIFEST.read_text())
     chans = manifest["channels"]

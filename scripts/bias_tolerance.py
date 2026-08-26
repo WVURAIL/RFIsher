@@ -38,7 +38,7 @@ Bias-response banks are intentionally not distributed. Build one and run:
         --bank data/fisher_bank_chime2022_pres_dense.npz \
         --estimator overview_combined_multibin \
         --time-scaling fixed_physical_at_reference_time \
-        --reference-years 1 --json-format complete-v1 \
+        --reference-years 1 \
         --json out/combined_fixed_physical.json
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 from rfisher import (__version__, channels, cosmologies, pkcache,
                      selection_policy, survey)
-from rfisher.compat import (import_radiofisher,
+from rfisher.backend import (import_radiofisher,
                              require_backend_capabilities)
 from rfisher.constants import HI_REST_FREQUENCY_MHZ
 from rfisher.fisherbank import (
@@ -89,7 +89,6 @@ TIME_SCALINGS = (
 )
 
 REPORT_SCHEMA = "baonoise-bias-tolerance-v1"
-JSON_FORMATS = ("legacy", "complete-v1")
 FISHER_CONDITION_LIMIT = float(selection_policy.value(
     "science.response_solver.maximum_condition_number"))
 FISHER_NULLSPACE_RTOL = float(selection_policy.value(
@@ -386,12 +385,10 @@ def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
 
 
 # ---------------------------------------------------------------------------
-# Legacy Appendix-A helpers. These signatures are used by plot_convergence.py
-# and three_worlds.py, so they remain stable and numerically unchanged.
+# Appendix-A helpers used by plot_convergence.py and three_worlds.py.
 # ---------------------------------------------------------------------------
-def split(F, names, targets=("aperp", "apar", "fs8")):
+def split(F, names):
     """(F_theta-theta, F_theta-A, kept names) with zero-information rows cut."""
-    del targets  # retained for the historical public signature
     ia = names.index(PRES)
     keep = [i for i, n in enumerate(names)
             if n != PRES and n not in EXCLUDE and F[i, i] > 0.0]
@@ -399,11 +396,6 @@ def split(F, names, targets=("aperp", "apar", "fs8")):
     Ftt = 0.5 * (Ftt + Ftt.T)
     FtA = F[keep, ia]
     return Ftt, FtA, [names[i] for i in keep]
-
-
-def condition(F, names):
-    Ftt, _, _ = split(F, names)
-    return float(np.linalg.cond(Ftt))
 
 
 def bias_per_unit_r(F, names):
@@ -842,11 +834,10 @@ def _invalid_evaluation(estimator, ibin: int, t_hours: float, param: str,
 
 def evaluate_raw(estimator, ibin: int, t_hours: float, param: str,
                  *, zeta: float, time_scaling: str,
-                 reference_hours: float | None,
-                 enforce_bank_bounds: bool = True) -> dict:
+                 reference_hours: float | None) -> dict:
     """Evaluate one estimator/bin/time/parameter point before stability gating."""
     position = _bank_time_grid_position(estimator.bank, t_hours)
-    if enforce_bank_bounds and position != "inside":
+    if position != "inside":
         return _invalid_evaluation(
             estimator, ibin, t_hours, param, time_scaling=time_scaling,
             reference_hours=reference_hours, position=position,
@@ -897,8 +888,7 @@ def evaluate_fisher_point(estimator, ibin: int, t_hours: float, param: str,
                           time_scaling: str = NOISE_NORMALIZED_AT_EACH_TIME,
                           reference_hours: float | None = None,
                           stability_fraction: float = DEFAULT_STABILITY_FRACTION,
-                          max_drift: float = DEFAULT_MAXIMUM_TOLERANCE_RATIO,
-                          enforce_bank_bounds: bool = True) -> dict:
+                          max_drift: float = DEFAULT_MAXIMUM_TOLERANCE_RATIO) -> dict:
     """Evaluate and gate one requested Fisher point, retaining all evidence."""
     if not np.isfinite(t_hours) or t_hours <= 0.0:
         raise ValueError("t_hours must be positive and finite")
@@ -920,8 +910,7 @@ def evaluate_fisher_point(estimator, ibin: int, t_hours: float, param: str,
     for label, scale in scales:
         evaluated = evaluate_raw(
             estimator, ibin, t_hours * scale, param, zeta=zeta,
-            time_scaling=time_scaling, reference_hours=reference_hours,
-            enforce_bank_bounds=enforce_bank_bounds)
+            time_scaling=time_scaling, reference_hours=reference_hours)
         perturbations.append({
             "label": label,
             "scale": float(scale),
@@ -998,8 +987,7 @@ def dtv_bin_indices(bank) -> list[int]:
 def build_report(bank, bank_path: Path, estimator, *, bins, years, params,
                  zeta: float, time_scaling: str,
                  reference_hours: float | None,
-                 stability_fraction: float, max_drift: float,
-                 enforce_bank_bounds: bool = True) -> dict:
+                 stability_fraction: float, max_drift: float) -> dict:
     """Build the complete machine-readable report; no point is dropped."""
     bin_reports = []
     for ibin in bins:
@@ -1015,8 +1003,7 @@ def build_report(bank, bank_path: Path, estimator, *, bins, years, params,
                         time_scaling=time_scaling,
                         reference_hours=reference_hours,
                         stability_fraction=stability_fraction,
-                        max_drift=max_drift,
-                        enforce_bank_bounds=enforce_bank_bounds)
+                        max_drift=max_drift)
                     for param in params
                 },
             })
@@ -1121,44 +1108,6 @@ def build_report(bank, bank_path: Path, estimator, *, bins, years, params,
     }
 
 
-def build_legacy_payload(bank, bank_path: Path, *, bins, years, params,
-                         zeta: float, max_drift: float) -> dict:
-    """The pre-v1 JSON shape, retained as the default for existing consumers."""
-    names = list(bank.paramnames)
-    out = []
-    for ibin in bins:
-        rows = {}
-        for year in years:
-            t_hours = float(year * survey.OVERVIEW_ONSKY_YEAR_HOURS)
-            dtheta, sigma = bias_per_unit_r(bank.F(ibin, t_hours), names)
-            record = {}
-            for param in params:
-                if param not in dtheta or dtheta[param] == 0.0:
-                    continue
-                r_tolerance = zeta * sigma[param] / abs(dtheta[param])
-                drift, sign_count = stability(
-                    bank, ibin, t_hours, names, param)
-                accepted = drift <= max_drift and sign_count == 1
-                record[param] = {
-                    "r_tol": float(r_tolerance),
-                    "sigma": float(sigma[param]),
-                    "dtheta_dr": float(dtheta[param]),
-                    "drift": float(drift),
-                    "stable": bool(accepted),
-                }
-            rows[str(year)] = record
-        accepted = [
-            item["r_tol"] for record in rows.values()
-            for item in record.values() if item["stable"]]
-        out.append({
-            "zlo": float(bank.zs[ibin]),
-            "zhi": float(bank.zs[ibin + 1]),
-            "rows": rows,
-            "binding": float(min(accepted)) if accepted else float("nan"),
-        })
-    return {"zeta": float(zeta), "bank": bank_path.name, "bins": out}
-
-
 def _validate_cli_numbers(ap, args):
     if not np.isfinite(args.zeta) or args.zeta <= 0.0:
         ap.error("--zeta must be positive and finite")
@@ -1217,10 +1166,6 @@ def main(argv=None):
                     help="largest tolerance ratio across the +/- time "
                          "perturbation before refusal")
     ap.add_argument("--json", type=Path)
-    ap.add_argument(
-        "--json-format", choices=JSON_FORMATS, default="legacy",
-        help="legacy preserves the pre-v1 JSON shape for existing consumers; "
-             "complete-v1 emits the versioned provenance and refusal ledger")
     args = ap.parse_args(argv)
     _validate_cli_numbers(ap, args)
 
@@ -1243,26 +1188,12 @@ def main(argv=None):
     reference_hours = (
         args.reference_years * survey.OVERVIEW_ONSKY_YEAR_HOURS
         if args.reference_years is not None else None)
-    if args.json_format == "legacy" and (
-            args.estimator != PERBIN_APPENDIX_A
-            or args.time_scaling != NOISE_NORMALIZED_AT_EACH_TIME):
-        ap.error(
-            "--json-format legacy represents only the historical "
-            "perbin_appendix_a/noise_normalized_at_each_time calculation; "
-            "use --json-format complete-v1 for this request")
-    if (args.json_format == "legacy"
-            and args.stability_fraction != DEFAULT_STABILITY_FRACTION):
-        ap.error(
-            "--json-format legacy has the historical fixed +/-10% stability "
-            "test; use --json-format complete-v1 to change "
-            "--stability-fraction")
     report = build_report(
         bank, args.bank, estimator, bins=bins, years=args.years,
         params=params, zeta=args.zeta, time_scaling=args.time_scaling,
         reference_hours=reference_hours,
         stability_fraction=args.stability_fraction,
-        max_drift=args.max_drift,
-        enforce_bank_bounds=args.json_format == "complete-v1")
+        max_drift=args.max_drift)
 
     response = bank.meta.get("expt_overrides", {}).get("P_res")
     print(f"bank {args.bank.name}  P_res={response}  zeta={args.zeta}")
@@ -1294,19 +1225,8 @@ def main(argv=None):
 
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
-        if args.json_format == "legacy":
-            payload = build_legacy_payload(
-                bank, args.bank, bins=bins, years=args.years,
-                params=params, zeta=args.zeta, max_drift=args.max_drift)
-            encoded = json.dumps(payload, indent=2)
-        else:
-            encoded = json.dumps(
-                report, indent=2, sort_keys=True, allow_nan=False)
-        # Preserve the historical JSON bytes, including its lack of a trailing
-        # newline. Complete-v1 follows the repository's newline-terminated
-        # machine-output convention.
-        suffix = "" if args.json_format == "legacy" else "\n"
-        args.json.write_text(encoded + suffix, encoding="utf-8")
+        encoded = json.dumps(report, indent=2, sort_keys=True, allow_nan=False)
+        args.json.write_text(encoded + "\n", encoding="utf-8")
         print(f"wrote {args.json}")
     return 0
 

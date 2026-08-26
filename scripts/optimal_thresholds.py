@@ -51,7 +51,7 @@ from pathlib import Path
 import numpy as np
 
 
-from rfisher import residual as R
+from rfisher import residual
 from rfisher import selection_policy
 from rfisher.thresholds import COST_PLATEAU
 
@@ -68,7 +68,7 @@ POSITIVE_EXCESS_ETA = float(selection_policy.value(
 PRIMARY_ZETA = float(selection_policy.value(
     "science.systematic_budget.primary_zeta"))
 FINE_DB = float(selection_policy.value("transfer.fine_stage_credit_db"))
-DEPLOYED_DELAY_DB = R.DELAY_SUPPRESSION_DB["aggressive_200ns"]
+DEPLOYED_DELAY_DB = residual.DELAY_SUPPRESSION_DB["aggressive_200ns"]
 PLATEAU = COST_PLATEAU
 RECENT_CALENDAR_YEARS = int(selection_policy.value(
     "archive_reference.recent_calendar_years"))
@@ -77,10 +77,10 @@ EARLIEST_RECENT_YEAR = int(selection_policy.value(
 MIN_DIAGNOSTIC_COHORT = int(selection_policy.value(
     "archive_reference.minimum_diagnostic_cohort_frames"))
 
-from rfisher import products as _products
+from rfisher import products
 from rfisher.npzio import load_npz
 
-DEFAULT_PRODUCTS = _products.paths()
+DEFAULT_PRODUCTS = products.paths()
 
 _FINE_START, _FINE_STOP, _FINE_STEP = selection_policy.value(
     "archive_reference.coarse_eta_fine_segment")
@@ -108,8 +108,8 @@ def recent_f(path, eta, mu0, year_from):
 
 
 def optimize(path, ch):
-    prov = R.floor_provenance(path)
-    corr = R.correlation_time(path)
+    prov = residual.floor_provenance(path)
+    corr = residual.correlation_time(path)
     tol = REPORT_TOLERANCES[ch]
     d = load_npz(path)
     t = d["unit_time0_ctime"]
@@ -117,7 +117,7 @@ def optimize(path, ch):
     era_from = max(
         yr_max - RECENT_CALENDAR_YEARS + 1, EARLIEST_RECENT_YEAR)
 
-    floor_db, floor_evidence = R.kept_frame_floor(path)
+    floor_db, floor_evidence = residual.kept_frame_floor(path)
     out = {"ch": ch, "mu0": prov.mu0, "tau_bound": corr.quality != "measured",
            "tol_aperp": tol, "era_from": era_from,
            "floor_evidence": floor_evidence, "bases": {}}
@@ -125,7 +125,7 @@ def optimize(path, ch):
     for basis in ("product", "sigma_null"):
         kw = {"floor_db": (floor_db if basis == "product"
                            else prov.sigma_implied_db)}
-        sweep = R.threshold_sweep(path, etas=ETAS, **kw)
+        sweep = residual.threshold_sweep(path, etas=ETAS, **kw)
         rows = [dict(eta=s["eta"], f=s["f"],
                      r_fine=s["r_masked"] / 10 ** (FINE_DB / 10))
                 for s in sweep]

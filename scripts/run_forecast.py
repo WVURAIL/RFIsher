@@ -12,7 +12,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 
 from rfisher import channels, forecast, plots, scenarios, survey
-from rfisher.compat import import_radiofisher
+from rfisher.backend import import_radiofisher
 from rfisher.fisherbank import FisherBank
 from rfisher.resources import DEFAULT_BANK, bank_file
 
@@ -284,7 +284,7 @@ def main() -> None:
         S = fc.per_bin_significance(scen_main[k], t2)
         with np.errstate(divide="ignore"):
             perbin[k] = np.where(S > 0, 100.0 / S, np.nan)  # sigma_A [%]
-    plots.fig_perbin_significance(
+    plots.fig_per_bin_significance(
         bank.zc, perbin, labels, outdir / "fig4_perbin_significance.png",
         t_label="1 on-sky yr (8,760 hr)",
         ylab=r"BAO amplitude uncertainty $\sigma_A$ [%]",

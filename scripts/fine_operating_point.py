@@ -86,26 +86,26 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import residual as R
+from rfisher import residual
 from rfisher import selection_policy
 from rfisher.npzio import load_npz
-from rfisher.thresholds import MULTIPLIER_ONE
+from rfisher.thresholds import Q16_SCALE
 
-spec = importlib.util.spec_from_file_location(
-    "ot", str(ROOT / "scripts" / "optimal_thresholds.py"))
-ot = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(ot)
+optimal_thresholds_spec = importlib.util.spec_from_file_location(
+    "optimal_thresholds", str(ROOT / "scripts" / "optimal_thresholds.py"))
+optimal_thresholds = importlib.util.module_from_spec(optimal_thresholds_spec)
+optimal_thresholds_spec.loader.exec_module(optimal_thresholds)
 
-TOL = ot.REPORT_TOLERANCES
-FINE_DB = ot.FINE_DB
-PLATEAU = ot.PLATEAU
-PRIMARY_ZETA = ot.PRIMARY_ZETA
-ETAS = ot.ETAS                       # reuse the coarse multiplier grid
-PRODUCTS = dict(ot.DEFAULT_PRODUCTS)   # resolved by the products manifest
+TOL = optimal_thresholds.REPORT_TOLERANCES
+FINE_DB = optimal_thresholds.FINE_DB
+PLATEAU = optimal_thresholds.PLATEAU
+PRIMARY_ZETA = optimal_thresholds.PRIMARY_ZETA
+ETAS = optimal_thresholds.ETAS        # reuse the coarse multiplier grid
+PRODUCTS = dict(optimal_thresholds.DEFAULT_PRODUCTS)  # products manifest
 
 HALF = int(selection_policy.value(
     "archive_reference.designated_half_width_bins"))
-MIN_KEPT = R.MIN_THRESHOLD_SWEEP_KEPT_FRAMES
+MIN_KEPT = residual.MIN_THRESHOLD_SWEEP_KEPT_FRAMES
 MIN_COHORT = int(selection_policy.value(
     "archive_reference.minimum_diagnostic_cohort_frames"))
 RANK_LOWER_FRACTION = float(selection_policy.value(
@@ -197,18 +197,19 @@ def channel_tables(path):
     # (residual.surviving_components), and the kept-frame floor follows
     # residual.kept_frame_floor.
     ch = int(d["physical_channel"][0])
-    _ot = R.SIGN_ON_OFF_THROUGH.get(ch)
-    _of = R.SIGN_OFF_FROM.get(ch)
-    stats = R.shelf_statistics(path, off_through=_ot, off_from=_of)
-    corr = R.correlation_time(path, off_through=_ot, off_from=_of)
-    comps = R.surviving_components(stats, corr)
-    floor_db, floor_evidence = R.kept_frame_floor(path)
+    _ot = residual.SIGN_ON_OFF_THROUGH.get(ch)
+    _of = residual.SIGN_OFF_FROM.get(ch)
+    stats = residual.shelf_statistics(path, off_through=_ot, off_from=_of)
+    corr = residual.correlation_time(path, off_through=_ot, off_from=_of)
+    comps = residual.surviving_components(stats, corr)
+    floor_db, floor_evidence = residual.kept_frame_floor(path)
 
     def r_of(mean_lin):
         db = 10.0 * np.log10(max(mean_lin, 1e-30))
-        return R.ResidualBudget(
+        return residual.ResidualBudget(
             shelf_floor_db=db,
-            delay_filter_db=R.DELAY_SUPPRESSION_DB[R.DEFAULT_DELAY_KEY],
+            delay_filter_db=residual.DELAY_SUPPRESSION_DB[
+                residual.DEFAULT_DELAY_KEY],
             components=comps).ratio
 
     return dict(
@@ -219,7 +220,7 @@ def channel_tables(path):
         n_desg=len(desg_arr),
         maxD=ff[:, desg_arr].max(axis=1),
         srt=np.sort(ff[:, bulk], axis=1),
-        prov=R.floor_provenance(path),
+        prov=residual.floor_provenance(path),
         floor_db=floor_db, floor_evidence=floor_evidence,
         tau_bound=corr.quality != "measured",
         r_of=r_of, n_on=int(on.sum()))
@@ -254,7 +255,7 @@ def optimize_channel(ch, path):
            **{k: tab[k] for k in ("anchor", "anchor_method", "anchor_early",
                                   "anchor_late", "offset_hz", "fine_bins",
                                   "n_bulk", "n_desg")}}
-    if tab["n_on"] < R.MIN_REFERENCE_SWEEP_FRAMES:
+    if tab["n_on"] < residual.MIN_REFERENCE_SWEEP_FRAMES:
         return out
 
     m_grid = np.asarray(ETAS)
@@ -314,7 +315,7 @@ def optimize_channel(ch, path):
             best = {k: v for k, v in best.items() if k != "j"}
             rec.update(best, headroom=n_bulk - best["rho"],
                        quantile=best["rho"] / (n_bulk + 1),
-                       multiplier_q16=int(round(best["m"] * MULTIPLIER_ONE)),
+                       multiplier_q16=int(round(best["m"] * Q16_SCALE)),
                        margin=tol / best["r_fine"],
                        f_recent=(float(fired_b[recent].mean())
                                  if recent.sum() >= MIN_COHORT
@@ -348,7 +349,8 @@ def main(argv=None):
     args.out.mkdir(parents=True, exist_ok=True)
 
     print(f"objective: min (1+r)/(1-f)  s.t.  r_fine <= "
-          f"r_tol({ot.REPORT_TOLERANCE_TARGET}), zeta = {PRIMARY_ZETA:g}; "
+          f"r_tol({optimal_thresholds.REPORT_TOLERANCE_TARGET}), "
+          f"zeta = {PRIMARY_ZETA:g}; "
           f"rho grid = [{RANK_LOWER_FRACTION:g}|B|, |B|]\n"
           f"selection: half-screen feasibility -> cost plateau "
           f"({100 * (PLATEAU - 1):g}%) -> "

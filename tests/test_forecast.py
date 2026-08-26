@@ -70,7 +70,7 @@ def test_direct_forecast_reports_missing_radiofisher_clearly(monkeypatch):
     def missing_backend(_rf_dir=None):
         raise FileNotFoundError("not installed")
 
-    monkeypatch.setattr("rfisher.compat.import_radiofisher", missing_backend)
+    monkeypatch.setattr("rfisher.backend.import_radiofisher", missing_backend)
     with pytest.raises(RuntimeError, match="direct Fisher.*RadioFisher"):
         fc.sigma_A_direct(SCENARIO, 1.0)
 
@@ -87,7 +87,7 @@ def test_direct_forecast_reuses_stored_radiofisher_path(monkeypatch):
         assert Path(explicit) == requested
         raise LookupObserved
 
-    monkeypatch.setattr("rfisher.compat.find_radiofisher_dir", observe_lookup)
+    monkeypatch.setattr("rfisher.backend.find_radiofisher_dir", observe_lookup)
     with pytest.raises(LookupObserved):
         fc.sigma_A_direct(SCENARIO, 1.0)
 
@@ -113,9 +113,9 @@ def test_direct_forecast_uses_bank_cosmology_and_matching_cache(monkeypatch):
     backend = Backend()
     fc = Forecast(bank, backend, style="perbin_A", rf_dir=Path("/rf"))
     seen = {}
-    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.backend.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
-    monkeypatch.setattr("rfisher.compat.require_backend_capabilities",
+    monkeypatch.setattr("rfisher.backend.require_backend_capabilities",
                         lambda *args, **kwargs: frozenset())
 
     def get_cosmology(name, rf, rf_dir):
@@ -171,9 +171,9 @@ def test_direct_custom_cosmology_applies_the_banks_recorded_profile(monkeypatch)
         "provenance": {"experiment": {"settings": {
             "epsilon_fg": 1e-6, "k_nl0": 0.14}}}}
     fc = Forecast(bank, Backend(), style="perbin_A", rf_dir=Path("/rf"))
-    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.backend.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
-    monkeypatch.setattr("rfisher.compat.require_backend_capabilities",
+    monkeypatch.setattr("rfisher.backend.require_backend_capabilities",
                         lambda *args, **kwargs: frozenset())
     monkeypatch.setattr("rfisher.survey.chime_experiment",
                         lambda rf, rf_dir, ttot_hours, epsilon_fg, k_nl0: {
@@ -212,9 +212,9 @@ def test_direct_full_mask_skips_zero_weight_bins(monkeypatch):
         "config": "chime2022", "cosmology": "planck2018",
         "astrophysical_model_profile": "chime_overview_2022"}
     fc = Forecast(bank, Backend(), style="perbin_A", rf_dir=Path("/rf"))
-    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.backend.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
-    monkeypatch.setattr("rfisher.compat.require_backend_capabilities",
+    monkeypatch.setattr("rfisher.backend.require_backend_capabilities",
                         lambda *args, **kwargs: frozenset())
     custom = {
         "h": 0.7, "omega_M_0": 0.3, "omega_b_0": 0.05,
@@ -229,13 +229,13 @@ def test_direct_forecast_fails_closed_on_missing_backend_capability(monkeypatch)
     bank = _Bank(np.eye(2), ["A", "sigma_NL"])
     bank.meta = {"config": "chime2022", "cosmology": "planck2018"}
     fc = Forecast(bank, object(), style="perbin_A", rf_dir=Path("/rf"))
-    monkeypatch.setattr("rfisher.compat.bind_radiofisher",
+    monkeypatch.setattr("rfisher.backend.bind_radiofisher",
                         lambda rf, explicit=None: Path("/rf"))
 
     def reject(*_args, **_kwargs):
         raise RuntimeError("lacks required capability(s): vol_frac")
 
-    monkeypatch.setattr("rfisher.compat.require_backend_capabilities", reject)
+    monkeypatch.setattr("rfisher.backend.require_backend_capabilities", reject)
     with pytest.raises(RuntimeError, match="vol_frac"):
         fc.sigma_A_direct(SCENARIO, 1.0)
 

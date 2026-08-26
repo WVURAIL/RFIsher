@@ -23,7 +23,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import channels as chn
+from rfisher import channels
 from rfisher.resources import DEFAULT_BANK
 
 
@@ -43,8 +43,8 @@ def main() -> int:
     args = ap.parse_args()
 
     kw = {} if args.rates_csv is None else {"rates_csv": args.rates_csv}
-    csv_t = chn.legacy_rate_table(**kw)
-    prod_t = chn.mask_table_from_products(args.npz)
+    csv_t = channels.legacy_rate_table(**kw)
+    prod_t = channels.mask_table_from_products(args.npz)
 
     print("=" * 70)
     print("SOURCES")
@@ -57,7 +57,7 @@ def main() -> int:
     for n in prod_t.notes:
         print(f"           ! {n}")
 
-    rows = chn.compare_mask_tables(csv_t, prod_t)
+    rows = channels.compare_mask_tables(csv_t, prod_t)
     covered = [r for r in rows if r[0] in prod_t.n_frames]
     print()
     print("=" * 70)

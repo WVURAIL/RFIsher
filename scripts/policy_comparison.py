@@ -70,7 +70,7 @@ def main(argv=None):
         print()
         print(cmp_.table())
 
-        print(f"\n  which policy wins, as the bias tolerance tightens:")
+        print("\n  which policy wins, as the bias tolerance tightens:")
         for lo, hi, p in reversed(cmp_.tolerance_map()):
             hi_s = "inf" if np.isinf(hi) else f"{hi:.4g}"
             print(f"    r tolerance {lo:10.4g} .. {hi_s:>10s}   {p.name}")

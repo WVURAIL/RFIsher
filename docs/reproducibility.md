@@ -32,11 +32,11 @@ python -m pip install -e ".[pk]"
 ## RadioFisher checkout
 
 RadioFisher is required for bank construction and direct backend validation.
-Use the reviewed branch recorded by the released banks:
+Use the reviewed commit recorded by the released banks:
 
 ```bash
 git clone https://github.com/WVURAIL/RadioFisher ../RadioFisher
-git -C ../RadioFisher checkout pilot-proxy
+git -C ../RadioFisher checkout f6bc9ea0972028ce30472dd21b25d4b21b7068c0
 export RADIOFISHER_DIR=../RadioFisher
 ```
 
@@ -57,6 +57,16 @@ python scripts/restamp_bank_pins.py --check
 `scripts/verify_bank.py` covers interpolation, physics checks, and agreement
 between bank evaluation and direct RadioFisher calls. The paper-number gate
 regenerates every quoted value from the tracked output tables.
+
+Byte-for-byte reproduction of the frozen forecast-completion figures uses the
+renderer recorded in the PNG metadata:
+
+```bash
+python -m pip install -e ".[test]" -c requirements/render.txt
+```
+
+Other supported Matplotlib versions can render current figures, but are not
+expected to reproduce version-dependent compressed image bytes.
 
 On a WSL checkout, use a Linux temporary directory if the test runner's
 default temporary path is on a mounted Windows filesystem:

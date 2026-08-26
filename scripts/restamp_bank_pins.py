@@ -56,7 +56,7 @@ def stale_provenance() -> tuple[list[str], dict]:
     A missing checkout is a hard error, not a skipped check.
     """
     from rfisher import fisherbank
-    from rfisher.compat import find_radiofisher_dir
+    from rfisher.backend import find_radiofisher_dir
 
     try:
         radiofisher_root = find_radiofisher_dir()

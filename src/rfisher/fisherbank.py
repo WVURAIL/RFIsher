@@ -124,7 +124,7 @@ def _init_context(rf_dir, cachefile, config, epsilon_fg, k_nl0,
                          BAO-shift-only, epsilon_fg=0)
     """
     from . import cosmologies
-    from .compat import import_radiofisher, require_backend_capabilities
+    from .backend import import_radiofisher, require_backend_capabilities
 
     _validate_configuration(config, cosmology)
 
@@ -341,7 +341,7 @@ def _sha256_json(value) -> str:
 def _build_provenance() -> dict:
     """Scientific and software identity of the context that built a bank."""
     from . import __version__
-    from .compat import backend_capabilities
+    from .backend import backend_capabilities
 
     rf = _CTX["rf"]
     rf_dir = Path(_CTX["rf_dir"])
@@ -697,7 +697,7 @@ def _normalise_metadata(meta: dict, paramnames: list[str]) -> dict:
         raise ValueError("v2 bank pk_cache.filename must be a plain filename")
     if provenance["radiofisher"]["backend_id"] != "radiofisher":
         raise ValueError("v2 bank provenance has the wrong RadioFisher backend_id")
-    from .compat import SUPPORTED_BACKEND_API_VERSION
+    from .backend import SUPPORTED_BACKEND_API_VERSION
     api_version = provenance["radiofisher"]["api_version"]
     if (isinstance(api_version, bool) or not isinstance(api_version, int)
             or api_version != SUPPORTED_BACKEND_API_VERSION):

@@ -5,7 +5,7 @@ module replaces all of them with a packaged manifest plus an optional
 machine-local overlay
 (``data/products.local.json``, gitignored) and an environment hook
 (``$RFISHER_PRODUCT_DIRS``, separated by the platform path separator and
-searched first). ``$BAONOISE_PRODUCT_DIRS`` remains a fallback.
+searched first).
 
 Resolution, per channel: an explicit ``path`` (local overlay first, then
 manifest) that exists on disk wins; otherwise each search directory is tried
@@ -26,7 +26,6 @@ _ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = PRODUCTS_MANIFEST
 LOCAL = _ROOT / "data" / "products.local.json"
 ENV_DIRS = "RFISHER_PRODUCT_DIRS"
-LEGACY_ENV_DIRS = "BAONOISE_PRODUCT_DIRS"
 
 
 def _read_json(source) -> dict:
@@ -38,9 +37,7 @@ def _read_json(source) -> dict:
 
 def _search_dirs(manifest: dict, local: dict) -> list[Path]:
     dirs: list[Path] = []
-    configured = os.environ.get(ENV_DIRS)
-    if configured is None:
-        configured = os.environ.get(LEGACY_ENV_DIRS, "")
+    configured = os.environ.get(ENV_DIRS, "")
     for d in configured.split(os.pathsep):
         if d:
             dirs.append(Path(d))

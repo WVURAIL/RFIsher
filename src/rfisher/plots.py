@@ -177,10 +177,10 @@ def fig_channel_masking(fractions: dict[int, float], excised: set[int],
     return _save(fig, outfile)
 
 
-def fig_perbin_significance(zc: np.ndarray, curves: dict[str, np.ndarray],
-                            labels: dict[str, str], outfile: Path,
-                            t_label: str = "2 yr", ylab: str | None = None,
-                            title: str | None = None):
+def fig_per_bin_significance(zc: np.ndarray, curves: dict[str, np.ndarray],
+                             labels: dict[str, str], outfile: Path,
+                             t_label: str = "2 yr", ylab: str | None = None,
+                             title: str | None = None):
     """Concentric marker sizes keep all series legible where curves coincide
     (outside the DTV band the scenarios are identical by construction).
     Pass precomputed values in `curves` (significance or uncertainty) with a

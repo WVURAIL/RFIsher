@@ -9,7 +9,8 @@ detector threshold something you can optimise rather than assume.
 import numpy as np
 import pytest
 
-from rfisher import residual, scenarios
+from rfisher import channels, residual, scenarios
+from rfisher.constants import CHIME_FRAME_SECONDS
 
 
 # ----------------------------------------------------------------------
@@ -26,8 +27,8 @@ def test_absent_residuals_reproduce_masking_only():
         # recompute the pre-residual formula directly
         width = nu_hi - nu_lo
         excised = sum(
-            max(0.0, min(nu_hi, scenarios.chn.channel_edges(c)[1])
-                - max(nu_lo, scenarios.chn.channel_edges(c)[0]))
+            max(0.0, min(nu_hi, channels.channel_edges(c)[1])
+                - max(nu_lo, channels.channel_edges(c)[0]))
             for c, f in sc.fractions.items() if f >= sc.excise_threshold)
         assert v == pytest.approx((width - excised) / width)
 
@@ -122,7 +123,8 @@ def test_hook_stays_consistent_with_bin_factors():
 
 
 def test_at_threshold_constructor():
-    sc = scenarios.at_threshold({30: (0.3, 0.2), 17: (0.1, 0.05)}, eta=1.23)
+    sc = scenarios.at_threshold(
+        {30: (0.3, 0.2), 17: (0.1, 0.05)}, threshold_label=1.23)
     assert sc.fractions == {30: 0.3, 17: 0.1}
     assert sc.residuals == {30: 0.2, 17: 0.05}
     assert "1.23" in sc.label
@@ -224,13 +226,13 @@ def test_component_fractions_are_validated():
 
 def test_n_coh_from_correlation_time():
     n = residual.n_coh_from_correlation_time(3600.0)
-    assert n == pytest.approx(3600.0 / residual.CHIME_FRAME_SECONDS, rel=1e-9)
+    assert n == pytest.approx(3600.0 / CHIME_FRAME_SECONDS, rel=1e-9)
     assert 10 * np.log10(n) == pytest.approx(49.3, abs=0.1)
     # never below 1: a residual cannot average down faster than thermal noise
     assert residual.n_coh_from_correlation_time(1e-6) == 1.0
     # never above one sidereal day: longer is m = 0 and already removed
     assert residual.n_coh_from_correlation_time(1e9) == pytest.approx(
-        residual.MAX_TAU_C_SECONDS / residual.CHIME_FRAME_SECONDS)
+        residual.MAX_TAU_C_SECONDS / CHIME_FRAME_SECONDS)
     with pytest.raises(ValueError):
         residual.n_coh_from_correlation_time(1.0, frame_seconds=0.0)
 
@@ -545,7 +547,6 @@ def test_mask_benefit_weighs_residual_reduction_against_data():
     # 10x cleaner for 50% of the data: pays
     d = residual.mask_benefit(35, f=0.5, r_unmasked=20.0, r_masked=1.0)
     assert d.residual_reduction == pytest.approx(21.0 / 2.0)
-    assert d.noise_gain == d.residual_reduction
     assert d.data_cost == pytest.approx(2.0)
     assert d.net == pytest.approx(5.25) and d.should_mask
     # the same cleaning for 99% of the data: does not

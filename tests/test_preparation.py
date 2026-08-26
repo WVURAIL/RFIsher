@@ -9,7 +9,7 @@ import pytest
 from rfisher import preparation, selection_policy, thresholds
 
 
-Q16 = thresholds.MULTIPLIER_ONE
+Q16 = thresholds.Q16_SCALE
 Q_GRID = (1, 2 * Q16)
 ETA_GRID = tuple(value / Q16 for value in Q_GRID)
 EVIDENCE_SHA = "1" * 64
@@ -20,7 +20,6 @@ def _hist(counts=(40, 40, 20), systematic=(4.0, 4.0, 12.0),
           variance=None, bulk_size=1, q16=Q_GRID):
     return thresholds.ResidualScoreHistogram(
         bulk_size=bulk_size,
-        candidate_eta=tuple(value / Q16 for value in q16),
         candidate_multiplier_q16=q16,
         counts=counts,
         systematic_residual_sums=systematic,
@@ -578,7 +577,7 @@ def test_stability_requires_matching_ranks_and_grids():
             max_cost_ratio=1.1, max_systematic_residual_ratio=1.1,
             minimum_half_retained_frames=30)
     other_grid = _hist(q16=(1, 3 * Q16))
-    with pytest.raises(ValueError, match="same eta grid"):
+    with pytest.raises(ValueError, match="same Q16 grid"):
         preparation.assess_histogram_stability(
             {1: _hist()}, {1: other_grid},
             early_support=_support(), late_support=_support(),
@@ -633,14 +632,9 @@ def test_preparation_invariants_refuse_even_screening(updates, message):
             family, 0.15, allow_screening=True)
 
 
-def test_prepared_family_requires_every_rank_and_exact_q16_grid():
+def test_prepared_family_requires_every_rank():
     with pytest.raises(ValueError, match="every supported rank"):
         _family(histograms_by_rho={1: _hist(bulk_size=2)})
-    plain = thresholds.ResidualScoreHistogram(
-        bulk_size=1, candidate_eta=(1.0, 2.0), counts=(40, 40, 20),
-        systematic_residual_sums=(4.0, 4.0, 12.0))
-    with pytest.raises(ValueError, match="exact Q16"):
-        _family(histograms_by_rho={1: plain})
 
 
 def test_policy_digest_mismatch_refuses_stale_family():

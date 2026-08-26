@@ -57,11 +57,13 @@ them.
 | `products` | External survey-product registry and path resolution |
 | `channels` | ATSC channel and physical-frequency conversion |
 | `survey` and `layout` | CHIME experiment definition, bins, time conventions, and baselines |
-| `compat` | RadioFisher checkout discovery, binding, and capability checks |
+| `backend` | RadioFisher checkout discovery, binding, and capability checks |
 | `pkcache` | Content-verified matter-power-spectrum caches |
 
-The preferred import namespace is `rfisher`. The earlier namespace remains a
-compatibility surface for existing banks, scripts, and downstream consumers.
+The public import namespace is `rfisher`. Version 3 removed the earlier Python
+and command-line aliases. Historical `baonoise` spellings remain in persisted
+schemas, cache formats, bank provenance, and frozen release artifacts, where
+renaming them would change an existing scientific artifact or data contract.
 
 ## Threshold boundary
 

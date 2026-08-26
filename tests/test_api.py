@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from rfisher import api, compat, scenarios, survey
+from rfisher import api, backend, scenarios, survey
 from rfisher.fisherbank import ARTIFACT_FORECAST
 
 
@@ -28,7 +28,7 @@ def test_default_banked_api_does_not_import_radiofisher(monkeypatch):
     def unexpected_backend_import(_rf_dir=None):
         raise AssertionError("the per-bin bank does not need RadioFisher")
 
-    monkeypatch.setattr(compat, "import_radiofisher", unexpected_backend_import)
+    monkeypatch.setattr(backend, "import_radiofisher", unexpected_backend_import)
     fc = api.load()
 
     assert fc.style == "perbin_A"
@@ -37,16 +37,16 @@ def test_default_banked_api_does_not_import_radiofisher(monkeypatch):
 
 
 def test_explicit_radiofisher_path_is_still_honored(monkeypatch):
-    backend = object()
+    backend_object = object()
     requested = Path("/explicit/RadioFisher")
 
     def import_backend(rf_dir=None):
         assert Path(rf_dir) == requested
-        return backend, requested
+        return backend_object, requested
 
-    monkeypatch.setattr(compat, "import_radiofisher", import_backend)
+    monkeypatch.setattr(backend, "import_radiofisher", import_backend)
     fc = api.load(rf_dir=requested)
-    assert fc.rf is backend
+    assert fc.rf is backend_object
     assert fc.rf_dir == requested
 
 
@@ -128,12 +128,6 @@ def test_masking_cost_curve_validates_duty_even_for_empty_curve(duty):
         api.masking_cost_curve(_NoForecastWork(), fracs=[], duty=duty)
 
 
-def test_tolerance_curve_compatibility_name():
-    current = api.masking_cost_curve(_NoForecastWork(), fracs=[])
-    former = api.tolerance_curve(_NoForecastWork(), fracs=[])
-    assert all(np.array_equal(a, b) for a, b in zip(current, former))
-
-
 @pytest.mark.parametrize("target", [0.0, -1.0, np.nan, np.inf, True])
 def test_threshold_curve_rejects_invalid_target_before_forecast(target):
     with pytest.raises(ValueError, match="target"):
@@ -166,8 +160,8 @@ def test_threshold_curve_preserves_orderable_string_labels():
     points = {"loose": {30: (0.1, 0.3)},
               "strict": {30: (0.3, 0.1)}}
     result = api.threshold_curve(Forecast(), points)
-    assert result["eta"].tolist() == ["loose", "strict"]
-    assert result["best_eta"] in points
+    assert result["thresholds"].tolist() == ["loose", "strict"]
+    assert result["best_threshold"] in points
 
 
 def test_scenario_passthrough_is_identity():

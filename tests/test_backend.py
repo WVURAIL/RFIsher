@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from rfisher.compat import backend_capabilities
+from rfisher.backend import backend_capabilities
 
 
 def _backend(api_version=1, capabilities=frozenset({"feature"})):

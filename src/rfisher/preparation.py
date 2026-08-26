@@ -15,7 +15,7 @@ import numpy as np
 
 from . import selection_policy
 from .thresholds import (ALWAYS_MASKED_Q16, MAX_MULTIPLIER_Q16,
-                         MIN_RETAINED_FRAMES, MULTIPLIER_ONE,
+                         MIN_RETAINED_FRAMES,
                          ResidualScoreHistogram, ThresholdOptimization,
                          build_q16_residual_score_histogram,
                          optimize_threshold)
@@ -357,8 +357,6 @@ def assess_histogram_stability(
         late_hist = late[rho]
         if early_hist.bulk_size != late_hist.bulk_size:
             raise ValueError("early and late histograms must use the same bulk")
-        if early_hist.candidate_eta != late_hist.candidate_eta:
-            raise ValueError("early and late histograms must use the same eta grid")
         if (early_hist.candidate_multiplier_q16
                 != late_hist.candidate_multiplier_q16):
             raise ValueError("early and late histograms must use the same Q16 grid")
@@ -453,8 +451,7 @@ def assess_histogram_stability(
                             f"than {min_half} frames in one era half"),
                     **unsupported)
             key = (rho, eta)
-            q16 = (None if early_hist.candidate_multiplier_q16 is None else
-                   early_hist.candidate_multiplier_q16[index])
+            q16 = early_hist.candidate_multiplier_q16[index]
             cost_rows.append((_ratio(epoint[4], lpoint[4]), key, q16))
             systematic_rows.append(
                 (_ratio(epoint[2], lpoint[2]), key, q16))
@@ -1017,8 +1014,6 @@ class PreparedThresholdFamily:
             if histogram.bulk_size != bulk_size:
                 raise ValueError("prepared histograms need one common bulk size")
             q16 = histogram.candidate_multiplier_q16
-            if q16 is None:
-                raise ValueError("prepared histograms need exact Q16 multipliers")
             if q16[0] != int(selection_policy.value(
                     "preparation.minimum_multiplier_q16")):
                 raise ValueError("prepared multiplier grids must start at Q16 one")

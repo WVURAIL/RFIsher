@@ -68,6 +68,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .constants import CHIME_FRAME_SECONDS
 from .npzio import load_npz
 from .selection_policy import value as _policy_value
 
@@ -95,7 +96,6 @@ DEFAULT_DELAY_KEY = str(_policy_value("transfer.delay_suppression.default_key"))
 if DEFAULT_DELAY_KEY not in DELAY_SUPPRESSION_DB:
     raise RuntimeError("default delay scenario is not defined")
 
-CHIME_FRAME_SECONDS = 16384 * 2.56e-6   # 41.94304 ms
 SIDEREAL_DAY = float(_policy_value("correlation.sidereal_day_seconds"))
 
 # Hard cap on the residual correlation time. Anything correlated for longer
@@ -1123,38 +1123,6 @@ def surviving_components(stats: ShelfStatistics, corr: CorrelationTime,
     return ((1.0, n_coh_from_correlation_time(tau)),)
 
 
-def residuals_from_products(paths, off_through=None, delay_key=DEFAULT_DELAY_KEY,
-                            floor_percentile: float = DEFAULT_FLOOR_PERCENTILE,
-                            trim_percentile: float = DEFAULT_TRIM_PERCENTILE,
-                            off_from=None, **ct_kwargs):
-    """Per-channel ``{channel: r}`` plus the statistics and correlation times.
-
-    ``off_through`` (sign-on channels) and ``off_from`` (sign-off channels)
-    may each be a single ``YYYY-MM`` applied to every product, or a
-    ``{channel: 'YYYY-MM'}`` mapping; a given channel may carry at most one
-    of the two. Channels with no measurable shelf floor
-    are omitted rather than defaulted; channels whose correlation time is
-    refused are included at the conservative cap and flagged by
-    ``corrs[ch].is_measured``.
-    """
-    out, stats, corrs = {}, {}, {}
-    for p in paths:
-        head = shelf_statistics(p, off_through=None,
-                                floor_percentile=floor_percentile)
-        ot = (off_through.get(head.channel) if isinstance(off_through, dict)
-              else off_through)
-        of = (off_from.get(head.channel) if isinstance(off_from, dict)
-              else off_from)
-        budget, st, ct = budget_from_products(
-            p, off_through=ot, off_from=of, delay_key=delay_key,
-            floor_percentile=floor_percentile,
-            trim_percentile=trim_percentile, **ct_kwargs)
-        stats[st.channel] = st
-        corrs[st.channel] = ct
-        if np.isfinite(st.floor_db):
-            out[st.channel] = budget.ratio
-    return out, stats, corrs
-
 def budget_from_products(npz_path: str | Path, off_through: str | None = None,
                          delay_key: str = DEFAULT_DELAY_KEY,
                          floor_percentile: float = DEFAULT_FLOOR_PERCENTILE,
@@ -1282,9 +1250,6 @@ class PolicyComparison:
         seen = [p.name for p in self.policies]
         if len(set(seen)) != len(seen):
             raise ValueError(f"duplicate policy names: {seen}")
-
-    def of_kind(self, kind: str) -> tuple[Policy, ...]:
-        return tuple(p for p in self.policies if p.kind == kind)
 
     def meets_bias(self, policy: Policy) -> bool:
         """Excision always meets it; without a tolerance nothing is excluded."""
@@ -1461,11 +1426,6 @@ class MaskDecision:
         return (1.0 + self.r_unmasked) / (1.0 + self.r_masked)
 
     @property
-    def noise_gain(self) -> float:
-        """Compatibility name for :attr:`residual_reduction`."""
-        return self.residual_reduction
-
-    @property
     def data_cost(self) -> float:
         """Factor by which masking raises noise through lost integration."""
         return np.inf if self.f >= 1.0 else 1.0 / (1.0 - self.f)
@@ -1595,9 +1555,3 @@ def threshold_sweep(npz_path, off_through=None, etas=None,
                         r_unmasked=r_un, r_masked=dec.r_masked,
                         net=dec.net, should_mask=dec.should_mask))
     return out
-
-
-def best_operating_point(sweep):
-    """The row of a :func:`threshold_sweep` with the largest net benefit."""
-    rows = [r for r in sweep if np.isfinite(r["net"])]
-    return max(rows, key=lambda r: r["net"]) if rows else None

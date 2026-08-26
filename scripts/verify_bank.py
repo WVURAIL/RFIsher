@@ -22,7 +22,7 @@ import time
 import numpy as np
 
 from rfisher import cosmologies, forecast, pkcache, scenarios, survey
-from rfisher.compat import import_radiofisher
+from rfisher.backend import import_radiofisher
 from rfisher.fisherbank import FisherBank
 from rfisher.resources import DEFAULT_BANK, filesystem_data_file
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from rfisher import forecast, scenarios
-from rfisher.compat import import_radiofisher
+from rfisher.backend import import_radiofisher
 from rfisher.fisherbank import FisherBank
 
 

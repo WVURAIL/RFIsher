@@ -4,6 +4,44 @@ RFIsher currently has two immutable forecast-completion release roots. They
 share artifact basenames but represent different provenance states. Neither
 directory should be renamed, moved, rewritten, or collapsed into the other.
 
+## Software API v3
+
+Version 3.0.0 removes the former `baonoise` Python namespace and console
+commands, ambiguous compatibility wrappers, and the pre-v1 bias-tolerance JSON
+shape. Current code uses `rfisher`, exact Q16 threshold identities, and the
+versioned bias-report schema exclusively. This software cleanup does not
+rewrite historical `baonoise` provenance keys or schema identifiers in the
+immutable artifacts below.
+
+### Migrating from v2
+
+| v2 surface | v3 replacement |
+|---|---|
+| `import baonoise` | `import rfisher` |
+| `rfisher.compat` | `rfisher.backend` |
+| `baonoise-forecast`, `baonoise-build-bank` | `rfisher-forecast`, `rfisher-build-bank` |
+| `api.tolerance_curve` | `api.masking_cost_curve` |
+| `channels.measured_mask_fractions`, `measured_mask_table` | `legacy_rate_fractions`, `legacy_rate_table` |
+| `scenarios.measured` | `legacy_rate_table_scenario` or `survey_product_scenario`, chosen explicitly |
+| `MaskDecision.noise_gain` | `MaskDecision.residual_reduction` |
+| `threshold_curve` keys `eta`, `best_eta` | `thresholds`, `best_threshold` |
+| `at_threshold(..., eta=...)` | `at_threshold(..., threshold_label=...)` |
+| floating `build_residual_score_histogram` | exact `build_q16_residual_score_histogram` |
+| `MULTIPLIER_Q`, `MULTIPLIER_ONE` | `Q16_FRACTION_BITS`, `Q16_SCALE` |
+| `bias_tolerance.py --json-format ...` | the sole versioned report schema; bank-grid refusal is unconditional |
+
+The removed convenience aggregators in `layout` and `residual` had no live
+callers. Compose their underlying explicit operations if an external workflow
+still needs equivalent behavior.
+
+The ordinary dissertation inputs `out/three_worlds.csv` and
+`scripts/dissertation/data/bao_era_points.csv` are also authenticated pre-v3
+scientific snapshots. Their embedded source hashes identify the code that
+produced their values; they are checked against those recorded identities, not
+against the current cleanup tree. Do not restamp them. Regenerate a new
+snapshot only when the archived products are available to run the full
+pipeline.
+
 ## Existing releases
 
 ### First release

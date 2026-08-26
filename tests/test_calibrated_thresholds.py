@@ -168,7 +168,6 @@ def test_failed_export_keeps_the_existing_file(tmp_path):
 
     assert path.read_text(encoding="utf-8") == "original\n"
 
-
 def test_failed_csv_write_keeps_the_existing_file(tmp_path):
     path = tmp_path / "table.csv"
     path.write_text("original\n", encoding="utf-8")
@@ -178,13 +177,3 @@ def test_failed_csv_write_keeps_the_existing_file(tmp_path):
             path, ("value",), ({"value": 1}, {"extra": 2}))
 
     assert path.read_text(encoding="utf-8") == "original\n"
-
-
-def test_cap_aliases_preserve_the_table_contract():
-    record = {f"{stem}_adopted": index
-              for index, stem in enumerate(calibrated.CAP_ALIAS_STEMS)}
-
-    calibrated.add_cap_aliases(record)
-
-    assert all(record[f"{stem}_cap"] == record[f"{stem}_adopted"]
-               for stem in calibrated.CAP_ALIAS_STEMS)

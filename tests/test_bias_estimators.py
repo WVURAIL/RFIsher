@@ -258,17 +258,10 @@ def test_complete_evaluation_refuses_both_sides_of_bank_time_grid():
         estimator, 0, 11.0, "aperp", zeta=1.0,
         time_scaling=bt.NOISE_NORMALIZED_AT_EACH_TIME,
         reference_hours=None)
-    legacy_above = bt.evaluate_raw(
-        estimator, 0, 11.0, "aperp", zeta=1.0,
-        time_scaling=bt.NOISE_NORMALIZED_AT_EACH_TIME,
-        reference_hours=None, enforce_bank_bounds=False)
-
     assert below["failure_reason"] == "outside_bank_time_grid"
     assert below["bank_time_grid_position"] == "below_minimum"
     assert above["failure_reason"] == "outside_bank_time_grid"
     assert above["bank_time_grid_position"] == "above_maximum"
-    assert legacy_above["valid"] is True
-    assert legacy_above["bank_time_grid_position"] == "above_maximum"
 
 
 def test_one_outside_stability_perturbation_rejects_complete_point():
@@ -402,32 +395,7 @@ def test_fixed_physical_cli_requires_reference_before_loading_bank():
         bt.main(["--time-scaling", bt.FIXED_PHYSICAL_AT_REFERENCE_TIME])
 
 
-def test_default_cli_json_retains_pre_v1_consumer_shape(
-        monkeypatch, tmp_path, capsys):
-    bank_path = tmp_path / "bank.npz"
-    bank_path.write_bytes(b"test-bank")
-    output = tmp_path / "legacy.json"
-    bank = Bank()
-    monkeypatch.setattr(
-        bt, "load_bias_bank", lambda _path, **_kwargs: bank)
-
-    assert bt.main([
-        "--bank", str(bank_path), "--bins", "0", "--years", "1",
-        "--params", "aperp", "--json", str(output),
-    ]) == 0
-    capsys.readouterr()
-    decoded = json.loads(output.read_text())
-
-    assert not output.read_bytes().endswith(b"\n")
-    assert set(decoded) == {"zeta", "bank", "bins"}
-    assert decoded["bank"] == "bank.npz"
-    assert set(decoded["bins"][0]) == {"zlo", "zhi", "rows", "binding"}
-    assert set(decoded["bins"][0]["rows"]["1.0"]["aperp"]) == {
-        "r_tol", "sigma", "dtheta_dr", "drift", "stable",
-    }
-
-
-def test_complete_v1_cli_json_requires_explicit_format(
+def test_cli_json_uses_the_complete_versioned_schema(
         monkeypatch, tmp_path, capsys):
     bank_path = tmp_path / "bank.npz"
     bank_path.write_bytes(b"test-bank")
@@ -438,8 +406,7 @@ def test_complete_v1_cli_json_requires_explicit_format(
 
     assert bt.main([
         "--bank", str(bank_path), "--bins", "0", "--years", "1",
-        "--params", "aperp", "--json-format", "complete-v1",
-        "--json", str(output),
+        "--params", "aperp", "--json", str(output),
     ]) == 0
     capsys.readouterr()
     decoded = json.loads(output.read_text())
@@ -463,8 +430,7 @@ def test_complete_v1_cli_refuses_outside_grid_with_explicit_position(
 
     assert bt.main([
         "--bank", str(bank_path), "--bins", "0", "--years", str(year),
-        "--params", "aperp", "--json-format", "complete-v1",
-        "--json", str(output),
+        "--params", "aperp", "--json", str(output),
     ]) == 0
     capsys.readouterr()
     central = json.loads(output.read_text())["bins"][0]["points"][0][
@@ -472,20 +438,6 @@ def test_complete_v1_cli_refuses_outside_grid_with_explicit_position(
     assert central["valid"] is False
     assert central["failure_reason"] == "outside_bank_time_grid"
     assert central["bank_time_grid_position"] == position
-
-
-def test_legacy_json_rejects_nonhistorical_stability_fraction(
-        monkeypatch, tmp_path):
-    bank_path = tmp_path / "bank.npz"
-    bank_path.write_bytes(b"test-bank")
-    monkeypatch.setattr(
-        bt, "load_bias_bank", lambda _path, **_kwargs: Bank())
-
-    with pytest.raises(SystemExit):
-        bt.main([
-            "--bank", str(bank_path), "--bins", "0",
-            "--stability-fraction", "0.05",
-        ])
 
 
 def test_bank_build_source_manifest_mismatch_fails_before_backend_import():

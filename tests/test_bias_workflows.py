@@ -77,8 +77,8 @@ def test_three_worlds_rejects_a_nonzero_foreground_bank(
     path = tmp_path / "bank.npz"
     path.touch()
     bank = types.SimpleNamespace(
-        artifact_kind=module.bt.ARTIFACT_BIAS_RESPONSE,
-        paramnames=[module.bt.PRES],
+        artifact_kind=module.bias_tolerance.ARTIFACT_BIAS_RESPONSE,
+        paramnames=[module.bias_tolerance.PRES],
         meta={
             "config": "chime2022",
             "cosmology": "planck2018",
@@ -88,11 +88,12 @@ def test_three_worlds_rejects_a_nonzero_foreground_bank(
             "provenance": {"experiment": {"settings": {"P_res": 1.0}}},
         },
     )
-    monkeypatch.setattr(module.bt, "FisherBank", lambda _path: bank)
+    monkeypatch.setattr(
+        module.bias_tolerance, "FisherBank", lambda _path: bank)
 
     with pytest.raises(ValueError, match=r"epsilon_fg must equal 0\.0"):
-        module.bt.load_bias_bank(path, expected_kfg_fac=None,
-                                 expected_epsilon_fg=0.0)
+        module.bias_tolerance.load_bias_bank(
+            path, expected_kfg_fac=None, expected_epsilon_fg=0.0)
 
 
 def _world_bank(module, response=1.0, t_grid=None):
@@ -173,7 +174,8 @@ def test_three_worlds_uses_the_on_era_for_signoff_channels(
     calls = []
 
     monkeypatch.setattr(
-        module.R, "kept_frame_floor", lambda path: (-40.0, "measured"))
+        module.residual, "kept_frame_floor",
+        lambda path: (-40.0, "measured"))
     monkeypatch.setattr(module, "eta1_population", lambda path, ch: (80, 100))
     monkeypatch.setattr(module, "floor_details",
                         lambda path, ch: ("test era", 80))
@@ -187,8 +189,8 @@ def test_three_worlds_uses_the_on_era_for_signoff_channels(
         calls.append(("correlation", kwargs["off_from"]))
         return types.SimpleNamespace(quality=quality, reason="test reason")
 
-    monkeypatch.setattr(module.R, "threshold_sweep", sweep)
-    monkeypatch.setattr(module.R, "correlation_time", correlation)
+    monkeypatch.setattr(module.residual, "threshold_sweep", sweep)
+    monkeypatch.setattr(module.residual, "correlation_time", correlation)
 
     result = module.channel_r_eta1("product.npz", channel)
 
@@ -213,12 +215,14 @@ def test_three_worlds_uses_the_on_era_for_signoff_channels(
 def test_three_worlds_reports_an_empty_eta1_population(monkeypatch):
     module = _load_three_worlds()
     monkeypatch.setattr(
-        module.R, "kept_frame_floor", lambda path: (-40.0, "measured"))
+        module.residual, "kept_frame_floor",
+        lambda path: (-40.0, "measured"))
     monkeypatch.setattr(
         module, "eta1_population", lambda path, ch: (16, 8359))
-    monkeypatch.setattr(module.R, "threshold_sweep", lambda path, **kwargs: [])
     monkeypatch.setattr(
-        module.R, "correlation_time",
+        module.residual, "threshold_sweep", lambda path, **kwargs: [])
+    monkeypatch.setattr(
+        module.residual, "correlation_time",
         lambda path, **kwargs: types.SimpleNamespace(
             quality="measured", reason=""))
     monkeypatch.setattr(module, "floor_details",
