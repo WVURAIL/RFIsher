@@ -784,11 +784,18 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
                  f" [{lo:.3f}, {hi:.3f}]; recompute the row from"
                  " out/bin_level_targets.csv")
 
-    # The survey-penalty column. Only the published legacy row has a shipped
-    # scenario, so it is pinned to the artifact; the products-substituted and
-    # band-wide rows correspond to no scenario in required_times.csv, and the
-    # only check available for them is that each stays consistent with the
-    # table's own baseline within the rounding slack of its printed cells.
+    # The survey-penalty column. Only the published legacy row is a row of
+    # required_times.csv, so it is pinned to the artifact. The products-
+    # substituted and band-wide rows are absent from that CSV only because
+    # run_forecast.py's table_scens dict does not build them: both are
+    # reproducible from shipped constructors --
+    # scenarios.survey_product_scenario([537, 521, 506], fill_missing="csv")
+    # and scenarios.uniform(0.942, DTV_BAND, excise_threshold=0.5) -- and
+    # they DO move when the pinned bank is rebuilt. Until those two are added
+    # to run_forecast.py they cannot be pinned to an artifact here, so the
+    # check below is a floor, not a ceiling: it holds each row against the
+    # table's own baseline within the rounding slack of its printed cells,
+    # which catches a stale or mistyped row but not a shared drift.
     ck.value("survey penalty, legacy rate table (published row)",
              [f"{required_time_penalties()['legacy_rate_table']:.3f}"],
              "quote out/required_times.csv time_penalty_vs_clean at the"
