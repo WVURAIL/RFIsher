@@ -14,6 +14,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
     "check_dissertation_numbers",
@@ -21,6 +23,16 @@ spec = importlib.util.spec_from_file_location(
 cdn = importlib.util.module_from_spec(spec)
 sys.modules["check_dissertation_numbers"] = cdn
 spec.loader.exec_module(cdn)
+
+
+@pytest.fixture(autouse=True)
+def _without_archive_products(monkeypatch):
+    """Keep the product-recomputed table checks inert here. These tests drive
+    the gate over synthetic corpora carrying only the registry-derived
+    needles, so the flagger and eta-sweep sections have no table to find;
+    without this the module's result would depend on whether the developer
+    happens to have RFISHER_PRODUCT_DIRS exported."""
+    monkeypatch.delenv("RFISHER_PRODUCT_DIRS", raising=False)
 
 
 def test_normalize_folds_unicode_and_commas():

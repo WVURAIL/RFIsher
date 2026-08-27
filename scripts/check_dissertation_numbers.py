@@ -489,6 +489,104 @@ def half_ulp(s: str) -> float:
     return 0.5 * 10.0 ** -(len(s) - s.index(".") - 1 if "." in s else 0)
 
 
+def table_row_cells(text: str, label: str,
+                    after: str | None = None) -> list[str] | None:
+    """The cells of one tabular row, located by its leading label and cut at
+    the row terminator. Checking a value in its own cell matters: a bare
+    substring search over the whole document can be satisfied by an
+    unrelated number elsewhere (0.984 is a substring of 0.9845). Pass
+    ``after`` to scope the search past an anchor when a row label is not
+    unique in the document."""
+    if after is not None:
+        start = text.find(after)
+        if start < 0:
+            return None
+        text = text[start:]
+    m = re.search(re.escape(label) + r"([^\\]*)\\\\", text)
+    if m is None:
+        return None
+    return [c.strip() for c in m.group(1).split("&")]
+
+
+def cell_matches(printed: str, value: float) -> bool:
+    """A printed cell agrees with a computed value when the value lies
+    within half a unit of that cell's own last printed place, so each cell
+    is held at whatever precision it chose to display."""
+    try:
+        return abs(value - float(printed)) <= half_ulp(printed)
+    except ValueError:
+        return False
+
+
+def check_row(ck, name: str, label: str, values: list[float], hint: str,
+              first: int = 1, after: str | None = None) -> None:
+    """Compare one recomputed row against the cells the table prints."""
+    cells = table_row_cells(ck.text, label, after=after)
+    if cells is None:
+        ck._emit("FAIL", name,
+                 f"row '{label}' not found; keep the row label and its"
+                 " cells on one line")
+        return
+    got = cells[first:first + len(values)]
+    if len(got) < len(values):
+        ck._emit("FAIL", name,
+                 f"row '{label}' has {len(got)} cells, expected"
+                 f" {len(values)}")
+        return
+    bad = [(i, c, v) for i, (c, v) in enumerate(zip(got, values))
+           if not cell_matches(c, v)]
+    ck._emit("PASS" if not bad else "FAIL", name,
+             "" if not bad else
+             "; ".join(f"cell {i + 1} prints {c} but recomputes to"
+                       f" {v:.6g}" for i, c, v in bad) + f"; {hint}")
+
+
+def flagger_cells() -> dict[int, dict] | None:
+    """Per-channel cells of the ch09 flagger comparison table, recomputed
+    from the archive products via incumbent.compare_flaggers at the shipped
+    defaults. That table is serialized in no artifact, so recomputation is
+    its only source. Returns None when the products are unreachable (they
+    are not vendored in the repo), and the caller skips rather than fails."""
+    try:
+        from rfisher import products
+        from rfisher.incumbent import DEFAULT_MAD_K, compare_flaggers
+    except Exception:
+        return None
+    got = products.paths([34, 35, 36], announce=False)
+    if len(got) < 3:
+        return None
+    cells: dict[int, dict] = {}
+    for ch, path in got.items():
+        rows, meta = compare_flaggers(path, mad_k=DEFAULT_MAD_K,
+                                      sk_nsigma=3.0, min_frames=8)
+        entry = {"duty": float(meta["duty_cycle"])}
+        for row in rows:
+            name = row.name.lower()
+            key = ("mad" if name.startswith("mad")
+                   else "sk" if name.startswith("sk")
+                   else "proxy" if "proxy" in name else None)
+            if key:
+                entry[key] = (float(row.reduction_db), float(row.f))
+        cells[ch] = entry
+    return cells
+
+
+def eta_sweep_ch33(etas=(1, 1.2, 1.5, 2, 5)) -> list | None:
+    """Channel 33's displayed eta sweep (residual.threshold_sweep). The grid
+    is the one the chapter prints, not the pinned default grid, and the rows
+    are serialized nowhere -- so this recomputation is the table's only
+    source. None when the product is unreachable."""
+    try:
+        from rfisher import products
+        from rfisher.residual import threshold_sweep
+    except Exception:
+        return None
+    got = products.paths([33], announce=False)
+    if 33 not in got:
+        return None
+    return threshold_sweep(got[33], etas=list(etas))
+
+
 def bin_target_years(zbin: str = "1.40-1.50") -> dict[str, float]:
     """Bin-level 5-sigma on-sky years per scenario for one redshift bin
     (out/bin_level_targets.csv); 1.40-1.50 is the most affected DTV bin."""
@@ -825,6 +923,68 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
                  f"quoted penalty {spen} outside {row_yr}/{base_yr} ="
                  f" [{slo:.3f}, {shi:.3f}]; recompute the row from"
                  " out/required_times.csv")
+
+    # ---- flagger comparison table <- incumbent.compare_flaggers ---------
+    # Recomputed, not read: this table is serialized in no provenance
+    # summary, no out/ artifact, and no vendored export, so a stale cell
+    # here turns nothing else red. The products are not vendored, so the
+    # section skips when they are unreachable.
+    ck.section("Flagger table <- incumbent.compare_flaggers (products)")
+    flag = flagger_cells()
+    if flag is None:
+        ck.skip("flagger comparison table",
+                "set RFISHER_PRODUCT_DIRS to the archive per-pilot products")
+    else:
+        chans = (34, 35, 36)
+        check_row(ck, "flagger table duty cycle row", "duty cycle",
+                  [flag[c]["duty"] for c in chans],
+                  "recompute with compare_flaggers duty_cycle")
+        for key, row_label, name in (
+                ("mad", "MAD 1.8x (per acquisition)", "MAD 1.8x"),
+                ("sk", "spectral kurtosis, 3\\sigma", "spectral kurtosis"),
+                ("proxy", "pilot proxy (bootstrap rule)", "pilot proxy")):
+            check_row(ck, f"flagger table {name} shelf removed (dB)",
+                      row_label, [flag[c][key][0] for c in chans],
+                      "recompute with compare_flaggers reduction_db")
+            check_row(ck, f"flagger table {name} masked fraction",
+                      row_label, [flag[c][key][1] for c in chans],
+                      "recompute with compare_flaggers f", first=4)
+
+    # ---- channel 33 eta sweep <- residual.threshold_sweep ---------------
+    # Also recomputed rather than read. The displayed eta grid is the one
+    # the chapter prints; the pinned default grid is a different one, so
+    # the grid itself is an input this check fixes.
+    ck.section("Channel 33 eta sweep <- residual.threshold_sweep (products)")
+    sweep = eta_sweep_ch33()
+    if sweep is None:
+        ck.skip("channel 33 eta sweep",
+                "set RFISHER_PRODUCT_DIRS to the archive per-pilot products")
+    else:
+        # 'masked fraction f' also heads a column of the flagger table, so
+        # every row here is scoped past this sweep's own header.
+        head = "\\eta & 1 (floor)"
+        check_row(ck, "ch33 sweep masked fraction row",
+                  "masked fraction f",
+                  [float(r["f"]) for r in sweep],
+                  "recompute with threshold_sweep f", after=head)
+        check_row(ck, "ch33 sweep kept-frame shelf row",
+                  "kept-frame shelf (dB)",
+                  [float(r["kept_shelf_db"]) for r in sweep],
+                  "recompute with threshold_sweep kept_shelf_db",
+                  after=head)
+        check_row(ck, "ch33 sweep residual row", "residual r_{\\rm proxy}",
+                  [float(r["r_masked"]) for r in sweep],
+                  "recompute with threshold_sweep r_masked", after=head)
+        if summary:
+            r_tol = float(summary["bao_policy_case"]["residual_tolerance"])
+            check_row(ck, "ch33 sweep residual over tolerance row",
+                      "r_{\\rm proxy}/r_{\\text{tol}}",
+                      [float(r["r_masked"]) / r_tol for r in sweep],
+                      "recompute as r_masked / bao_policy_case"
+                      ".residual_tolerance", after=head)
+        else:
+            ck.skip("ch33 sweep residual over tolerance row",
+                    "pass --summary-json for the pinned residual tolerance")
 
     # ---- per-bin r_tol table <- forecast_completion_all_dtv_bins.json ---
     ck.section("Per-bin r_tol table <- out/forecast_completion_all_dtv_bins"
