@@ -502,7 +502,10 @@ def table_row_cells(text: str, label: str,
         if start < 0:
             return None
         text = text[start:]
-    m = re.search(re.escape(label) + r"([^\\]*)\\\\", text)
+    # Non-greedy to the row terminator rather than "no backslash until it":
+    # a cell may legitimately hold a control sequence (the band-wide row
+    # ends in \infty), and a single backslash is not the terminator.
+    m = re.search(re.escape(label) + r"([\s\S]*?)\\\\", text)
     if m is None:
         return None
     return [c.strip() for c in m.group(1).split("&")]
@@ -569,6 +572,69 @@ def flagger_cells() -> dict[int, dict] | None:
                 entry[key] = (float(row.reduction_db), float(row.f))
         cells[ch] = entry
     return cells
+
+
+def table91_historical_rows() -> dict | None:
+    """Table 9.1's substituted and band-wide rows, recomputed. They are
+    absent from out/required_times.csv only because run_forecast.py's
+    table_scens dict does not build them; both are first-class shipped
+    scenarios and both move when the pinned bank is rebuilt, so holding
+    them against the table's own baseline is weaker than recomputing.
+    The band-wide row needs only the pinned bank. The substituted row also
+    needs the ch34-36 archive products and is omitted without them."""
+    try:
+        import numpy as np
+
+        from rfisher import forecast, scenarios, survey
+        from rfisher.backend import import_radiofisher
+        from rfisher.fisherbank import FisherBank
+        from rfisher.resources import DEFAULT_BANK
+    except Exception:
+        return None
+    try:
+        bank = FisherBank(DEFAULT_BANK)
+        style = ("perbin_A" if bank.meta["config"] == "chime2022"
+                 else "shared_A")
+        rf, rf_dir = ((None, None) if style == "perbin_A"
+                      else import_radiofisher())
+        fc = forecast.Forecast(bank, rf, style=style, rf_dir=rf_dir)
+    except Exception:
+        return None
+
+    zbin = 6  # z = 1.40-1.50, the most affected DTV bin
+    hour = survey.OVERVIEW_ONSKY_YEAR_HOURS
+
+    def survey_hours(sc):
+        return fc.required_hours(sc, 5.0)
+
+    def bin_hours(sc):
+        return fc.required_hours_metric(
+            lambda t, sc=sc: fc.significance(sc, t, bins=[zbin]), 5.0)
+
+    clean = scenarios.clean()
+    h_clean, hb_clean = survey_hours(clean), bin_hours(clean)
+    rows: dict[str, dict] = {}
+
+    def add(key, sc):
+        h5 = survey_hours(sc)
+        entry = {"survey_years": h5 / hour, "survey_penalty": h5 / h_clean}
+        hb = bin_hours(sc)
+        if np.isfinite(hb):
+            entry["bin_years"] = hb / hour
+            entry["bin_penalty"] = hb / hb_clean
+        rows[key] = entry
+
+    add("band", scenarios.uniform(0.942, scenarios.DTV_BAND,
+                                  excise_threshold=0.5))
+    try:
+        from rfisher import products
+        got = products.paths([34, 35, 36], announce=False)
+        if len(got) == 3:
+            add("sub", scenarios.survey_product_scenario(
+                [got[34], got[35], got[36]], fill_missing="csv"))
+    except Exception:
+        pass
+    return rows
 
 
 def eta_sweep_ch33(etas=(1, 1.2, 1.5, 2, 5)) -> list | None:
@@ -924,6 +990,32 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
                  f" [{slo:.3f}, {shi:.3f}]; recompute the row from"
                  " out/required_times.csv")
 
+    # Recomputed cover for the same two rows. The self-consistency checks
+    # above catch a mistyped or stale row; these catch a shared drift the
+    # baseline moves with, which is what a bank rebuild produces.
+    hist = table91_historical_rows()
+    if hist is None:
+        ck.skip("Table 9.1 historical rows recomputed",
+                "the pinned forecast bank could not be loaded")
+    else:
+        check_row(ck, "Table 9.1 band-wide row recomputed",
+                  "bootstrap rule band-wide",
+                  [hist["band"]["survey_years"],
+                   hist["band"]["survey_penalty"]],
+                  "recompute with scenarios.uniform(0.942, DTV_BAND,"
+                  " excise_threshold=0.5)")
+        if "sub" in hist:
+            sub = hist["sub"]
+            check_row(ck, "Table 9.1 products-substituted row recomputed",
+                      "with products substituted",
+                      [sub["survey_years"], sub["survey_penalty"],
+                       sub["bin_years"], sub["bin_penalty"]],
+                      "recompute with scenarios.survey_product_scenario"
+                      "([537, 521, 506], fill_missing='csv')")
+        else:
+            ck.skip("Table 9.1 products-substituted row recomputed",
+                    "set RFISHER_PRODUCT_DIRS for the ch34-36 products")
+
     # ---- flagger comparison table <- incumbent.compare_flaggers ---------
     # Recomputed, not read: this table is serialized in no provenance
     # summary, no out/ artifact, and no vendored export, so a stale cell
@@ -936,19 +1028,24 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
                 "set RFISHER_PRODUCT_DIRS to the archive per-pilot products")
     else:
         chans = (34, 35, 36)
+        # 'duty cycle' also occurs in prose, so every row here is scoped
+        # past this table's own column header.
+        top = "shelf removed (dB)"
         check_row(ck, "flagger table duty cycle row", "duty cycle",
                   [flag[c]["duty"] for c in chans],
-                  "recompute with compare_flaggers duty_cycle")
+                  "recompute with compare_flaggers duty_cycle", after=top)
         for key, row_label, name in (
                 ("mad", "MAD 1.8x (per acquisition)", "MAD 1.8x"),
                 ("sk", "spectral kurtosis, 3\\sigma", "spectral kurtosis"),
                 ("proxy", "pilot proxy (bootstrap rule)", "pilot proxy")):
             check_row(ck, f"flagger table {name} shelf removed (dB)",
                       row_label, [flag[c][key][0] for c in chans],
-                      "recompute with compare_flaggers reduction_db")
+                      "recompute with compare_flaggers reduction_db",
+                      after=top)
             check_row(ck, f"flagger table {name} masked fraction",
                       row_label, [flag[c][key][1] for c in chans],
-                      "recompute with compare_flaggers f", first=4)
+                      "recompute with compare_flaggers f", first=4,
+                      after=top)
 
     # ---- channel 33 eta sweep <- residual.threshold_sweep ---------------
     # Also recomputed rather than read. The displayed eta grid is the one
@@ -963,6 +1060,19 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
         # 'masked fraction f' also heads a column of the flagger table, so
         # every row here is scoped past this sweep's own header.
         head = "\\eta & 1 (floor)"
+        # The grid is an input, not an output: the values below are computed
+        # at the etas this gate sweeps, so the header has to still name them
+        # or the rows would be right about the wrong thing.
+        header = table_row_cells(ck.text, "\\eta &")
+        printed_etas = [c.split()[0] for c in (header or [])[:len(sweep)]
+                        if c.split()]
+        want_etas = [f"{float(r['eta']):g}" for r in sweep]
+        ck._emit(
+            "PASS" if printed_etas == want_etas else "FAIL",
+            "ch33 sweep header lists the swept etas",
+            "" if printed_etas == want_etas else
+            f"header reads {printed_etas} but the rows are computed at"
+            f" {want_etas}; keep the two in step")
         check_row(ck, "ch33 sweep masked fraction row",
                   "masked fraction f",
                   [float(r["f"]) for r in sweep],

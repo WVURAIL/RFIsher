@@ -244,9 +244,16 @@ def _forecast_headline_rows() -> str:
     yrs = cdn.required_times_years()
     pens = cdn.required_time_penalties()
     byrs = cdn.bin_target_years()
-    # The substituted and band-wide rows of Table 9.1 answer to no shipped
-    # scenario, so their years stay the historical literals the table quotes.
-    sub_yr, band_yr = 0.0253, 0.0295
+    # The substituted and band-wide rows of Table 9.1 are not rows of
+    # required_times.csv, but they are shipped scenarios the gate recomputes,
+    # so take them from the same source it uses. SUB_YR is the fallback when
+    # the archive products are unreachable and only the band-wide row can be
+    # rebuilt from the pinned bank.
+    SUB_YR = 0.0253
+    hist = cdn.table91_historical_rows() or {}
+    band = hist.get("band", {"survey_years": 0.0295,
+                             "survey_penalty": 1.239})
+    sub = hist.get("sub")
     tol = cdn.perbin_fs8_tolerances()
     trs = cdn.template_rows()
     per = [float(r["perbin_binding_tolerance"]) for r in trs]
@@ -279,13 +286,21 @@ def _forecast_headline_rows() -> str:
          f" {yrs['legacy_rate_table']:.4f} &"
          f" {pens['legacy_rate_table']:.3f} &"
          f" {byrs['legacy_rate_table']:.3f} &"
-         f" {byrs['legacy_rate_table'] / byrs['clean']:.3f}",
-         # Penalties derived from the printed years, so the rows stay
-         # internally consistent -- all the survey column check can assert.
-         f"with products substituted on ch 34-36 & {sub_yr:.4f} &"
-         f" {sub_yr / yrs['clean']:.3f} & 0.258 & 1.474",
-         f"bootstrap rule band-wide (f = 0.942, excised) & {band_yr:.4f} &"
-         f" {band_yr / yrs['clean']:.3f} & never & infty",
+         f" {byrs['legacy_rate_table'] / byrs['clean']:.3f} \\\\",
+         # Row terminators matter: the cell-anchored checks cut a row at
+         # its trailing \\, so a row without one is invisible to them.
+         # The substituted and band-wide cells come from the same shipped
+         # scenarios the gate recomputes, so the green text tracks a bank
+         # rebuild the way the dissertation would.
+         f"with products substituted on ch 34-36 &"
+         f" {sub['survey_years']:.4f} & {sub['survey_penalty']:.3f} &"
+         f" {sub['bin_years']:.3f} & {sub['bin_penalty']:.3f} \\\\"
+         if sub else
+         f"with products substituted on ch 34-36 & {SUB_YR:.4f} &"
+         f" {SUB_YR / yrs['clean']:.3f} & 0.258 & 1.474 \\\\",
+         f"bootstrap rule band-wide (f = 0.942, excised) &"
+         f" {band['survey_years']:.4f} & {band['survey_penalty']:.3f} &"
+         f" never & \\infty \\\\",
          "r_tol (x 10^{-3}) & "
          + " & ".join(f"{1e3 * tol[b]:.2f}" for b in range(5, 12)),
          f"{min(per):.6f}-{max(per):.6f}",
