@@ -10,7 +10,7 @@ repository (Overleaf). Point it at the source:
     #   git clone https://git.overleaf.com/<project-id> dissertation-tex
     python3 scripts/check_dissertation_numbers.py \
         --tex ../dissertation-tex \
-        --summary-json ../pilot-proxy/data/provenance/dissertation_summary_v2.json
+        --summary-json ../pilot-proxy/data/provenance/dissertation_summary_v3.json
 
 `--tex` accepts .tex files, directories (searched recursively for *.tex), or a
 plain-text export (e.g. pdftotext output) -- table layout can scramble in text
@@ -474,6 +474,21 @@ def required_times_years() -> dict[str, float]:
             for r in read_csv("required_times.csv")}
 
 
+def required_time_penalties() -> dict[str, float]:
+    """Survey-level time penalty against the clean baseline per scenario
+    (out/required_times.csv). The column is formed from the underlying
+    hours, so it is finer than the ratio of the rounded years_5sig cells
+    and is the quantity the table's survey-penalty column quotes."""
+    return {r["scenario"]: float(r["time_penalty_vs_clean"])
+            for r in read_csv("required_times.csv")}
+
+
+def half_ulp(s: str) -> float:
+    """Half a unit in the last printed place of a decimal literal -- the
+    rounding slack a quoted table cell carries."""
+    return 0.5 * 10.0 ** -(len(s) - s.index(".") - 1 if "." in s else 0)
+
+
 def bin_target_years(zbin: str = "1.40-1.50") -> dict[str, float]:
     """Bin-level 5-sigma on-sky years per scenario for one redshift bin
     (out/bin_level_targets.csv); 1.40-1.50 is the most affected DTV bin."""
@@ -526,9 +541,9 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     # ---- Fig. 9.4 / SS9.7: one comparison population --------------------
     ck.section("Fig. 9.4 / SS9.7 -- keep-everything on one population")
     if summary is None:
-        ck.skip("summary_v2 policy invariants",
+        ck.skip("summary_v3 policy invariants",
                 "pass --summary-json <pilot-proxy>/data/provenance/"
-                "dissertation_summary_v2.json")
+                "dissertation_summary_v3.json")
     else:
         pol = {p["policy_key"]: p
                for p in summary["bao_policy_case"]["policies"]}
@@ -754,9 +769,6 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
                  "rows not found; keep the 'uncontaminated baseline' label and four"
                  " numeric columns per row")
     else:
-        def half_ulp(s: str) -> float:
-            return 0.5 * 10.0 ** -(len(s) - s.index(".") - 1
-                                   if "." in s else 0)
         c_bin = clean_m.group(3)
         legacy_bin = legacy_m.group(3)
         pen = legacy_m.group(4)
@@ -771,6 +783,41 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
                  f"quoted penalty {pen} outside {legacy_bin}/{c_bin} ="
                  f" [{lo:.3f}, {hi:.3f}]; recompute the row from"
                  " out/bin_level_targets.csv")
+
+    # The survey-penalty column. Only the published legacy row has a shipped
+    # scenario, so it is pinned to the artifact; the products-substituted and
+    # band-wide rows correspond to no scenario in required_times.csv, and the
+    # only check available for them is that each stays consistent with the
+    # table's own baseline within the rounding slack of its printed cells.
+    ck.value("survey penalty, legacy rate table (published row)",
+             [f"{required_time_penalties()['legacy_rate_table']:.3f}"],
+             "quote out/required_times.csv time_penalty_vs_clean at the"
+             " table's rounding")
+    survey_pat = r"[^&]*& (\d[\d.]*) & (\d[\d.]*)"
+    base_s = re.search(r"uncontaminated baseline" + survey_pat, ck.text)
+    for label, name in (("legacy detector rate table", "legacy rate table"),
+                        ("with products substituted", "products on ch 34-36"),
+                        ("bootstrap rule band-wide", "bootstrap band-wide")):
+        row_s = re.search(re.escape(label) + survey_pat, ck.text)
+        if base_s is None or row_s is None:
+            ck._emit("FAIL", f"Table 9.1 survey penalty self-consistent:"
+                             f" {name}",
+                     "row not found; keep the row label and its two survey"
+                     " columns numeric")
+            continue
+        base_yr, row_yr, spen = (base_s.group(1), row_s.group(1),
+                                 row_s.group(2))
+        slo = (float(row_yr) - half_ulp(row_yr)) / (float(base_yr)
+                                                    + half_ulp(base_yr))
+        shi = (float(row_yr) + half_ulp(row_yr)) / (float(base_yr)
+                                                    - half_ulp(base_yr))
+        sok = slo - half_ulp(spen) <= float(spen) <= shi + half_ulp(spen)
+        ck._emit("PASS" if sok else "FAIL",
+                 f"Table 9.1 survey penalty self-consistent: {name}",
+                 "" if sok else
+                 f"quoted penalty {spen} outside {row_yr}/{base_yr} ="
+                 f" [{slo:.3f}, {shi:.3f}]; recompute the row from"
+                 " out/required_times.csv")
 
     # ---- per-bin r_tol table <- forecast_completion_all_dtv_bins.json ---
     ck.section("Per-bin r_tol table <- out/forecast_completion_all_dtv_bins"
@@ -916,7 +963,7 @@ def main(argv: list[str] | None = None) -> int:
                          " by figure-borne checks")
     ap.add_argument("--summary-json", default=None,
                     help="pilot-proxy data/provenance/"
-                         "dissertation_summary_v2.json (policy invariants"
+                         "dissertation_summary_v3.json (policy invariants"
                          " SKIP without it)")
     args = ap.parse_args(argv)
 

@@ -230,7 +230,11 @@ def _forecast_headline_rows() -> str:
     forecast rerun exactly as the dissertation would."""
     cols = cdn.fig31_clean_columns()
     yrs = cdn.required_times_years()
+    pens = cdn.required_time_penalties()
     byrs = cdn.bin_target_years()
+    # The substituted and band-wide rows of Table 9.1 answer to no shipped
+    # scenario, so their years stay the historical literals the table quotes.
+    sub_yr, band_yr = 0.0253, 0.0295
     tol = cdn.perbin_fs8_tolerances()
     trs = cdn.template_rows()
     per = [float(r["perbin_binding_tolerance"]) for r in trs]
@@ -259,9 +263,17 @@ def _forecast_headline_rows() -> str:
          + " & ".join(f"{v:.3f}" for _, v in cols),
          f"uncontaminated baseline & {yrs['clean']:.4f} & 1.000 &"
          f" {byrs['clean']:.3f} & 1.000 \\\\",
-         f"legacy rate table & {yrs['legacy_rate_table']:.4f} &"
-         f" {yrs['legacy_rate_table'] / yrs['clean']:.3f} & {byrs['legacy_rate_table']:.3f} &"
+         f"legacy detector rate table, 23 ch (published) &"
+         f" {yrs['legacy_rate_table']:.4f} &"
+         f" {pens['legacy_rate_table']:.3f} &"
+         f" {byrs['legacy_rate_table']:.3f} &"
          f" {byrs['legacy_rate_table'] / byrs['clean']:.3f}",
+         # Penalties derived from the printed years, so the rows stay
+         # internally consistent -- all the survey column check can assert.
+         f"with products substituted on ch 34-36 & {sub_yr:.4f} &"
+         f" {sub_yr / yrs['clean']:.3f} & 0.258 & 1.474",
+         f"bootstrap rule band-wide (f = 0.942, excised) & {band_yr:.4f} &"
+         f" {band_yr / yrs['clean']:.3f} & never & infty",
          "r_tol (x 10^{-3}) & "
          + " & ".join(f"{1e3 * tol[b]:.2f}" for b in range(5, 12)),
          f"{min(per):.6f}-{max(per):.6f}",
