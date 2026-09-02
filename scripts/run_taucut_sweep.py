@@ -96,6 +96,41 @@ THRESHOLDS = (5.0, 3.0)
 # shows the hard cut is the conservative one.
 SOFT_CUT_CONFIGS = ("archive7yr",)
 
+# Figure typography. "repo" is rfisher.plots.setup_style (Computer Modern,
+# the RFIsher paper). "proposal" layers scripts/figstyle.py on top of it:
+# Times (TeX Gyre Termes) with STIX math at 9 pt, drawn at the proposal's
+# \textwidth so nothing is rescaled on inclusion. Proposal-style files get a
+# "_proposal" suffix so the two never overwrite each other.
+STYLES = ("repo", "proposal")
+
+
+def _load_figstyle():
+    """scripts/figstyle.py, by its own path, so this works whether the
+    driver runs as a script or is imported by a test."""
+    import importlib.util
+    location = Path(__file__).with_name("figstyle.py")
+    spec = importlib.util.spec_from_file_location("figstyle", location)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _apply_style(style):
+    from rfisher.plots import setup_style
+    setup_style()
+    if style == "proposal":
+        figstyle = _load_figstyle()
+        figstyle.use()
+        return figstyle.TEXTWIDTH, "_proposal"
+    return 7.4, ""
+
+
+def _annotation_pt():
+    """Annotation size that follows the active style's base size."""
+    import matplotlib
+    return float(matplotlib.rcParams["font.size"]) - 1.0
+
+
 # Legend labels for the two-panel Fig. 10-format figure, where the top
 # panel carries the context and the legend must fit beside the curves.
 SHORT_LABELS = {
@@ -342,7 +377,7 @@ def read_off_threshold(taus, significances, target):
 def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
                      kpar_of_delay, residual_table, markers, tau_cut_ns,
                      tau_mask_ns, z_reference, outfile, floor=0.1,
-                     delay_max_ns=450.0):
+                     delay_max_ns=450.0, style="repo"):
     """Two panels on the delay axis of Amiri et al. 2025 Fig. 10.
 
     Top: their filter's RMS residual against the delay of a mode, with the
@@ -356,12 +391,16 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
     import matplotlib.pyplot as plt
     from matplotlib.ticker import NullFormatter
     from rfisher.plots import (BASELINE, CRITICAL, INK, INK2, MUTED, SERIES,
-                               _save, setup_style)
+                               _save)
 
-    setup_style()
+    width, _suffix = _apply_style(style)
+    small = _annotation_pt()
     fig, (top, bot) = plt.subplots(
-        2, 1, figsize=(7.4, 7.2), sharex=True,
+        2, 1, figsize=(width, width * 0.97), sharex=True,
         gridspec_kw={"height_ratios": [1.0, 2.2], "hspace": 0.08})
+    # savefig.bbox = tight crops to the drawn content, so the axes span the
+    # figure: what is saved is then TEXTWIDTH wide and includes unscaled.
+    fig.subplots_adjust(left=0.085, right=0.995, top=0.90, bottom=0.075)
     gray, pink = "#d9d9d9", "#f6c9c9"
     for ax in (top, bot):
         ax.axvspan(0.0, tau_cut_ns, color=gray, alpha=0.55, lw=0)
@@ -376,11 +415,11 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
     top.set_ylabel("RMS filter residual")
     top.text(tau_cut_ns + 4, 0.97,
              r"$\tau_{\rm cut}$" + f" = {tau_cut_ns:.0f} ns",
-             color=INK2, fontsize=9, ha="left", va="top", rotation=90)
+             color=INK2, fontsize=small, ha="left", va="top", rotation=90)
     top.text(tau_mask_ns + 6, 0.1, f"kept above {tau_mask_ns:.0f} ns",
-             color=INK2, fontsize=9, ha="left", va="bottom")
+             color=INK2, fontsize=small, ha="left", va="bottom")
     top.text(2, 0.92, "Amiri et al. 2025, Fig. 10 (digitised)",
-             color=MUTED, fontsize=8.5, ha="left", va="top")
+             color=MUTED, fontsize=small, ha="left", va="top")
     top.grid(True, axis="y")
 
     # -- bottom: what the BAO is worth at that floor -------------------
@@ -403,7 +442,7 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
             bot.axhline(ceiling, color=color, lw=1.0, ls=(0, (4, 3)),
                         alpha=0.5)
             bot.text(delay_max_ns - 4, ceiling * 1.08, "no cut",
-                     color=color, fontsize=8.5, ha="right", va="bottom")
+                     color=color, fontsize=small, ha="right", va="bottom")
         soft = (soft_curves or {}).get(name)
         if soft:
             stau = delay_floor_of_tau(np.asarray(soft["tau"], dtype=float))
@@ -417,22 +456,22 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
     ymin, ymax = bot.get_ylim()
     for level, text in ((5.0, r"5$\sigma$"), (3.0, r"3$\sigma$")):
         bot.axhline(level, color=MUTED, lw=1.0)
-        bot.text(3, level, f" {text}", color=INK2, fontsize=9,
+        bot.text(3, level, f" {text}", color=INK2, fontsize=small,
                  va="bottom", ha="left")
     for tau, label in markers:
         bot.axvline(tau, color=BASELINE, lw=1.0, ls=":")
         if tau == tau_mask_ns:
             continue                      # labelled with the mask line
         bot.text(tau, ymin * 1.15, f" {tau:.0f} ns {label}", color=INK2,
-                 fontsize=8.5, va="bottom", ha="left", rotation=90)
+                 fontsize=small, va="bottom", ha="left", rotation=90)
     bot.axvline(tau_mask_ns, color=CRITICAL, lw=1.1, ls="--", alpha=0.8)
     bot.text(tau_mask_ns, ymax * 0.9, f" {tau_mask_ns:.0f} ns kept today",
-             color=CRITICAL, fontsize=8.5, va="top", ha="left", rotation=90)
+             color=CRITICAL, fontsize=small, va="top", ha="left", rotation=90)
     bot.set_xlim(0.0, delay_max_ns)
     bot.set_xlabel(r"retained delay floor $\tau_{\min}$ [ns]"
                    r"  (hard cut: $1.4\,\tau_{\rm cut}$)")
     bot.set_ylabel(r"BAO detection significance $A/\sigma_A$")
-    bot.legend(loc="lower right", fontsize=8.4, bbox_to_anchor=(1.0, 0.10),
+    bot.legend(loc="lower right", bbox_to_anchor=(1.0, 0.10),
                handlelength=2.2)
 
     # -- shared top axis: k_par of a mode at that delay, z = 1.16 -------
@@ -446,7 +485,7 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
     secondary.set_xticks([k for k in ticks_k if k / scale <= delay_max_ns])
     secondary.xaxis.set_minor_formatter(NullFormatter())
     fig.suptitle("The discarded delay window, on the paper's own axis",
-                 y=0.985, fontsize=12)
+                 y=0.985)
     return _save(fig, Path(outfile))
 
 
@@ -574,10 +613,12 @@ def _write_caption(out, *caption_args):
     print(f"[taucut] wrote {out / 'fig_taucut_bao_caption.txt'}")
 
 
-def _draw_figures(out, rf, configs, curves, curves_soft, zref):
+def _draw_figures(out, rf, configs, curves, curves_soft, zref, style="repo"):
     """Both figures from in-memory curves: the tau_cut figure and the
     Fig. 10-format companion on the retained-delay axis."""
     from rfisher import plots
+
+    _width, suffix = _apply_style(style)
 
     shown = [name for name, cfg in configs.items() if cfg.get("figure", True)]
     hard = {name: {"tau": c["tau"], "significance": c["significance"]}
@@ -593,7 +634,7 @@ def _draw_figures(out, rf, configs, curves, curves_soft, zref):
         markers=TAU_NS_MARKERS,
         published_tau_ns=survey.CHIME2025_TAU_CUT_NS,
         z_reference=zref,
-        outfile=out / "fig_taucut_bao.png")
+        outfile=out / f"fig_taucut_bao{suffix}.png")
     print(f"[taucut] wrote {path} (+ .pdf)")
     transition = rf.DELAY_TRANSITION_FACTOR
     path = fig_fig10_format(
@@ -607,8 +648,8 @@ def _draw_figures(out, rf, configs, curves, curves_soft, zref):
         markers=TAU_NS_MARKERS,
         tau_cut_ns=survey.CHIME2025_TAU_CUT_NS,
         tau_mask_ns=survey.CHIME2025_TAU_MASK_NS,
-        z_reference=zref,
-        outfile=out / "fig_taucut_bao_fig10.png")
+        z_reference=zref, style=style,
+        outfile=out / f"fig_taucut_bao_fig10{suffix}.png")
     print(f"[taucut] wrote {path} (+ .pdf)")
 
 
@@ -676,7 +717,7 @@ def _load_outputs(out: Path):
     }
 
 
-def figures_only(out: Path, rf, draw=True) -> int:
+def figures_only(out: Path, rf, draw=True, style="repo") -> int:
     """Redraw both figures and the caption from an existing run's CSVs."""
     loaded = _load_outputs(out)
     configs = _CTX["configs"]
@@ -691,7 +732,7 @@ def figures_only(out: Path, rf, draw=True) -> int:
                    loaded["cal"], loaded["curves_soft"])
     if draw:
         _draw_figures(out, rf, configs, loaded["curves"],
-                      loaded["curves_soft"], zref)
+                      loaded["curves_soft"], zref, style=style)
     return 0
 
 
@@ -712,6 +753,11 @@ def main(argv=None) -> int:
                     help="skip the second sweep at the sigma_NL that "
                          "reproduces the published 12.4 sigma")
     ap.add_argument("--no-figure", action="store_true")
+    ap.add_argument("--style", choices=STYLES, default="repo",
+                    help="figure typography: 'repo' (Computer Modern, the "
+                         "RFIsher paper) or 'proposal' (scripts/figstyle.py: "
+                         "Times at 9 pt, drawn at the proposal's textwidth; "
+                         "files get a _proposal suffix)")
     ap.add_argument("--figures-only", action="store_true",
                     help="redraw both figures and the caption from the CSVs "
                          "already in --out; no Fisher evaluations")
@@ -725,7 +771,8 @@ def main(argv=None) -> int:
     zref = survey.CHIME2025_Z_REFERENCE
     fiducial_sigma_nl = float(_CTX["cosmo"]["sigma_nl"])
     if args.figures_only:
-        return figures_only(out, rf, draw=not args.no_figure)
+        return figures_only(out, rf, draw=not args.no_figure,
+                            style=args.style)
 
     # ---------------------------------------------------- 1. calibration
     fiducial_cases = [
@@ -904,7 +951,8 @@ def main(argv=None) -> int:
                    sigma_nl_match, ttot_factor, fiducial_sigma_nl, curves,
                    curves_matched, threshold_rows, cal, curves_soft)
     if not args.no_figure:
-        _draw_figures(out, rf, configs, curves, curves_soft, zref)
+        _draw_figures(out, rf, configs, curves, curves_soft, zref,
+                      style=args.style)
     return 0
 
 

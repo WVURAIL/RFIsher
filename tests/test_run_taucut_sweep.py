@@ -215,3 +215,33 @@ def test_figures_only_rebuilds_figures_and_caption_from_the_csvs(tmp_path):
         assert (tmp_path / name).is_file()
     assert (tmp_path / "fig_taucut_bao_caption.txt").read_text() \
         == (out / "fig_taucut_bao_caption.txt").read_text()
+
+
+def test_proposal_style_draws_at_textwidth_with_a_suffix(tmp_path):
+    """--style proposal applies scripts/figstyle.py (Times, 9 pt) and writes
+    _proposal files at the proposal's textwidth, leaving the repo-style
+    files alone."""
+    import shutil
+    import matplotlib
+    from rfisher.backend import find_radiofisher_dir
+    try:
+        find_radiofisher_dir()
+    except FileNotFoundError:
+        pytest.skip("figures-only needs the backend for the delay mapping")
+    out = ROOT / "out"
+    for name in ("taucut_sweep.csv", "taucut_thresholds.csv",
+                 "taucut_calibration.csv"):
+        shutil.copy(out / name, tmp_path / name)
+
+    assert taucut.main(["--out", str(tmp_path), "--figures-only",
+                        "--style", "proposal"]) == 0
+
+    for name in ("fig_taucut_bao_proposal.pdf",
+                 "fig_taucut_bao_fig10_proposal.pdf"):
+        assert (tmp_path / name).is_file()
+    assert not (tmp_path / "fig_taucut_bao_fig10.pdf").exists()
+    # the style stayed applied: Times-first serif list, 9 pt, TrueType embed
+    assert matplotlib.rcParams["font.serif"][0] == "TeX Gyre Termes"
+    assert matplotlib.rcParams["font.size"] == 9
+    assert matplotlib.rcParams["pdf.fonttype"] == 42
+    assert taucut._load_figstyle().TEXTWIDTH == 6.5
