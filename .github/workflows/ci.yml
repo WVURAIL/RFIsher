@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: WVURAIL/RadioFisher
-          ref: f6bc9ea0972028ce30472dd21b25d4b21b7068c0
+          ref: 564b69cfa0b32a8678e75c99ae6012858570bfb6
           path: RadioFisher
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
