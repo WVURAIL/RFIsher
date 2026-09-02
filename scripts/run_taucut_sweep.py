@@ -57,6 +57,7 @@ Outputs, all under --out:
     fig_taucut_bao_caption.txt
 
     python3 scripts/run_taucut_sweep.py --out out/
+    python3 scripts/run_taucut_sweep.py --out out/ --figures-only   # redraw
 """
 from __future__ import annotations
 
@@ -567,6 +568,133 @@ def _print_table(title, curves, sweep_taus):
         print(f"{label:>9}  " + "  ".join(values))
 
 
+def _write_caption(out, *caption_args):
+    caption = _caption(*caption_args)
+    (out / "fig_taucut_bao_caption.txt").write_text(caption)
+    print(f"[taucut] wrote {out / 'fig_taucut_bao_caption.txt'}")
+
+
+def _draw_figures(out, rf, configs, curves, curves_soft, zref):
+    """Both figures from in-memory curves: the tau_cut figure and the
+    Fig. 10-format companion on the retained-delay axis."""
+    from rfisher import plots
+
+    shown = [name for name, cfg in configs.items() if cfg.get("figure", True)]
+    hard = {name: {"tau": c["tau"], "significance": c["significance"]}
+            for name, c in curves.items() if name in shown}
+    no_cut = {name: c["no_cut"] for name, c in curves.items()
+              if name in shown}
+    soft = ({name: {"tau": c["tau"], "significance": c["significance"]}
+             for name, c in curves_soft.items()} if curves_soft else None)
+    path = plots.fig_taucut_significance(
+        hard, {name: cfg["label"] for name, cfg in configs.items()}, no_cut,
+        soft_curves=soft,
+        kpar_min_of_tau=lambda tau: kpar_min_h(tau, zref),
+        markers=TAU_NS_MARKERS,
+        published_tau_ns=survey.CHIME2025_TAU_CUT_NS,
+        z_reference=zref,
+        outfile=out / "fig_taucut_bao.png")
+    print(f"[taucut] wrote {path} (+ .pdf)")
+    transition = rf.DELAY_TRANSITION_FACTOR
+    path = fig_fig10_format(
+        hard,
+        {name: SHORT_LABELS.get(name, cfg["label"])
+         for name, cfg in configs.items()},
+        no_cut, soft,
+        delay_floor_of_tau=lambda tau: transition * np.asarray(tau),
+        kpar_of_delay=lambda delay: kpar_min_h(delay / transition, zref),
+        residual_table=survey.filter_residual_table(),
+        markers=TAU_NS_MARKERS,
+        tau_cut_ns=survey.CHIME2025_TAU_CUT_NS,
+        tau_mask_ns=survey.CHIME2025_TAU_MASK_NS,
+        z_reference=zref,
+        outfile=out / "fig_taucut_bao_fig10.png")
+    print(f"[taucut] wrote {path} (+ .pdf)")
+
+
+def _load_outputs(out: Path):
+    """Rebuild everything the figures and caption need from a previous
+    run's CSVs, so a redraw does not cost a sweep."""
+    def rows(name):
+        with (out / name).open(newline="") as stream:
+            return list(csv.DictReader(stream))
+
+    sweep = rows("taucut_sweep.csv")
+    thresholds = rows("taucut_thresholds.csv")
+    calibration = rows("taucut_calibration.csv")
+    fiducial = float(_CTX["cosmo"]["sigma_nl"])
+    sigmas = sorted({float(r["sigma_nl_mpc"]) for r in sweep})
+    matched = [v for v in sigmas if v != fiducial]
+
+    def curves_for(cut, sigma_nl):
+        curves: dict = {}
+        for r in sweep:
+            if r["cut"] != cut or float(r["sigma_nl_mpc"]) != sigma_nl:
+                continue
+            c = curves.setdefault(
+                r["config"], {"tau": [], "significance": [], "no_cut": None})
+            tau, sig = float(r["tau_cut_ns"]), float(r["significance"])
+            if tau == 0.0:
+                c["no_cut"] = sig
+            else:
+                c["tau"].append(tau)
+                c["significance"].append(sig)
+        return curves or None
+
+    published = survey.CHIME2025_DETECTION_SIGMA
+    cal: dict = {}
+    for config in ("chime2025", "chime2025_masked"):
+        mine = [r for r in calibration if r["config"] == config]
+
+        def pick(case, tau=survey.CHIME2025_TAU_CUT_NS, field="total_sn"):
+            for r in mine:
+                if r["case"] == case and float(r["tau_cut_ns"]) == tau \
+                        and (case != "calib_nl_lifted"
+                             or float(r["sigma_nl_mpc"]) == fiducial):
+                    return float(r[field])
+            raise ValueError(f"{config}: no calibration row {case!r} at "
+                             f"{tau} ns in taucut_calibration.csv")
+
+        head = pick("calib_nl_lifted")
+        cal[config] = {
+            "headline": head,
+            "uncut": pick("calib_nl_lifted", tau=0.0),
+            "undamped": pick("calib_undamped"),
+            "match_f": pick("calib_summary_F", field="sigma_nl_mpc"),
+            "match_amp": pick("calib_summary_amplitude",
+                              field="sigma_nl_mpc"),
+            "ttot_factor": published / head,
+        }
+    return {
+        "curves": curves_for("hard", fiducial),
+        "curves_soft": curves_for("soft", fiducial),
+        "curves_matched": curves_for("hard", matched[0]) if matched else None,
+        "sigma_nl_match": matched[0] if matched else fiducial,
+        "threshold_rows": thresholds,
+        "cal": cal,
+        "fiducial_sigma_nl": fiducial,
+    }
+
+
+def figures_only(out: Path, rf, draw=True) -> int:
+    """Redraw both figures and the caption from an existing run's CSVs."""
+    loaded = _load_outputs(out)
+    configs = _CTX["configs"]
+    zref = survey.CHIME2025_Z_REFERENCE
+    published = survey.CHIME2025_DETECTION_SIGMA
+    c = loaded["cal"]["chime2025"]
+    _write_caption(out, c["headline"], c["headline"] / published,
+                   c["uncut"], c["uncut"] / published, c["undamped"],
+                   loaded["sigma_nl_match"], c["ttot_factor"],
+                   loaded["fiducial_sigma_nl"], loaded["curves"],
+                   loaded["curves_matched"], loaded["threshold_rows"],
+                   loaded["cal"], loaded["curves_soft"])
+    if draw:
+        _draw_figures(out, rf, configs, loaded["curves"],
+                      loaded["curves_soft"], zref)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="out", help="output directory")
@@ -584,6 +712,9 @@ def main(argv=None) -> int:
                     help="skip the second sweep at the sigma_NL that "
                          "reproduces the published 12.4 sigma")
     ap.add_argument("--no-figure", action="store_true")
+    ap.add_argument("--figures-only", action="store_true",
+                    help="redraw both figures and the caption from the CSVs "
+                         "already in --out; no Fisher evaluations")
     args = ap.parse_args(argv)
 
     out = Path(args.out)
@@ -593,6 +724,8 @@ def main(argv=None) -> int:
     configs = _CTX["configs"]
     zref = survey.CHIME2025_Z_REFERENCE
     fiducial_sigma_nl = float(_CTX["cosmo"]["sigma_nl"])
+    if args.figures_only:
+        return figures_only(out, rf, draw=not args.no_figure)
 
     # ---------------------------------------------------- 1. calibration
     fiducial_cases = [
@@ -767,51 +900,11 @@ def main(argv=None) -> int:
               f"{row['tau_loglog_interp_ns'] or '-'}")
 
     # --------------------------------------------------------- 3. figure
-    caption = _caption(headline, ratio, uncut, uncut_ratio, undamped,
-                       sigma_nl_match, ttot_factor, fiducial_sigma_nl,
-                       curves, curves_matched, threshold_rows, cal,
-                       curves_soft)
-    (out / "fig_taucut_bao_caption.txt").write_text(caption)
-    print(f"[taucut] wrote {out / 'fig_taucut_bao_caption.txt'}")
+    _write_caption(out, headline, ratio, uncut, uncut_ratio, undamped,
+                   sigma_nl_match, ttot_factor, fiducial_sigma_nl, curves,
+                   curves_matched, threshold_rows, cal, curves_soft)
     if not args.no_figure:
-        from rfisher import plots
-        shown = [name for name, cfg in configs.items()
-                 if cfg.get("figure", True)]
-        path = plots.fig_taucut_significance(
-            {name: {"tau": c["tau"], "significance": c["significance"]}
-             for name, c in curves.items() if name in shown},
-            {name: cfg["label"] for name, cfg in configs.items()},
-            {name: c["no_cut"] for name, c in curves.items()
-             if name in shown},
-            soft_curves=({name: {"tau": c["tau"],
-                                 "significance": c["significance"]}
-                          for name, c in curves_soft.items()}
-                         if curves_soft else None),
-            kpar_min_of_tau=lambda tau: kpar_min_h(tau, zref),
-            markers=TAU_NS_MARKERS,
-            published_tau_ns=survey.CHIME2025_TAU_CUT_NS,
-            z_reference=zref,
-            outfile=out / "fig_taucut_bao.png")
-        print(f"[taucut] wrote {path} (+ .pdf)")
-        transition = rf.DELAY_TRANSITION_FACTOR
-        path = fig_fig10_format(
-            {name: {"tau": c["tau"], "significance": c["significance"]}
-             for name, c in curves.items() if name in shown},
-            {name: SHORT_LABELS.get(name, cfg["label"])
-             for name, cfg in configs.items()},
-            {name: c["no_cut"] for name, c in curves.items()
-             if name in shown},
-            ({name: {"tau": c["tau"], "significance": c["significance"]}
-              for name, c in curves_soft.items()} if curves_soft else None),
-            delay_floor_of_tau=lambda tau: transition * np.asarray(tau),
-            kpar_of_delay=lambda delay: kpar_min_h(delay / transition, zref),
-            residual_table=survey.filter_residual_table(),
-            markers=TAU_NS_MARKERS,
-            tau_cut_ns=survey.CHIME2025_TAU_CUT_NS,
-            tau_mask_ns=survey.CHIME2025_TAU_MASK_NS,
-            z_reference=zref,
-            outfile=out / "fig_taucut_bao_fig10.png")
-        print(f"[taucut] wrote {path} (+ .pdf)")
+        _draw_figures(out, rf, configs, curves, curves_soft, zref)
     return 0
 
 

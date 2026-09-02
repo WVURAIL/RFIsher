@@ -191,3 +191,27 @@ def test_fig10_format_figure_renders_on_the_delay_axis(tmp_path):
         z_reference=1.16, outfile=tmp_path / "fig10.png")
     assert Path(out).is_file()
     assert (tmp_path / "fig10.pdf").is_file()
+
+
+def test_figures_only_rebuilds_figures_and_caption_from_the_csvs(tmp_path):
+    """The committed tables are enough to redraw both figures and the
+    caption without a sweep; the redrawn caption must match the committed
+    one, which the full run wrote."""
+    import shutil
+    from rfisher.backend import find_radiofisher_dir
+    try:
+        find_radiofisher_dir()
+    except FileNotFoundError:
+        pytest.skip("figures-only needs the backend for the delay mapping")
+    out = ROOT / "out"
+    for name in ("taucut_sweep.csv", "taucut_thresholds.csv",
+                 "taucut_calibration.csv"):
+        shutil.copy(out / name, tmp_path / name)
+
+    assert taucut.main(["--out", str(tmp_path), "--figures-only"]) == 0
+
+    for name in ("fig_taucut_bao.png", "fig_taucut_bao.pdf",
+                 "fig_taucut_bao_fig10.png", "fig_taucut_bao_fig10.pdf"):
+        assert (tmp_path / name).is_file()
+    assert (tmp_path / "fig_taucut_bao_caption.txt").read_text() \
+        == (out / "fig_taucut_bao_caption.txt").read_text()
