@@ -222,7 +222,8 @@ def fig_per_bin_significance(zc: np.ndarray, curves: dict[str, np.ndarray],
 def fig_taucut_significance(curves: dict, labels: dict, no_cut: dict,
                             kpar_min_of_tau, markers, published_tau_ns,
                             z_reference: float, outfile: Path,
-                            floor: float = 0.1):
+                            floor: float = 0.1, soft_curves: dict | None = None,
+                            soft_label: str = "soft cut (Fig. 10 transfer)"):
     """BAO significance against the delay cut that sets the k_par floor.
 
     curves: config -> {'tau': [ns], 'significance': [A/sigma_A]}.
@@ -255,6 +256,14 @@ def fig_taucut_significance(curves: dict, labels: dict, no_cut: dict,
         if ceiling and np.isfinite(ceiling):
             ax.axhline(ceiling, color=color, lw=1.0, ls=(0, (4, 3)),
                        alpha=0.5)
+        soft = (soft_curves or {}).get(name)
+        if soft:
+            stau = np.asarray(soft["tau"], dtype=float)
+            ssig = np.asarray(soft["significance"], dtype=float)
+            alive = np.isfinite(ssig) & (ssig > floor)
+            ax.plot(stau[alive], ssig[alive], color=color, lw=1.4,
+                    ls=(0, (6, 2)), marker="s", ms=3.2, mfc="none",
+                    label=f"{labels.get(name, name)}, {soft_label}")
 
     ax.set_xscale("log")
     ax.set_yscale("log")

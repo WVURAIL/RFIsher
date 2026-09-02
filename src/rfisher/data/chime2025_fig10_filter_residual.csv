@@ -1,0 +1,99 @@
+# Amiri et al. 2025 (arXiv:2511.19620v2), Figure 10, page 23: RMS residual of
+# the stacked DAYENU foreground filter (tau_cut = 200 ns) applied to a unit
+# sinusoid of delay tau, median over local ERA (the black curve). Extracted
+# from the PDF's vector path and calibrated on the axis tick labels (fit
+# residuals below 0.01 ns and 1e-4 in the residual); 85 vertices at tau >= 0, plus the
+# origin: the path's flat zero-residual segment runs from -225 ns to 190 ns
+# with no interior vertices, so (0, 0) is its implied value at tau = 0.
+# High-delay plateau (median, tau > 800 ns): 0.8698. The overall
+# attenuation is forward-modelled in the analysis and does not bias the
+# estimate; use the response relative to the plateau.
+# Column 1 is tau / tau_cut with tau_cut = 200 ns, so the curve scales to
+# other cuts on the assumption that the filter shape is self-similar.
+tau_over_tau_cut,rms_residual
+0.00000,0.0000
+0.95008,0.0001
+1.00008,0.0005
+1.05008,0.0343
+1.10008,0.1765
+1.15009,0.4355
+1.20009,0.6367
+1.25008,0.6809
+1.30008,0.7226
+1.35008,0.7420
+1.40009,0.7556
+1.45009,0.7668
+1.50009,0.7765
+1.55009,0.7830
+1.60009,0.7910
+1.70009,0.8017
+1.75009,0.8060
+1.80010,0.8111
+1.85010,0.8140
+1.95010,0.8219
+2.00009,0.8248
+2.25010,0.8356
+2.30010,0.8382
+2.35010,0.8395
+2.50011,0.8454
+2.55011,0.8466
+2.60010,0.8482
+2.65010,0.8493
+2.70010,0.8502
+2.75010,0.8513
+2.80011,0.8520
+2.90011,0.8530
+3.05011,0.8540
+3.10011,0.8548
+3.20012,0.8570
+3.25012,0.8574
+3.30011,0.8584
+3.35012,0.8598
+3.40011,0.8606
+3.45012,0.8608
+3.60012,0.8624
+3.65012,0.8621
+3.70012,0.8628
+3.75012,0.8630
+3.80012,0.8638
+3.85012,0.8651
+3.90013,0.8660
+3.95012,0.8662
+4.00012,0.8670
+4.05012,0.8668
+4.10013,0.8672
+4.15013,0.8668
+4.20013,0.8675
+4.25013,0.8677
+4.30013,0.8687
+4.40013,0.8685
+4.45013,0.8689
+4.50014,0.8687
+4.55014,0.8688
+4.60013,0.8682
+4.65014,0.8673
+4.70014,0.8681
+4.80014,0.8682
+4.90014,0.8696
+4.95014,0.8693
+5.05014,0.8700
+5.10014,0.8700
+5.15014,0.8708
+5.20014,0.8709
+5.30014,0.8700
+5.35015,0.8702
+5.40015,0.8706
+5.50015,0.8718
+5.55015,0.8717
+5.60015,0.8723
+5.70015,0.8719
+5.75015,0.8723
+5.85015,0.8722
+5.90015,0.8717
+5.95015,0.8715
+6.00015,0.8710
+6.05016,0.8709
+6.15015,0.8704
+6.20016,0.8702
+6.30016,0.8688
+6.33345,0.8687

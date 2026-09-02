@@ -132,6 +132,7 @@ def test_threshold_rows_and_caption_survive_dead_curves():
                        "no_cut": 50.0},
     }
     rows = taucut._threshold_rows(curves, 7.0)
+    assert {r["cut"] for r in rows} == {"hard"}
     by = {(r["config"], r["target_sigma"]): r for r in rows}
     assert by[("chime2025", "5")]["tau_last_at_or_above_ns"] == ""
     assert by[("chime2025", "3")]["tau_last_at_or_above_ns"] == "50"
@@ -148,3 +149,20 @@ def test_threshold_rows_and_caption_survive_dead_curves():
     assert "100-150 ns" in caption
     assert "sensitivity sweep not run" in caption
     assert "12.4" in caption
+
+
+def test_soft_cut_rows_are_kept_apart_from_the_hard_ones():
+    curves = {"archive7yr": {"tau": [100.0, 150.0], "significance": [12.0, 4.0],
+                             "no_cut": 50.0}}
+    hard = taucut._threshold_rows(curves, 7.0)
+    soft = taucut._threshold_rows(curves, 7.0, cut="soft")
+    assert {r["cut"] for r in hard} == {"hard"}
+    assert {r["cut"] for r in soft} == {"soft"}
+    caption = taucut._caption(
+        headline=2.2, ratio=0.18, uncut=10.4, uncut_ratio=0.84,
+        undamped=88.0, sigma_nl_match=4.9, ttot_factor=5.6,
+        sigma_nl_fiducial=7.0, curves=curves, curves_matched=None,
+        threshold_rows=hard + soft, curves_soft=curves)
+    assert "archive7yr (soft)" in caption
+    assert "Fig. 10" in caption
+    assert taucut.SOFT_CUT_CONFIGS == ("archive7yr",)
