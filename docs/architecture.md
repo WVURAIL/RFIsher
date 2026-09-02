@@ -185,22 +185,41 @@ ordinary fitted parameter.
 
 ## Direct backend path
 
-The supported RadioFisher backend exposes three experiment-dictionary hooks:
+The supported RadioFisher backend exposes five experiment-dictionary hooks:
 
 - `noise_freq_weight`: surviving-time weight as a function of frequency;
-- `noise_freq_mode`: `invvar` or `fourier` band reduction; and
-- `vol_frac`: surviving survey-volume fraction.
+- `noise_freq_mode`: `invvar` or `fourier` band reduction;
+- `vol_frac`: surviving survey-volume fraction;
+- `kpar_min_fn`: callable of redshift giving the smallest retained
+  `|k_par|` in Mpc^-1, a hard line-of-sight excision applied beside the
+  backend's own foreground, wedge, and non-linear cuts; and
+- `kpar_transfer_fn`: callable of `(|k_par|, z)` giving the surviving
+  signal-power fraction in `[0, 1]`, a soft version of the same cut.
 
 A `NaN` weight marks an excised slice. Unknown or missing required
 capabilities fail before a masked direct evaluation begins. The hooks are
 no-ops when absent, so the unmodified backend result remains the clean
 forecast.
 
-For the scenarios represented by the current bank, these hooks reduce to the
-same effective-time and volume factors used by bank interpolation.
+The division of labour behind these hooks is fixed. The backend owns a
+*dimension of the Fisher integrand*, expressed in quantities it already
+uses: `radiofisher.delay_cut_kpar_min` and `delay_transfer_fn` map a
+delay to `k_par` through `nu_line` and `H(z)` and know nothing about any
+instrument. RFIsher owns every *number*, *decision*, and *dataset* that
+fills that dimension in: which field, band, time, and duty cycle define a
+configuration (`survey.chime2025_experiment`, `archive_accepted_experiment`),
+what a published analysis's cut and mask were, how a sky cut scales time
+(fixed per-voxel depth), and the digitised filter response the soft cut
+reads (`src/rfisher/data/chime2025_fig10_filter_residual.csv`, via
+`survey.delay_transfer`). `scripts/run_taucut_sweep.py` is the driver that
+sweeps the cut through the direct path; the shipped banks do not carry it.
+
+For the scenarios represented by the current bank, the masking hooks reduce
+to the same effective-time and volume factors used by bank interpolation.
 `scripts/verify_bank.py` checks the two paths, including a full-survey
-comparison. Direct evaluation remains useful when extending the model to a
-new dimension, such as radial-mode coupling from spectral gaps.
+comparison. Direct evaluation is how the model is extended to a new
+dimension; the delay cut is the first such extension, and radial-mode
+coupling from spectral gaps would be the next.
 
 ## Provenance boundary
 

@@ -187,8 +187,11 @@ validation. After installing the pinned checkout, run
 [pilot-proxy](https://github.com/WVURAIL/pilot-proxy) owns detector kernels,
 survey-product generation, and the underlying masking measurements.
 [RadioFisher](https://github.com/WVURAIL/RadioFisher) supplies the supported
-Fisher backend. RFIsher validates those inputs, maps them to masking and
-contamination-residual scenarios, and prices their scientific effect.
+Fisher backend: the integrand and the instrument-agnostic hooks that cut or
+weight it, in the backend's own units. RFIsher validates those inputs, maps
+them to masking and contamination-residual scenarios, supplies every
+survey-specific number, decision, and dataset the hooks consume, and prices
+the scientific effect.
 
 The immutable historical releases retain their original paths, filenames,
 schema identifiers, and provenance fields. They are indexed in
