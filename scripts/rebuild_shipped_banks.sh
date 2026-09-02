@@ -58,18 +58,24 @@ python scripts/fg_sensitivity.py
 # aborts the re-stamp on any failure below.
 python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022.npz
 python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022_pact2025.npz
-# The byte pins still describe the pre-rebuild banks here, so the two
-# byte-pin tests are deselected and run again after the re-stamp below;
-# everything else (provenance vs the live source trees, direct-backend
-# agreement) must pass first.
+# The pins still describe the pre-rebuild state here, so every pin-checking
+# test is deselected and run again after the re-stamp below; everything else
+# (provenance vs the live source trees, direct-backend agreement) must pass
+# first. test_named_banks_are_distinct_matched_v3_builds is on that list
+# because it also asserts EXPECTED_RADIOFISHER_SOURCE_SHA256, which the
+# re-stamp maintains: leaving it selected made this step fail on exactly the
+# backend change the pin exists to record. Re-signing is still gated, by
+# restamp_bank_pins.py's own provenance check.
 python -m pytest tests/test_resources.py -q \
   --deselect tests/test_resources.py::test_packaged_data_bytes_are_unchanged \
+  --deselect tests/test_resources.py::test_named_banks_are_distinct_matched_v3_builds \
   --deselect tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_v3_builds
 
 python scripts/restamp_bank_pins.py
 python scripts/check_paper_numbers.py
 python -m pytest -q \
   tests/test_resources.py::test_packaged_data_bytes_are_unchanged \
+  tests/test_resources.py::test_named_banks_are_distinct_matched_v3_builds \
   tests/test_resources.py::test_bull_research_banks_are_matched_strict_v2_v3_builds
 echo "ALL SHIPPED BANKS REBUILT, VERIFIED, AND RE-PINNED (workdir: $WORK)"
 echo "foreground_sensitivity.csv regenerated and paper-number gate passed."
