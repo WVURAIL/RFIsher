@@ -241,3 +241,58 @@ def test_delay_cut_rejects_a_negative_delay():
     with pytest.raises(ValueError, match="tau_cut_seconds"):
         survey.delay_cut(rf, {"nu_line": survey.HI_REST_FREQUENCY_MHZ},
                          cosmo_fns, -1e-9)
+
+
+# ------------------------------------------------- accepted-sky archive
+def test_accepted_sky_is_the_declination_band_within_y_of_0p4():
+    """|y| < 0.4 is |sin za_NS| < 0.4: 23.6 deg either side of CHIME's
+    latitude, 25.7-72.9 deg in declination, about 10,760 deg^2."""
+    area = survey.accepted_sky_area_deg2()
+
+    half = np.degrees(np.arcsin(0.4))
+    lo, hi = survey.CHIME_LATITUDE_DEG - half, survey.CHIME_LATITUDE_DEG + half
+    assert (lo, hi) == pytest.approx((25.74, 72.90), abs=0.01)
+    expected = (2.0 * np.pi * (np.sin(np.radians(hi)) - np.sin(np.radians(lo)))
+                * (180.0 / np.pi) ** 2)
+    assert area == pytest.approx(expected)
+    assert 10_700.0 < area < 10_800.0
+    # A third of the Overview sky, which is the number the caption quotes.
+    assert area / survey.OVERVIEW_SAREA_DEG2 == pytest.approx(0.347, abs=2e-3)
+
+
+def test_accepted_sky_area_clips_at_the_pole_and_rejects_bad_sines():
+    # From a pole-adjacent site the band cannot extend past +90 deg.
+    polar = survey.accepted_sky_area_deg2(y_max=0.4, latitude_deg=80.0)
+    assert polar < survey.accepted_sky_area_deg2(y_max=0.4, latitude_deg=0.0)
+    with pytest.raises(ValueError):
+        survey.accepted_sky_area_deg2(y_max=1.5)
+    with pytest.raises(ValueError):
+        survey.accepted_sky_area_deg2(y_max=0.0)
+
+
+def test_accepted_archive_holds_per_voxel_depth_fixed(monkeypatch):
+    """A declination cut loses volume, not depth: Sarea / t_tot -- the
+    combination RadioFisher's thermal noise depends on -- must be the
+    same for the accepted-sky archive as for the full-sky one."""
+    seen = []
+
+    def fake_chime2022(rf, rf_dir, ttot_hours=None):
+        seen.append(ttot_hours)
+        return {"Sarea": survey.OVERVIEW_SAREA_DEG2 / survey.DEG2_PER_SR,
+                "ttot": ttot_hours * survey.HRS_MHZ,
+                "survey_numax": 800.0, "survey_dnutot": 400.0}
+
+    monkeypatch.setattr(survey, "chime2022_experiment", fake_chime2022)
+    full = survey.chime2022_experiment(None, None,
+                                       ttot_hours=survey.archive_hours())
+    accepted = survey.archive_accepted_experiment(None, None)
+
+    assert seen[-1] == pytest.approx(survey.accepted_archive_hours())
+    assert accepted["Sarea"] * survey.DEG2_PER_SR == pytest.approx(
+        survey.accepted_sky_area_deg2())
+    assert accepted["Sarea"] / accepted["ttot"] == pytest.approx(
+        full["Sarea"] / full["ttot"])
+    # Band untouched; only the field and the time scale with it.
+    assert accepted["survey_numax"] == 800.0
+    assert accepted["survey_dnutot"] == 400.0
+    assert survey.accepted_archive_hours() == pytest.approx(3236.0, abs=1.0)

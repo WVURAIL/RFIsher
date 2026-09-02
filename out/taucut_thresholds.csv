@@ -1,0 +1,13 @@
+config,sigma_nl_mpc,target_sigma,no_cut_significance,tau_last_at_or_above_ns,significance_there,tau_first_below_ns,significance_below,tau_loglog_interp_ns
+chime2025,7,5,5.2549,,,,,
+chime2025,7,3,5.2549,50,3.1453,75,1.833,51.81
+archive7yr,7,5,50.189,125,5.5518,140,3.5239,128.3
+archive7yr,7,3,50.189,140,3.5239,150,2.5016,144.6
+archive7yr_accepted,7,5,29.563,110,5.0463,125,3.2702,110.3
+archive7yr_accepted,7,3,29.563,125,3.2702,140,2.0757,127.7
+chime2025,4.9,5,5.5169,,,,,
+chime2025,4.9,3,5.5169,50,3.4961,75,2.2054,57.21
+archive7yr,4.9,5,52.354,140,5.529,150,4.2089,143.6
+archive7yr,4.9,3,52.354,160,3.2122,175,2.0165,162.1
+archive7yr_accepted,4.9,5,30.838,110,6.7349,125,4.7311,122.5
+archive7yr_accepted,4.9,3,30.838,140,3.2568,150,2.4792,142.9

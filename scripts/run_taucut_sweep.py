@@ -8,34 +8,43 @@ wiggles live at k ~ 0.05-0.3 h/Mpc, i.e. below that floor. This script
 prices the window: for a hard delay cut at tau_cut, what BAO detection
 significance and what BAO dilation errors survive?
 
-Two configurations:
+Three configurations:
 
-  chime2025   the published field: 2,200 deg^2, 608.2-707.8 MHz (three
-              dz ~ 0.1 bins), 385 h effective, Tsys_tot = 55 K.
-  archive7yr  the Overview fiducial (31,000 deg^2, 400-800 MHz) at seven
-              calendar years x the 2019 duty cycle = 1.06 on-sky years.
+  chime2025            the published field: 2,200 deg^2, 608.2-707.8 MHz
+                       (three dz ~ 0.1 bins), 385 h effective, Tsys = 55 K.
+  archive7yr           the Overview fiducial (31,000 deg^2, 400-800 MHz) at
+                       seven calendar years x the 2019 duty cycle = 1.06
+                       on-sky years.
+  archive7yr_accepted  the same archive on the sky the present cuts accept,
+                       |y| < 0.4 (10,760 deg^2), at the same per-voxel depth.
 
 The cut runs through the RadioFisher fork's expt['kpar_min_fn'] hook and
 direct rf.fisher() calls, not the shipped Fisher banks: k_par,min is a
 dimension the banks do not carry.
 
-Before the sweep is trusted, the noise model is calibrated against the
-published 12.4 sigma: with tau_cut = 200 ns, the total power-spectrum S/N
-over 0.4 < k < 1.5 h/Mpc is computed for the chime2025 configuration and
-compared. Two traps sit in that comparison. The first is RadioFisher's
-k_NL cutoff, which lands on top of the published k_par floor and would
-delete the whole band (see CALIBRATION_K_NL0). The second is sigma_NL:
-the delay cut leaves only mu ~ 1 modes, and those are exactly what
-exp(-mu^2 k^2 sigma_NL^2) removes at k > 0.4 h/Mpc, so the statistic
-measures the BAO-damping parameter more than it measures the noise (see
-CALIBRATION_SIGMA_NL_GRID). The calibration reports both, and the sweep
-runs at the fiducial settings.
+Calibration. The noise model is checked against the published 12.4 sigma:
+with tau_cut = 200 ns, the total power-spectrum S/N over 0.4 < k < 1.5
+h/Mpc for chime2025. The statistic is sqrt(F_pk,pk) with deriv_pk =
+P_sig / (P_sig + P_N), i.e. exactly sum over modes of (P_sig / sigma_P)^2
+with sigma_P = (P_sig + P_N) sqrt(2 / N_modes): a true total S/N of a
+single P(k) amplitude, not the BAO-wiggle amplitude. It depends on
+sigma_NL only because RadioFisher's signal is Kaiser x exp(-mu^2 k^2
+sigma_NL^2), a broadband damping of the whole 21 cm power rather than of
+the wiggles, and the delay cut leaves exactly the mu ~ 1 modes that term
+acts on at k > 0.4 h/Mpc. Two traps therefore sit in the comparison: the
+k_NL cutoff, which lands on the published k_par floor and would delete the
+band (CALIBRATION_K_NL0), and sigma_NL itself (CALIBRATION_SIGMA_NL_GRID).
+The calibration reports the noise check uncut, the sigma_NL that
+reproduces 12.4 sigma under the cut, and how much the BAO thresholds move
+between that value and the fiducial.
 
 Outputs, all under --out:
     taucut_calibration.csv    the calibration against 12.4 sigma
     taucut_sweep.csv          A/sigma(A), sigma(alpha_par), sigma(alpha_perp)
+                              at the fiducial sigma_NL and at the matched one
     taucut_sweep_perbin.csv   the per-redshift-bin alpha errors
-    fig_taucut_bao.png/.pdf   the figure
+    taucut_thresholds.csv     3 and 5 sigma crossings read off the grid
+    fig_taucut_bao.png/.pdf   the figure (fiducial sigma_NL)
     fig_taucut_bao_caption.txt
 
     python3 scripts/run_taucut_sweep.py --out out/
@@ -57,9 +66,12 @@ from rfisher import cosmologies, forecast, pkcache, survey
 from rfisher.backend import import_radiofisher, require_backend_capabilities
 from rfisher.resources import filesystem_data_file
 
-# The delay grid of the proposal's figure, in ns. 200 is the published
-# DAYENU cut; 280 is the first delay the published analysis retains.
-TAU_NS_DEFAULT = (30.0, 50.0, 75.0, 100.0, 150.0, 200.0, 280.0, 400.0)
+# The delay grid of the proposal's figure, in ns, dense through 100-200 ns
+# where the archive curves cross 5 and 3 sigma so the crossings are read
+# off rather than interpolated. 200 is the published DAYENU cut; 280 is
+# the first delay the published analysis retains.
+TAU_NS_DEFAULT = (30.0, 50.0, 75.0, 100.0, 110.0, 125.0, 140.0, 150.0,
+                  160.0, 175.0, 200.0, 280.0, 400.0)
 
 # Marked on the figure: the proposal's "current / realistic / stretch".
 # The published DAYENU cut is 200 ns; 280 ns is the first delay the
@@ -67,6 +79,8 @@ TAU_NS_DEFAULT = (30.0, 50.0, 75.0, 100.0, 150.0, 200.0, 280.0, 400.0)
 # proposal's own language and 200 ns is marked separately.
 TAU_NS_MARKERS = ((280.0, "current"), (100.0, "realistic"),
                   (50.0, "stretch"))
+
+THRESHOLDS = (5.0, 3.0)
 
 # RadioFisher's non-linear cutoff, k_NL,0 = 0.14 Mpc^-1, rises as
 # (1+z)^(2/(2+ns)) and reaches 0.35 h/Mpc at z = 1.16 -- numerically the
@@ -78,19 +92,13 @@ TAU_NS_MARKERS = ((280.0, "current"), (100.0, "realistic"),
 # nothing: BAO information is damped away long before k_NL.
 CALIBRATION_K_NL0 = 10.0            # Mpc^-1
 
-# RadioFisher damps the signal by exp(-mu^2 k^2 sigma_NL^2). sigma_NL = 7 Mpc
-# is the fiducial BAO-smearing scale of the Overview forecast, valid where
-# BAO information lives (k <~ 0.2 Mpc^-1). The published detection band is
-# 0.4-1.5 h/Mpc, and the delay cut leaves exactly the mu ~ 1 modes that term
-# annihilates there, so the calibration statistic is a probe of sigma_NL far
-# more than of the noise. This grid measures that sensitivity and reports the
-# sigma_NL that would reproduce 12.4 sigma; the BAO sweep keeps the fiducial.
+# sigma_NL = 7 Mpc is the fiducial BAO-smearing scale of the Overview
+# forecast, valid where BAO information lives (k <~ 0.2 Mpc^-1). The scan
+# measures the calibration statistic's sensitivity to it and locates the
+# value that reproduces 12.4 sigma; the "undamped" value is small enough
+# that exp(-mu^2 k^2 sigma_NL^2) is 1 over the whole band.
 CALIBRATION_SIGMA_NL_GRID = (3.0, 4.0, 5.0, 6.0, 7.0)
-
-CONFIG_LABELS = {
-    "chime2025": "CHIME 2025 as published (2,200 deg$^2$, 385 h)",
-    "archive7yr": "Seven-year archive (31,000 deg$^2$, 1.06 on-sky yr)",
-}
+CALIBRATION_SIGMA_NL_UNDAMPED = 1e-3
 
 _CTX: dict = {}
 
@@ -104,8 +112,12 @@ def _make_configs(rf, rf_dir, chime2025_ttot_hours=None):
         rf, rf_dir, ttot_hours=chime2025_ttot_hours)
     zs2025, zc2025 = survey.chime2025_zbins(rf, chime2025)
     zs_arch, zc_arch = survey.chime2022_zbins()
+    accepted_deg2 = survey.accepted_sky_area_deg2()
     return {
         "chime2025": {
+            "label": f"CHIME 2025 as published "
+                     f"({survey.CHIME2025_SAREA_DEG2:,.0f} deg$^2$, "
+                     f"{chime2025_ttot_hours:,.0f} h)",
             "make_expt": lambda: survey.chime2025_experiment(
                 rf, rf_dir, ttot_hours=chime2025_ttot_hours),
             "zs": np.asarray(zs2025), "zc": np.asarray(zc2025),
@@ -113,11 +125,24 @@ def _make_configs(rf, rf_dir, chime2025_ttot_hours=None):
             "sarea_deg2": survey.CHIME2025_SAREA_DEG2,
         },
         "archive7yr": {
+            "label": f"Seven-year archive, full sky "
+                     f"({survey.OVERVIEW_SAREA_DEG2:,.0f} deg$^2$, "
+                     f"{survey.archive_hours() / survey.OVERVIEW_ONSKY_YEAR_HOURS:.2f} "
+                     f"on-sky yr)",
             "make_expt": lambda: survey.chime2022_experiment(
                 rf, rf_dir, ttot_hours=survey.archive_hours()),
             "zs": np.asarray(zs_arch), "zc": np.asarray(zc_arch),
             "ttot_hours": survey.archive_hours(),
-            "sarea_deg2": 31000.0,
+            "sarea_deg2": survey.OVERVIEW_SAREA_DEG2,
+        },
+        "archive7yr_accepted": {
+            "label": f"Seven-year archive, $|y| < {survey.ACCEPTED_NS_SINE_MAX}$ "
+                     f"({accepted_deg2:,.0f} deg$^2$, same depth)",
+            "make_expt": lambda: survey.archive_accepted_experiment(
+                rf, rf_dir),
+            "zs": np.asarray(zs_arch), "zc": np.asarray(zc_arch),
+            "ttot_hours": survey.accepted_archive_hours(),
+            "sarea_deg2": accepted_deg2,
         },
     }
 
@@ -158,7 +183,7 @@ def _one_fisher(task):
     expt = cfg["make_expt"]()
     kwargs = {}
     if kind.startswith("calib"):
-        if kind == "calib_nl_lifted":
+        if kind != "calib_nl_default":
             expt["k_nl0"] = CALIBRATION_K_NL0
         h = cosmo["h"]
         kwargs = dict(kmin=survey.CHIME2025_KMIN_H * h,
@@ -180,7 +205,7 @@ def _run(tasks, nproc, verbose=True):
         with mp.get_context("fork").Pool(nproc) as pool:
             for k, res in enumerate(pool.imap_unordered(_one_fisher, tasks)):
                 results.append(res)
-                if verbose and (k + 1) % 20 == 0:
+                if verbose and (k + 1) % 50 == 0:
                     print(f"[taucut] {k + 1}/{len(tasks)} "
                           f"({(time.time() - started) / 60:.1f} min)",
                           flush=True)
@@ -242,6 +267,34 @@ def bao_metrics(rf, paramnames, F_list):
     }
 
 
+def read_off_threshold(taus, significances, target):
+    """Bracket a downward crossing of ``target`` on the sweep grid.
+
+    Returns (tau_above, sig_above, tau_below, sig_below, tau_interp): the
+    largest grid delay still at or above the target, the next grid delay
+    below it, and a log-log interpolation between the two for reference.
+    The bracket is what to quote; the interpolation is a convenience.
+    ``tau_above`` is None when the curve never reaches the target,
+    ``tau_below`` is None when it never drops below it on the grid."""
+    order = np.argsort(taus)
+    taus = np.asarray(taus, dtype=float)[order]
+    sig = np.asarray(significances, dtype=float)[order]
+    above = np.flatnonzero(sig >= target)
+    if above.size == 0:
+        return None, None, None, None, None
+    i = int(above[-1])
+    if i + 1 >= taus.size:
+        return float(taus[i]), float(sig[i]), None, None, None
+    t0, s0, t1, s1 = taus[i], sig[i], taus[i + 1], sig[i + 1]
+    if s1 > 0.0 and s0 > 0.0:
+        interp = float(np.exp(np.interp(
+            np.log(target), [np.log(s1), np.log(s0)],
+            [np.log(t1), np.log(t0)])))
+    else:
+        interp = None
+    return float(t0), float(s0), float(t1), float(s1), interp
+
+
 # ------------------------------------------------------------------- main
 def _write_csv(path: Path, rows, fields):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -255,7 +308,103 @@ def _write_csv(path: Path, rows, fields):
 
 
 def _fmt(value, digits=6):
+    if value is None:
+        return ""
     return "inf" if not np.isfinite(value) else f"{value:.{digits}g}"
+
+
+def _sweep(configs, sweep_taus, sigma_nl, nproc, zref):
+    """Run every (config, tau, zbin) at one sigma_NL and reduce to rows."""
+    tasks = [(config, tau, i, "bao", sigma_nl)
+             for config in configs for tau in sweep_taus
+             for i in range(len(configs[config]["zc"]))]
+    results = _run(tasks, nproc)
+    grouped: dict = {}
+    schema: dict = {}
+    for config, tau_ns, ibin, _kind, _s, F, paramnames in results:
+        grouped.setdefault((config, tau_ns), {})[ibin] = F
+        schema.setdefault((config, tau_ns), paramnames)
+
+    label = _CTX["cosmo"]["sigma_nl"] if sigma_nl is None else sigma_nl
+    rf = _CTX["rf"]
+    sweep_rows, per_bin_rows = [], []
+    curves: dict = {}
+    for config in configs:
+        cfg = configs[config]
+        nbins = len(cfg["zc"])
+        curves[config] = {"tau": [], "significance": [], "no_cut": None}
+        for tau in sweep_taus:
+            matrices = grouped[(config, tau)]
+            metrics = bao_metrics(rf, schema[(config, tau)],
+                                  [matrices[i] for i in range(nbins)])
+            sweep_rows.append({
+                "config": config,
+                "sigma_nl_mpc": _fmt(label, 4),
+                "tau_cut_ns": _fmt(tau, 4),
+                "kpar_min_mpc": _fmt(
+                    kpar_min_h(tau, zref) * _CTX["cosmo"]["h"], 5),
+                "kpar_min_h_at_z1p16": _fmt(kpar_min_h(tau, zref), 5),
+                "ttot_hours": _fmt(cfg["ttot_hours"], 6),
+                "sarea_deg2": _fmt(cfg["sarea_deg2"], 6),
+                "nzbins": nbins,
+                "sigma_A": _fmt(metrics["sigma_A"]),
+                "significance": _fmt(metrics["significance"]),
+                "sigma_apar": _fmt(metrics["sigma_apar"]),
+                "sigma_aperp": _fmt(metrics["sigma_aperp"]),
+            })
+            for i, entry in enumerate(metrics["per_bin"]):
+                per_bin_rows.append({
+                    "config": config,
+                    "sigma_nl_mpc": _fmt(label, 4),
+                    "tau_cut_ns": _fmt(tau, 4),
+                    "zbin": f"{cfg['zs'][i]:.4f}-{cfg['zs'][i + 1]:.4f}",
+                    "z_center": _fmt(cfg["zc"][i], 5),
+                    "kpar_min_h": _fmt(kpar_min_h(tau, cfg["zc"][i]), 5),
+                    "sigma_apar": _fmt(entry["sigma_apar"]),
+                    "sigma_aperp": _fmt(entry["sigma_aperp"]),
+                })
+            if tau > 0.0:
+                curves[config]["tau"].append(tau)
+                curves[config]["significance"].append(metrics["significance"])
+            else:
+                curves[config]["no_cut"] = metrics["significance"]
+    return sweep_rows, per_bin_rows, curves
+
+
+def _threshold_rows(curves, sigma_nl_label):
+    rows = []
+    for config, curve in curves.items():
+        for target in THRESHOLDS:
+            t0, s0, t1, s1, interp = read_off_threshold(
+                curve["tau"], curve["significance"], target)
+            rows.append({
+                "config": config,
+                "sigma_nl_mpc": _fmt(sigma_nl_label, 4),
+                "target_sigma": _fmt(target, 3),
+                "no_cut_significance": _fmt(curve["no_cut"], 5),
+                "tau_last_at_or_above_ns": _fmt(t0, 4),
+                "significance_there": _fmt(s0, 5),
+                "tau_first_below_ns": _fmt(t1, 4),
+                "significance_below": _fmt(s1, 5),
+                "tau_loglog_interp_ns": _fmt(interp, 4),
+            })
+    return rows
+
+
+def _print_table(title, curves, sweep_taus):
+    print(f"\n-- {title} --")
+    names = list(curves)
+    print(f"{'tau [ns]':>9}  " + "  ".join(f"{c:>20s}" for c in names))
+    for tau in sweep_taus:
+        label = "no cut" if tau == 0.0 else f"{tau:.0f}"
+        values = []
+        for name in names:
+            if tau == 0.0:
+                values.append(f"{curves[name]['no_cut']:20.3f}")
+            else:
+                j = curves[name]["tau"].index(tau)
+                values.append(f"{curves[name]['significance'][j]:20.3f}")
+        print(f"{label:>9}  " + "  ".join(values))
 
 
 def main(argv=None) -> int:
@@ -268,15 +417,10 @@ def main(argv=None) -> int:
                     help=f"delay grid [ns] (default {list(TAU_NS_DEFAULT)})")
     ap.add_argument("--chime2025-ttot-hours", type=float, default=None,
                     help="override the published field's integration time "
-                         "[h] (default 385). Use this to apply the t_tot "
-                         "rescale the calibration reports, if you want the "
-                         "delay-cut S/N forced onto the published 12.4 "
-                         "sigma; see the caption for why it is not the "
-                         "default")
-    ap.add_argument("--sigma-nl", type=float, default=None,
-                    help="override the fiducial BAO damping scale sigma_NL "
-                         "[Mpc] in the sweep (sensitivity runs only; the "
-                         "calibration always scans it)")
+                         "[h] (default 385)")
+    ap.add_argument("--no-sensitivity", action="store_true",
+                    help="skip the second sweep at the sigma_NL that "
+                         "reproduces the published 12.4 sigma")
     ap.add_argument("--no-figure", action="store_true")
     args = ap.parse_args(argv)
 
@@ -286,25 +430,18 @@ def main(argv=None) -> int:
                                args.chime2025_ttot_hours)
     configs = _CTX["configs"]
     zref = survey.CHIME2025_Z_REFERENCE
+    fiducial_sigma_nl = float(_CTX["cosmo"]["sigma_nl"])
 
     # ---------------------------------------------------- 1. calibration
-    # The published statistic: with tau_cut = 200 ns, total power-spectrum
-    # S/N over 0.4 < k < 1.5 h/Mpc for the published field, against 12.4.
-    #
-    # Three fiducial variants isolate the two traps the comparison runs
-    # into. `nl_default` shows what the k_NL cutoff does to this band (it
-    # deletes it). `nocut` removes the delay cut, which is the clean test
-    # of the noise normalisation. The sigma_NL grid then measures how much
-    # of the cut result is the signal model rather than the noise: after
-    # the delay cut only mu ~ 1 modes survive, and those are precisely the
-    # ones exp(-mu^2 k^2 sigma_NL^2) removes at k > 0.4 h/Mpc.
     fiducial_cases = [
         ("calib_nl_lifted", survey.CHIME2025_TAU_CUT_NS, None),
         ("calib_nl_lifted", 0.0, None),
         ("calib_nl_default", survey.CHIME2025_TAU_CUT_NS, None),
+        ("calib_undamped", survey.CHIME2025_TAU_CUT_NS,
+         CALIBRATION_SIGMA_NL_UNDAMPED),
     ]
     sigma_nl_cases = [
-        ("calib_nl_lifted", survey.CHIME2025_TAU_CUT_NS, value)
+        ("calib_sigma_nl_scan", survey.CHIME2025_TAU_CUT_NS, value)
         for value in CALIBRATION_SIGMA_NL_GRID
     ]
     nbins2025 = len(configs["chime2025"]["zc"])
@@ -327,12 +464,12 @@ def main(argv=None) -> int:
         key = (kind, tau, sigma_nl)
         total = np.sqrt(sn2[key])
         calibration_rows.append({
-            "case": kind if sigma_nl is None else "calib_sigma_nl_scan",
+            "case": kind,
             "tau_cut_ns": _fmt(tau, 4),
             "sigma_nl_mpc": _fmt(
-                _CTX["cosmo"]["sigma_nl"] if sigma_nl is None else sigma_nl, 4),
-            "k_nl0_mpc": _fmt(CALIBRATION_K_NL0 if kind == "calib_nl_lifted"
-                              else 0.14, 4),
+                fiducial_sigma_nl if sigma_nl is None else sigma_nl, 4),
+            "k_nl0_mpc": _fmt(0.14 if kind == "calib_nl_default"
+                              else CALIBRATION_K_NL0, 4),
             "kpar_min_h_at_z1p16": _fmt(kpar_min_h(tau, zref), 4),
             "k_range_h": f"{survey.CHIME2025_KMIN_H}-{survey.CHIME2025_KMAX_H}",
             "total_sn": _fmt(total, 4),
@@ -345,20 +482,21 @@ def main(argv=None) -> int:
     headline = np.sqrt(sn2[("calib_nl_lifted", survey.CHIME2025_TAU_CUT_NS,
                             None)])
     uncut = np.sqrt(sn2[("calib_nl_lifted", 0.0, None)])
+    undamped = np.sqrt(sn2[("calib_undamped", survey.CHIME2025_TAU_CUT_NS,
+                            CALIBRATION_SIGMA_NL_UNDAMPED)])
     ratio, uncut_ratio = headline / published, uncut / published
 
     # sigma_NL that reproduces the published S/N under the delay cut, by
     # log-linear interpolation across the scan (S/N falls steeply and
     # monotonically with sigma_NL over this grid).
-    scan = np.array([np.sqrt(sn2[("calib_nl_lifted",
+    scan = np.array([np.sqrt(sn2[("calib_sigma_nl_scan",
                                   survey.CHIME2025_TAU_CUT_NS, value)])
                      for value in CALIBRATION_SIGMA_NL_GRID])
     grid = np.array(CALIBRATION_SIGMA_NL_GRID, dtype=float)
     order = np.argsort(np.log(scan))
     sigma_nl_match = float(np.interp(np.log(published), np.log(scan)[order],
                                      grid[order]))
-    # The alternative remedy: the time that would reproduce 12.4 sigma at
-    # the fiducial sigma_NL. Reported, not applied -- see the caption.
+    sigma_nl_match = round(sigma_nl_match, 1)
     ttot_factor = float(published / headline)
 
     calibration_rows.append({
@@ -377,102 +515,67 @@ def main(argv=None) -> int:
     _write_csv(out / "taucut_calibration.csv", calibration_rows,
                list(calibration_rows[0]))
 
-    print(f"\n[calibration] tau_cut = 200 ns, 0.4 < k < 1.5 h/Mpc, k_NL "
-          f"lifted: total S/N = {headline:.2f} vs published {published} "
-          f"({ratio:.2f}x) -> FAILS the 1.5x test as specified")
-    print(f"[calibration] same band, no delay cut:   S/N = {uncut:.2f} "
-          f"({uncut_ratio:.2f}x) -> noise normalisation PASSES")
-    print(f"[calibration] the gap is the signal model, not the noise: "
-          f"sigma_NL = {sigma_nl_match:.2f} Mpc (fiducial "
-          f"{_CTX['cosmo']['sigma_nl']:.1f}) reproduces {published} sigma "
-          f"under the cut")
-    print(f"[calibration] the t_tot rescale that would do the same job is "
-          f"x{ttot_factor:.1f} ({survey.CHIME2025_TTOT_HOURS * ttot_factor:.0f} "
-          f"h); NOT applied by default -- it would overshoot the uncut S/N "
-        f"by "
-          f"{ttot_factor * uncut_ratio:.1f}x\n", flush=True)
+    print(f"\n[calibration] total P(k) S/N, 0.4 < k < 1.5 h/Mpc, tau_cut = "
+          f"200 ns, k_NL lifted:\n"
+          f"              sigma_NL = {fiducial_sigma_nl:.0f} Mpc (fiducial)  "
+          f"{headline:6.2f}  ({ratio:.2f}x of {published})\n"
+          f"              sigma_NL -> 0 (undamped)        "
+          f"{undamped:6.2f}  ({undamped / published:.2f}x)\n"
+          f"              sigma_NL = {sigma_nl_match:.1f} Mpc            "
+          f"{published:6.2f}  (matched)\n"
+          f"[calibration] same band, no delay cut, fiducial: {uncut:.2f} "
+          f"({uncut_ratio:.2f}x) -> noise normalisation within 1.5x\n"
+          f"[calibration] t_tot rescale that would do the same job: "
+          f"x{ttot_factor:.1f}; not applied\n", flush=True)
 
     # ---------------------------------------------------------- 2. sweep
     sweep_taus = (0.0,) + tuple(tau_grid)      # 0 ns = the no-cut reference
-    tasks = [(config, tau, i, "bao", args.sigma_nl)
-             for config in configs for tau in sweep_taus
-             for i in range(len(configs[config]["zc"]))]
-    results = _run(tasks, args.nproc)
+    sweep_rows, per_bin_rows, curves = _sweep(
+        configs, sweep_taus, None, args.nproc, zref)
+    threshold_rows = _threshold_rows(curves, fiducial_sigma_nl)
+    _print_table(f"A/sigma(A), sigma_NL = {fiducial_sigma_nl:.0f} Mpc "
+                 "(fiducial)", curves, sweep_taus)
 
-    grouped: dict = {}
-    schema: dict = {}
-    for config, tau_ns, ibin, _kind, _sigma_nl, F, paramnames in results:
-        grouped.setdefault((config, tau_ns), {})[ibin] = F
-        schema.setdefault((config, tau_ns), paramnames)
-
-    sweep_rows, per_bin_rows = [], []
-    curves: dict = {}
-    for config in configs:
-        cfg = configs[config]
-        nbins = len(cfg["zc"])
-        curves[config] = {"tau": [], "significance": []}
-        for tau in sweep_taus:
-            matrices = grouped[(config, tau)]
-            F_list = [matrices[i] for i in range(nbins)]
-            metrics = bao_metrics(rf, schema[(config, tau)], F_list)
-            sweep_rows.append({
-                "config": config,
-                "tau_cut_ns": _fmt(tau, 4),
-                "kpar_min_mpc": _fmt(
-                    kpar_min_h(tau, zref) * _CTX["cosmo"]["h"], 5),
-                "kpar_min_h_at_z1p16": _fmt(kpar_min_h(tau, zref), 5),
-                "ttot_hours": _fmt(cfg["ttot_hours"], 6),
-                "sarea_deg2": _fmt(cfg["sarea_deg2"], 6),
-                "nzbins": nbins,
-                "sigma_A": _fmt(metrics["sigma_A"]),
-                "significance": _fmt(metrics["significance"]),
-                "sigma_apar": _fmt(metrics["sigma_apar"]),
-                "sigma_aperp": _fmt(metrics["sigma_aperp"]),
-            })
-            for i, entry in enumerate(metrics["per_bin"]):
-                per_bin_rows.append({
-                    "config": config,
-                    "tau_cut_ns": _fmt(tau, 4),
-                    "zbin": f"{cfg['zs'][i]:.4f}-{cfg['zs'][i + 1]:.4f}",
-                    "z_center": _fmt(cfg["zc"][i], 5),
-                    "kpar_min_h": _fmt(kpar_min_h(tau, cfg["zc"][i]), 5),
-                    "sigma_apar": _fmt(entry["sigma_apar"]),
-                    "sigma_aperp": _fmt(entry["sigma_aperp"]),
-                })
-            if tau > 0.0:
-                curves[config]["tau"].append(tau)
-                curves[config]["significance"].append(metrics["significance"])
+    curves_matched = None
+    if not args.no_sensitivity:
+        rows_m, per_bin_m, curves_matched = _sweep(
+            configs, sweep_taus, sigma_nl_match, args.nproc, zref)
+        sweep_rows += rows_m
+        per_bin_rows += per_bin_m
+        threshold_rows += _threshold_rows(curves_matched, sigma_nl_match)
+        _print_table(f"A/sigma(A), sigma_NL = {sigma_nl_match:.1f} Mpc "
+                     "(matched to the published detection)",
+                     curves_matched, sweep_taus)
 
     _write_csv(out / "taucut_sweep.csv", sweep_rows, list(sweep_rows[0]))
     _write_csv(out / "taucut_sweep_perbin.csv", per_bin_rows,
                list(per_bin_rows[0]))
+    _write_csv(out / "taucut_thresholds.csv", threshold_rows,
+               list(threshold_rows[0]))
 
-    no_cut = {config: float(
-        [r["significance"] for r in sweep_rows
-         if r["config"] == config and float(r["tau_cut_ns"]) == 0.0][0])
-        for config in configs}
-
-    print("\n-- BAO significance A/sigma(A) --")
-    print(f"{'tau [ns]':>9}  " + "  ".join(f"{c:>12s}" for c in configs))
-    for tau in sweep_taus:
-        label = "no cut" if tau == 0.0 else f"{tau:.0f}"
-        values = []
-        for config in configs:
-            row = next(r for r in sweep_rows if r["config"] == config
-                       and float(r["tau_cut_ns"]) == tau)
-            values.append(f"{float(row['significance']):12.3f}")
-        print(f"{label:>9}  " + "  ".join(values))
+    print("\n-- thresholds read off the grid --")
+    for row in threshold_rows:
+        print(f"  {row['config']:20s} sigma_NL={row['sigma_nl_mpc']:>4s}  "
+              f"{row['target_sigma']}sigma: last at/above "
+              f"{row['tau_last_at_or_above_ns'] or '-':>4s} ns "
+              f"({row['significance_there'] or '-'}), first below "
+              f"{row['tau_first_below_ns'] or '-':>4s} ns "
+              f"({row['significance_below'] or '-'}); interp "
+              f"{row['tau_loglog_interp_ns'] or '-'}")
 
     # --------------------------------------------------------- 3. figure
-    caption = _caption(headline, ratio, uncut, uncut_ratio, sigma_nl_match,
-                       ttot_factor, no_cut, sweep_rows,
-                       _CTX["cosmo"]["sigma_nl"])
+    caption = _caption(headline, ratio, uncut, uncut_ratio, undamped,
+                       sigma_nl_match, ttot_factor, fiducial_sigma_nl,
+                       curves, curves_matched, threshold_rows)
     (out / "fig_taucut_bao_caption.txt").write_text(caption)
     print(f"[taucut] wrote {out / 'fig_taucut_bao_caption.txt'}")
     if not args.no_figure:
         from rfisher import plots
         path = plots.fig_taucut_significance(
-            curves, CONFIG_LABELS, no_cut,
+            {name: {"tau": c["tau"], "significance": c["significance"]}
+             for name, c in curves.items()},
+            {name: cfg["label"] for name, cfg in configs.items()},
+            {name: c["no_cut"] for name, c in curves.items()},
             kpar_min_of_tau=lambda tau: kpar_min_h(tau, zref),
             markers=TAU_NS_MARKERS,
             published_tau_ns=survey.CHIME2025_TAU_CUT_NS,
@@ -482,71 +585,114 @@ def main(argv=None) -> int:
     return 0
 
 
-def _caption(headline, ratio, uncut, uncut_ratio, sigma_nl_match,
-             ttot_factor, no_cut, sweep_rows, sigma_nl_fiducial):
-    def sig(config, tau):
-        return float(next(r["significance"] for r in sweep_rows
-                          if r["config"] == config
-                          and float(r["tau_cut_ns"]) == tau))
+def _caption(headline, ratio, uncut, uncut_ratio, undamped, sigma_nl_match,
+             ttot_factor, sigma_nl_fiducial, curves, curves_matched,
+             threshold_rows):
     published = survey.CHIME2025_DETECTION_SIGMA
     archive_h = survey.archive_hours()
+    accepted = survey.accepted_sky_area_deg2()
+
+    def bracket(config, target, sigma_nl):
+        for row in threshold_rows:
+            if (row["config"] == config
+                    and float(row["target_sigma"]) == target
+                    and float(row["sigma_nl_mpc"]) == float(sigma_nl)):
+                if not row["tau_last_at_or_above_ns"]:
+                    return "never reached"
+                if not row["tau_first_below_ns"]:
+                    return f">= {row['tau_last_at_or_above_ns']} ns"
+                return (f"{row['tau_last_at_or_above_ns']}-"
+                        f"{row['tau_first_below_ns']} ns")
+        return "n/a"
+
+    def sig(config, tau):
+        c = curves[config]
+        return c["significance"][c["tau"].index(tau)]
+
     lines = [
         "Figure: what the discarded k_par window is worth.",
         "",
-        "BAO detection significance A/sigma(A) versus the delay cut "
-        "tau_cut, for CHIME as published in the 2025 auto-correlation "
-        "detection (2,200 deg^2, 608.2-707.8 MHz, three dz ~ 0.11 bins "
-        "spanning the band, 385 h of effective integration from 94 nights, "
-        "0.5 mJy/beam per frequency channel, Tsys_tot = 55 K) and for the "
-        "seven-year archive (the Overview fiducial: 31,000 deg^2, "
-        f"400-800 MHz, 15 bins, seven calendar years at the 2019 "
-        f"cosmology-quality duty cycle = {archive_h:.0f} h = "
-        f"{archive_h / survey.OVERVIEW_ONSKY_YEAR_HOURS:.2f} on-sky years). "
-        "The published analysis filters at tau_cut = 200 ns and discards "
+        "BAO detection significance A/sigma(A) versus the delay cut tau_cut "
+        "for three configurations. CHIME as published in the 2025 "
+        "auto-correlation detection: 2,200 deg^2, 608.2-707.8 MHz in three "
+        "dz ~ 0.11 bins, 385 h of effective integration from 94 nights, 0.5 "
+        "mJy/beam per frequency channel, Tsys_tot = 55 K. The seven-year "
+        "archive on the full Overview sky: 31,000 deg^2, 400-800 MHz in 15 "
+        f"bins, seven calendar years at the 2019 cosmology-quality duty "
+        f"cycle = {archive_h:,.0f} h = "
+        f"{archive_h / survey.OVERVIEW_ONSKY_YEAR_HOURS:.2f} on-sky years. "
+        "The same archive on the sky the present pipeline accepts, |y| < "
+        f"0.4 (declinations {survey.CHIME_LATITUDE_DEG - 23.58:.1f}-"
+        f"{survey.CHIME_LATITUDE_DEG + 23.58:.1f} deg, {accepted:,.0f} deg^2) "
+        "at the same per-voxel depth, i.e. t_tot scaled with the area: a "
+        "declination cut loses volume without deepening what it keeps. The "
+        "published analysis filters at tau_cut = 200 ns and discards "
         "everything below the 280 ns mask, so it begins at k_par = 0.35 "
         "h/Mpc; the top axis gives k_par,min at z = 1.16 for each tau_cut, "
         "including that 1.4x transition factor. Contamination residuals "
-        "are set to zero: this prices the modes the cut removes, not the "
-        "leakage left in the modes it keeps.",
+        "are zero: this prices the modes the cut removes, not the leakage "
+        "left in the modes it keeps.",
         "",
-        "Noise-model calibration. The specified test -- total "
-        f"power-spectrum S/N over 0.4 < k < 1.5 h/Mpc with tau_cut = 200 ns "
-        f"-- gives {headline:.2f} against the published {published} "
-        f"({ratio:.2f}x), outside 1.5x. The same band with no delay cut "
-        f"gives {uncut:.1f} ({uncut_ratio:.2f}x), which is inside 1.5x, so "
-        "the noise normalisation is not what fails. What fails is the "
-        "signal model in that band: RadioFisher damps the signal by "
-        "exp(-mu^2 k^2 sigma_NL^2), the delay cut leaves only mu ~ 1 "
-        f"modes, and at k > 0.4 h/Mpc the fiducial sigma_NL = "
-        f"{sigma_nl_fiducial:.0f} Mpc removes them. sigma_NL = "
-        f"{sigma_nl_match:.1f} Mpc reproduces the published {published} "
-        "sigma under the cut. sigma_NL is a BAO-smearing parameter, "
-        "calibrated where BAO information lives (k <~ 0.2 Mpc^-1), and the "
-        "0.4-1.5 h/Mpc detection band is outside its domain; the sweep "
-        "below therefore keeps the fiducial value and the published 385 h. "
-        f"The alternative remedy, scaling t_tot by x{ttot_factor:.1f} to "
-        f"{survey.CHIME2025_TTOT_HOURS * ttot_factor:.0f} h, is reported in "
-        "out/taucut_calibration.csv but not applied: it would overshoot the "
-        f"uncut S/N by {ttot_factor * uncut_ratio:.1f}x. Note also that "
+        "Thresholds, read off the grid as the bracket [last delay at or "
+        "above, first delay below], sigma_NL = "
+        f"{sigma_nl_fiducial:.0f} Mpc:",
+    ]
+    for config in curves:
+        lines.append(
+            f"  {config:20s} 5 sigma: {bracket(config, 5.0, sigma_nl_fiducial):>14s}"
+            f"   3 sigma: {bracket(config, 3.0, sigma_nl_fiducial):>14s}"
+            f"   no cut: {curves[config]['no_cut']:.2f}")
+    lines += [
+        "",
+        "Noise-model calibration. The total power-spectrum S/N over 0.4 < k "
+        "< 1.5 h/Mpc with tau_cut = 200 ns is sqrt(F_pk,pk) = sqrt(sum over "
+        "modes of (P_sig / sigma_P)^2), a single-amplitude total S/N and not "
+        f"the wiggle amplitude. At the fiducial sigma_NL = "
+        f"{sigma_nl_fiducial:.0f} Mpc it gives {headline:.1f} against the "
+        f"published {published} ({ratio:.2f}x); with the small-scale "
+        f"damping removed it gives {undamped:.0f} ({undamped / published:.1f}x); "
+        f"sigma_NL = {sigma_nl_match:.1f} Mpc reproduces {published}. The "
+        "statistic is sensitive to sigma_NL because RadioFisher applies "
+        "exp(-mu^2 k^2 sigma_NL^2) to the whole 21 cm power and the delay "
+        "cut leaves only the mu ~ 1 modes that term acts on; it is a "
+        "measurement of small-scale damping, not of the noise. The noise "
+        f"normalisation is checked uncut: the same band with no delay cut "
+        f"gives {uncut:.1f} ({uncut_ratio:.2f}x), within 1.5x, so t_tot is "
+        f"not rescaled (x{ttot_factor:.1f} would be needed under the cut). "
+        "The BAO sweep runs at the fiducial sigma_NL; at the matched value "
+        "the thresholds move by",
+    ]
+    if curves_matched is not None:
+        for config in curves:
+            lines.append(
+                f"  {config:20s} 5 sigma: "
+                f"{bracket(config, 5.0, sigma_nl_fiducial):>14s} -> "
+                f"{bracket(config, 5.0, sigma_nl_match):>14s}"
+                f"   3 sigma: {bracket(config, 3.0, sigma_nl_fiducial):>14s}"
+                f" -> {bracket(config, 3.0, sigma_nl_match):>14s}")
+    else:
+        lines.append("  (sensitivity sweep not run)")
+    lines += [
         "RadioFisher's k_NL cutoff (0.14 Mpc^-1 at z = 0) lands at 0.35 "
         "h/Mpc at z = 1.16 and deletes the entire detection band; it is "
         "lifted for the calibration step only and restored for the sweep.",
         "",
-        "Key values (A/sigma(A)):",
-        f"  no cut          archive {no_cut['archive7yr']:.2f}   "
-        f"published field {no_cut['chime2025']:.2f}",
+        "Key values (A/sigma(A), fiducial):",
     ]
-    for tau in (50.0, 100.0, 200.0, 280.0):
-        lines.append(
-            f"  tau_cut {tau:5.0f} ns  archive {sig('archive7yr', tau):.2f}   "
-            f"published field {sig('chime2025', tau):.2f}")
+    grid = set.intersection(*(set(c["tau"]) for c in curves.values()))
+    for tau in (50.0, 100.0, 125.0, 150.0, 200.0, 280.0):
+        if tau not in grid:
+            continue
+        lines.append(f"  tau_cut {tau:5.0f} ns  " + "   ".join(
+            f"{config} {sig(config, tau):6.2f}" for config in curves))
     lines += [
         "",
         "Sources: Amiri et al. 2025 (arXiv:2511.19620) for the field, band, "
-        "94 nights, 385 h, 0.5 mJy/beam, the 200 ns cut, the 280 ns mask "
-        "and the 12.4 sigma detection; Amiri et al. 2022 (ApJS 261, 29) "
-        "Appendix A for the instrument model, Tsys_tot = 55 K, the "
-        "BAO-shift-only Fisher settings and the fiducial cosmology.",
+        "94 nights, 385 h, 0.5 mJy/beam, the |y| < 0.4 beam selection, the "
+        "200 ns cut, the 280 ns mask and the 12.4 sigma detection; Amiri et "
+        "al. 2022 (ApJS 261, 29) Appendix A for the instrument model, "
+        "Tsys_tot = 55 K, the BAO-shift-only Fisher settings and the "
+        "fiducial cosmology.",
     ]
     return "\n".join(lines) + "\n"
 

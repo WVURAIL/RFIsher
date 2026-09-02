@@ -132,6 +132,61 @@ CHIME2025_Z_REFERENCE = 1.16       # redshift their k_par floor is quoted at
 ARCHIVE_CALENDAR_YEARS = 7.0
 
 
+# ----------------------------------------------------------------------
+# What the present pipeline accepts of the archive. The 2025 analysis keeps
+# formed beams with |y| < 0.4, y being the sine of the north-south zenith
+# angle, i.e. declinations within 23.6 deg of CHIME's latitude: about
+# 10,760 deg^2 of the Overview's 31,000. A declination cut discards volume
+# without buying depth on what is kept -- every strip transits for the
+# same time whether or not its neighbours are analysed -- so the
+# accepted-sky archive holds Sarea / t_tot (RadioFisher's per-voxel noise)
+# fixed and scales t_tot with the area, rather than spending 9,327 h on a
+# third of the sky and coming out deeper than the full archive.
+# ----------------------------------------------------------------------
+
+CHIME_LATITUDE_DEG = 49.3207
+OVERVIEW_SAREA_DEG2 = 31000.0
+ACCEPTED_NS_SINE_MAX = 0.4         # |y| < 0.4 in the 2025 analysis
+DEG2_PER_SR = (180.0 / np.pi) ** 2
+
+
+def accepted_sky_area_deg2(y_max: float = ACCEPTED_NS_SINE_MAX,
+                           latitude_deg: float = CHIME_LATITUDE_DEG) -> float:
+    """Sky area [deg^2] of the declination band a transit telescope at
+    ``latitude_deg`` sees within north-south zenith angles |sin za| < y_max."""
+    y_max = positive_scalar(y_max, "y_max")
+    if y_max > 1.0:
+        raise ValueError("y_max is a sine and must not exceed 1")
+    half_width = np.degrees(np.arcsin(y_max))
+    dec_lo = max(-90.0, latitude_deg - half_width)
+    dec_hi = min(90.0, latitude_deg + half_width)
+    steradians = 2.0 * np.pi * (np.sin(np.radians(dec_hi))
+                                - np.sin(np.radians(dec_lo)))
+    return float(steradians * DEG2_PER_SR)
+
+
+def accepted_archive_hours(area_deg2: float | None = None) -> float:
+    """Archive hours that hold the full-sky archive's per-voxel depth on
+    ``area_deg2`` of sky under RadioFisher's Sarea / t_tot noise scaling."""
+    if area_deg2 is None:
+        area_deg2 = accepted_sky_area_deg2()
+    area_deg2 = positive_scalar(area_deg2, "area_deg2")
+    return archive_hours() * area_deg2 / OVERVIEW_SAREA_DEG2
+
+
+def archive_accepted_experiment(rf, rf_dir: str | Path,
+                                area_deg2: float | None = None) -> dict:
+    """The seven-year archive restricted to the sky the present cuts accept:
+    the Overview instrument, band and duty cycle over ``area_deg2``
+    (default: the |y| < 0.4 declination band), at fixed per-voxel depth."""
+    if area_deg2 is None:
+        area_deg2 = accepted_sky_area_deg2()
+    expt = chime2022_experiment(
+        rf, rf_dir, ttot_hours=accepted_archive_hours(area_deg2))
+    expt["Sarea"] = positive_scalar(area_deg2, "area_deg2") / DEG2_PER_SR
+    return expt
+
+
 def chime2025_experiment(rf, rf_dir: str | Path,
                          ttot_hours: float = CHIME2025_TTOT_HOURS) -> dict:
     """CHIME as published in the 2025 auto-correlation detection: the
