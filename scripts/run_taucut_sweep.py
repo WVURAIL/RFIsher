@@ -246,7 +246,8 @@ def bao_metrics(rf, paramnames, F_list):
 def _write_csv(path: Path, rows, fields):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer = csv.DictWriter(stream, fieldnames=fields,
+                                lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)

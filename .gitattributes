@@ -12,6 +12,7 @@ requirements/*.txt text eol=lf
 .gitignore text eol=lf
 out/*.csv text eol=lf
 out/*.md text eol=lf
+out/*.txt text eol=lf
 scripts/dissertation/data/*.csv text eol=lf
 src/rfisher/data/*.csv text eol=lf
 src/rfisher/data/*.json text eol=lf
