@@ -1,0 +1,14 @@
+Figure: what the discarded k_par window is worth.
+
+BAO detection significance A/sigma(A) versus the delay cut tau_cut, for CHIME as published in the 2025 auto-correlation detection (2,200 deg^2, 608.2-707.8 MHz, three dz ~ 0.11 bins spanning the band, 385 h of effective integration from 94 nights, 0.5 mJy/beam per frequency channel, Tsys_tot = 55 K) and for the seven-year archive (the Overview fiducial: 31,000 deg^2, 400-800 MHz, 15 bins, seven calendar years at the 2019 cosmology-quality duty cycle = 9327 h = 1.06 on-sky years). The published analysis filters at tau_cut = 200 ns and discards everything below the 280 ns mask, so it begins at k_par = 0.35 h/Mpc; the top axis gives k_par,min at z = 1.16 for each tau_cut, including that 1.4x transition factor. Contamination residuals are set to zero: this prices the modes the cut removes, not the leakage left in the modes it keeps.
+
+Noise-model calibration. The specified test -- total power-spectrum S/N over 0.4 < k < 1.5 h/Mpc with tau_cut = 200 ns -- gives 2.22 against the published 12.4 (0.18x), outside 1.5x. The same band with no delay cut gives 10.4 (0.84x), which is inside 1.5x, so the noise normalisation is not what fails. What fails is the signal model in that band: RadioFisher damps the signal by exp(-mu^2 k^2 sigma_NL^2), the delay cut leaves only mu ~ 1 modes, and at k > 0.4 h/Mpc the fiducial sigma_NL = 7 Mpc removes them. sigma_NL = 4.9 Mpc reproduces the published 12.4 sigma under the cut. sigma_NL is a BAO-smearing parameter, calibrated where BAO information lives (k <~ 0.2 Mpc^-1), and the 0.4-1.5 h/Mpc detection band is outside its domain; the sweep below therefore keeps the fiducial value and the published 385 h. The alternative remedy, scaling t_tot by x5.6 to 2154 h, is reported in out/taucut_calibration.csv but not applied: it would overshoot the uncut S/N by 4.7x. Note also that RadioFisher's k_NL cutoff (0.14 Mpc^-1 at z = 0) lands at 0.35 h/Mpc at z = 1.16 and deletes the entire detection band; it is lifted for the calibration step only and restored for the sweep.
+
+Key values (A/sigma(A)):
+  no cut          archive 50.19   published field 5.25
+  tau_cut    50 ns  archive 30.87   published field 3.15
+  tau_cut   100 ns  archive 11.07   published field 0.92
+  tau_cut   200 ns  archive 0.36   published field 0.00
+  tau_cut   280 ns  archive 0.01   published field 0.00
+
+Sources: Amiri et al. 2025 (arXiv:2511.19620) for the field, band, 94 nights, 385 h, 0.5 mJy/beam, the 200 ns cut, the 280 ns mask and the 12.4 sigma detection; Amiri et al. 2022 (ApJS 261, 29) Appendix A for the instrument model, Tsys_tot = 55 K, the BAO-shift-only Fisher settings and the fiducial cosmology.

@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from rfisher import resources, survey
 
@@ -126,3 +127,117 @@ def test_recorded_experiment_fails_closed_on_unexplained_setting_drift(
     with np.testing.assert_raises_regex(ValueError, "cannot be reconstructed"):
         survey.experiment_from_bank_metadata(
             object(), tmp_path, meta, ttot_hours=1.0)
+
+
+
+# ---------------------------------------------- CHIME 2025 / archive configs
+def test_chime2025_experiment_overrides_only_field_band_and_time(monkeypatch):
+    """The published-detection configuration is the Overview instrument
+    pointed at a smaller field for less time; nothing else moves."""
+    seen = {}
+
+    def fake_chime2022(rf, rf_dir, ttot_hours=None):
+        seen["ttot_hours"] = ttot_hours
+        return {"Sarea": 9.44314001338921, "survey_numax": 800.0,
+                "survey_dnutot": 400.0, "nu_line": 1420.406, "k_nl0": 0.14,
+                "epsilon_fg": 0, "Ndish": 1024, "dnu": 0.390,
+                "Tsys_tot(z)": lambda z: 55e3}
+
+    monkeypatch.setattr(survey, "chime2022_experiment", fake_chime2022)
+    experiment = survey.chime2025_experiment(object(), "/nonexistent")
+
+    assert seen["ttot_hours"] == survey.CHIME2025_TTOT_HOURS == 385.0
+    assert experiment["survey_numax"] == survey.CHIME2025_NUMAX_MHZ == 707.8
+    assert experiment["survey_dnutot"] == pytest.approx(99.6)
+    assert experiment["Sarea"] == pytest.approx(2200.0 * (np.pi / 180.0) ** 2)
+    # Instrument, foregrounds and non-linear cutoff are the Overview's.
+    assert experiment["k_nl0"] == 0.14
+    assert experiment["epsilon_fg"] == 0
+    assert experiment["Ndish"] == 1024
+    assert experiment["Tsys_tot(z)"](1.16) == 55e3
+
+
+def test_published_band_is_three_bins_of_dz_about_one_tenth():
+    lo = survey.HI_REST_FREQUENCY_MHZ / survey.CHIME2025_NUMAX_MHZ - 1.0
+    hi = survey.HI_REST_FREQUENCY_MHZ / survey.CHIME2025_NUMIN_MHZ - 1.0
+
+    assert lo == pytest.approx(1.0068, abs=1e-4)
+    assert hi == pytest.approx(1.3354, abs=1e-4)
+    assert (hi - lo) / survey.CHIME2025_NZBINS == pytest.approx(0.1095,
+                                                               abs=5e-4)
+    # The band brackets the redshift the published k_par floor is quoted at.
+    assert lo < survey.CHIME2025_Z_REFERENCE < hi
+
+
+def test_chime2025_zbins_split_the_band_rather_than_tiling_from_its_edge():
+    seen = {}
+
+    class Backend:
+        @staticmethod
+        def zbins_equal_spaced(expt, *, bins):
+            seen.update(expt=expt, bins=bins)
+            return [1.0, 1.1, 1.2, 1.3], [1.05, 1.15, 1.25]
+
+    edges, centers = survey.chime2025_zbins(Backend(), {"band": "published"})
+
+    assert seen == {"expt": {"band": "published"}, "bins": 3}
+    assert np.array_equal(edges, [1.0, 1.1, 1.2, 1.3])
+    assert np.array_equal(centers, [1.05, 1.15, 1.25])
+
+
+def test_archive_hours_is_seven_calendar_years_at_the_2019_duty_cycle():
+    hours = survey.archive_hours()
+
+    assert hours == pytest.approx(
+        survey.ARCHIVE_CALENDAR_YEARS * survey.MEAN_CALENDAR_YEAR_HOURS
+        * survey.DUTY_2019_PRACTICE)
+    assert hours == pytest.approx(9327.0, abs=1.0)
+    # The headline the caption quotes: 1.06 Overview on-sky years.
+    assert hours / survey.OVERVIEW_ONSKY_YEAR_HOURS == pytest.approx(
+        1.06, abs=5e-3)
+    assert survey.archive_hours(years=1.0, duty=1.0) == pytest.approx(
+        survey.MEAN_CALENDAR_YEAR_HOURS)
+
+
+def _radiofisher_backend():
+    from rfisher.backend import find_radiofisher_dir, import_radiofisher
+    try:
+        find_radiofisher_dir()
+    except FileNotFoundError:
+        pytest.skip("delay-cut binding requires a RadioFisher checkout")
+    return import_radiofisher()
+
+
+def test_delay_cut_reproduces_the_published_kpar_floor():
+    """200 ns filter + 280 ns mask = 0.35 h/Mpc at z = 1.16, which is where
+    the published auto-spectrum measurement begins."""
+    from rfisher import cosmologies
+
+    rf, rf_dir = _radiofisher_backend()
+    cosmo = cosmologies.get("planck2018", rf, rf_dir)
+    cosmo_fns = rf.background_evolution_splines(cosmo)
+    experiment = {"nu_line": survey.HI_REST_FREQUENCY_MHZ}
+
+    kpar_min_fn = survey.delay_cut(rf, experiment, cosmo_fns, 200e-9)
+
+    kpar_min = kpar_min_fn(survey.CHIME2025_Z_REFERENCE)
+    assert kpar_min / cosmo["h"] == pytest.approx(0.351, abs=5e-4)
+    # A zero cut is a valid no-op so the no-cut reference runs the same path.
+    assert survey.delay_cut(rf, experiment, cosmo_fns, 0.0)(1.16) == 0.0
+    # Linear in the delay, and the transition factor is separable.
+    assert survey.delay_cut(rf, experiment, cosmo_fns, 100e-9)(1.16) \
+        == pytest.approx(0.5 * kpar_min)
+    assert survey.delay_cut(
+        rf, experiment, cosmo_fns, 280e-9, transition=1.0)(1.16) \
+        == pytest.approx(kpar_min)
+
+
+def test_delay_cut_rejects_a_negative_delay():
+    rf, rf_dir = _radiofisher_backend()
+    from rfisher import cosmologies
+    cosmo_fns = rf.background_evolution_splines(
+        cosmologies.get("planck2018", rf, rf_dir))
+
+    with pytest.raises(ValueError, match="tau_cut_seconds"):
+        survey.delay_cut(rf, {"nu_line": survey.HI_REST_FREQUENCY_MHZ},
+                         cosmo_fns, -1e-9)

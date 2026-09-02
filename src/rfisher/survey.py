@@ -95,6 +95,91 @@ def chime2022_experiment(rf, rf_dir: str | Path,
     return expt
 
 
+# ----------------------------------------------------------------------
+# CHIME 2025 auto-spectrum configuration (Amiri et al. 2025,
+# arXiv:2511.19620): the field, band, and integration time behind the
+# published 12.4 sigma detection of the 21 cm signal in auto-correlation
+# at z ~ 1. 94 nights of the 2019 dataset, 385 h of effective integration,
+# 0.5 mJy/beam per frequency channel, a 200 ns DAYENU cut and a 280 ns
+# mask, over 2,200 deg^2 and 608.2-707.8 MHz.
+#
+# Everything else -- as-built 4x256 geometry, Tsys_tot = 55 K, epsilon_fg =
+# 0, BAO-shift-only USE flags, Foreman's as-built n(u) -- is the Overview
+# configuration, so the two configurations differ only in field, band, and
+# time. This is a forecast of that field, not a reconstruction of their
+# pipeline: the sky area and integration time are theirs, but the noise
+# comes from the Overview's own instrument model.
+# ----------------------------------------------------------------------
+
+CHIME2025_SAREA_DEG2 = 2200.0
+CHIME2025_NUMIN_MHZ = 608.2
+CHIME2025_NUMAX_MHZ = 707.8
+CHIME2025_TTOT_HOURS = 385.0
+CHIME2025_NZBINS = 3               # three dz ~ 0.1 bins across the band
+CHIME2025_NIGHTS = 94
+CHIME2025_SENSITIVITY_MJY_PER_BEAM = 0.5
+CHIME2025_TAU_CUT_NS = 200.0       # DAYENU high-pass delay
+CHIME2025_TAU_MASK_NS = 280.0      # first delay actually retained
+CHIME2025_DETECTION_SIGMA = 12.4   # total power-spectrum S/N
+CHIME2025_KMIN_H = 0.4             # detection band, h/Mpc
+CHIME2025_KMAX_H = 1.5
+CHIME2025_Z_REFERENCE = 1.16       # redshift their k_par floor is quoted at
+
+# Seven calendar years of archive at the 2019 dataset's measured
+# cosmology-quality duty cycle: 7 x 8,766 h x 0.152 = 9,327 h, i.e. 1.06
+# Overview on-sky years. The collaboration has stated the full archive is
+# what it will analyze next.
+ARCHIVE_CALENDAR_YEARS = 7.0
+
+
+def chime2025_experiment(rf, rf_dir: str | Path,
+                         ttot_hours: float = CHIME2025_TTOT_HOURS) -> dict:
+    """CHIME as published in the 2025 auto-correlation detection: the
+    Overview instrument over 2,200 deg^2 and 608.2-707.8 MHz."""
+    expt = chime2022_experiment(rf, rf_dir, ttot_hours=ttot_hours)
+    expt["Sarea"] = CHIME2025_SAREA_DEG2 * (np.pi / 180.0) ** 2
+    expt["survey_numax"] = CHIME2025_NUMAX_MHZ
+    expt["survey_dnutot"] = CHIME2025_NUMAX_MHZ - CHIME2025_NUMIN_MHZ
+    return expt
+
+
+def chime2025_zbins(rf, expt: dict, bins: int = CHIME2025_NZBINS):
+    """Equal-width redshift bins spanning the published band exactly.
+
+    608.2-707.8 MHz is z = 1.0068-1.3354, so three equal bins are dz =
+    0.1095 each. Splitting the band rather than laying dz = 0.1 bins from
+    its low edge keeps the survey volume right, which is what the forecast
+    is actually sensitive to."""
+    zs, zc = rf.zbins_equal_spaced(expt, bins=bins)
+    return np.asarray(zs), np.asarray(zc)
+
+
+def archive_hours(years: float = ARCHIVE_CALENDAR_YEARS,
+                  duty: float = DUTY_2019_PRACTICE) -> float:
+    """On-sky hours in `years` calendar years at a given duty cycle."""
+    return float(years_to_hours(years, duty=duty,
+                                hours_per_year=MEAN_CALENDAR_YEAR_HOURS))
+
+
+def delay_cut(rf, expt: dict, cosmo_fns, tau_cut_seconds: float,
+              transition: float | None = None):
+    """Return the ``expt['kpar_min_fn']`` hook for a hard delay-domain cut.
+
+    ``tau_cut_seconds`` is the high-pass filter delay; the backend applies
+    the transition-zone factor (1.4 by default, CHIME's 200 ns cut against
+    its 280 ns mask) before converting delay to k_par. A zero cut is a
+    valid no-op, so a no-cut reference runs through exactly the same
+    code path as every masked point."""
+    from .backend import require_backend_capabilities
+
+    require_backend_capabilities(rf, {"kpar_min_fn"})
+    if transition is None:
+        transition = rf.DELAY_TRANSITION_FACTOR
+    return rf.delay_cut_kpar_min(
+        nonnegative_scalar(tau_cut_seconds, "tau_cut_seconds"),
+        cosmo_fns[0], expt["nu_line"], transition=transition)
+
+
 def experiment_from_bank_metadata(rf, rf_dir: str | Path, meta: dict,
                                   ttot_hours: float) -> dict:
     """Reconstruct the exact experiment recorded by a strict-v2 bank.

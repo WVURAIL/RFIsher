@@ -217,3 +217,96 @@ def fig_per_bin_significance(zc: np.ndarray, curves: dict[str, np.ndarray],
                  "Where masking bites: per-redshift-bin BAO significance")
     ax.legend(loc="upper right")
     return _save(fig, outfile)
+
+
+def fig_taucut_significance(curves: dict, labels: dict, no_cut: dict,
+                            kpar_min_of_tau, markers, published_tau_ns,
+                            z_reference: float, outfile: Path,
+                            floor: float = 0.1):
+    """BAO significance against the delay cut that sets the k_par floor.
+
+    curves: config -> {'tau': [ns], 'significance': [A/sigma_A]}.
+    no_cut: config -> significance with no delay cut, drawn as the ceiling
+    each curve is trying to reach. markers: [(tau_ns, label)]. Points that
+    carry no BAO information at all are drawn as open triangles on the
+    floor rather than plunging off a log axis. The top axis converts
+    tau_cut into k_par,min at ``z_reference``, which is what the
+    measurement actually cares about and what the published analysis
+    quotes."""
+    from matplotlib.ticker import NullFormatter
+
+    setup_style()
+    fig, ax = plt.subplots(figsize=(7.4, 5.0))
+
+    colors = {name: SERIES[i] for i, name in enumerate(curves)}
+    ceiling_max = max([v for v in no_cut.values() if np.isfinite(v)] or [1.0])
+    for name, curve in curves.items():
+        tau = np.asarray(curve["tau"], dtype=float)
+        sig = np.asarray(curve["significance"], dtype=float)
+        color = colors[name]
+        live = np.isfinite(sig) & (sig > floor)
+        ax.plot(tau[live], sig[live], color=color, marker="o", ms=4.5,
+                label=labels.get(name, name))
+        dead = ~live
+        if np.any(dead):
+            ax.plot(tau[dead], np.full(dead.sum(), floor), color=color,
+                    marker="v", ms=5.5, mfc="none", ls="none")
+        ceiling = no_cut.get(name)
+        if ceiling and np.isfinite(ceiling):
+            ax.axhline(ceiling, color=color, lw=1.0, ls=(0, (4, 3)),
+                       alpha=0.5)
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    all_tau = np.concatenate([np.asarray(c["tau"], dtype=float)
+                              for c in curves.values()])
+    x0, x1 = all_tau.min(), all_tau.max()
+    ax.set_xlim(x0 * 0.80, x1 * 1.30)
+    ax.set_ylim(floor * 0.75, ceiling_max * 2.2)
+    ymin, ymax = ax.get_ylim()
+
+    for name, ceiling in no_cut.items():
+        if ceiling and np.isfinite(ceiling):
+            ax.text(x1 * 1.22, ceiling * 1.07, "no cut", color=colors[name],
+                    fontsize=8.5, va="bottom", ha="right")
+
+    _threshold(ax, 5.0, r"5$\sigma$", x0 * 0.82)
+    _threshold(ax, 3.0, r"3$\sigma$", x0 * 0.82)
+
+    label_y = ymax * 0.72
+    for tau, label in markers:
+        ax.axvline(tau, color=BASELINE, lw=1.0, ls=":")
+        ax.text(tau, label_y, f"{tau:.0f} ns {label} ", color=INK2,
+                fontsize=8.5, va="top", ha="right", rotation=90)
+    ax.axvline(published_tau_ns, color=CRITICAL, lw=1.2, ls="--", alpha=0.85)
+    ax.text(published_tau_ns, label_y,
+            f"{published_tau_ns:.0f} ns published cut ", color=CRITICAL,
+            fontsize=8.5, va="top", ha="right", rotation=90)
+
+    ticks = sorted({x0, x1, published_tau_ns} | {t for t, _ in markers})
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([f"{t:.0f}" for t in ticks])
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.minorticks_off()
+    ax.set_xlabel(r"DAYENU delay cut $\tau_{\rm cut}$ [ns]")
+    ax.set_ylabel(r"BAO detection significance $A/\sigma_A$")
+    ax.set_title("What the discarded $k_\\parallel$ window is worth")
+
+    # k_par,min is exactly linear in tau_cut, so the pair of transforms is
+    # a single scale factor in both directions.
+    scale = kpar_min_of_tau(1.0)
+    secondary = ax.secondary_xaxis(
+        "top", functions=(lambda t: np.asarray(t, dtype=float) * scale,
+                          lambda k: np.asarray(k, dtype=float) / scale))
+    secondary.set_xlabel(
+        r"$k_{\parallel,\rm min}$ at $z = %.2f$ [$h\,$Mpc$^{-1}$]"
+        % z_reference)
+    top_taus = [t for t in (30.0, 50.0, 100.0, 200.0, 400.0)
+                if x0 * 0.80 <= t <= x1 * 1.30]
+    secondary.set_xticks([t * scale for t in top_taus])
+    secondary.set_xticklabels([f"{t * scale:.2f}" for t in top_taus])
+    secondary.xaxis.set_minor_formatter(NullFormatter())
+    secondary.minorticks_off()
+
+    ax.legend(loc="lower left", bbox_to_anchor=(0.0, 0.02))
+    return _save(fig, outfile)
