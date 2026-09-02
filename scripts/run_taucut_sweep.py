@@ -27,6 +27,19 @@ multiplying the signal (expt['kpar_transfer_fn']) instead of the hard
 kpar_min_fn excision. One dashed line on the figure; `cut` column in the
 tables.
 
+Every configuration is also run wedge-limited: the hard cut beside the
+backend's horizon wedge (expt['wedge'] = 'horizon', the region c tau <=
+|b| of Seo & Hirata 2016, arXiv:1502.07596, Eqs. 5-6). This is the case
+in which the foreground wedge, not the canceller, sets the cut on long
+baselines: a baseline of length b is contaminated below its horizon delay
+b/c whatever is subtracted, so lowering tau_cut reopens only baselines
+shorter than c tau_cut (37 m at 125 ns; CHIME's longest east-west
+baseline, 66 m, has b/c = 220 ns) and every mode with k_par < k_perp r
+H / (c (1+z)) stays masked at every cut (mu < 0.61 at z = 1.16). The
+wedge boundary is taken sharp, without the 1.4 transition factor the cut
+carries; its zero-cut point is the wedge-only ceiling. `cut` = "wedge" in
+the tables; dotted lines for the archive rows on the Fig. 10-format figure.
+
 The cut runs through the RadioFisher fork's expt['kpar_min_fn'] hook and
 direct rf.fisher() calls, not the shipped Fisher banks: k_par,min is a
 dimension the banks do not carry.
@@ -95,6 +108,19 @@ THRESHOLDS = (5.0, 3.0)
 # The soft cut is drawn for the full-sky archive only: one extra line that
 # shows the hard cut is the conservative one.
 SOFT_CUT_CONFIGS = ("archive7yr",)
+
+# The wedge-limited case is tabulated for every configuration and drawn
+# for the two archive rows, which are the ones the proposal's scenario
+# table carries.
+WEDGE_CUT_CONFIGS = ("chime2025", "archive7yr", "archive7yr_accepted",
+                     "chime2025_masked")
+WEDGE_FIGURE_CONFIGS = ("archive7yr", "archive7yr_accepted")
+WEDGE = "horizon"                   # the backend's expt['wedge'] setting
+
+# Sweep kinds by the `cut` column they write.
+SWEEP_KINDS = {"hard": "bao", "soft": "bao_soft", "wedge": "bao_wedge"}
+
+C_KM_S = 299792.458
 
 # Figure typography. "repo" is rfisher.plots.setup_style (Computer Modern,
 # the RFIsher paper). "proposal" layers scripts/figstyle.py on top of it:
@@ -245,6 +271,43 @@ def kpar_min_h(tau_ns: float, z: float) -> float:
     return float(fn(z) / cosmo["h"])
 
 
+def wedge_slope(z: float) -> float:
+    """k_par / k_perp on the horizon wedge at redshift z, r(z) H(z) /
+    (c (1 + z)): the backend masks k_par below this multiple of k_perp
+    when expt['wedge'] == 'horizon'. The same number is the horizon delay
+    b/c of a baseline mapped through the delay-to-k_par relation the cut
+    uses, so the two masks share one convention."""
+    hubble, comoving = _CTX["cosmo_fns"][0], _CTX["cosmo_fns"][1]
+    return float(comoving(z)) * float(hubble(z)) / (C_KM_S * (1.0 + z))
+
+
+def wedge_mu(z: float) -> float:
+    """Largest cosine mu = k_par / k the horizon wedge removes at z."""
+    slope = wedge_slope(z)
+    return slope / np.sqrt(1.0 + slope**2)
+
+
+def configure_cut(expt: dict, kind: str, tau_ns: float, rf, cosmo_fns):
+    """Install the delay treatment of one sweep kind on an experiment.
+
+    "bao" and the calibration kinds: the hard kpar_min_fn excision at
+    1.4 tau_cut (a zero cut is the no-op reference). "bao_soft": the
+    Fig. 10 transfer on the signal instead, falling back to the same
+    no-op at zero cut so the reference point is shared. "bao_wedge": the
+    hard excision beside the backend's horizon wedge, expt['wedge'] =
+    'horizon', so that modes with c tau <= |b| stay masked whatever the
+    cut and only the baselines shorter than c tau_cut reopen."""
+    if kind == "bao_soft" and tau_ns > 0.0:
+        expt["kpar_transfer_fn"] = survey.delay_transfer(
+            rf, expt, cosmo_fns, tau_ns * 1e-9)
+    else:
+        expt["kpar_min_fn"] = survey.delay_cut(
+            rf, expt, cosmo_fns, tau_ns * 1e-9)
+    if kind == "bao_wedge":
+        expt["wedge"] = WEDGE
+    return expt
+
+
 # ----------------------------------------------------------------- worker
 def _one_fisher(task):
     """Worker: one (config, tau, zbin) Fisher matrix, BAO or calibration."""
@@ -261,12 +324,7 @@ def _one_fisher(task):
         h = cosmo["h"]
         kwargs = dict(kmin=survey.CHIME2025_KMIN_H * h,
                       kmax=survey.CHIME2025_KMAX_H * h)
-    if kind == "bao_soft" and tau_ns > 0.0:
-        expt["kpar_transfer_fn"] = survey.delay_transfer(
-            rf, expt, cosmo_fns, tau_ns * 1e-9)
-    else:
-        expt["kpar_min_fn"] = survey.delay_cut(
-            rf, expt, cosmo_fns, tau_ns * 1e-9)
+    configure_cut(expt, kind, tau_ns, rf, cosmo_fns)
     zs = cfg["zs"]
     with contextlib.redirect_stdout(io.StringIO()):
         F, paramnames = rf.fisher(zs[ibin], zs[ibin + 1], cosmo, expt,
@@ -377,7 +435,7 @@ def read_off_threshold(taus, significances, target):
 def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
                      kpar_of_delay, residual_table, markers, tau_cut_ns,
                      tau_mask_ns, z_reference, outfile, floor=0.1,
-                     delay_max_ns=450.0, style="repo"):
+                     delay_max_ns=450.0, style="repo", wedge_curves=None):
     """Two panels on the delay axis of Amiri et al. 2025 Fig. 10.
 
     Top: their filter's RMS residual against the delay of a mode, with the
@@ -387,7 +445,9 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
     tau_min = 1.4 tau_cut on the sweep grid. Sharing the axis makes the
     figure read as "here is what the filter keeps; here is what the BAO is
     worth at that delay". The top axis is k_par at z = 1.16 for a mode of
-    that delay, as in the paper."""
+    that delay, as in the paper. ``wedge_curves`` (config -> curve) are
+    drawn dotted: the same hard cut with the horizon wedge kept masked,
+    the case in which only the short baselines reopen."""
     import matplotlib.pyplot as plt
     from matplotlib.ticker import NullFormatter
     from rfisher.plots import (BASELINE, CRITICAL, INK, INK2, MUTED, SERIES,
@@ -451,6 +511,16 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
             bot.plot(stau[alive], ssig[alive], color=color, lw=1.4,
                      ls=(0, (6, 2)), marker="s", ms=3.0, mfc="none",
                      label=f"{labels.get(name, name)}, soft cut")
+        wedge = (wedge_curves or {}).get(name)
+        if wedge:
+            wtau = delay_floor_of_tau(np.asarray(wedge["tau"], dtype=float))
+            wsig = np.asarray(wedge["significance"], dtype=float)
+            alive = np.isfinite(wsig) & (wsig > floor) & (wtau <= delay_max_ns)
+            # The area is on the solid line directly above this entry.
+            short = labels.get(name, name).split(" (")[0]
+            bot.plot(wtau[alive], wsig[alive], color=color, lw=1.4,
+                     ls=(0, (1.2, 1.6)), marker="^", ms=3.4, mfc="none",
+                     label=f"{short}, wedge-limited")
     bot.set_yscale("log")
     bot.set_ylim(floor * 0.75, ceiling_max * 2.2)
     ymin, ymax = bot.get_ylim()
@@ -471,8 +541,8 @@ def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
     bot.set_xlabel(r"retained delay floor $\tau_{\min}$ [ns]"
                    r"  (hard cut: $1.4\,\tau_{\rm cut}$)")
     bot.set_ylabel(r"BAO detection significance $A/\sigma_A$")
-    bot.legend(loc="lower right", bbox_to_anchor=(1.0, 0.10),
-               handlelength=2.2)
+    bot.legend(loc="lower right", bbox_to_anchor=(1.0, 0.05),
+               handlelength=2.2, labelspacing=0.35)
 
     # -- shared top axis: k_par of a mode at that delay, z = 1.16 -------
     scale = kpar_of_delay(1.0)
@@ -510,7 +580,7 @@ def _fmt(value, digits=6):
 def _sweep(configs, sweep_taus, sigma_nl, nproc, zref, cut="hard",
            only=None):
     """Run every (config, tau, zbin) at one sigma_NL and reduce to rows."""
-    kind = "bao_soft" if cut == "soft" else "bao"
+    kind = SWEEP_KINDS[cut]
     names = [c for c in configs if only is None or c in only]
     tasks = [(config, tau, i, kind, sigma_nl)
              for config in names for tau in sweep_taus
@@ -613,9 +683,11 @@ def _write_caption(out, *caption_args):
     print(f"[taucut] wrote {out / 'fig_taucut_bao_caption.txt'}")
 
 
-def _draw_figures(out, rf, configs, curves, curves_soft, zref, style="repo"):
+def _draw_figures(out, rf, configs, curves, curves_soft, zref, style="repo",
+                  curves_wedge=None):
     """Both figures from in-memory curves: the tau_cut figure and the
-    Fig. 10-format companion on the retained-delay axis."""
+    Fig. 10-format companion on the retained-delay axis, which also
+    carries the wedge-limited archive curves."""
     from rfisher import plots
 
     _width, suffix = _apply_style(style)
@@ -627,6 +699,9 @@ def _draw_figures(out, rf, configs, curves, curves_soft, zref, style="repo"):
               if name in shown}
     soft = ({name: {"tau": c["tau"], "significance": c["significance"]}
              for name, c in curves_soft.items()} if curves_soft else None)
+    wedge = ({name: {"tau": c["tau"], "significance": c["significance"]}
+              for name, c in curves_wedge.items()
+              if name in WEDGE_FIGURE_CONFIGS} if curves_wedge else None)
     path = plots.fig_taucut_significance(
         hard, {name: cfg["label"] for name, cfg in configs.items()}, no_cut,
         soft_curves=soft,
@@ -648,7 +723,7 @@ def _draw_figures(out, rf, configs, curves, curves_soft, zref, style="repo"):
         markers=TAU_NS_MARKERS,
         tau_cut_ns=survey.CHIME2025_TAU_CUT_NS,
         tau_mask_ns=survey.CHIME2025_TAU_MASK_NS,
-        z_reference=zref, style=style,
+        z_reference=zref, style=style, wedge_curves=wedge,
         outfile=out / f"fig_taucut_bao_fig10{suffix}.png")
     print(f"[taucut] wrote {path} (+ .pdf)")
 
@@ -709,6 +784,7 @@ def _load_outputs(out: Path):
     return {
         "curves": curves_for("hard", fiducial),
         "curves_soft": curves_for("soft", fiducial),
+        "curves_wedge": curves_for("wedge", fiducial),
         "curves_matched": curves_for("hard", matched[0]) if matched else None,
         "sigma_nl_match": matched[0] if matched else fiducial,
         "threshold_rows": thresholds,
@@ -729,10 +805,12 @@ def figures_only(out: Path, rf, draw=True, style="repo") -> int:
                    loaded["sigma_nl_match"], c["ttot_factor"],
                    loaded["fiducial_sigma_nl"], loaded["curves"],
                    loaded["curves_matched"], loaded["threshold_rows"],
-                   loaded["cal"], loaded["curves_soft"])
+                   loaded["cal"], loaded["curves_soft"],
+                   loaded["curves_wedge"])
     if draw:
         _draw_figures(out, rf, configs, loaded["curves"],
-                      loaded["curves_soft"], zref, style=style)
+                      loaded["curves_soft"], zref, style=style,
+                      curves_wedge=loaded["curves_wedge"])
     return 0
 
 
@@ -749,6 +827,9 @@ def main(argv=None) -> int:
                          "[h] (default 385)")
     ap.add_argument("--no-soft", action="store_true",
                     help="skip the soft-cut sweep of the archive")
+    ap.add_argument("--no-wedge", action="store_true",
+                    help="skip the wedge-limited sweep (hard cut plus the "
+                         "horizon wedge)")
     ap.add_argument("--no-sensitivity", action="store_true",
                     help="skip the second sweep at the sigma_NL that "
                          "reproduces the published 12.4 sigma")
@@ -918,6 +999,19 @@ def main(argv=None) -> int:
                      "SOFT cut (Fig. 10 transfer on the signal)",
                      curves_soft, sweep_taus)
 
+    curves_wedge = None
+    if not args.no_wedge:
+        rows_w, per_bin_w, curves_wedge = _sweep(
+            configs, sweep_taus, None, args.nproc, zref, cut="wedge",
+            only=WEDGE_CUT_CONFIGS)
+        sweep_rows += rows_w
+        per_bin_rows += per_bin_w
+        threshold_rows += _threshold_rows(curves_wedge, fiducial_sigma_nl,
+                                          cut="wedge")
+        _print_table(f"A/sigma(A), sigma_NL = {fiducial_sigma_nl:.0f} Mpc, "
+                     "WEDGE-limited (hard cut + horizon wedge; 0 ns = "
+                     "wedge only)", curves_wedge, sweep_taus)
+
     curves_matched = None
     if not args.no_sensitivity:
         rows_m, per_bin_m, curves_matched = _sweep(
@@ -949,16 +1043,17 @@ def main(argv=None) -> int:
     # --------------------------------------------------------- 3. figure
     _write_caption(out, headline, ratio, uncut, uncut_ratio, undamped,
                    sigma_nl_match, ttot_factor, fiducial_sigma_nl, curves,
-                   curves_matched, threshold_rows, cal, curves_soft)
+                   curves_matched, threshold_rows, cal, curves_soft,
+                   curves_wedge)
     if not args.no_figure:
         _draw_figures(out, rf, configs, curves, curves_soft, zref,
-                      style=args.style)
+                      style=args.style, curves_wedge=curves_wedge)
     return 0
 
 
 def _caption(headline, ratio, uncut, uncut_ratio, undamped, sigma_nl_match,
              ttot_factor, sigma_nl_fiducial, curves, curves_matched,
-             threshold_rows, cal=None, curves_soft=None):
+             threshold_rows, cal=None, curves_soft=None, curves_wedge=None):
     published = survey.CHIME2025_DETECTION_SIGMA
     amplitude = survey.CHIME2025_DETECTION_SIGMA_AMPLITUDE
     archive_h = survey.archive_hours()
@@ -1029,6 +1124,26 @@ def _caption(headline, ratio, uncut, uncut_ratio, undamped, sigma_nl_match,
         "kept. Thresholds on that axis are the tau_cut brackets times 1.4 "
         "(full-sky archive 5 sigma at 175-196 ns, accepted sky 140-154 ns, "
         "soft cut 196-210 ns), and 'current' is 280 ns as in the text.",
+    ]
+    if curves_wedge:
+        zref = survey.CHIME2025_Z_REFERENCE
+        lines += [
+            "",
+            "Wedge-limited case (dotted archive lines on the companion "
+            "figure): the same hard cut with the backend's horizon wedge "
+            "kept masked at every cut, k_par < k_perp r H / (c (1+z)) (Seo "
+            "& Hirata 2016, arXiv:1502.07596, Eqs. 5-6), the case in which "
+            "the foreground wedge and not the canceller sets the cut on "
+            "long baselines. A baseline of length b is contaminated below "
+            "its horizon delay b/c whatever is subtracted, so lowering "
+            "tau_cut reopens only the baselines shorter than c tau_cut (37 "
+            "m at 125 ns; CHIME's longest east-west baseline, 66 m, has b/c "
+            f"= 220 ns), and every mode with mu below {wedge_mu(zref):.2f} "
+            f"at z = {zref} is lost at any cut. The wedge boundary is "
+            "sharp, without the 1.4 transition factor the cut carries. The "
+            "wedge-limited zero-cut value is the wedge-only ceiling.",
+        ]
+    lines += [
         "",
         "Thresholds, read off the grid as the bracket [last delay at or "
         "above, first delay below], sigma_NL = "
@@ -1046,6 +1161,13 @@ def _caption(headline, ratio, uncut, uncut_ratio, undamped, sigma_nl_match,
                 f"{bracket(config, 5.0, sigma_nl_fiducial, 'soft'):>14s}"
                 f"   3 sigma: {bracket(config, 3.0, sigma_nl_fiducial, 'soft'):>14s}"
                 f"   no cut: {curves_soft[config]['no_cut']:.2f}")
+    if curves_wedge:
+        for config in curves_wedge:
+            lines.append(
+                f"  {config + ' (wedge)':20s} 5 sigma: "
+                f"{bracket(config, 5.0, sigma_nl_fiducial, 'wedge'):>14s}"
+                f"   3 sigma: {bracket(config, 3.0, sigma_nl_fiducial, 'wedge'):>14s}"
+                f"   wedge only: {curves_wedge[config]['no_cut']:.2f}")
     lines += [
         "",
         "Noise-model calibration. The total power-spectrum S/N over 0.4 < k "
@@ -1096,6 +1218,16 @@ def _caption(headline, ratio, uncut, uncut_ratio, undamped, sigma_nl_match,
             continue
         lines.append(f"  tau_cut {tau:5.0f} ns  " + "   ".join(
             f"{config} {sig(config, tau):6.2f}" for config in curves))
+    if curves_wedge:
+        lines += ["", "Key values (A/sigma(A), wedge-limited, fiducial):"]
+        wgrid = set.intersection(*(set(c["tau"]) for c in curves_wedge.values()))
+        for tau in (50.0, 100.0, 125.0, 150.0, 200.0, 280.0):
+            if tau not in wgrid:
+                continue
+            lines.append(f"  tau_cut {tau:5.0f} ns  " + "   ".join(
+                f"{config} "
+                f"{curves_wedge[config]['significance'][curves_wedge[config]['tau'].index(tau)]:6.2f}"
+                for config in curves_wedge))
     lines += [
         "",
         "Sources: Amiri et al. 2025 (arXiv:2511.19620v2) for the field "

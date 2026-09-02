@@ -214,6 +214,15 @@ reads (`src/rfisher/data/chime2025_fig10_filter_residual.csv`, via
 `survey.delay_transfer`). `scripts/run_taucut_sweep.py` is the driver that
 sweeps the cut through the direct path; the shipped banks do not carry it.
 
+The wedge-limited scenario (the foreground wedge, not the canceller, sets
+the cut on long baselines) needs no new hook: it is the hard cut beside the
+backend's existing horizon wedge, `expt['wedge'] = 'horizon'` (Seo &
+Hirata 2016, the region `c tau <= |b|`), whose boundary is the horizon
+delay `b/c` of a baseline mapped through the same delay-to-`k_par`
+relation the cut uses. The decision to run it, and for which
+configurations, lives in the driver (`WEDGE_CUT_CONFIGS`; `cut = "wedge"`
+in the tables).
+
 For the scenarios represented by the current bank, the masking hooks reduce
 to the same effective-time and volume factors used by bank interpolation.
 `scripts/verify_bank.py` checks the two paths, including a full-survey

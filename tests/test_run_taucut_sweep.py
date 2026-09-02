@@ -245,3 +245,87 @@ def test_proposal_style_draws_at_textwidth_with_a_suffix(tmp_path):
     assert matplotlib.rcParams["font.size"] == 9
     assert matplotlib.rcParams["pdf.fonttype"] == 42
     assert taucut._load_figstyle().TEXTWIDTH == 6.5
+
+
+def test_wedge_kind_keeps_the_horizon_wedge_beside_the_hard_cut():
+    """The wedge-limited sweep is the hard cut plus the backend's own
+    horizon wedge, nothing else: the same kpar_min_fn as the hard kind,
+    and expt['wedge'] = 'horizon' so that c tau <= |b| stays masked at
+    every cut. The other kinds must not leave a wedge behind."""
+    from rfisher.backend import find_radiofisher_dir, import_radiofisher
+    try:
+        find_radiofisher_dir()
+    except FileNotFoundError:
+        pytest.skip("configure_cut needs the backend's delay-cut hooks")
+    rf, _ = import_radiofisher()
+    cosmo_fns = (lambda z: 70.0 * (1.0 + z), None, None, None)
+
+    def expt():
+        return {"nu_line": survey.HI_REST_FREQUENCY_MHZ}
+
+    hard = taucut.configure_cut(expt(), "bao", 125.0, rf, cosmo_fns)
+    wedge = taucut.configure_cut(expt(), "bao_wedge", 125.0, rf, cosmo_fns)
+    soft = taucut.configure_cut(expt(), "bao_soft", 125.0, rf, cosmo_fns)
+    reference = taucut.configure_cut(expt(), "bao_wedge", 0.0, rf, cosmo_fns)
+
+    assert wedge["wedge"] == taucut.WEDGE == "horizon"
+    assert "wedge" not in hard and "wedge" not in soft
+    assert wedge["kpar_min_fn"](1.16) == pytest.approx(
+        hard["kpar_min_fn"](1.16))
+    assert "kpar_transfer_fn" in soft and "kpar_min_fn" not in soft
+    # the zero-cut wedge point is the wedge-only ceiling: no k_par floor
+    assert reference["wedge"] == "horizon"
+    assert reference["kpar_min_fn"](1.16) == 0.0
+    assert taucut.SWEEP_KINDS == {"hard": "bao", "soft": "bao_soft",
+                                  "wedge": "bao_wedge"}
+
+
+def test_wedge_rows_are_tabulated_for_every_configuration_and_kept_apart():
+    from rfisher.backend import find_radiofisher_dir
+    try:
+        find_radiofisher_dir()
+    except FileNotFoundError:
+        pytest.skip("the wedge paragraph quotes the wedge's mu from the "
+                    "backend's cosmology splines")
+    taucut._init_context()
+    curves = {"archive7yr": {"tau": [100.0, 150.0], "significance": [6.0, 1.5],
+                             "no_cut": 20.0}}
+    hard = taucut._threshold_rows(curves, 7.0)
+    wedge = taucut._threshold_rows(curves, 7.0, cut="wedge")
+    assert {r["cut"] for r in wedge} == {"wedge"}
+    caption = taucut._caption(
+        headline=2.2, ratio=0.18, uncut=10.4, uncut_ratio=0.84,
+        undamped=88.0, sigma_nl_match=4.9, ttot_factor=5.6,
+        sigma_nl_fiducial=7.0, curves=curves, curves_matched=None,
+        threshold_rows=hard + wedge, curves_wedge=curves)
+    assert "archive7yr (wedge)" in caption
+    assert "wedge only: 20.00" in caption
+    assert "Seo & Hirata" in caption
+    assert set(taucut.WEDGE_CUT_CONFIGS) == {
+        "chime2025", "archive7yr", "archive7yr_accepted", "chime2025_masked"}
+    assert set(taucut.WEDGE_FIGURE_CONFIGS) <= set(taucut.WEDGE_CUT_CONFIGS)
+
+
+def test_wedge_slope_is_the_horizon_delay_through_the_cut_s_own_mapping():
+    """k_par / k_perp on the horizon wedge, r H / (c (1+z)), must equal
+    the horizon delay b/c of a baseline mapped through delay_cut_kpar_min
+    (without the transition factor): the wedge and the cut then share one
+    delay convention, and 66 m is 220 ns on both."""
+    from rfisher.backend import find_radiofisher_dir
+    try:
+        find_radiofisher_dir()
+    except FileNotFoundError:
+        pytest.skip("needs the backend's cosmology splines")
+    taucut._init_context()
+    z = survey.CHIME2025_Z_REFERENCE
+    baseline_m = 66.0
+    tau_h_ns = baseline_m / 2.99792458e8 * 1e9
+    assert tau_h_ns == pytest.approx(220.0, abs=0.5)
+    nu_hz = survey.HI_REST_FREQUENCY_MHZ * 1e6 / (1.0 + z)
+    comoving = float(taucut._CTX["cosmo_fns"][1](z))
+    kperp_h = 2.0 * np.pi * baseline_m * nu_hz / (2.99792458e8 * comoving) \
+        / taucut._CTX["cosmo"]["h"]
+    kpar_from_delay = taucut.kpar_min_h(tau_h_ns / 1.4, z)
+    assert taucut.wedge_slope(z) * kperp_h == pytest.approx(
+        kpar_from_delay, rel=2e-3)
+    assert 0.55 < taucut.wedge_mu(z) < 0.65

@@ -4,12 +4,18 @@ BAO detection significance A/sigma(A) versus the delay cut tau_cut for three con
 
 Companion figure (fig_taucut_bao_fig10): the same curves on the delay axis of the paper's Fig. 10, two panels sharing it. The top panel is their filter's RMS residual against the delay of a mode, with the same gray (below the 200 ns cut) and pink (200-280 ns transition) shading; the bottom panel is the BAO significance against the retained delay floor tau_min = 1.4 tau_cut, which is the same quantity as their axis: the delay above which modes are kept. Thresholds on that axis are the tau_cut brackets times 1.4 (full-sky archive 5 sigma at 175-196 ns, accepted sky 140-154 ns, soft cut 196-210 ns), and 'current' is 280 ns as in the text.
 
+Wedge-limited case (dotted archive lines on the companion figure): the same hard cut with the backend's horizon wedge kept masked at every cut, k_par < k_perp r H / (c (1+z)) (Seo & Hirata 2016, arXiv:1502.07596, Eqs. 5-6), the case in which the foreground wedge and not the canceller sets the cut on long baselines. A baseline of length b is contaminated below its horizon delay b/c whatever is subtracted, so lowering tau_cut reopens only the baselines shorter than c tau_cut (37 m at 125 ns; CHIME's longest east-west baseline, 66 m, has b/c = 220 ns), and every mode with mu below 0.61 at z = 1.16 is lost at any cut. The wedge boundary is sharp, without the 1.4 transition factor the cut carries. The wedge-limited zero-cut value is the wedge-only ceiling.
+
 Thresholds, read off the grid as the bracket [last delay at or above, first delay below], sigma_NL = 7 Mpc:
   chime2025            5 sigma:  never reached   3 sigma:       50-75 ns   no cut: 5.25
   archive7yr           5 sigma:     125-140 ns   3 sigma:     140-150 ns   no cut: 50.19
   archive7yr_accepted  5 sigma:     100-110 ns   3 sigma:     110-125 ns   no cut: 24.20
   chime2025_masked     5 sigma:  never reached   3 sigma:       30-50 ns   no cut: 4.30
   archive7yr (soft)    5 sigma:     140-150 ns   3 sigma:     160-175 ns   no cut: 50.19
+  chime2025 (wedge)    5 sigma:  never reached   3 sigma:  never reached   wedge only: 2.72
+  archive7yr (wedge)   5 sigma:     110-125 ns   3 sigma:     125-140 ns   wedge only: 23.28
+  archive7yr_accepted (wedge) 5 sigma:      75-100 ns   3 sigma:     100-110 ns   wedge only: 11.22
+  chime2025_masked (wedge) 5 sigma:  never reached   3 sigma:  never reached   wedge only: 2.22
 
 Noise-model calibration. The total power-spectrum S/N over 0.4 < k < 1.5 h/Mpc with tau_cut = 200 ns is sqrt(F_pk,pk) = sqrt(sum over modes of (P_sig / sigma_P)^2), a single-amplitude total S/N and not the wiggle amplitude; the paper's amplitude-based 13.6 sigma is the closer analogue to it, its F-based 12.4 the headline. At the fiducial sigma_NL = 7 Mpc it gives 2.2 against 12.4 (0.18x); with the small-scale damping removed it gives 88 (7.1x); sigma_NL = 4.9 Mpc reproduces 12.4 (4.8 Mpc for 13.6; on the masked field 4.6 and 4.5 Mpc). The statistic is sensitive to sigma_NL because RadioFisher applies exp(-mu^2 k^2 sigma_NL^2) to the whole 21 cm power and the delay cut leaves only the mu ~ 1 modes that term acts on; it is a measurement of small-scale damping, not of the noise. The noise normalisation is checked uncut: the same band with no delay cut gives 10.4 (0.84x), within 1.5x, so t_tot is not rescaled (x5.6 would be needed under the cut). The BAO sweep runs at the fiducial sigma_NL; at the matched value the thresholds move by
   chime2025            5 sigma:  never reached ->  never reached   3 sigma:       50-75 ns ->       50-75 ns
@@ -24,6 +30,14 @@ Key values (A/sigma(A), fiducial):
   tau_cut   125 ns  chime2025   0.39   archive7yr   5.55   archive7yr_accepted   2.68   chime2025_masked   0.32
   tau_cut   150 ns  chime2025   0.13   archive7yr   2.50   archive7yr_accepted   1.21   chime2025_masked   0.11
   tau_cut   200 ns  chime2025   0.00   archive7yr   0.36   archive7yr_accepted   0.17   chime2025_masked   0.00
+  tau_cut   280 ns  chime2025   0.00   archive7yr   0.01   archive7yr_accepted   0.00   chime2025_masked   0.00
+
+Key values (A/sigma(A), wedge-limited, fiducial):
+  tau_cut    50 ns  chime2025   2.08   archive7yr  19.20   archive7yr_accepted   9.26   chime2025_masked   1.70
+  tau_cut   100 ns  chime2025   0.65   archive7yr   7.61   archive7yr_accepted   3.67   chime2025_masked   0.53
+  tau_cut   125 ns  chime2025   0.28   archive7yr   3.89   archive7yr_accepted   1.88   chime2025_masked   0.23
+  tau_cut   150 ns  chime2025   0.09   archive7yr   1.76   archive7yr_accepted   0.85   chime2025_masked   0.07
+  tau_cut   200 ns  chime2025   0.00   archive7yr   0.26   archive7yr_accepted   0.12   chime2025_masked   0.00
   tau_cut   280 ns  chime2025   0.00   archive7yr   0.01   archive7yr_accepted   0.00   chime2025_masked   0.00
 
 Sources: Amiri et al. 2025 (arXiv:2511.19620v2) for the field (Eq. 46), 94 nights, 385 h (Fig. 5), 0.5 mJy/beam, the |y| < 0.4 selection, the Section 5.2 spatial mask, the 200 ns cut, the 280 ns mask and Fig. 10 (Sec. 5.3), and the 12.4 / 13.0 / 13.6 sigma of Table 3; Amiri et al. 2022 (ApJS 261, 29) Appendix A for the instrument model, Tsys_tot = 55 K, the BAO-shift-only Fisher settings and the fiducial cosmology.
