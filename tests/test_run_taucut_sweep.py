@@ -166,3 +166,28 @@ def test_soft_cut_rows_are_kept_apart_from_the_hard_ones():
     assert "archive7yr (soft)" in caption
     assert "Fig. 10" in caption
     assert taucut.SOFT_CUT_CONFIGS == ("archive7yr",)
+
+
+def test_fig10_format_figure_renders_on_the_delay_axis(tmp_path):
+    """Two panels on the paper's delay axis: the digitised filter response
+    on top, BAO significance against the retained delay floor below."""
+    curves = {
+        "archive7yr": {"tau": [50.0, 100.0, 150.0, 200.0],
+                       "significance": [30.0, 11.0, 2.5, 0.05]},
+        "chime2025": {"tau": [50.0, 100.0, 150.0, 200.0],
+                      "significance": [3.1, 0.9, 0.05, 0.0]},
+    }
+    ratio = np.array([0.0, 0.95, 1.0, 1.2, 1.4, 2.0, 4.0, 6.0])
+    response = np.array([0.0, 0.0, 0.0, 0.5, 0.75, 0.83, 0.86, 0.87])
+    out = taucut.fig_fig10_format(
+        curves, {"archive7yr": "archive", "chime2025": "field"},
+        {"archive7yr": 50.0, "chime2025": 5.3},
+        {"archive7yr": {"tau": [50.0, 100.0, 150.0, 200.0],
+                        "significance": [32.0, 14.0, 4.2, 0.9]}},
+        delay_floor_of_tau=lambda tau: 1.4 * np.asarray(tau),
+        kpar_of_delay=lambda delay: 0.00125 * np.asarray(delay),
+        residual_table=(ratio, response),
+        markers=taucut.TAU_NS_MARKERS, tau_cut_ns=200.0, tau_mask_ns=280.0,
+        z_reference=1.16, outfile=tmp_path / "fig10.png")
+    assert Path(out).is_file()
+    assert (tmp_path / "fig10.pdf").is_file()

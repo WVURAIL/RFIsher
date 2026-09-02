@@ -95,6 +95,15 @@ THRESHOLDS = (5.0, 3.0)
 # shows the hard cut is the conservative one.
 SOFT_CUT_CONFIGS = ("archive7yr",)
 
+# Legend labels for the two-panel Fig. 10-format figure, where the top
+# panel carries the context and the legend must fit beside the curves.
+SHORT_LABELS = {
+    "chime2025": "Published field (2,200 deg$^2$, 385 h)",
+    "archive7yr": "Archive, full sky (31,000 deg$^2$)",
+    "archive7yr_accepted": "Archive, accepted sky (7,206 deg$^2$)",
+    "chime2025_masked": "Published field after mask (1,474 deg$^2$)",
+}
+
 # RadioFisher's non-linear cutoff, k_NL,0 = 0.14 Mpc^-1, rises as
 # (1+z)^(2/(2+ns)) and reaches 0.35 h/Mpc at z = 1.16 -- numerically the
 # same place as the published 280 ns mask. Left in place it would delete
@@ -326,6 +335,118 @@ def read_off_threshold(taus, significances, target):
     else:
         interp = None
     return float(t0), float(s0), float(t1), float(s1), interp
+
+
+# ----------------------------------------------------------------- figure
+def fig_fig10_format(curves, labels, no_cut, soft_curves, delay_floor_of_tau,
+                     kpar_of_delay, residual_table, markers, tau_cut_ns,
+                     tau_mask_ns, z_reference, outfile, floor=0.1,
+                     delay_max_ns=450.0):
+    """Two panels on the delay axis of Amiri et al. 2025 Fig. 10.
+
+    Top: their filter's RMS residual against the delay of a mode, with the
+    same gray (below the cut) and pink (transition) shading. Bottom: BAO
+    significance against the *retained delay floor*, which is the same
+    quantity: a hard cut that keeps modes above delay tau_min sits at
+    tau_min = 1.4 tau_cut on the sweep grid. Sharing the axis makes the
+    figure read as "here is what the filter keeps; here is what the BAO is
+    worth at that delay". The top axis is k_par at z = 1.16 for a mode of
+    that delay, as in the paper."""
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import NullFormatter
+    from rfisher.plots import (BASELINE, CRITICAL, INK, INK2, MUTED, SERIES,
+                               _save, setup_style)
+
+    setup_style()
+    fig, (top, bot) = plt.subplots(
+        2, 1, figsize=(7.4, 7.2), sharex=True,
+        gridspec_kw={"height_ratios": [1.0, 2.2], "hspace": 0.08})
+    gray, pink = "#d9d9d9", "#f6c9c9"
+    for ax in (top, bot):
+        ax.axvspan(0.0, tau_cut_ns, color=gray, alpha=0.55, lw=0)
+        ax.axvspan(tau_cut_ns, tau_mask_ns, color=pink, alpha=0.55, lw=0)
+
+    # -- top: the paper's filter response -----------------------------
+    ratio, response = residual_table
+    delay = ratio * tau_cut_ns
+    top.plot(delay, response, color=INK, lw=1.6)
+    top.set_ylim(0.0, 1.0)
+    top.set_yticks([0.0, 0.3, 0.5, 0.7, 0.9])
+    top.set_ylabel("RMS filter residual")
+    top.text(tau_cut_ns + 4, 0.97,
+             r"$\tau_{\rm cut}$" + f" = {tau_cut_ns:.0f} ns",
+             color=INK2, fontsize=9, ha="left", va="top", rotation=90)
+    top.text(tau_mask_ns + 6, 0.1, f"kept above {tau_mask_ns:.0f} ns",
+             color=INK2, fontsize=9, ha="left", va="bottom")
+    top.text(2, 0.92, "Amiri et al. 2025, Fig. 10 (digitised)",
+             color=MUTED, fontsize=8.5, ha="left", va="top")
+    top.grid(True, axis="y")
+
+    # -- bottom: what the BAO is worth at that floor -------------------
+    colors = {name: SERIES[i] for i, name in enumerate(curves)}
+    ceiling_max = max([v for v in no_cut.values() if np.isfinite(v)]
+                      or [1.0])
+    for name, curve in curves.items():
+        tau = delay_floor_of_tau(np.asarray(curve["tau"], dtype=float))
+        sig = np.asarray(curve["significance"], dtype=float)
+        color = colors[name]
+        live = np.isfinite(sig) & (sig > floor) & (tau <= delay_max_ns)
+        bot.plot(tau[live], sig[live], color=color, marker="o", ms=4.0,
+                 label=labels.get(name, name))
+        dead = ~live & (tau <= delay_max_ns)
+        if np.any(dead):
+            bot.plot(tau[dead], np.full(dead.sum(), floor), color=color,
+                     marker="v", ms=5.0, mfc="none", ls="none")
+        ceiling = no_cut.get(name)
+        if ceiling and np.isfinite(ceiling):
+            bot.axhline(ceiling, color=color, lw=1.0, ls=(0, (4, 3)),
+                        alpha=0.5)
+            bot.text(delay_max_ns - 4, ceiling * 1.08, "no cut",
+                     color=color, fontsize=8.5, ha="right", va="bottom")
+        soft = (soft_curves or {}).get(name)
+        if soft:
+            stau = delay_floor_of_tau(np.asarray(soft["tau"], dtype=float))
+            ssig = np.asarray(soft["significance"], dtype=float)
+            alive = np.isfinite(ssig) & (ssig > floor) & (stau <= delay_max_ns)
+            bot.plot(stau[alive], ssig[alive], color=color, lw=1.4,
+                     ls=(0, (6, 2)), marker="s", ms=3.0, mfc="none",
+                     label=f"{labels.get(name, name)}, soft cut")
+    bot.set_yscale("log")
+    bot.set_ylim(floor * 0.75, ceiling_max * 2.2)
+    ymin, ymax = bot.get_ylim()
+    for level, text in ((5.0, r"5$\sigma$"), (3.0, r"3$\sigma$")):
+        bot.axhline(level, color=MUTED, lw=1.0)
+        bot.text(3, level, f" {text}", color=INK2, fontsize=9,
+                 va="bottom", ha="left")
+    for tau, label in markers:
+        bot.axvline(tau, color=BASELINE, lw=1.0, ls=":")
+        if tau == tau_mask_ns:
+            continue                      # labelled with the mask line
+        bot.text(tau, ymin * 1.15, f" {tau:.0f} ns {label}", color=INK2,
+                 fontsize=8.5, va="bottom", ha="left", rotation=90)
+    bot.axvline(tau_mask_ns, color=CRITICAL, lw=1.1, ls="--", alpha=0.8)
+    bot.text(tau_mask_ns, ymax * 0.9, f" {tau_mask_ns:.0f} ns kept today",
+             color=CRITICAL, fontsize=8.5, va="top", ha="left", rotation=90)
+    bot.set_xlim(0.0, delay_max_ns)
+    bot.set_xlabel(r"retained delay floor $\tau_{\min}$ [ns]"
+                   r"  (hard cut: $1.4\,\tau_{\rm cut}$)")
+    bot.set_ylabel(r"BAO detection significance $A/\sigma_A$")
+    bot.legend(loc="lower right", fontsize=8.4, bbox_to_anchor=(1.0, 0.10),
+               handlelength=2.2)
+
+    # -- shared top axis: k_par of a mode at that delay, z = 1.16 -------
+    scale = kpar_of_delay(1.0)
+    secondary = top.secondary_xaxis(
+        "top", functions=(lambda t: np.asarray(t, dtype=float) * scale,
+                          lambda k: np.asarray(k, dtype=float) / scale))
+    secondary.set_xlabel(
+        r"$k_\parallel$ at $z = %.2f$ [$h\,$Mpc$^{-1}$]" % z_reference)
+    ticks_k = [0.1, 0.2, 0.3, 0.4, 0.5]
+    secondary.set_xticks([k for k in ticks_k if k / scale <= delay_max_ns])
+    secondary.xaxis.set_minor_formatter(NullFormatter())
+    fig.suptitle("The discarded delay window, on the paper's own axis",
+                 y=0.985, fontsize=12)
+    return _save(fig, Path(outfile))
 
 
 # ------------------------------------------------------------------- main
@@ -672,6 +793,25 @@ def main(argv=None) -> int:
             z_reference=zref,
             outfile=out / "fig_taucut_bao.png")
         print(f"[taucut] wrote {path} (+ .pdf)")
+        transition = rf.DELAY_TRANSITION_FACTOR
+        path = fig_fig10_format(
+            {name: {"tau": c["tau"], "significance": c["significance"]}
+             for name, c in curves.items() if name in shown},
+            {name: SHORT_LABELS.get(name, cfg["label"])
+             for name, cfg in configs.items()},
+            {name: c["no_cut"] for name, c in curves.items()
+             if name in shown},
+            ({name: {"tau": c["tau"], "significance": c["significance"]}
+              for name, c in curves_soft.items()} if curves_soft else None),
+            delay_floor_of_tau=lambda tau: transition * np.asarray(tau),
+            kpar_of_delay=lambda delay: kpar_min_h(delay / transition, zref),
+            residual_table=survey.filter_residual_table(),
+            markers=TAU_NS_MARKERS,
+            tau_cut_ns=survey.CHIME2025_TAU_CUT_NS,
+            tau_mask_ns=survey.CHIME2025_TAU_MASK_NS,
+            z_reference=zref,
+            outfile=out / "fig_taucut_bao_fig10.png")
+        print(f"[taucut] wrote {path} (+ .pdf)")
     return 0
 
 
@@ -737,6 +877,17 @@ def _caption(headline, ratio, uncut, uncut_ratio, undamped, sigma_nl_match,
         "including that 1.4x transition factor. Contamination residuals "
         "are zero: this prices the modes the cut removes, not the leakage "
         "left in the modes it keeps.",
+        "",
+        "Companion figure (fig_taucut_bao_fig10): the same curves on the "
+        "delay axis of the paper's Fig. 10, two panels sharing it. The top "
+        "panel is their filter's RMS residual against the delay of a mode, "
+        "with the same gray (below the 200 ns cut) and pink (200-280 ns "
+        "transition) shading; the bottom panel is the BAO significance "
+        "against the retained delay floor tau_min = 1.4 tau_cut, which is "
+        "the same quantity as their axis: the delay above which modes are "
+        "kept. Thresholds on that axis are the tau_cut brackets times 1.4 "
+        "(full-sky archive 5 sigma at 175-196 ns, accepted sky 140-154 ns, "
+        "soft cut 196-210 ns), and 'current' is 280 ns as in the text.",
         "",
         "Thresholds, read off the grid as the bracket [last delay at or "
         "above, first delay below], sigma_NL = "
