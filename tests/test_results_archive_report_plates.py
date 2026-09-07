@@ -27,7 +27,6 @@ REAL_CHANNEL = 24                      # the smallest product that carries a dia
 FRAMES, UNITS = 24, 12
 ANCHOR_BIN = 128                       # the fixture's designated window is centred here
 BULK_REFERENCE = 20                    # every bulk bin's three terms, so every bulk T is exactly 1
-FIRST_MONTH = "2024-06"                # the fixture's six months, two acquisitions each
 MONTHS = ("2024-06", "2024-07", "2024-08", "2024-11", "2025-01", "2025-02")
 PEAKS = (10, 24, 30, 40, 60, 200)      # designated target term per frame group -> Z = peak / BULK_REFERENCE
 
@@ -375,6 +374,10 @@ def test_build_every_column(tmp_path):
     assert r35[2] == "--" and "not found" in r35[9]
     assert "no trade curves" in r36[9]
 
+    names = [Path(i).name for i in frag.inputs]
+    assert m.ERAS_JSON in names and m.POINTS_CSV in names
+    assert not [n for n in names if n.endswith(".npz")]          # the gigabyte products are named, never hashed
+
     keys = _keys(frag)
     assert len(keys) == len(set(keys))
     p = "appC.plates"
@@ -399,6 +402,7 @@ def test_build_every_column(tmp_path):
     assert "channels 31: the diagnostic point keeps no current-era frame" in notes
     assert "channels 28, 36: operating_points.csv carries no candidate point" in notes
     assert "channels 35: the product could not be opened" in notes
+    assert "their sha256 digests are the run's own" in notes
     assert "not the difference of the two drawn curves" in notes
     if _ungated():
         assert "channels 14, 19, 28, 31, 36: this process could not apply the run's frame-health gate" in notes
@@ -528,3 +532,13 @@ def test_trade_curves_with_no_drawable_row_is_absent(tmp_path):
     _points(path, [{"channel": 14, "rho": 1, "eta": 1.0, "masked_fraction": "", "r_sys": ""}])
     curves = m.read_points(path)
     assert curves.rows == 1 and not curves.present and curves.by_rho == {}
+
+
+def test_fine_statistic_marks_the_dead_reference_bins(tmp_path):
+    """The ratio and its positive-denominator mask come out of one read of the terms."""
+    path = _write_product(tmp_path / "products", 14, dead_bulk=True)
+    with Product(path) as product:
+        ratio, positive = m.fine_statistic(product)
+    assert ratio.shape == (FRAMES, 256) and positive.shape == ratio.shape
+    assert not positive[0].any() and positive[1].all()       # frame 0's references were zeroed
+    assert np.all(ratio[0] == 0.0) and np.allclose(ratio[1, 5], 1.0)

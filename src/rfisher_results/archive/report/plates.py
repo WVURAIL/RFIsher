@@ -438,9 +438,13 @@ def _era_mask(product: Product, months: np.ndarray, first: int, last: int) -> np
     return product.selected & np.isfinite(product.frame_time) & (months >= first) & (months <= last)
 
 
-def fine_statistic(product: Product) -> np.ndarray:
-    """``T[i, f] = 2 S_0 / (S_1 + S_2)`` for every frame, and the positive-denominator mask."""
-    return fine_power_ratio(product.fine_terms_all())
+def fine_statistic(product: Product) -> tuple[np.ndarray, np.ndarray]:
+    """``(T, positive)``: the fine ratio ``2 S_0 / (S_1 + S_2)`` of every frame and bin, and where its
+    reference denominator is positive (the run ranks only those bins, and scores the rest as zero)."""
+    terms = product.fine_terms_all()
+    ratio = fine_power_ratio(terms)
+    positive = (terms[:, 1].astype(np.float64) + terms[:, 2].astype(np.float64)) > 0.0
+    return ratio, positive
 
 
 def z_statistic(ratio: np.ndarray, positive: np.ndarray, *, anchor_bin: int, bulk: np.ndarray,
@@ -621,7 +625,8 @@ def compute_plate(run: Run, ledger: core.Channel, *, products_dir: Path | str | 
     with product:
         _fill_from_product(plate, product, records, current)
     plate.present = True
-    plate.inputs.append(plate.product_path)
+    # the product itself is not listed as an input: it is up to 1 GB, and the run already recorded its
+    # sha256 in run.json (products) and in the channel's own ledger record (product_sha256)
     return plate
 
 
@@ -650,10 +655,7 @@ def _fill_from_product(plate: Plate, product: Product, records: Sequence[EraReco
     plate.input_median = float(np.median(plate.input_power)) if plate.input_power.size else math.nan
     plate.rail_frames = float((plate.input_power >= FULL_SCALE_NATIVE).sum()) if plate.input_power.size else math.nan
 
-    terms = product.fine_terms_all()
-    ratio = fine_power_ratio(terms)
-    positive = (terms[:, 1].astype(np.float64) + terms[:, 2].astype(np.float64)) > 0.0
-    del terms
+    ratio, positive = fine_statistic(product)
     plate.fine_hz = fine_hz_of_bin(np.arange(ratio.shape[1]))
     plate.heat_months, heat = monthly_fine_means(ratio, months, selected)
     plate.heat_db = _db(heat, 1.0)
@@ -1336,6 +1338,15 @@ def build(run: Run, *, products_dir: Path | str | None = None) -> Fragment:
         frag.notes.append(f"channels {_list(ungated)}: this process could not apply the run's frame-health gate "
                           f"({HEALTH_GATE_SCHEMA}, which needs pilot_proxy) and read valid frames alone, so the frame "
                           "counts are the run's plus whatever the gate would have removed; the plate says so in its head")
+    read = [p.channel for p in rows if p.present]
+    if read:
+        frag.notes.append(f"the four measured layers of channels {_list(read)} were read from the v5 products under "
+                          f"{Path(str(run.run.get('products_dir', '')))}; those files are not listed as inputs "
+                          "(each is up to a gigabyte), and their sha256 digests are the run's own, in run.json's "
+                          "products map and in each channel's product_sha256")
+    frag.notes.append("the trade panel draws the evaluation-block replay with the run's block-bootstrap 16--84% "
+                      "interval and the calibration-block diagnostic point without one: the run bootstrapped the "
+                      "replay alone, so no calibration interval exists to draw beside it")
     frag.notes.append("the plates print no false-alarm rate, no chain gain and no residual ratio R: those are the "
                       "ledgers' columns, and the trade panel marks r_sys against r_tol rather than their ratio")
     return frag
