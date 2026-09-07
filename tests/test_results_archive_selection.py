@@ -120,8 +120,16 @@ def test_refusals_are_reported_not_raised(product):
     assert summary["surface_points"] == len(short.points) and summary["min_r_sys"] <= min(p["r_sys"] for p in short.points if p["r_sys"] == p["r_sys"])
     out = selection.write_operating_points(short, product.path.parent / "op.csv")
     lines = out.read_text().splitlines()
-    assert lines[0] == "channel," + ",".join(selection.POINT_COLUMNS) + ",selected" and len(lines) == len(short.points) + 1
+    assert lines[0] == "channel," + ",".join(selection.POINT_COLUMNS) + ",selected"
+    assert len(lines) == len(selection.thin_points(short.points, (short.rho, short.eta_q16) if short.rho is not None else None)) + 1
     assert sum(line.endswith(",True") for line in lines[1:]) == (1 if short.status == "feasible" else 0)
+    # thinning keeps every rank's ends, its least-residual point and the selected point, at most max_per_rho per rank
+    pts = [{"rho": 1, "eta_q16": 65536 + i, "r_sys": 1.0 / (i + 1) if i != 500 else 0.0, "eta": 1.0} for i in range(1000)]
+    pts += [{"rho": 2, "eta_q16": 65536 + i, "r_sys": float("nan"), "eta": 1.0} for i in range(50)]
+    thin = selection.thin_points(pts, (1, 65536 + 777), max_per_rho=100)
+    r1 = [p["eta_q16"] - 65536 for p in thin if p["rho"] == 1]
+    assert r1[0] == 0 and r1[-1] == 999 and 500 in r1 and 777 in r1 and len(r1) <= 102
+    assert len([p for p in thin if p["rho"] == 2]) == 50
 
 
 def test_rows_carry_the_unmasked_residual_and_the_evaluation_intervals(tmp_path):
