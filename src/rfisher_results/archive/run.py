@@ -316,7 +316,15 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         record.add("null_evaluation", None)
     if sel is not None:
         selection.write_operating_points(sel, ch_dir / "operating_points.csv")
-        record.add("selection", {**sel.as_row(), **selection.surface_summary(sel)})
+        # the keep-everything residual on each block, whether or not a point was selected (r_keep of the chain)
+        keep = {}
+        for name, block in (("calibration", split.calibration), ("evaluation", split.evaluation)):
+            rows = np.flatnonzero(np.asarray(block, dtype=bool))
+            try:
+                keep[f"keep_everything_r_sys_{name}"] = float(selection.systematic_residuals(p, rows, floor, gain).mean()) if rows.size else math.nan
+            except ValueError:
+                keep[f"keep_everything_r_sys_{name}"] = math.nan
+        record.add("selection", {**sel.as_row(), **selection.surface_summary(sel), **keep})
     else:
         record.add("selection", None)
 

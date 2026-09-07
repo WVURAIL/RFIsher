@@ -319,18 +319,46 @@ def _point_row(pt) -> dict:
             "cost": float(pt.cost), "feasible": bool(pt.feasible)}
 
 
-def write_operating_points(result: SelectionResult, path: Path | str) -> Path:
-    """The calibration surface: one row per evaluated (rho, eta) pair (the two-walls curves read this)."""
+MAX_POINTS_PER_RHO = 200
+
+
+def thin_points(points: Sequence[dict], selected: tuple | None = None, *, max_per_rho: int = MAX_POINTS_PER_RHO) -> list[dict]:
+    """At most ``max_per_rho`` points per rank: evenly spaced in eta, always keeping the first, the last,
+    the least-residual point of the rank and the selected point. The full surface (about 1.3 million pairs
+    per channel) stays in memory for the summary; only this is written."""
+    by_rho: dict[int, list[dict]] = {}
+    for row in points:
+        by_rho.setdefault(int(row["rho"]), []).append(row)
+    out: list[dict] = []
+    for rho in sorted(by_rho):
+        rows = sorted(by_rho[rho], key=lambda r: r["eta_q16"])
+        keep = set()
+        n = len(rows)
+        if n <= max_per_rho:
+            keep = set(range(n))
+        else:
+            keep.update(int(round(i * (n - 1) / (max_per_rho - 1))) for i in range(max_per_rho))
+        finite = [i for i, r in enumerate(rows) if math.isfinite(r["r_sys"])]
+        if finite:
+            keep.add(min(finite, key=lambda i: rows[i]["r_sys"]))
+        if selected is not None:
+            keep.update(i for i, r in enumerate(rows) if (r["rho"], r["eta_q16"]) == tuple(selected))
+        out.extend(rows[i] for i in sorted(keep))
+    return out
+
+
+def write_operating_points(result: SelectionResult, path: Path | str, *, max_per_rho: int = MAX_POINTS_PER_RHO) -> Path:
+    """The calibration surface, thinned per rank (:func:`thin_points`), with the selected point marked."""
     import csv
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    selected = (result.rho, result.eta_q16) if result.rho is not None else None
     with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=["channel", *POINT_COLUMNS, "selected"], lineterminator="\n")
         writer.writeheader()
-        for row in result.points:
-            selected = result.rho == row["rho"] and result.eta_q16 == row["eta_q16"]
+        for row in thin_points(result.points, selected, max_per_rho=max_per_rho):
             writer.writerow({"channel": result.channel, **{k: (repr(v) if isinstance(v, float) else v) for k, v in row.items()},
-                             "selected": selected})
+                             "selected": (row["rho"], row["eta_q16"]) == selected})
     return path
 
 
