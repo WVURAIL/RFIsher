@@ -252,6 +252,17 @@ def build(run: Run) -> Fragment:
                       "own footing), taken bank by bank so each world prices against its own forecast")
     frag.notes.append("scope: the worlds model the cut's mode geometry only; the table says nothing about how well a "
                       "delay filter removes foregrounds, and no world asserts that the filter has been applied")
+    uneven = []
+    for c in channels:
+        s = c.section(SECTION)
+        priced = {w: frozenset(p for p in PARAMETERS if _num(s.get(f"{w}_{p}_R")) is not None) for w in WORLD_NAMES}
+        if len(set(priced.values())) > 1:
+            uneven.append(c.channel)
+    if uneven:
+        frag.notes.append(f"on {_channel_list(uneven)} the stability gate accepts a different parameter set in "
+                          "different worlds, so the binding ratio is over different parameters from column to "
+                          "column and a fall between columns there is not by itself a gain from the cut; the "
+                          f"per-parameter ratios in {LEDGER_NAME} are the ones to compare")
     if absent:
         frag.notes.append("absent cells: " + "; ".join(absent[:12])
                           + (f" (and {len(absent) - 12} more)" if len(absent) > 12 else ""))
