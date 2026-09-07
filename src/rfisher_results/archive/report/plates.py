@@ -175,7 +175,7 @@ SPANS = (64, 128, 256)                     # psd.SPANS: the candidate capture sp
 FULL_SCALE_NATIVE = 128.0                  # complex-int4 negative-full-scale power, 2 * 8^2
 PSD_CHUNK = 2048                           # frames per decoded spectrum chunk (psd.DEFAULT_CHUNK)
 HIST_BINS = 72
-MAX_NOTE_SHARE = 0.32                      # most of a panel belongs to its data, whatever the note asks for
+MAX_NOTE_SHARE = 0.36                      # most of a panel belongs to its data, whatever the note asks for
 MAX_RANK_CURVES = 24                       # trade curves drawn behind the diagnostic rank
 
 
@@ -1029,22 +1029,25 @@ def panel_containment(ax, plate: Plate) -> None:
     edges = containment_edges()
     counts, _ = np.histogram(magnitude, bins=edges)
     ax.stairs(counts, edges, **HIST_FILL)
-    for k, colour in zip(SPANS, (style.CONDITIONAL, style.MODEL, style.FAILURE)):
-        ax.axvline(span_half_width_hz(k), color=colour, ls=(0, (2.6, 1.6)), lw=0.75, zorder=5,
-                   label=rf"$K = {k}$: ${fmt(plate.in_span.get(k, math.nan), 3)}$")
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(lowest, WINDOW_HZ)
     log_axis(ax)
-    reserve_headroom(ax, float(counts.max()) if counts.size else 1.0, 4)   # the legend's title and three spans
+    era = plate.reference_label if plate.reference_is_current else f"previous on era {plate.reference_label}"
+    fractions = " / ".join(fmt(plate.in_span.get(k, math.nan), 3) for k in SPANS)
+    note = [era, rf"median $|$offset$|$ ${fmt(plate.peak_abs_median_hz, 1)}$ Hz",
+            rf"in span ${fractions}$ for $K = {' / '.join(str(k) for k in SPANS)}$"]
+    reserve_headroom(ax, float(counts.max()) if counts.size else 1.0, len(note))
+    # the spans name themselves on their own lines: a legend box here sits on the tallest bar of half the band
+    for k, colour in zip(SPANS, (style.CONDITIONAL, style.MODEL, style.FAILURE)):
+        ax.axvline(span_half_width_hz(k), color=colour, ls=(0, (2.6, 1.6)), lw=0.75, zorder=5)
+        ax.text(span_half_width_hz(k), 0.02, rf"$K\,{k}$", transform=ax.get_xaxis_transform(), rotation=90,
+                ha="right", va="bottom", fontsize=NOTE_PT - 0.4, color=colour, zorder=6)
     ax.set_xlabel("$|$peak offset$|$ from the nominal pilot [Hz]", fontsize=AXIS_PT, labelpad=1.4)
     ax.set_ylabel("frames", fontsize=AXIS_PT, labelpad=1.6)
     ax.grid(True, axis="y", color=style.GRID, lw=0.3)
     ax.set_axisbelow(True)
-    ax.legend(loc="upper left", fontsize=NOTE_PT, handlelength=1.6, labelspacing=0.28, borderaxespad=0.25,
-              frameon=False, title="in-span fraction", title_fontsize=NOTE_PT)
-    era = plate.reference_label if plate.reference_is_current else f"previous on era {plate.reference_label}"
-    _note(ax, f"{era}\nmedian $|$offset$|$ ${fmt(plate.peak_abs_median_hz, 1)}$ Hz", x=0.985, ha="right")
+    _note(ax, "\n".join(note), x=0.985, ha="right")
 
 
 def panel_operating(ax, plate: Plate) -> None:
@@ -1082,8 +1085,19 @@ def panel_operating(ax, plate: Plate) -> None:
     ax.set_ylabel(r"$r_{\rm sys}$", fontsize=AXIS_PT, labelpad=1.6)
     ax.grid(True, axis="both", color=style.GRID, lw=0.3)
     ax.set_axisbelow(True)
-    ax.legend(loc="center left", fontsize=NOTE_PT, handlelength=1.6, labelspacing=0.28, borderaxespad=0.25,
-              frameon=False, ncol=1)
+    handles, labels = ax.get_legend_handles_labels()
+    drawn = [v for v in (plate.r_tol, plate.diagnostic_r_sys, plate.evaluation_r_sys, plate.evaluation_r_sys_q16,
+                         plate.evaluation_r_sys_q84) if _finite(v) and v > 0]
+    for arc in plate.curves.by_rho.values():
+        finite = arc[:, 1][np.isfinite(arc[:, 1]) & (arc[:, 1] > 0)]
+        if finite.size:
+            drawn += [float(finite.min()), float(finite.max())]
+    if drawn:
+        # the surface's own range decides the axis, and the legend gets the room above it: on a channel whose
+        # residual barely moves, a legend placed by 'best' sits on the only curve there is
+        reserve_headroom(ax, max(drawn), len(labels), floor=min(drawn) / 1.6)
+    ax.legend(handles, labels, loc="upper left", fontsize=NOTE_PT, handlelength=1.6, labelspacing=0.28,
+              borderaxespad=0.25, frameon=False, ncol=1)
 
 
 def plate_title(plate: Plate) -> str:

@@ -250,6 +250,10 @@ def build(run: Run) -> Fragment:
     frag.notes.append("the tolerance is the smallest per-unit-residual bias over the integration times passing the "
                       "registered response-stability gate, over the forecast bins the channel overlaps (the ledger's "
                       "own footing), taken bank by bank so each world prices against its own forecast")
+    frag.notes.append("the tolerance is a minimum over a gate-filtered set, and the gate accepts different "
+                      "integration times in different worlds, so a tolerance need not move monotonically with cut "
+                      "depth; a ratio that rises between adjacent columns is a statement about which times survived "
+                      "the gate in each world, not about the cut removing less")
     frag.notes.append("scope: the worlds model the cut's mode geometry only; the table says nothing about how well a "
                       "delay filter removes foregrounds, and no world asserts that the filter has been applied")
     uneven = []
