@@ -10,9 +10,6 @@
 requirements/*.txt text eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf
-out/*.csv text eol=lf
-out/*.md text eol=lf
-out/*.txt text eol=lf
 scripts/dissertation/data/*.csv text eol=lf
 src/rfisher/data/*.csv text eol=lf
 src/rfisher/data/*.json text eol=lf
@@ -22,11 +19,4 @@ src/rfisher/data/*.dat text eol=lf
 # Release evidence hashes identify the checked-in bytes, independent of a
 # contributor's core.autocrlf setting.
 docs/*.schema.json text eol=lf
-out/forecast_completion_*.json text eol=lf
-out/forecast_completion_*.csv text eol=lf
-out/forecast_completion_*.tex text eol=lf
-out/forecast_completion_*.txt text eol=lf
-out/forecast_completion_*/*.json text eol=lf
-out/forecast_completion_*/*.csv text eol=lf
-out/forecast_completion_*/*.tex text eol=lf
-out/forecast_completion_*/*.txt text eol=lf
+docs/releases/*.json text eol=lf
