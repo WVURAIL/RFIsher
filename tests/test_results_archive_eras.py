@@ -136,6 +136,32 @@ def test_station_change_needs_a_persistent_shift_against_the_running_location():
     assert seg.zone_months == (M0 + 2,) and seg.eras[1].boundary_ambiguous_months == 1
 
 
+def test_station_change_must_be_confirmed_at_the_new_location():
+    # a one-month excursion followed by a genuine change: the excursion month is not promoted to an era
+    locs = [-2, -3, 1, -1, 0, 3, 7, 6, 5, 4, 6, 7, 4]
+    seg = segment([_rec(i, 2.0, peak=float(v)) for i, v in enumerate(locs)])
+    assert _spans(seg) == [(0, 5, PROXY_HIGH), (6, 12, PROXY_HIGH)]
+    # month 2 (+3.5 bins for one month) and month 5 (the month before the change) are excursions
+    assert [(e.month - M0, e.kind) for e in seg.excursions] == [(2, "station"), (5, "station")]
+    assert seg.eras[1].evidence == EVIDENCE_STATION
+    # the first tested month disagreeing with two agreeing followers is the excursion, not a one-month era
+    seg = segment([_rec(i, 2.0, peak=float(v)) for i, v in enumerate([1, -2, -3, -2.5, -2, -3])])
+    assert _spans(seg) == [(0, 5, PROXY_HIGH)]
+    assert [(e.month - M0, e.kind, e.detail) for e in seg.excursions] == [(0, "station", "+3.0 bins")]
+    assert seg.eras[0].peak_offset_bins == pytest.approx(-2.25)   # the era location counts every tested month, the excursion included
+
+
+def test_persistence_counts_definite_months_only():
+    # one proxy-low month with two trailing ambiguous months does not open a proxy-low era
+    seg = segment([_rec(0, 2.0), _rec(1, 2.0), _rec(2, 2.0), _rec(3, 0.3), _rec(4, 0.7), _rec(5, 0.8)])
+    assert _spans(seg) == [(0, 5, PROXY_HIGH)]
+    assert [(e.month - M0, e.kind) for e in seg.excursions] == [(3, "state")]
+    # a leading ambiguous month cannot lend persistence to a single definite month
+    seg = segment([_rec(0, 0.7), _rec(1, 2.0), _rec(2, 0.3), _rec(3, 0.3)])
+    assert _spans(seg) == [(0, 3, PROXY_LOW)]
+    assert [(e.month - M0, e.kind) for e in seg.excursions] == [(1, "state")]
+
+
 def test_station_rule_ignores_proxy_low_months():
     lows = [_rec(i, 0.1, peak=float(p)) for i, p in enumerate([-20, 5, 17, -3, 9, 25])]
     seg = segment(lows)

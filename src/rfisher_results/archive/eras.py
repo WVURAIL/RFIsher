@@ -170,8 +170,8 @@ CHANNEL_COLUMNS = (
     "current_frames", "stale_latest", "stale_lag_months", "stale_reference", "campaign_last_month", "fallback",
     "indeterminate",
     "populated_months", "ambiguous_months", "ambiguous_fraction", "transition_zone_months",
-    "state_excursions", "station_excursions", "instrument_change_months", "instrument_excursions",
-    "software_tags", "software_tag_changes", "frames_selected", "frames_without_time",
+    "state_excursions", "station_excursions", "unmatched_station_records", "instrument_change_months",
+    "instrument_excursions", "software_tags", "software_tag_changes", "frames_selected", "frames_without_time",
     "peak_cohort_fallback_months", "sensitivity_units", "sensitivity_units_moves",
     "sensitivity_thresholds", "sensitivity_thresholds_moves", "config_version", "config_digest",
 )
@@ -182,7 +182,7 @@ CHANNEL_COLUMNS = (
 class EraConfig:
     """Every policy value of the section 8.1 procedure, versioned and digested."""
 
-    version: str = "section-8.1-eras-v1"
+    version: str = "section-8.1-eras-v2"
     min_frames: int = blocks.MONTH_MIN_FRAMES
     min_units: int = blocks.MONTH_MIN_UNITS
     min_days: int = blocks.MONTH_MIN_DAYS
@@ -196,7 +196,8 @@ class EraConfig:
     station_check_states: tuple[str, ...] = (PROXY_HIGH,)
     instrument_field: str = "unit_input_map_sha256"
     indeterminate_fraction: float = 0.5        # ambiguous majority -> rule indeterminate
-    stale_grace_months: int = 0                # stale-latest when the era ends more than this before the snapshot
+    stale_grace_months: int = 1                # stale-latest when the era ends more than this before the snapshot
+                                               # (1: the snapshot month itself is partial and is not held against a channel)
     units_sensitivity: tuple[int, ...] = blocks.MONTH_MIN_UNITS_SENSITIVITY
     threshold_sensitivity_db: tuple[tuple[float, float], ...] = (
         (0.5, 0.5), (0.5, 1.0), (0.5, 2.0), (1.0, 1.0), (1.0, 2.0), (2.0, 2.0))
@@ -486,8 +487,10 @@ def _resolve_states(raw: list[str], config: EraConfig) -> tuple[list[str], list[
             j = i
             while j < n and resolved[j] == resolved[i]:
                 j += 1
-            if j - i < config.persistence_months:
-                demoted.extend(k for k in range(i, j) if labels[k] != AMBIGUOUS)
+            # persistence counts definite months only: an inherited ambiguous month does not hold a state
+            definite = [k for k in range(i, j) if labels[k] != AMBIGUOUS]
+            if len(definite) < config.persistence_months:
+                demoted.extend(definite)
             i = j
         if not demoted:
             break
@@ -517,9 +520,26 @@ def _station_boundaries(pop: Sequence[MonthRecord], raw: list[str], positions: l
     excursions: list[Excursion] = []
     running: list[float] = []
     last_tested = None
+    skip = -1
     for k, i in enumerate(tested):
         loc = pop[i].peak_offset_bins
         if not running:
+            # seed: the first tested month starts the running location unless the following
+            # persistence_months tested months agree with each other and disagree with it,
+            # in which case the first month is the excursion and they seed the location
+            follow = tested[k + 1: k + 1 + config.persistence_months]
+            if len(follow) == config.persistence_months:
+                locs = [pop[q].peak_offset_bins for q in follow]
+                agree = all(abs(v - locs[0]) < config.station_shift_bins for v in locs[1:])
+                if agree and all(abs(v - loc) >= config.station_shift_bins for v in locs):
+                    excursions.append(Excursion(pop[i].month, "station", f"{loc - locs[0]:+.1f} bins"))
+                    last_tested = i
+                    continue
+            running.append(loc)
+            last_tested = i
+            continue
+        if k == skip:
+            # the month that confirmed a change is already part of the new running location
             running.append(loc)
             last_tested = i
             continue
@@ -527,12 +547,15 @@ def _station_boundaries(pop: Sequence[MonthRecord], raw: list[str], positions: l
         shift = loc - reference
         if abs(shift) >= config.station_shift_bins:
             nxt = tested[k + 1] if k + 1 < len(tested) else None
-            holds = nxt is not None and abs(pop[nxt].peak_offset_bins - reference) >= config.station_shift_bins
+            # a change holds when the next tested month sits at the new location, not merely away from the old one
+            holds = (nxt is not None and abs(pop[nxt].peak_offset_bins - reference) >= config.station_shift_bins
+                     and abs(pop[nxt].peak_offset_bins - loc) < config.station_shift_bins)
             if holds:
                 zone = tuple(pop[p].month for p in positions if last_tested < p < i)
                 boundaries.append(Boundary(EVIDENCE_STATION, pop[last_tested].month, pop[i].month, zone,
                                            f"{reference:+.1f} bins", f"{loc:+.1f} bins"))
                 running = [loc]
+                skip = k + 1
             else:
                 excursions.append(Excursion(pop[i].month, "station", f"{shift:+.1f} bins"))
         else:
@@ -868,6 +891,7 @@ def channel_row(table: EraTable) -> dict:
         "transition_zone_months": _labels(table.transition_zone_months),
         "state_excursions": ";".join(e.label for e in table.excursions if e.kind == "state"),
         "station_excursions": ";".join(e.label for e in table.excursions if e.kind == "station"),
+        "unmatched_station_records": ";".join(table.unmatched_station_records),
         "instrument_change_months": _labels(table.instrument_change_months),
         "instrument_excursions": ";".join(e.label for e in table.excursions if e.kind == "instrument"),
         "software_tags": table.software_tags, "software_tag_changes": table.software_tag_changes,

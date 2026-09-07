@@ -10,7 +10,7 @@ import pytest
 
 from rfisher_results.archive import anchors, blocks
 from rfisher_results.archive.products import (
-    FINE_BIN_HZ, FINE_BINS, Geometry, Product, fine_hz_of_bin, fine_offset_to_rf_hz,
+    FINE_BIN_HZ, FINE_BINS, Geometry, Product,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,9 +64,9 @@ def test_on_minus_quiet_anchor_cancels_static_structure(tmp_path):
     assert r.designated_bins == (63, 64, 65, 66, 67)
     assert r.bulk_size == 126 and not r.bulk[list(r.designated_bins)].any()
     assert r.anchor_fine_hz == pytest.approx(65 * FINE_BIN_HZ)
-    # under sense -1 three bins above nominal is a small negative RF offset from the pilot
-    expected_rf = fine_offset_to_rf_hz(fine_hz_of_bin(65), g.grid_residual_hz, g.sense)
-    assert r.anchor_rf_offset_hz == pytest.approx(float(expected_rf))
+    # under sense -1 three bins above nominal is a small negative RF offset from the pilot: the nominal bin
+    # sits 0.566 Hz below the grid residual, so bin 65 is -(3 * 11.92 - 0.566) Hz = -35.20 Hz
+    assert r.anchor_rf_offset_hz == pytest.approx(-(3 * FINE_BIN_HZ) + (g.grid_residual_hz - NOMINAL * FINE_BIN_HZ), abs=1e-9)
     assert -3 * FINE_BIN_HZ - FINE_BIN_HZ / 2 < r.anchor_rf_offset_hz < -3 * FINE_BIN_HZ + FINE_BIN_HZ / 2
     assert r.boot_status == "skipped" and r.boot_replicates == 0 and np.isnan(r.boot_offset_bins_q16)
 
@@ -98,7 +98,7 @@ def test_alias_flag_when_a_stronger_on_line_sits_outside_the_window(tmp_path):
     assert r.aliased_out_of_window
     assert r.runner_up_bin == 65 and r.separation == pytest.approx(19.0 - 4.0)
     assert r.designated_bins == (198, 199, 200, 201, 202) and r.bulk_size == 125
-    assert r.window_anchor_rf_offset_hz == pytest.approx(anchors.rf_offset_of_bin(65, p.geometry))
+    assert -3 * FINE_BIN_HZ - FINE_BIN_HZ / 2 < r.window_anchor_rf_offset_hz < -3 * FINE_BIN_HZ + FINE_BIN_HZ / 2
 
 
 def test_fallback_to_the_plain_median_without_a_quiet_cohort(tmp_path):
@@ -281,3 +281,36 @@ def test_anchor_from_ratio_validates_shapes(tmp_path):
             anchors.anchor_from_ratio(ratio, mask=p.selected[:-1], **kw)
         r = anchors.anchor_from_ratio(ratio, mask=p.selected, **kw)
         assert r.anchor_bin == 65 and r.label == "x"
+
+
+def test_fine_and_psd_axes_agree_on_the_rf_offset_of_a_tone(tmp_path):
+    """A tone at RF offset D from the nominal pilot lands on the fine bin and the PSD bin that both convert back to D."""
+    from rfisher_results.archive.products import COARSE_BIN_HZ, NFFT, PSD_BIN_HZ
+    path = v5_fixture._write_product(tmp_path / "506.npz", 36)
+    with Product(path) as p:
+        g = p.geometry
+    assert g.sense == -1 and g.nominal_fine_bin == NOMINAL
+    for d in (500.0, -500.0, 1200.0, -1200.0, 0.0):
+        # receiver-frame offset of the tone from the coarse-channel centre, then the fine axis measures it modulo one coarse bin
+        receiver = g.sense * (g.pilot_hz + d - g.centre_hz)
+        fine_hz = receiver % COARSE_BIN_HZ
+        fine_bin = int(round(fine_hz / FINE_BIN_HZ)) % FINE_BINS
+        assert abs(anchors.rf_offset_of_bin(fine_bin, g) - d) <= FINE_BIN_HZ / 2 + 1e-9
+        psd_bin = (receiver / PSD_BIN_HZ) % NFFT
+        assert g.psd_rf_offset_hz(np.array([psd_bin]))[0] == pytest.approx(d, abs=1e-6)
+    # the station itself: the nominal bin converts to +0.566 Hz, the grid residual above the bin centre
+    assert anchors.rf_offset_of_bin(NOMINAL, g) == pytest.approx(g.grid_residual_hz - NOMINAL * FINE_BIN_HZ)
+
+
+def test_rf_offset_shares_one_wrap_with_the_bin_offset(tmp_path):
+    """Offsets -128 and -127 are one fine bin apart in RF, not a coarse bin (the wrap is about the nominal bin)."""
+    path = v5_fixture._write_product(tmp_path / "506.npz", 36)
+    with Product(path) as p:
+        g = p.geometry
+    assert g.grid_residual_hz > NOMINAL * FINE_BIN_HZ       # residual above the bin centre: the case that used to jump
+    bins = np.array([(NOMINAL + k) % FINE_BINS for k in (-128, -127, 0, 127)])
+    offsets = anchors.unwrap_bins(bins, NOMINAL)
+    assert offsets.tolist() == [-128, -127, 0, 127]
+    rf = anchors.rf_offset_of_bin(bins, g)
+    assert np.allclose(np.diff(rf), [-FINE_BIN_HZ, -127 * FINE_BIN_HZ, -127 * FINE_BIN_HZ])
+    assert rf[0] == pytest.approx(-(offsets[0] * FINE_BIN_HZ) + (g.grid_residual_hz - NOMINAL * FINE_BIN_HZ))

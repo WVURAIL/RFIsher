@@ -59,10 +59,23 @@ pilot-associated energy and ``E_K(c)`` (ch04 eq:param:kstar)
     so the two edge bins of every hard window enter fractionally. The spans
     are nested about nominal, so ``E_K`` is non-increasing in ``K``.
 
+axis
+    Offsets are read on the receiver's circular axis centred on the nominal
+    pilot: the per-frame spectrum is an FFT of the coarse channel, as is the
+    detector's K-tap transform, so a feature beyond the coarse-channel edge
+    nearest the pilot appears (to both) at the aliased offset on the far side
+    of the pilot, one sample rate away. ``edge_distance_hz`` is the pilot's
+    distance to that edge; ``window_aliased_hz`` is the width of ``W`` beyond
+    it (content read there is aliased from the channel's other edge; zero on
+    channels whose pilot sits more than ``W`` from either edge) and
+    ``ref_aliased_K`` marks a reference passband that crosses it. Channels 21
+    and 32 are the archive's cases.
+
 reference-region contamination
     The excess over baseline inside the two reference passbands (centres
-    ``+-2 f_s / K``, each ``+-f_s / 2K`` wide) as a fraction of the in-span
-    excess at the same ``K``. The centre line's bins are *included* here (the
+    ``+-2 f_s / K``, each ``+-f_s / 2K`` wide, on the circular axis, so a
+    passband that crosses the coarse-channel edge is read where the detector
+    reads it) as a fraction of the in-span excess at the same ``K``. The centre line's bins are *included* here (the
     detector's references integrate it), where ``E_K`` excludes them; the
     contaminant is named when the centre line falls in a passband
     (``centre_line``) or a feature in it exceeds ``FEATURE_MIN_DB`` over the
@@ -90,14 +103,17 @@ disposition (design section 6)
     ``supported with sentinel`` when a lobe is recovered but a stronger
     out-of-span feature exists, ``E_128 < E_min``, contamination is at or
     above 5%, or (told by the caller) the fine anchor aliases an out-of-span
-    feature; ``unsupported`` when no in-span lobe is recoverable.
+    feature or disagrees with the in-span lobe by more than the designated
+    half-width (``anchor_lobe_offset_bins``); ``unsupported`` when no in-span
+    lobe is recoverable.
 
 Output columns of ``containment.csv`` (one row per channel; floats
 ``repr()``, NaN blank), in order:
 
 ``channel, freq_id, frames, frames_with_spectrum, detected_frames,
 top_frame_share, centre_line_rf_offset_hz, centre_line_db,
-window_median_power, dominant_offset_hz, dominant_refined_offset_hz,
+window_median_power, edge_distance_hz, window_aliased_hz,
+dominant_offset_hz, dominant_refined_offset_hz,
 dominant_db, dominant_excess_db, near_offset_hz, near_db,
 in_span_offset_hz, in_span_refined_offset_hz, in_span_db,
 in_span_excess_db, in_span_recovered, out_of_span_offset_hz,
@@ -107,12 +123,14 @@ peak_signed_p99_hz, frames_in_span_64, frames_in_span_128,
 frames_in_span_256, excess_total, e_64, e_128, e_256,
 ref_contamination_64, ref_contamination_128, ref_contamination_256,
 ref_contaminant_64, ref_contaminant_128, ref_contaminant_256,
-straddle_loss_db_64, straddle_loss_db_128, straddle_loss_db_256,
+ref_aliased_64, ref_aliased_128, ref_aliased_256, straddle_loss_db_64, straddle_loss_db_128, straddle_loss_db_256,
 margin_hz_64, margin_hz_128, margin_hz_256, margin_fraction_64,
 margin_fraction_128, margin_fraction_256, disposition, reasons``
 
 ``frames_in_span_K`` are fractions of ``detected_frames``; ``excess_total`` is
-the summed excess (linear power) within ``W``; offsets are Hz from nominal;
+the summed excess (linear power) within ``W``; the reference passbands are
+read on the full circular axis (the K = 64 passbands reach 15.26 kHz, past
+``W``); offsets are Hz from nominal;
 ``*_db`` are dB over the window median except ``*_excess_db`` (over the local
 baseline). ``kstar.csv`` has one row per ``E_min``: ``e_min, k_star,
 failing_k, binding_channel, binding_e, sentinels, eligible``. The window
@@ -131,7 +149,7 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
-from .products import NFFT, PSD_BIN_HZ, SAMPLE_RATE_HZ, Geometry, Product
+from .products import FINE_BIN_HZ, NFFT, PSD_BIN_HZ, SAMPLE_RATE_HZ, Geometry, Product
 
 SPANS = (64, 128, 256)
 TARGET_K = 128                                   # the campaign's tap length: the in-span lobe lives here
@@ -187,6 +205,33 @@ def overlap_weights(rf_hz, lo: float, hi: float, bin_hz: float = PSD_BIN_HZ) -> 
     return np.clip((right - left) / bin_hz, 0.0, 1.0)
 
 
+def centred_offset_hz(rf_offset_hz, sample_rate_hz: float = SAMPLE_RATE_HZ) -> np.ndarray:
+    """Wrap RF offsets onto the receiver's circular axis centred on the nominal pilot, ``[-f_s/2, f_s/2)``."""
+    x = np.asarray(rf_offset_hz, dtype=float)
+    return (x + sample_rate_hz / 2.0) % sample_rate_hz - sample_rate_hz / 2.0
+
+
+def edge_distance_hz(geometry: Geometry, sample_rate_hz: float = SAMPLE_RATE_HZ) -> float:
+    """Distance from the nominal pilot to the nearer coarse-channel edge, in Hz."""
+    receiver = float(np.sign(geometry.sense) or 1) * (geometry.pilot_hz - geometry.centre_hz)
+    return float(sample_rate_hz / 2.0 - abs(receiver))
+
+
+def aliased_width_hz(lo: float, hi: float, geometry: Geometry, sample_rate_hz: float = SAMPLE_RATE_HZ) -> float:
+    """How much of the RF-offset interval ``[lo, hi]`` lies beyond the coarse-channel edges (read aliased)."""
+    receiver = float(np.sign(geometry.sense) or 1) * (geometry.pilot_hz - geometry.centre_hz)
+    sense = float(np.sign(geometry.sense) or 1)
+    a, b = sorted((receiver + sense * lo, receiver + sense * hi))     # receiver frequencies of the interval
+    half = sample_rate_hz / 2.0
+    return float(max(0.0, -half - a) + max(0.0, b - half))
+
+
+def anchor_lobe_offset_bins(anchor_rf_offset_hz: float, lobe_rf_offset_hz: float, fine_bin_hz: float = FINE_BIN_HZ) -> float:
+    """Fine anchor minus PSD in-span lobe, in fine bins (NaN when either is undefined)."""
+    a, b = float(anchor_rf_offset_hz), float(lobe_rf_offset_hz)
+    return (a - b) / fine_bin_hz if math.isfinite(a) and math.isfinite(b) else float("nan")
+
+
 def _db(ratio) -> np.ndarray:
     r = np.asarray(ratio, dtype=float)
     out = np.full(r.shape, np.nan)
@@ -224,7 +269,7 @@ def accumulate_spectra(product: Product, mask, detected=None, *, window_hz: floa
     if mask.shape != (n,):
         raise ValueError(f"mask must have shape ({n},); got {mask.shape}")
     det = mask & (product.rejected if detected is None else np.asarray(detected, dtype=bool))
-    rf_fft = g.psd_rf_offset_hz(np.arange(NFFT))
+    rf_fft = centred_offset_hz(g.psd_rf_offset_hz(np.arange(NFFT)))      # the circular axis, pilot at the centre
     order = np.argsort(rf_fft, kind="stable")
     in_window = np.abs(rf_fft) <= window_hz
     peak_cols = np.flatnonzero(in_window & (np.abs(rf_fft - g.centre_line_rf_offset_hz) > centre_line_hz))
@@ -315,6 +360,8 @@ class ContainmentRow:
     centre_line_rf_offset_hz: float
     centre_line_db: float
     window_median_power: float
+    edge_distance_hz: float
+    window_aliased_hz: float
     dominant_offset_hz: float
     dominant_refined_offset_hz: float
     dominant_db: float
@@ -347,6 +394,9 @@ class ContainmentRow:
     ref_contaminant_64: str
     ref_contaminant_128: str
     ref_contaminant_256: str
+    ref_aliased_64: bool
+    ref_aliased_128: bool
+    ref_aliased_256: bool
     straddle_loss_db_64: float
     straddle_loss_db_128: float
     straddle_loss_db_256: float
@@ -531,7 +581,7 @@ def peak_counts(offsets_hz: np.ndarray, rf_offset_hz: np.ndarray) -> np.ndarray:
 def disposition(in_span: Lobe | None, out_of_span_offset_hz: float, e_128: float, contamination_128: float, *,
                 e_min: float = E_MIN, contamination_limit: float = CONTAMINATION_LIMIT,
                 feature_min_db: float = FEATURE_MIN_DB, anchor_aliases: bool = False,
-                target_k: int = TARGET_K) -> tuple[str, str]:
+                target_k: int = TARGET_K, anchor_note: str = "") -> tuple[str, str]:
     """Design section 6: supported / supported with sentinel / unsupported, with the reasons."""
     if in_span is None or not (np.isfinite(in_span.excess_db) and in_span.excess_db >= feature_min_db):
         return UNSUPPORTED, (f"no in-span lobe at or above {feature_min_db:g} dB over baseline within "
@@ -544,7 +594,7 @@ def disposition(in_span: Lobe | None, out_of_span_offset_hz: float, e_128: float
     if not (np.isfinite(contamination_128) and contamination_128 < contamination_limit):
         reasons.append(f"K = 128 reference contamination {contamination_128:.3f} >= {contamination_limit:g}")
     if anchor_aliases:
-        reasons.append("fine anchor aliases an out-of-span feature")
+        reasons.append(anchor_note or "fine anchor aliases an out-of-span feature")
     if reasons:
         return SUPPORTED_SENTINEL, "; ".join(reasons)
     return SUPPORTED, ""
@@ -552,7 +602,8 @@ def disposition(in_span: Lobe | None, out_of_span_offset_hz: float, e_128: float
 
 def analyse(spectrum: EraSpectrum, geometry: Geometry, *, e_min: float = E_MIN, anchor_aliases: bool = False,
             window_hz: float = WINDOW_HZ, near_hz: float = NEAR_NOMINAL_HZ, target_k: int = TARGET_K,
-            feature_min_db: float = FEATURE_MIN_DB, contamination_limit: float = CONTAMINATION_LIMIT) -> ChannelPsd:
+            feature_min_db: float = FEATURE_MIN_DB, contamination_limit: float = CONTAMINATION_LIMIT,
+            anchor_note: str = "") -> ChannelPsd:
     """Every containment quantity from an accumulated era spectrum (pure array work)."""
     window, dominant_i = window_spectrum(spectrum, geometry, window_hz=window_hz)
     rf = window.rf_offset_hz
@@ -563,7 +614,7 @@ def analyse(spectrum: EraSpectrum, geometry: Geometry, *, e_min: float = E_MIN, 
     in_span = _lobe(window, _argmax_lobe(window.mean_db, allowed & (np.abs(rf) <= h_target)))
     recovered = in_span is not None and np.isfinite(in_span.excess_db) and in_span.excess_db >= feature_min_db
     # a stronger excess outside the campaign span (the co-channel-carrier case)
-    outside = allowed & (np.abs(rf) > h_target)
+    outside = allowed & (np.abs(rf) > h_target) & (np.abs(rf) <= window_hz)
     out_offset = out_excess_db = float("nan")
     if in_span is not None and outside.any():
         j = int(np.argmax(np.where(outside, window.excess, -np.inf)))
@@ -578,7 +629,10 @@ def analyse(spectrum: EraSpectrum, geometry: Geometry, *, e_min: float = E_MIN, 
     margin = {k: span_half_width_hz(k) - abs(lobe_offset) if recovered else float("nan") for k in SPANS}
     verdict, reasons = disposition(in_span, out_offset, e_k[128], refs[128][0], e_min=e_min,
                                    contamination_limit=contamination_limit, feature_min_db=feature_min_db,
-                                   anchor_aliases=anchor_aliases, target_k=target_k)
+                                   anchor_aliases=anchor_aliases, target_k=target_k, anchor_note=anchor_note)
+    edge = edge_distance_hz(geometry)
+    aliased = {k: any(aliased_width_hz(c - span_half_width_hz(k), c + span_half_width_hz(k), geometry) > 0
+                      for c in reference_centres_hz(k)) for k in SPANS}
     centre_idx = np.flatnonzero(window.centre_line)
     centre_db = float(np.nanmax(window.mean_db[centre_idx])) if centre_idx.size and np.isfinite(window.mean_db[centre_idx]).any() else float("nan")
     nan = float("nan")
@@ -587,6 +641,7 @@ def analyse(spectrum: EraSpectrum, geometry: Geometry, *, e_min: float = E_MIN, 
         frames_with_spectrum=spectrum.frames_with_spectrum, detected_frames=spectrum.detected_frames,
         top_frame_share=float(spectrum.top_frame_share), centre_line_rf_offset_hz=float(geometry.centre_line_rf_offset_hz),
         centre_line_db=centre_db, window_median_power=window.window_median_power,
+        edge_distance_hz=edge, window_aliased_hz=aliased_width_hz(-window_hz, window_hz, geometry),
         dominant_offset_hz=dominant.offset_hz if dominant else nan,
         dominant_refined_offset_hz=dominant.refined_offset_hz if dominant else nan,
         dominant_db=dominant.db if dominant else nan, dominant_excess_db=dominant.excess_db if dominant else nan,
@@ -604,6 +659,7 @@ def analyse(spectrum: EraSpectrum, geometry: Geometry, *, e_min: float = E_MIN, 
         e_64=e_k[64], e_128=e_k[128], e_256=e_k[256],
         ref_contamination_64=refs[64][0], ref_contamination_128=refs[128][0], ref_contamination_256=refs[256][0],
         ref_contaminant_64=refs[64][1], ref_contaminant_128=refs[128][1], ref_contaminant_256=refs[256][1],
+        ref_aliased_64=aliased[64], ref_aliased_128=aliased[128], ref_aliased_256=aliased[256],
         straddle_loss_db_64=straddle[64], straddle_loss_db_128=straddle[128], straddle_loss_db_256=straddle[256],
         margin_hz_64=margin[64], margin_hz_128=margin[128], margin_hz_256=margin[256],
         margin_fraction_64=margin[64] / span_half_width_hz(64), margin_fraction_128=margin[128] / span_half_width_hz(128),
@@ -614,10 +670,10 @@ def analyse(spectrum: EraSpectrum, geometry: Geometry, *, e_min: float = E_MIN, 
 
 
 def containment(product: Product, mask, detected=None, *, e_min: float = E_MIN, anchor_aliases: bool = False,
-                chunk: int = DEFAULT_CHUNK) -> ChannelPsd:
+                chunk: int = DEFAULT_CHUNK, anchor_note: str = "") -> ChannelPsd:
     """The containment analysis of one product under a frame mask (the era frames)."""
     spectrum = accumulate_spectra(product, mask, detected, chunk=chunk)
-    return analyse(spectrum, product.geometry, e_min=e_min, anchor_aliases=anchor_aliases)
+    return analyse(spectrum, product.geometry, e_min=e_min, anchor_aliases=anchor_aliases, anchor_note=anchor_note)
 
 
 # ---------------------------------------------------------------------- K*
@@ -645,6 +701,9 @@ def k_star(rows: Iterable[ContainmentRow], e_min: float = E_MIN, spans: Sequence
     eligible = [r for r in rows if r.disposition != UNSUPPORTED and all(math.isfinite(r.e_k(k)) for k in spans)]
     sentinels = tuple(r.channel for r in eligible if all(r.e_k(k) < e_min for k in spans))
     counted = [r for r in eligible if r.channel not in sentinels]
+    if not counted:
+        # nothing to count (no rows, all unsupported, or every eligible channel a sentinel): the rule is undefined
+        return KStar(e_min, None, None, None, float("nan"), sentinels, tuple(r.channel for r in eligible))
     best = None
     for k in sorted(spans):
         failing = [r for r in counted if r.e_k(k) < e_min]

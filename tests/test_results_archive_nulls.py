@@ -25,15 +25,29 @@ def test_iid_widths_match_the_text():
     assert mean == pytest.approx(1.000002, abs=1e-6) and 100 * sigma == pytest.approx(0.239, abs=0.001)
 
 
-def test_corrected_probes_recover_an_ideal_null_and_the_as_coded_ones_do_not():
+def test_each_probe_convention_recovers_an_ideal_null_on_its_own_population():
     rng = np.random.default_rng(3)
     x = stats.f.rvs(*nulls.COARSE_DOF, size=100_000, random_state=rng)
+    # the whole null about its median: the full-null percentiles
     d = nulls.describe_null(x, nulls.COARSE_DOF)
     assert d.raw_width_factor == pytest.approx(1.0, abs=0.02)
     assert d.core_width_factor == pytest.approx(1.0, abs=0.03) and d.core_spread == pytest.approx(1.0, abs=0.05)
     assert d.as_coded_sigma / d.iid_sigma == pytest.approx(0.84, abs=0.03) and d.as_coded_spread > 1.8
     assert d.tail_fraction == pytest.approx(d.tail_fraction_iid, abs=0.001)
     assert d.centre_db == pytest.approx(0.0, abs=0.01)
+    # the kept half about mu_0: the register's percentiles (rfisher.residual.null_scale as coded)
+    k = nulls.kept_half_null(x / d.iid_mean, nulls.COARSE_DOF)
+    assert k.frames == pytest.approx(50_000, abs=600)
+    assert k.width_factor == pytest.approx(1.0, abs=0.03) and k.spread == pytest.approx(1.0, abs=0.05)
+    # a transmitter present in most frames leaves the kept half intact while the bulk reads the detections
+    y = x.copy()
+    y[: 70_000] *= 1.02 + 0.05 * rng.random(70_000)
+    bulk = nulls.describe_null(y, nulls.COARSE_DOF)
+    kept = nulls.kept_half_null(y / d.iid_mean, nulls.COARSE_DOF)
+    assert bulk.centre > 1.01 and bulk.core_width_factor > 3.0
+    assert kept.width_factor == pytest.approx(1.0, abs=0.1)
+    assert nulls.null_like(d)[0] and not nulls.null_like(bulk)[0]
+    assert nulls.kept_half_null(x[:10], nulls.COARSE_DOF).frames < nulls.MIN_NULL_FRAMES
 
 
 def test_a_contaminated_tail_inflates_raw_but_not_core():
@@ -97,10 +111,18 @@ def test_calibrate_null_on_the_fixture_declares_its_source_and_floor(product):
     off[: product.n_frames // 2] = True
     cal_off = nulls.calibrate_null(product, era, anchor_bin=128, bulk_mask=bulk, era_label="fixture", off_era=off)
     finite = np.isfinite(product.shelf_db[off]).sum()
-    if finite >= nulls.FLOOR_MIN_FRAMES:
+    null_like = nulls.off_population_check(product, off)[0]
+    assert cal_off.off_null_like is null_like and cal_off.off_coarse is not None and cal_off.off_check
+    if null_like and finite >= nulls.FLOOR_MIN_FRAMES:
         assert cal_off.floor.evidence == "measured" and cal_off.null_source.startswith("verified")
     else:
         assert cal_off.floor.evidence == "stated"
+    if not null_like:
+        assert "not null-like" in cal_off.null_source and any("not null-like" in n for n in cal_off.notes)
+    # the stated floor follows the kept half about mu_0; the bulk value is carried for comparison
+    assert cal.floor.evidence != "measured" and math.isfinite(cal.floor.stated_bulk_db) or math.isnan(cal.floor.stated_bulk_db)
+    assert cal.kept is not None and "kept_width_factor" in row and "off_null_like" in row
+    assert cal.off_null_like is None and cal.off_coarse is None
     nulls.write_null_rows([cal, cal_off], product.path.parent / "nulls.csv")
     header = (product.path.parent / "nulls.csv").read_text().splitlines()[0]
     assert header.startswith("channel,freq_id,era,era_frames,null_source")

@@ -269,16 +269,44 @@ its status; changing one is a new run.
 - The floor on channels without a verified off era is the sigma-implied
   substitute and is labelled `stated`; no reference-surrogate floor is
   introduced without a registered method.
-- Null-scale probes. The register's `floor.null_scale_probes` pairs
-  two-sided tail fractions (32%, 5%, 0.3%) with their Gaussian deviates, and
-  `rfisher.residual.null_scale` (and ppcal) apply the fractions as one-sided
-  percentiles. On an ideal null that returns 0.84 of the coarse width, 0.82
-  of the fine width, and a probe spread near 2 where a Gaussian tail gives 1
-  (simulated, 200k draws). `archive.nulls` uses the one-sided percentiles
-  the deviates belong to (15.87 / 2.5 / 0.15) and reports the as-coded value
-  beside it. The sigma-implied floor rises by about 0.8 dB under the
-  corrected probes. The register entry is the author's to correct; the v3
-  numbers built on it were biased in the optimistic direction.
+- Null-scale probes. The register's `floor.null_scale_probes` (32%, 5%,
+  0.3% with deviates 1, 1.96, 2.97) are the one-sided percentiles of the
+  *kept half* about `mu_0`, which is how `rfisher.residual.null_scale` applies
+  them (the kept frames are the null's lower half, so their 32nd percentile
+  is the null's 16th). Simulated on an ideal null they recover the width to
+  1%; applied to a full null about its median they would return 0.84 of it,
+  which is what an earlier note of this design wrongly reported as a bug.
+  `archive.nulls` follows the register for the sigma-implied floor
+  (`kept_half_null`: frames with `Q <= 1` on the calibration block) and
+  describes the whole era's bulk with the full-null percentiles (15.87 / 2.5 /
+  0.15) beside it. On a channel whose carrier is present in most frames the
+  bulk's median lies above `mu_0` and its left side is the detections' lower
+  tail (channel 33: bulk width factor 25 against a kept-half factor near 1),
+  so the floor is read from the kept half.
+- Off population. A recorded off epoch counts as a null population only when
+  the frames of the procedure's proxy-low eras inside it read as a null:
+  coarse centre within 2% of `mu_0` and robust-core width factor at most 5
+  (`nulls.OFF_CENTRE_TOLERANCE`, `OFF_WIDTH_LIMIT`, recorded per row). A
+  post-sign-off epoch that still carries a carrier (channel 20: centre 1.12,
+  width factor 21; channel 27: 1.03, 10) gets a `stated` floor and its era is
+  not an off era for screening. Channels 19, 26, 32 and 35's pre-sign-on
+  epoch pass.
+- Off-era channels read the anchor of record and the containment from the
+  previous (on) era, labelled as such; the selection and the null are on the
+  off era itself (false-alarm basis).
+- The within-era drift screen (`rfisher.preparation`) refuses every archive
+  channel (sparse small-eta candidates, or halves below six months / 270
+  days). The selector still runs on the prepared histograms and the point is
+  reported as `diagnostic` with the refusal beside it; nothing is labelled
+  `screening` or `operational`.
+- Spectrum axis. The per-frame spectra are read on the receiver's circular
+  axis centred on the pilot (`psd.centred_offset_hz`), as the detector's
+  K-tap FFT reads them: on channels 21 and 32 the pilot is within `W` of a
+  coarse-channel edge and the far side of the window is aliased content,
+  recorded by `edge_distance_hz`, `window_aliased_hz` and `ref_aliased_K`.
+- Anchor against lobe. The fine anchor is compared with the spectrum's
+  in-span lobe (`anchor_lobe_offset_bins`); a difference beyond the designated
+  half-width sets the sentinel with its own reason.
 
 ## 7. Decisions that stay with the author
 

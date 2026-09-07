@@ -57,19 +57,55 @@ def station_records(channel: int) -> dict[str, str]:
     return out
 
 
-def verified_off(product: Product, months: np.ndarray) -> tuple[np.ndarray | None, str | None, str | None]:
-    """Frames of the channel's verified transmitter-off epoch, and its month bounds."""
+@dataclasses.dataclass(frozen=True)
+class OffEpoch:
+    """The channel's verified transmitter-off population.
+
+    ``record`` is the frame mask of the recorded off epoch (``residual.SIGN_OFF_FROM`` /
+    ``SIGN_ON_OFF_THROUGH``); ``mask`` restricts it to the frames of the era table's
+    proxy-low eras, so a month the section 8.1 procedure classifies proxy-high or
+    ambiguous never enters the null population even when the record's date covers
+    it (channel 20's record says 2022-09 while the procedure reads the transmitter
+    on through 2022-12). ``mask`` is None when no record exists or nothing survives.
+    """
+
+    mask: np.ndarray | None
+    off_through: str | None
+    off_from: str | None
+    record_frames: int
+    off_frames: int
+    note: str
+
+
+def verified_off(product: Product, months: np.ndarray, table: eras.EraTable | None = None) -> OffEpoch:
+    """Frames of the channel's verified transmitter-off epoch, restricted to proxy-low eras when a table is given."""
     ch = product.geometry.physical_channel
     off_from = residual.SIGN_OFF_FROM.get(ch)
     off_through = residual.SIGN_ON_OFF_THROUGH.get(ch)
-    mask = None
+    record = None
     if off_from:
         y, m = (int(x) for x in off_from.split("-"))
-        mask = product.selected & (months >= y * 12 + m - 1)
+        record = product.selected & (months >= y * 12 + m - 1)
     elif off_through:
         y, m = (int(x) for x in off_through.split("-"))
-        mask = product.selected & (months <= y * 12 + m - 1)
-    return mask, off_through, off_from
+        record = product.selected & (months <= y * 12 + m - 1)
+    if record is None:
+        return OffEpoch(None, off_through, off_from, 0, 0, "")
+    if table is None:
+        return OffEpoch(record if record.any() else None, off_through, off_from, int(record.sum()), int(record.sum()), "")
+    low = np.zeros(record.shape, dtype=bool)
+    for index, era in enumerate(table.eras):
+        if era.state == eras.PROXY_LOW:
+            low |= table.era_mask(product, index)
+    mask = record & low
+    notes = []
+    dropped = int(record.sum() - mask.sum())
+    if dropped:
+        notes.append(f"off population: {dropped} of {int(record.sum())} frames of the recorded off epoch fall outside the "
+                     f"procedure's proxy-low eras and are excluded")
+    if table.unmatched_station_records:
+        notes.append("station record not matched by a transition: " + ", ".join(table.unmatched_station_records))
+    return OffEpoch(mask if mask.any() else None, off_through, off_from, int(record.sum()), int(mask.sum()), "; ".join(notes))
 
 
 def _label(era: eras.Era | None) -> str:
@@ -96,13 +132,32 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     era = table.current_era
     era_mask = table.current_era_mask(p)
     months = eras.frame_months(p)
-    off_mask, off_through, off_from = verified_off(p, months)
-    off_era_current = bool(off_mask is not None and era is not None and off_mask[era_mask].mean() > 0.5) if era_mask.any() else False
-    record.add("era", eras.channel_row(table))
+    off = verified_off(p, months, table)
+    off_mask, off_through, off_from = off.mask, off.off_through, off.off_from
+    if off.note:
+        notes.append(off.note)
+    # the current era is an off era when the recorded off epoch covers most of it AND that population reads as a
+    # null (nulls.null_like); proxy-low is a level state (a weak but present carrier reads proxy-low), and a
+    # post-sign-off epoch that still carries a carrier is neither a null population nor an off era
+    off_ok, off_widths, off_reason = nulls.off_population_check(p, off_mask)
+    off_majority = bool(off_mask is not None and era_mask.any() and off_mask[era_mask].mean() > 0.5)
+    off_era_current = off_majority and off_ok
+    if off_mask is not None and not off_ok:
+        notes.append(f"recorded off population is not null-like: {off_reason}")
+    record.add("era", {**eras.channel_row(table), "off_record_frames": off.record_frames, "off_population_frames": off.off_frames,
+                       "off_null_like": off_ok if off_widths is not None else None, "off_majority_of_current_era": off_majority,
+                       "off_era_current": off_era_current})
     era_label = _label(era)
+    # on an off era the transmitter's position and containment are read from the last on era (the previous era)
+    reference_index = table.current_index - 1 if (off_era_current and table.current_index > 0) else table.current_index
+    reference_mask = table.era_mask(p, reference_index) if reference_index >= 0 and reference_index != table.current_index else era_mask
+    reference_label = era_label if reference_index == table.current_index else f"previous era {_label(table.eras[reference_index])} (current era is off)"
+    if reference_index != table.current_index:
+        notes.append(f"anchor and containment read on the {reference_label}")
 
-    # 2. blocks
-    split = blocks.split_blocks(p.frame_unit_index, p.unit_time, era_mask, frame_time=p.frame_time, minimum_months=1)
+    # 2. blocks (month support on the era procedure's own gate)
+    split = blocks.split_blocks(p.frame_unit_index, p.unit_time, era_mask, frame_time=p.frame_time, minimum_months=1,
+                                month_kwargs=dict(min_frames=config.min_frames, min_units=config.min_units, min_days=config.min_days))
     record.add("blocks", {
         "status": split.status, "detail": split.detail, "boundary_time": split.boundary_time,
         "calibration_frames": split.calibration_frames, "evaluation_frames": split.evaluation_frames,
@@ -123,27 +178,46 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
                                              replicates=replicates, seed=seed)
         anchor_results.append(anc["previous_era"])
     anchors.write_contrast_curves(anchor_results, ch_dir / "anchor_contrast.csv")
-    of_record = anc["calibration"] if anc["calibration"].status == "ok" else anc["current_era"]
-    record.add("anchor", anchors.anchor_row(of_record))
-    record.add("anchor_evaluation", anchors.anchor_row(anc["evaluation"]))
-    record.add("anchor_era", anchors.anchor_row(anc["current_era"]))
+    if reference_index != table.current_index and "previous_era" in anc and anc["previous_era"].status == "ok":
+        of_record = anc["previous_era"]
+    else:
+        of_record = anc["calibration"] if anc["calibration"].status == "ok" else anc["current_era"]
+    record.add("anchor", {**anchors.anchor_record(of_record), "source": of_record.label})
+    record.add("anchor_evaluation", anchors.anchor_record(anc["evaluation"]))
+    record.add("anchor_era", anchors.anchor_record(anc["current_era"]))
     if "previous_era" in anc:
-        row = anchors.anchor_row(anc["previous_era"])
-        row["shift_from_previous_bins"] = anchors.anchor_shift_bins(anc["current_era"], anc["previous_era"]) if anc["previous_era"].status == "ok" else ""
+        row = anchors.anchor_record(anc["previous_era"])
+        both = anc["previous_era"].status == "ok" and anc["current_era"].status == "ok"
+        row["shift_from_previous_bins"] = anchors.anchor_shift_bins(anc["current_era"], anc["previous_era"]) if both else None
         record.add("anchor_previous", row)
     else:
         record.add("anchor_previous", None)
 
-    # 4. containment (current era; needs the per-frame spectra the campaign products carry)
-    if era_mask.any() and "psd_frame_db_i16" in p.archive.files:
-        cont = psd.containment(p, era_mask, anchor_aliases=bool(of_record.aliased_out_of_window))
-        psd.write_spectra_json([cont], ch_dir / "spectra_window.json", provenance=f"current era {era_label}")
+    # 4. containment (current era; needs the per-frame spectra the campaign products carry). The fine anchor
+    # is compared with the spectrum's in-span lobe: a disagreement beyond the designated half-width sets the
+    # sentinel (design section 6), and the difference is recorded beside both estimates.
+    if reference_mask.any() and "psd_frame_db_i16" in p.archive.files:
+        spectrum = psd.accumulate_spectra(p, reference_mask)
+        first = psd.analyse(spectrum, g)
+        lobe_hz = first.row.in_span_refined_offset_hz if first.row.in_span_recovered else math.nan
+        anchor_hz = float(of_record.anchor_rf_offset_hz) if of_record.status == "ok" else math.nan
+        offset_bins = psd.anchor_lobe_offset_bins(anchor_hz, lobe_hz)
+        disagree = math.isfinite(offset_bins) and abs(offset_bins) > anchors.DESIGNATED_HALF_WIDTH + 0.5
+        aliases = bool(of_record.aliased_out_of_window)
+        reasons = []
+        if aliases:
+            reasons.append("fine anchor aliases an out-of-span feature")
+        if disagree:
+            reasons.append(f"fine anchor {offset_bins:+.1f} bins from the PSD in-span lobe")
+        cont = psd.analyse(spectrum, g, anchor_aliases=aliases or disagree, anchor_note="; ".join(reasons))
+        psd.write_spectra_json([cont], ch_dir / "spectra_window.json", provenance=reference_label)
         containment_row = cont.row
-        record.add("containment", dataclasses.asdict(cont.row))
+        record.add("containment", {**dataclasses.asdict(cont.row), "anchor_lobe_offset_bins": offset_bins,
+                                   "anchor_lobe_disagree": bool(disagree), "era": reference_label})
     else:
         cont, containment_row = None, None
         record.add("containment", None)
-        if era_mask.any():
+        if reference_mask.any():
             notes.append("containment skipped: product carries no per-frame spectra")
 
     # 5. chain (archive-wide on population outside the declared off epoch)
@@ -162,12 +236,20 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     r_tol = float(tol_row.get("r_tol_dilation", math.nan))
     record.add("tolerance", tol_row or None)
 
-    # 7. null calibration (floor first; exchangeability after the selection)
+    # 7. null calibration on the calibration block (floor first; exchangeability after the selection).
+    # The evaluation block never enters the null: the floor and the widths that score both blocks are
+    # read from the calibration block (or from the verified off population, which lies outside the era).
     anchor_bin = int(of_record.anchor_bin) if of_record.status == "ok" else g.nominal_fine_bin
     bulk = of_record.bulk if of_record.status == "ok" else anchors.bulk_mask(anchor_bin, pad_factor=p.fine_pad_factor,
                                                                              guard_fine_bins=p.fine_guard_bins,
                                                                              census_excluded_bins=p.fine_census_excluded_bins)
-    null_cal = nulls.calibrate_null(p, era_mask, anchor_bin=anchor_bin, bulk_mask=bulk, era_label=era_label,
+    if split.calibration.any():
+        null_block, null_label = split.calibration, f"{era_label}/calibration"
+    else:
+        null_block, null_label = era_mask, era_label
+        if era_mask.any():
+            notes.append("null calibrated on the whole era: no calibration block")
+    null_cal = nulls.calibrate_null(p, null_block, anchor_bin=anchor_bin, bulk_mask=bulk, era_label=null_label,
                                     off_era=off_mask, fine_t=ratio)
     floor = selection.Floor(null_cal.floor.db, null_cal.floor.evidence, null_cal.floor.population)
 
@@ -181,7 +263,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         sel = None
         notes.append("selection skipped: no tolerance or no calibration frames")
     if sel is not None and sel.rho is not None:
-        null_cal = nulls.calibrate_null(p, era_mask, anchor_bin=anchor_bin, bulk_mask=bulk, era_label=era_label,
+        null_cal = nulls.calibrate_null(p, null_block, anchor_bin=anchor_bin, bulk_mask=bulk, era_label=null_label,
                                         off_era=off_mask, rho=sel.rho, quiet_block=split.evaluation, fine_t=ratio)
     record.add("null", null_cal.as_row())
     record.add("selection", sel.as_row() if sel is not None else None)
@@ -250,11 +332,11 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
     out.mkdir(parents=True, exist_ok=True)
     paths = sorted(products_dir.glob("*.npz"))
     opened = [Product(p) for p in paths]
-    by_channel = {p.geometry.physical_channel: p for p in opened}
-    if channels:
-        by_channel = {c: by_channel[c] for c in channels}
+    all_channels = {p.geometry.physical_channel: p for p in opened}
     config = era_config or eras.DEFAULT_CONFIG
-    campaign_last = eras.campaign_last_populated_month(list(by_channel.values()), config)
+    # the campaign snapshot is the last populated month over every product present, whatever subset runs
+    campaign_last = eras.campaign_last_populated_month(list(all_channels.values()), config)
+    by_channel = {c: all_channels[c] for c in channels} if channels else all_channels
     tol_rows = {r.channel: r.as_row() for r in tolerances.channel_tolerances()}
     tolerances.write_channel_tolerances(tolerances.channel_tolerances(), out / "tables" / "channel_tolerances.csv")
     jobs = [(str(p.path), str(out), dict(campaign_last_month=campaign_last, replicates=replicates, seed=seed,
