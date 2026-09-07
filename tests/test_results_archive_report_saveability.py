@@ -45,8 +45,13 @@ def _chain(quality, minutes=None, high=None):
     return {"tau_quality": quality, "tau_c_minutes": minutes, "tau_c_high_minutes": high}
 
 
+_RUNS = {}
+
+
 def _run(tmp_path):
-    """A band with one channel of every tier, plus the era marks."""
+    """A band with one channel of every tier, plus the era marks; built once per tmp_path."""
+    if tmp_path in _RUNS:
+        return _RUNS[tmp_path]
     records = {
         # inside on the growth rate with no filter at all
         33: {"worlds": _worlds(0.5, 0.05), "chain": _chain("measured", 4.0), "era": {}, "screening": {}},
@@ -55,7 +60,7 @@ def _run(tmp_path):
         # the dilations come in under a cut, the growth rate never does
         26: {"worlds": _worlds(500.0, 5.0), "chain": _chain("bounded_above", None, 5.0), "era": {}, "screening": {}},
         # booked at the cap: nothing as booked, but the what-if reaches the dilations
-        23: {"worlds": _worlds(4e5, 4e3), "chain": _chain("refused"), "era": {}, "screening": {}},
+        23: {"worlds": _worlds(4e3, 4e2), "chain": _chain("refused"), "era": {}, "screening": {}},
         # booked at the cap and the what-if reaches nothing either
         30: {"worlds": _worlds(4e12, 4e11), "chain": _chain("refused"), "era": {}, "screening": {}},
         # a measured timescale and no world reaches anything: the cap is not the excuse
@@ -73,7 +78,8 @@ def _run(tmp_path):
         # no worlds section at all
         14: {"chain": _chain("refused"), "era": {}, "screening": {}},
     }
-    return core.load_run(_ledger(tmp_path, records))
+    _RUNS[tmp_path] = core.load_run(_ledger(tmp_path, records))
+    return _RUNS[tmp_path]
 
 
 def _tiers(run):
@@ -87,18 +93,20 @@ def test_builder_is_registered():
     assert sv.BUILDERS == (sv.build,) and "saveability" in b.TABLE_MODULES
 
 
-def test_the_reference_timescale_is_the_bands_worst_measured_evidence(tmp_path):
+def test_the_reference_timescale_is_the_shortest_the_band_exhibits(tmp_path):
     run = _run(tmp_path)
     tau, basis = sv.reference_tau_seconds(run)
-    assert tau == pytest.approx(4.0 * 60.0)             # ch33's 4 min is the largest measured
-    assert "largest measured" in basis
+    assert tau == pytest.approx(1.0 * 60.0)             # ch20's 1 min is the shortest evidence
+    assert "shortest measured correlation time" in basis
 
 
-def test_a_bound_stands_in_when_nothing_is_measured(tmp_path):
+def test_a_bound_counts_as_evidence_when_it_is_the_shortest(tmp_path):
     run = core.load_run(_ledger(tmp_path, {26: {"worlds": _worlds(1.0, 1.0),
-                                                "chain": _chain("bounded_above", None, 5.0)}}))
+                                                "chain": _chain("bounded_above", None, 5.0)},
+                                           33: {"worlds": _worlds(1.0, 1.0),
+                                                "chain": _chain("measured", 40.0)}}))
     tau, basis = sv.reference_tau_seconds(run)
-    assert tau == pytest.approx(300.0) and "upper bound" in basis
+    assert tau == pytest.approx(300.0) and "shortest correlation-time bound" in basis
 
 
 def test_a_run_with_no_timescale_at_all_states_its_fallback(tmp_path):
@@ -129,7 +137,10 @@ def test_a_channel_inside_on_the_dilations_only_is_its_own_tier(tmp_path):
 def test_the_cadence_tier_needs_both_a_refused_timescale_and_a_reachable_what_if(tmp_path):
     tiers = _tiers(_run(tmp_path))
     assert tiers[23].tier == "cadence" and tiers[23].headroom < 1.0
-    assert tiers[30].tier == "none" and "the cap is not the reason" in tiers[30].note
+    assert tiers[30].tier == "none" and "the cap is not what is wrong" in tiers[30].note
+    # the required time is quoted whatever the tier, and it is what would land the best world on 1
+    assert tiers[30].required_tau == pytest.approx(sv.CAP_SECONDS / tiers[30].dilation_ratio)
+    assert math.isnan(tiers[18].required_tau)           # a measured timescale is not a cap question
     # a measured timescale never takes the cadence tier, however far out it is
     assert tiers[18].tier == "none" and tiers[18].headroom == 1.0
 
@@ -175,3 +186,19 @@ def test_an_empty_run_says_so(tmp_path):
     run = core.load_run(_ledger(tmp_path, {}))
     frag = sv.build(run)
     assert frag.tex == "" and "no channel" in frag.notes[0]
+
+
+def test_the_required_time_column_is_the_cap_over_the_ratio(tmp_path):
+    run = _run(tmp_path)
+    frag = sv.build(run)
+    needed = {n.key.rsplit(".", 1)[-1]: n for n in frag.numbers if ".required_tau_seconds." in n.key}
+    assert needed["ch23"].value == pytest.approx(sv.required_tau_seconds(_tiers(run)[23].dilation_ratio))
+    assert needed["ch18"].value is None                  # a measured timescale gets no required time
+    assert sv.required_tau_seconds(1.0) == pytest.approx(sv.CAP_SECONDS)
+    assert math.isnan(sv.required_tau_seconds(0.0))
+
+
+def test_the_notes_quote_the_longest_time_any_capped_channel_could_accept(tmp_path):
+    joined = " ".join(sv.build(_run(tmp_path)).notes)
+    assert "tau_c needed (s) is the correlation time" in joined
+    assert "exactly on R = 1" in joined
