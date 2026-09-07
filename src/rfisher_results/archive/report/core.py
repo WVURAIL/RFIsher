@@ -252,7 +252,12 @@ def write_report(run: Run, out_dir: Path | str, builders: Sequence[Builder], *, 
     for path in extra_artifacts:
         artifacts.append({"name": Path(path).stem, "label": "", "table": str(Path(path).relative_to(out)) if Path(path).is_relative_to(out) else str(path),
                           "numbers": "", "sha256": _sha256(Path(path)), "numbers_sha256": "", "count": 0, "notes": []})
-    manifest = {"schema": SCHEMA, "source": {"repository": REPOSITORY, "commit": commit}, "generated": generated,
+    producer = run.run.get("producer") if isinstance(run.run.get("producer"), Mapping) else {}
+    manifest = {"schema": SCHEMA, "source": {"repository": REPOSITORY, "commit": commit},
+                # the run's own producer: a report is only as clean as the run it renders
+                "producer": {k: producer.get(k) for k in ("commit", "dirty", "dirty_files", "source_digest",
+                                                          "source_changed_during_run") if k in producer},
+                "generated": generated,
                 "run": {"results_dir": str(run.results_dir), "generated": run.generated,
                         "era_config_digest": run.run.get("era_config_digest", ""),
                         "products": run.run.get("products", {}), "channels": [c.channel for c in run.channels]},

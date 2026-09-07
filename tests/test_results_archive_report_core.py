@@ -34,7 +34,8 @@ def _ledger(tmp_path):
     ledger = tmp_path / "ledger"
     (ledger / "channels").mkdir(parents=True)
     run = {"schema": {"name": "rfisher-archive-ledger", "version": 1}, "generated": "2026-09-07T00:00:00+00:00",
-           "producer": {"commit": "a" * 40}, "products": {"552.npz": "b" * 64}, "channels": ["channels/ch33_fid552.json"],
+           "producer": {"commit": "a" * 40, "dirty": False, "source_digest": "c" * 64}, "products": {"552.npz": "b" * 64},
+           "channels": ["channels/ch33_fid552.json"],
            "era_config_digest": "c" * 64}
     (ledger / "run.json").write_text(json.dumps(run))
     rec = {"channel": 33, "freq_id": 552, "product": "552.npz", "product_sha256": "b" * 64, "notes": ["n1"],
@@ -74,4 +75,6 @@ def test_write_report_emits_fragments_numbers_and_manifest(tmp_path):
     assert len(doc["inputs"]) == 2
     m = json.loads((out / "export_manifest.json").read_text())
     assert m == manifest and m["schema"]["name"] == "rfisher-archive-report" and m["artifacts"][0]["label"] == "tab:demo"
+    # the run's own producer travels with the report: a report is only as clean as the run it renders
+    assert m["producer"] == {"commit": "a" * 40, "dirty": False, "source_digest": "c" * 64}
     assert m["artifacts"][0]["count"] == 2 and m["artifacts"][0]["notes"] == ["one channel"] and m["run"]["channels"] == [33]
