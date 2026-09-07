@@ -417,6 +417,8 @@ def test_archive_report_checks_verify_markers_against_the_numbers_documents(tmp_
     ck = cdn.Checker("")
     report_by_chapter = cdn.archive_report_checks(ck, report, inv)
     out = capsys.readouterr().out
-    assert ck.failures == 1 and "update the marker" in out and "no source" in out
+    assert ck.failures == 1 and "update the marker" in out
     assert report_by_chapter["chapters/ch08.tex"]["verified"] == 1 and report_by_chapter["chapters/ch08.tex"]["changed"] == 1
-    assert "flip to black" not in out.split("ch08.tex:")[1].split("\n")[0]
+    # the unbound ch09 marker is reported as unbound, never verified by a coincidence of value
+    assert "1 rerun markers not bound to a report key" in out and "chapters/ch09.tex" not in report_by_chapter
+    assert "2 of 3 markers bound to a report key" in out
