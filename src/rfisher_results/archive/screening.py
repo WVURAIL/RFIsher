@@ -53,6 +53,7 @@ class ScreeningInputs:
     floor_evidence: str               # 'measured' | 'stated' | 'refused'
     correlation_quality: str          # 'measured' | 'bounded_above' | 'refused' | 'unmeasured'
     refusal: str = ""
+    claim_status: str = "screening"   # 'operational' | 'screening' | 'diagnostic' (drift screen refused)
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,8 @@ def screen(inputs: ScreeningInputs, *, wall_masked_fraction: float = OCCUPANCY_W
 
     if feasible:
         reasons.append(f"selected point inside tolerance on the dilation tier (R = {inputs.tolerance_fraction:.3g})")
+        if inputs.claim_status == "diagnostic":
+            reasons.append(f"point is diagnostic: the within-era drift screen refused ({inputs.refusal})")
         if floor_ok and tau_ok:
             reasons.append(f"floor measured; correlation time {inputs.correlation_quality}")
             return Screening(RECOVERY, "transfer gate: the online exact-replay agreement", tuple(reasons), thresholds)

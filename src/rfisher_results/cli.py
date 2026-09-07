@@ -9,10 +9,13 @@ is no reason to re-stamp them.
         [--title TEXT] [--y-min DB] [--no-tex]
     python -m rfisher_results.cli transfer-points --sweep ROOT --out plot_points.csv
         [--conditioning conditioning.json] [--bootstrap-samples N]
+    python -m rfisher_results.cli archive --products DIR --out DIR
+        [--workers 6] [--replicates 1000] [--seed 20260907] [--channels 35,29]
 """
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -51,7 +54,22 @@ def main(argv: list[str] | None = None) -> int:
     tp.add_argument("--out", type=Path, required=True, help="CSV to write")
     tp.add_argument("--conditioning", type=Path, default=None, help="conditioning.json with the waveform coefficients")
     tp.add_argument("--bootstrap-samples", type=int, default=10_000, dest="bootstrap_samples")
+    ar = sub.add_parser("archive", help="the archive pipeline over the campaign products: eras, anchors, containment, nulls, selection, ledger")
+    ar.add_argument("--products", type=Path, required=True, help="directory of the 23 v5 per-pilot products")
+    ar.add_argument("--out", type=Path, required=True, help="results tree to write (a new dated directory)")
+    ar.add_argument("--workers", type=int, default=6)
+    ar.add_argument("--replicates", type=int, default=1000)
+    ar.add_argument("--seed", type=int, default=20260907)
+    ar.add_argument("--channels", default=None, help="comma-separated physical channels to run (default all)")
     args = ap.parse_args(argv)
+
+    if args.command == "archive":
+        from .archive.run import run_archive
+        chans = [int(c) for c in args.channels.split(",")] if args.channels else None
+        summary = run_archive(args.products, args.out, workers=args.workers, replicates=args.replicates, seed=args.seed,
+                              channels=chans)
+        print(json.dumps({k: v for k, v in summary.items() if k != "errors"}), flush=True)
+        return 1 if summary["errors"] else 0
 
     if args.command == "transfer-points":
         shards = load_evaluations(digital_sweep_layout(args.sweep))
