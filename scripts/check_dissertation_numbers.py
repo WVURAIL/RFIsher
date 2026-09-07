@@ -1285,8 +1285,14 @@ def archive_report_checks(ck: Checker, report_dir: Path, inventory: Path) -> dic
     is a PASS; a key the report does not carry is reported, not failed, until
     the fragment that owns it is written. Returns the per-chapter report.
     """
-    from rfisher_results.archive import numbers as nb
     ck.section("v5 archive report <- numbers/*.numbers.json vs STUBS_rerun_inventory.csv")
+    try:
+        from rfisher_results.archive import numbers as nb
+    except ImportError:
+        ck.skip("archive report markers",
+                "rfisher_results is not importable: add this repository's src/ to PYTHONPATH "
+                "(the marker verification reads its numbers.json loader and matcher)")
+        return {}
     docs = sorted(Path(report_dir).glob("numbers/*.numbers.json"))
     if not docs:
         ck.skip("archive report numbers", f"no numbers/*.numbers.json under {report_dir}")
