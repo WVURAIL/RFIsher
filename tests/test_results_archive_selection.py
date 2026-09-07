@@ -157,3 +157,32 @@ def test_an_undefined_floor_bounds_nothing_and_frames_without_a_shelf_still_need
     if without.size:
         with pytest.raises(ValueError, match="finite floor"):
             sel_mod.systematic_residuals(product, without, sel_mod.Floor(float("nan"), "refused", "none"))
+
+
+def test_drift_diagnostic_names_the_refusing_candidate_and_the_drift_a_point_would_see(product):
+    """The screen refuses on the first candidate to cross the pooled floor; the diagnostic says so and
+    measures the early/late ratios where a real operating point lives."""
+    import numpy as np
+    from rfisher_results.archive import selection as sel_mod
+    from rfisher.residual_scores import build_residual_score_bundle
+
+    era = product.selected & np.isfinite(product.frame_time)
+    bulk = np.zeros(256, dtype=bool)
+    bulk[::2] = True
+    for k in range(-2, 3):
+        bulk[(128 + k) % 256] = False
+    bundle = build_residual_score_bundle(product.path, era, anchor_bin=128, designated_half_width=2, bulk_mask=bulk)
+    residuals = sel_mod.systematic_residuals(product, bundle.source_row_index, FLOOR, 1.0)
+    d = sel_mod.drift_diagnostic(bundle, residuals, product.frame_time[bundle.source_row_index])
+    assert d["drift_status"] in ("measured", "no evaluable candidate")
+    assert d["drift_early_frames"] > 0 and d["drift_late_frames"] > 0
+    if "drift_refused_rho" in d:
+        # the refusing candidate keeps at least the pooled floor and less than the per-half floor in one half
+        assert d["drift_refused_early_kept"] + d["drift_refused_late_kept"] >= 30
+        assert min(d["drift_refused_early_kept"], d["drift_refused_late_kept"]) < sel_mod.PROVISIONAL_MIN_HALF_RETAINED
+        assert 0.0 < d["drift_refused_kept_fraction"] <= 1.0
+    if d["drift_status"] == "measured":
+        assert d["drift_candidates_at_0"] >= d.get("drift_candidates_at_0p2", 0)
+        assert d["drift_max_cost_ratio_at_0"] >= 1.0 and d["drift_max_systematic_ratio_at_0"] >= 1.0
+    # an empty or untimed block is reported, not raised
+    assert sel_mod.drift_diagnostic(bundle, residuals, np.full(bundle.frame_count, np.nan))["drift_status"] == "no timed frames"

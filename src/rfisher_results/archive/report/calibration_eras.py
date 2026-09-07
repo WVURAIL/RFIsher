@@ -1,17 +1,29 @@
-"""``tab:calibration:eras`` (chapter 8): the current era of every channel and
-its transition evidence, one row per channel.
+"""``tab:calibration:eras`` (chapter 8) and its companion evidence ledger
+``tab:archive:calibration_eras`` (Appendix~C): the current era of every channel
+and its transition evidence, one row per channel in each.
 
-Columns (the ledger key each cell reads; ``era.*`` is the channel record's
-``era`` section, ``eras.csv`` the run's ``tables/eras.csv`` with
-``channels/chNN/eras.json`` as the fallback):
+The chapter table prints exactly the columns the chapter's ``\\stubtab`` names
+(the current era's start, end and boundary uncertainty; the transition evidence
+and its agreement with a station record; the stale-latest flag; the earlier eras;
+the valid-frame count; the calendar coverage) beside the channel. It is one
+``tabular`` -- no panel split was needed -- and its natural width fits a sideways
+page with room to spare (700~pt against the 650.4~pt of ``\\textheight``, a scale
+of 0.93). The per-channel *evidence* the builder carries beyond the stub -- the
+spectral state, the located-month count, the peak drift and range, and the
+unconfirmed-instrument flag -- goes to the companion ``calibration_eras_ledger``
+fragment (411~pt: it fits a portrait page), beside the channel's plate in
+Appendix~\\ref{app:archive-diagnostics}, rather than widening the chapter table
+to 1022~pt.
+
+Both fragments read the channel record's ``era`` section and the run's
+``tables/eras.csv`` (with ``channels/chNN/eras.json`` as the fallback), and both
+are joined on the channel number.
+
+Chapter columns (the ledger key each cell reads; ``era.*`` is the channel
+record's ``era`` section):
 
 ``Ch.``
     the channel number.
-``State``
-    ``era.current_state`` as ``high`` / ``low`` / ``ambiguous`` (``proxy-high``,
-    ``proxy-low``, ``ambiguous-only``); ``(no off)`` follows when ``era.fallback``
-    carries ``no_off_state`` -- the channel has no proxy-low month and its era
-    is bounded only by station and instrument changes.
 ``Start``, ``End``
     ``era.current_first_month`` and ``era.current_last_month`` (UTC months).
 ``$\\pm$ mo``
@@ -45,6 +57,19 @@ Columns (the ledger key each cell reads; ``era.*`` is the channel record's
 ``Coverage``
     ``populated_months/months_spanned`` of the current era's ``eras.csv`` row
     (its ``coverage`` is the ratio).
+
+Companion ledger columns (``calibration_eras_ledger``, one row per channel):
+
+``Ch.``
+    the channel number, the join back to the chapter table.
+``State``
+    ``era.current_state`` as ``high`` / ``low`` / ``ambiguous`` (``proxy-high``,
+    ``proxy-low``, ``ambiguous-only``); ``(no off)`` follows when ``era.fallback``
+    carries ``no_off_state`` -- the channel has no proxy-low month and its era
+    is bounded only by station and instrument changes.
+``Peak mo.``
+    ``peak_months`` of the current era's ``eras.csv`` row: the era's months
+    whose fine peak was located, the sample the drift and range are read from.
 ``Drift (bins/mo)``
     ``era.current_peak_drift_bins_per_month``: the least-squares slope of the
     located monthly peak position (the era's proxy-high months whose peak was
@@ -66,23 +91,25 @@ Columns (the ledger key each cell reads; ``era.*`` is the channel record's
     persistence rule (``persistence_months``) cannot confirm it and the era is
     left open; ``none`` otherwise.
 
-Numbers: per channel ``ch08.eras.<column>.chNN`` for ``n_eras``,
-``current_state``, ``current_first_month``, ``current_last_month``,
+Numbers (unchanged keys; only the fragment that carries them moved with their
+columns): per channel ``ch08.eras.<column>.chNN`` for ``n_eras``,
+``current_first_month``, ``current_last_month``,
 ``current_boundary_uncertainty_months``, ``current_evidence``,
 ``record_agreement``, ``unmatched_station_records``, ``stale_latest``,
 ``stale_lag_months``, ``earlier_eras``, ``current_frames``, ``coverage``
-(the ratio, rendered ``m/n``), ``coverage_populated_months``,
-``coverage_months_spanned``, ``current_peak_drift_bins_per_month``,
+(the ratio, rendered ``m/n``), ``coverage_populated_months`` and
+``coverage_months_spanned`` from the chapter table, and ``current_state``,
+``peak_months``, ``current_peak_drift_bins_per_month``,
 ``current_peak_range_bins``, ``peak_range_exceeds_half_width`` (``yes`` /
-``no``, the mark), ``peak_months`` (the located months the drift and range
-are read from, from the current era's ``eras.csv`` row; not printed) and
-``unconfirmed_instrument_change_last_month`` (``yes`` / ``no``); band-level
-``ch08.eras.n_channels``, ``n_eras_total``, ``n_channels_multi_era``,
-``n_channels_record_confirmed``, ``n_channels_stale``,
+``no``, the mark) and ``unconfirmed_instrument_change_last_month`` (``yes`` /
+``no``) from the ledger; band-level ``ch08.eras.n_channels``,
+``n_eras_total``, ``n_channels_multi_era``, ``n_channels_record_confirmed``,
+``n_channels_stale`` and ``campaign_last_month`` from the chapter table, and
 ``n_channels_no_off_state``, ``n_channels_drift_measured``,
 ``n_channels_peak_range_exceeds_half_width``,
-``n_channels_unconfirmed_instrument_change``, ``designated_half_width`` and
-``campaign_last_month``. Text cells that print the dash emit no number.
+``n_channels_unconfirmed_instrument_change`` and ``designated_half_width``
+from the ledger. Every key each fragment emits is emitted once, across the two
+documents. Text cells that print the dash emit no number.
 """
 from __future__ import annotations
 
@@ -98,6 +125,8 @@ from .core import DASH, Channel, Fragment, Run, booktabs, fmt, fmt_int, fmt_mont
 
 NAME = "calibration_eras"
 LABEL = "tab:calibration:eras"
+LEDGER_NAME = "calibration_eras_ledger"          # the companion evidence ledger, Appendix C
+LEDGER_LABEL = "tab:archive:calibration_eras"
 KEY = "ch08.eras"
 EARLIER_WIDTH = "4.4cm"          # the wrapped earlier-eras column (two eras per line at \\footnotesize)
 RANGE_MARK = r"^{\dagger}"       # inside the range cell's math mode: the range exceeds the designated half-width
@@ -266,7 +295,7 @@ def _instrument(era: Mapping) -> tuple[str, str]:
     return "none", "no"
 
 
-def _current_row(c: Channel, rows: list[dict], frag: Fragment) -> dict | None:
+def _current_row(c: Channel, rows: list[dict], frag: Fragment, dashed: str) -> dict | None:
     """The eras.csv row of the current era, cross-checked against the ledger; None when absent or inconsistent."""
     era = c.era
     current = [r for r in rows if r["is_current"]]
@@ -279,35 +308,51 @@ def _current_row(c: Channel, rows: list[dict], frag: Fragment) -> dict | None:
     if era.get("current_first_month") and row["first_month"] != era["current_first_month"]:
         frag.notes.append(f"ch{c.channel:02d}: the eras table's current era ({row['first_month']}..{row['last_month']}) "
                           f"disagrees with the ledger ({era['current_first_month']}..{era.get('current_last_month', '')}); "
-                          "record, earlier eras and coverage are dashed")
+                          f"{dashed} are dashed")
         return None
     return row
+
+
+def _context(run: Run, frag: Fragment, dashed: str) -> tuple[list[tuple[Channel, list[dict], dict | None]], list[int]]:
+    """Per channel: (record, its era rows, the current era's row); and the channels with no era rows at all.
+
+    Sets ``frag.inputs``; ``dashed`` names the cells a disagreeing eras table costs this fragment.
+    """
+    era_rows, extra_inputs = load_era_rows(run)
+    frag.inputs = run.inputs() + extra_inputs
+    context, without_table = [], []
+    for c in run.channels:
+        table_rows = era_rows.get(c.channel, [])
+        current = _current_row(c, table_rows, frag, dashed) if c.era else None
+        if not table_rows and c.era:
+            without_table.append(c.channel)
+        context.append((c, table_rows, current))
+    return context, without_table
 
 
 def _channels(numbers: list[int]) -> str:
     return ", ".join(str(ch) for ch in numbers)
 
 
-# ------------------------------------------------------------------ builder
+def _missing_note(run: Run, frag: Fragment) -> None:
+    missing = [c.channel for c in run.channels if not c.era]
+    if missing:
+        frag.notes.append("no era section for channels " + _channels(missing) + ": every era cell is dashed")
+
+
+# ------------------------------------------------------------------ the chapter table
 def build(run: Run) -> Fragment:
+    """``tab:calibration:eras``: the stub's columns beside the channel, one row per channel."""
     frag = Fragment(NAME, LABEL, "")
-    era_rows, extra_inputs = load_era_rows(run)
-    frag.inputs = run.inputs() + extra_inputs
-    header = ["Ch.", "State", "Start", "End", r"$\pm$ mo", "Evidence", "Record", "Stale (lag)", "Earlier eras", "Frames",
-              "Coverage", "Drift (bins/mo)", "Range (bins)", r"Instr.\ (last mo.)"]
+    context, without_table = _context(run, frag, "record, earlier eras and coverage")
+    header = ["Ch.", "Start", "End", r"$\pm$ mo", "Evidence", "Record", "Stale (lag)", "Earlier eras", "Frames", "Coverage"]
     rows = []
-    n_multi = n_confirmed = n_stale = n_no_off = n_eras_total = n_drift = 0
-    without_table, drift_dashed, range_exceeds, unconfirmed = [], [], [], []
+    n_multi = n_confirmed = n_stale = n_eras_total = 0
     campaign_month = str(run.run.get("campaign_last_month") or "")
-    era_config = run.run.get("era_config") if isinstance(run.run.get("era_config"), Mapping) else {}
-    for c in run.channels:
+    for c, table_rows, current in context:
         ch = c.channel
         era = c.era
         row = {"channel": ch}
-        table_rows = era_rows.get(ch, [])
-        current = _current_row(c, table_rows, frag) if era else None
-        if table_rows == [] and era:
-            without_table.append(ch)
         n_eras = _as_int(era.get("n_eras"))
         index = _as_int(era.get("current_era"))
         if n_eras is not None:
@@ -316,12 +361,6 @@ def build(run: Run) -> Fragment:
             n_multi += n_eras > 1
         if not campaign_month:
             campaign_month = str(era.get("campaign_last_month") or "")
-
-        state_cell, state_text = _state(era)
-        if state_text:
-            frag.add(f"{KEY}.current_state.ch{ch}", state_text, kind="text", renderings=(state_text, str(era["current_state"])),
-                     row=row, column="State")
-            n_no_off += state_cell.endswith("(no off)")
 
         first, last = era.get("current_first_month") or "", era.get("current_last_month") or ""
         if first:
@@ -374,6 +413,62 @@ def build(run: Run) -> Fragment:
             frag.add(f"{KEY}.coverage_populated_months.ch{ch}", m, kind="int", row=row, column="Coverage")
             frag.add(f"{KEY}.coverage_months_spanned.ch{ch}", n, kind="int", row=row, column="Coverage")
 
+        rows.append([str(ch), fmt_month(first), fmt_month(last), unc_cell, evidence_cell, tex(record_cell), tex(stale_cell),
+                     earlier_cell, frames_cell, cov_cell])
+
+    frag.tex = booktabs(header, rows, "rllrllllrr")
+    frag.add(f"{KEY}.n_channels", len(run.channels), kind="int", column="rows")
+    frag.add(f"{KEY}.n_eras_total", n_eras_total, kind="int", column="n_eras")
+    frag.add(f"{KEY}.n_channels_multi_era", n_multi, kind="int", column="n_eras")
+    frag.add(f"{KEY}.n_channels_record_confirmed", n_confirmed, kind="int", column="Record")
+    frag.add(f"{KEY}.n_channels_stale", n_stale, kind="int", column="Stale (lag)")
+    if campaign_month:
+        frag.add(f"{KEY}.campaign_last_month", campaign_month, kind="text", renderings=(campaign_month,), column="Stale (lag)")
+
+    frag.notes.append("the +- column is dashed for 'archive start' eras: no transition defines the start, so the boundary "
+                      "uncertainty is undefined (the ledger records 0)")
+    frag.notes.append("the record column is dashed where no station record exists for the boundary; instrument records enter "
+                      "the evidence column as 'instrument change'")
+    frag.notes.append("earlier eras carry span and state only; their evidence and record agreement stay in tables/eras.csv")
+    frag.notes.append(f"the columns beyond the stub -- the era's spectral state, its located-month count, the peak drift and "
+                      f"range and the unconfirmed-instrument flag -- print in the companion evidence ledger "
+                      f"{LEDGER_NAME}.tex ({LEDGER_LABEL}, appendix C), one row per channel joined on the channel number; "
+                      "printing them here would take the table to 1022 pt")
+    frag.notes.append("one tabular, no panel split: 700 pt natural width fits a sideways page (650.4 pt) at a scale of 0.93; "
+                      "the companion ledger is 411 pt and fits a portrait page")
+    if without_table:
+        frag.notes.append("no eras table (tables/eras.csv or channels/chNN/eras.json) for channels "
+                          + _channels(without_table) + ": record, earlier eras and coverage are dashed")
+    _missing_note(run, frag)
+    return frag
+
+
+# ------------------------------------------------------------------ the companion ledger
+def build_ledger(run: Run) -> Fragment:
+    """``tab:archive:calibration_eras``: the per-channel era evidence behind the chapter table (appendix C)."""
+    frag = Fragment(LEDGER_NAME, LEDGER_LABEL, "")
+    context, without_table = _context(run, frag, "the located-month count")
+    header = ["Ch.", "State", "Peak mo.", "Drift (bins/mo)", "Range (bins)", r"Instr.\ (last mo.)"]
+    rows = []
+    n_no_off = n_drift = 0
+    drift_dashed, range_exceeds, unconfirmed = [], [], []
+    era_config = run.run.get("era_config") if isinstance(run.run.get("era_config"), Mapping) else {}
+    for c, _table_rows, current in context:
+        ch = c.channel
+        era = c.era
+        row = {"channel": ch}
+
+        state_cell, state_text = _state(era)
+        if state_text:
+            frag.add(f"{KEY}.current_state.ch{ch}", state_text, kind="text", renderings=(state_text, str(era["current_state"])),
+                     row=row, column="State")
+            n_no_off += state_cell.endswith("(no off)")
+
+        peak_cell = DASH
+        if current and current.get("peak_months") is not None:
+            peak_cell = f"${fmt_int(current['peak_months'])}$"
+            frag.add(f"{KEY}.peak_months.ch{ch}", current["peak_months"], kind="int", row=row, column="Peak mo.")
+
         drift_cell, drift, drift_text = _drift(era)
         if drift is not None:
             frag.add(f"{KEY}.current_peak_drift_bins_per_month.ch{ch}", drift, precision=2, renderings=(drift_text,),
@@ -381,8 +476,6 @@ def build(run: Run) -> Fragment:
             n_drift += 1
         elif era:
             drift_dashed.append(ch)
-        if current and current.get("peak_months") is not None:
-            frag.add(f"{KEY}.peak_months.ch{ch}", current["peak_months"], kind="int", row=row, column="Drift (bins/mo)")
 
         range_cell, peak_range, range_text, exceeds = _range(era)
         if peak_range is not None:
@@ -400,30 +493,21 @@ def build(run: Run) -> Fragment:
             if instr_text == "yes":
                 unconfirmed.append(ch)
 
-        rows.append([str(ch), tex(state_cell), fmt_month(first), fmt_month(last), unc_cell, evidence_cell, tex(record_cell),
-                     tex(stale_cell), earlier_cell, frames_cell, cov_cell, drift_cell, range_cell, instr_cell])
+        rows.append([str(ch), tex(state_cell), peak_cell, drift_cell, range_cell, instr_cell])
 
-    frag.tex = booktabs(header, rows, "rlllrllllrrrrl")
-    frag.add(f"{KEY}.n_channels", len(run.channels), kind="int", column="rows")
-    frag.add(f"{KEY}.n_eras_total", n_eras_total, kind="int", column="n_eras")
-    frag.add(f"{KEY}.n_channels_multi_era", n_multi, kind="int", column="n_eras")
-    frag.add(f"{KEY}.n_channels_record_confirmed", n_confirmed, kind="int", column="Record")
-    frag.add(f"{KEY}.n_channels_stale", n_stale, kind="int", column="Stale (lag)")
+    frag.tex = booktabs(header, rows, "rlrrrl")
     frag.add(f"{KEY}.n_channels_no_off_state", n_no_off, kind="int", column="State")
     frag.add(f"{KEY}.n_channels_drift_measured", n_drift, kind="int", column="Drift (bins/mo)")
     frag.add(f"{KEY}.n_channels_peak_range_exceeds_half_width", len(range_exceeds), kind="int", column="Range (bins)")
     frag.add(f"{KEY}.n_channels_unconfirmed_instrument_change", len(unconfirmed), kind="int", column="Instr. (last mo.)")
     frag.add(f"{KEY}.designated_half_width", DESIGNATED_HALF_WIDTH, kind="int", column="Range (bins)")
-    if campaign_month:
-        frag.add(f"{KEY}.campaign_last_month", campaign_month, kind="text", renderings=(campaign_month,), column="Stale (lag)")
 
     shift = era_config.get("station_shift_bins", 3)
     persistence = era_config.get("persistence_months", 2)
-    frag.notes.append("the +- column is dashed for 'archive start' eras: no transition defines the start, so the boundary "
-                      "uncertainty is undefined (the ledger records 0)")
-    frag.notes.append("the record column is dashed where no station record exists for the boundary; instrument records enter "
-                      "the evidence column as 'instrument change'")
-    frag.notes.append("earlier eras carry span and state only; their evidence and record agreement stay in tables/eras.csv")
+    frag.notes.append(f"the term-by-term era evidence behind {LABEL}, one row per channel joined on the channel number: "
+                      "the columns the chapter stub does not name, beside the channel's plate")
+    frag.notes.append("peak mo. is the current era's located-month count from tables/eras.csv (the sample the drift and range "
+                      "are read from); it is dashed where no eras-table row backs the era section")
     frag.notes.append("drift and range: the least-squares slope (bins/month) and max - min of the located monthly peak position "
                       "over the current era's proxy-high months; the drift is dashed with fewer than three located months "
                       "(on this run every proxy-low era; a range beside a dashed drift is an era with one or two located months)"
@@ -437,8 +521,9 @@ def build(run: Run) -> Fragment:
                       + (f": channels {_channels(unconfirmed)}" if unconfirmed else " (no channel)"))
     if without_table:
         frag.notes.append("no eras table (tables/eras.csv or channels/chNN/eras.json) for channels "
-                          + _channels(without_table) + ": record, earlier eras and coverage are dashed")
-    missing = [c.channel for c in run.channels if not c.era]
-    if missing:
-        frag.notes.append("no era section for channels " + _channels(missing) + ": every era cell is dashed")
+                          + _channels(without_table) + ": the located-month count is dashed")
+    _missing_note(run, frag)
     return frag
+
+
+BUILDERS = (build, build_ledger)
