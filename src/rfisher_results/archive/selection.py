@@ -344,6 +344,81 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
 POINT_COLUMNS = ("rho", "rank_fraction", "eta_q16", "eta", "frames", "kept", "masked_fraction", "r_sys",
                  "tolerance_fraction", "cost", "feasible")
 
+# where a real operating point lives: the fraction of each era half a candidate must keep for its
+# early/late ratios to describe the drift a selected point would see, rather than a sparse tail
+DRIFT_KEPT_FRACTIONS = (0.0, 0.01, 0.05, 0.2)
+
+
+def drift_diagnostic(bundle, residuals: np.ndarray, frame_time: np.ndarray, *,
+                     min_half: int = PROVISIONAL_MIN_HALF_RETAINED,
+                     kept_fractions: Sequence[float] = DRIFT_KEPT_FRACTIONS) -> dict:
+    """Why the within-era drift screen refused, measured on the candidates a selector could choose.
+
+    :func:`rfisher.preparation.assess_histogram_stability` refuses the whole
+    family at the first candidate whose pooled kept count reaches the
+    thirty-frame floor while one calendar half falls below ``min_half``. Every
+    eta sweep crosses that band, so the refusal names a point keeping a few
+    tenths of a percent of the block, which no selector would choose, and its
+    message says "insufficient support" whatever the data does.
+
+    This records both facts: the candidate the screen refused on (with the
+    frames it keeps in each half), and the worst early/late cost and
+    systematic-residual ratios over the candidates that keep at least a stated
+    fraction of *each* half. The second is the drift a selected point would
+    actually see; where it exceeds the declared limits the refusal is the
+    right verdict for the wrong stated reason.
+    """
+    from rfisher.preparation import MIN_RETAINED_FRAMES, _ratio, _surface
+    from rfisher.thresholds import build_q16_residual_score_histogram
+
+    times = np.asarray(frame_time, dtype=float)
+    if times.size == 0 or not np.isfinite(times).any():
+        return {"drift_status": "no timed frames"}
+    mid = 0.5 * (np.nanmin(times) + np.nanmax(times))
+    early_mask, late_mask = times <= mid, times > mid
+    n_early, n_late = int(early_mask.sum()), int(late_mask.sum())
+    if not (n_early and n_late):
+        return {"drift_status": "calendar split leaves one half empty"}
+    requirements = bundle.requirements_by_rho()
+    bulk_size = max(requirements)
+    refused = None
+    rows: list[tuple[float, float, float]] = []
+    for rho in sorted(requirements):
+        values = tuple(requirements[rho])
+        grid = tuple(sorted({int(v) for v in values if int(v) != ALWAYS_MASKED_Q16}))
+        if not grid:
+            continue
+        early = build_q16_residual_score_histogram(
+            tuple(v for v, k in zip(values, early_mask) if k), residuals[early_mask], grid, bulk_size=bulk_size)
+        late = build_q16_residual_score_histogram(
+            tuple(v for v, k in zip(values, late_mask) if k), residuals[late_mask], grid, bulk_size=bulk_size)
+        e_surface, l_surface = _surface(early), _surface(late)
+        for index, eta in enumerate(early.candidate_eta):
+            e, l = e_surface[index], l_surface[index]
+            e_kept = 0 if e is None else e[0]
+            l_kept = 0 if l is None else l[0]
+            if e_kept + l_kept < MIN_RETAINED_FRAMES:
+                continue
+            if e is None or l is None or e_kept < min_half or l_kept < min_half:
+                if refused is None:
+                    refused = {"drift_refused_rho": int(rho), "drift_refused_eta": float(eta),
+                               "drift_refused_early_kept": int(e_kept), "drift_refused_late_kept": int(l_kept),
+                               "drift_refused_kept_fraction": (e_kept + l_kept) / (n_early + n_late)}
+                continue
+            rows.append((min(e_kept / n_early, l_kept / n_late), _ratio(e[4], l[4]), _ratio(e[2], l[2])))
+    out = {"drift_status": "measured" if rows else "no evaluable candidate",
+           "drift_early_frames": n_early, "drift_late_frames": n_late, **(refused or {})}
+    if rows:
+        arr = np.asarray(rows, dtype=float)
+        for fraction in kept_fractions:
+            keep = arr[arr[:, 0] >= float(fraction)]
+            tag = f"{float(fraction):g}".replace(".", "p")
+            if keep.size:
+                out[f"drift_candidates_at_{tag}"] = int(keep.shape[0])
+                out[f"drift_max_cost_ratio_at_{tag}"] = float(keep[:, 1].max())
+                out[f"drift_max_systematic_ratio_at_{tag}"] = float(keep[:, 2].max())
+    return out
+
 
 def _point_row(pt) -> dict:
     return {"rho": int(pt.rho), "rank_fraction": float(pt.rank_fraction), "eta_q16": int(pt.multiplier_q16), "eta": float(pt.eta),

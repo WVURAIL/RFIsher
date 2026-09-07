@@ -443,11 +443,24 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
                 keep[f"keep_everything_r_sys_{name}"] = float(selection.systematic_residuals(p, rows, floor, gain).mean()) if rows.size else math.nan
             except ValueError:
                 keep[f"keep_everything_r_sys_{name}"] = math.nan
+        # why the drift screen refused: the candidate it refused on, and the drift a selected point would see
+        drift = {}
+        try:
+            bundle = selection.build_residual_score_bundle(
+                p.path, split.calibration, anchor_bin=int(anchor_bin),
+                designated_half_width=selection.DESIGNATED_HALF_WIDTH, bulk_mask=bulk)
+            drift = selection.drift_diagnostic(
+                bundle, selection.systematic_residuals(p, bundle.source_row_index, floor, gain),
+                p.frame_time[bundle.source_row_index])
+        except Exception as exc:
+            notes.append(f"drift diagnostic: {type(exc).__name__}: {exc}")
+            drift = {"drift_status": f"{type(exc).__name__}"}
+
         # the coarse rule's own frontier (f, r_sys) on the calibration block, beside the fine surface
         frontier = _coarse_frontier(p, split.calibration, floor, gain, r_tol)
         _write_csv([{"channel": ch, **row} for row in frontier], ch_dir / "coarse_frontier.csv")
         record.add("selection", {**sel.as_row(), **selection.surface_summary(sel), **keep, "anchor_source": anchor_source,
-                                 "gain_basis": gain_basis, **_frontier_summary(frontier)})
+                                 "gain_basis": gain_basis, **_frontier_summary(frontier), **drift})
     else:
         record.add("selection", None)
 

@@ -348,10 +348,24 @@ its status; changing one is a new run.
   previous (on) era, labelled as such; the selection and the null are on the
   off era itself (false-alarm basis).
 - The within-era drift screen (`rfisher.preparation`) refuses every archive
-  channel (sparse small-eta candidates, or halves below six months / 270
-  days). The selector still runs on the prepared histograms and the point is
-  reported as `diagnostic` with the refusal beside it; nothing is labelled
-  `screening` or `operational`.
+  channel. Its stated reason is an artifact of its candidate rule: it refuses
+  the whole family at the first candidate whose pooled kept count reaches the
+  thirty-frame floor while one calendar half is below it, and every eta sweep
+  crosses that band, so the message says "insufficient support" whatever the
+  data does. Measured on channels 19, 21, 26, 29, 32 and 33, that candidate
+  keeps 30 frames of 6,453 to 20,218 (0.15% to 0.5%), split 11/19 to 20/10:
+  no selector would choose it. `selection.drift_diagnostic` records it and
+  measures what the screen would say if such a candidate were skipped
+  (as one below the pooled floor already is): over the candidates keeping at
+  least a fifth of each half, the worst early/late cost ratio is 1.18 to 1.95
+  and the worst systematic-residual ratio 1.26 to 4.38, against the
+  provisional limits 1.05 and 1.10. So the refusal is the right verdict for
+  the wrong stated reason: the current eras do drift between their halves.
+  Correcting the message belongs in `rfisher.preparation`, which the bank
+  digest pins, so it is the author's call; the diagnostic is recorded in the
+  ledger meanwhile. The selector still runs on the prepared histograms and the
+  point is reported as `diagnostic` with the refusal beside it; nothing is
+  labelled `screening` or `operational`.
 - Spectrum axis. The per-frame spectra are read on the receiver's circular
   axis centred on the pilot (`psd.centred_offset_hz`), as the detector's
   K-tap FFT reads them: on channels 21 and 32 the pilot is within `W` of a

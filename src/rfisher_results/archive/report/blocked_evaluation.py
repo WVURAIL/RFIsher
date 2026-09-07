@@ -1,34 +1,38 @@
 """The ch05 blocked-evaluation table (``tab:estimator:blocked``, the
-sec:estimator:archive stub): does the null frozen on the calibration block
-transfer to the untouched evaluation block?
+sec:estimator:archive stub) and its appendix companion: does the null frozen
+on the calibration block transfer to the untouched evaluation block?
 
-One row per channel 14--36. Cells read the ledger sections ``blocks``,
-``null`` (the calibration block's null), ``null_evaluation`` (the same
-description read on the evaluation block with nothing re-fitted) and
-``selection`` (the diagnostic replay). A value the ledger does not carry or
-that is undefined prints as the dash and the fragment's notes say why. No
-channel of the 2026-09-07 run has a selected operating point: the replay
-columns print the least-residual point of the calibration surface replayed
-on the evaluation block (``selection.diagnostic_*``, claim status
-``diagnostic``) and the column head says so.
+The chapter stub names, per channel, the calibration-block and
+evaluation-block null centre and width, the drift between blocks, the
+finite-estimate rate and the block-bootstrap interval, and the chapter table
+prints exactly those (plus the channel): ten columns, one row per channel
+14--36, a single ``tabular`` that needs no panel split. The block month
+spans, the block frame counts, the untimed frames excluded from both blocks,
+the survey flag rates and the frames the replay keeps are per-channel
+evidence the stub does not ask for; they move to the companion fragment
+``blocked_evaluation_ledger`` (``tab:archive:blocked_evaluation``, destined
+for Appendix~C beside the channel's plate), one row per channel in the same
+order. Every number either table printed before is still emitted under its
+own key: the two fragments partition the keys between their ``numbers.json``
+documents, none is dropped and none is duplicated.
 
-Columns (ledger keys in ``section.key`` form; numeric cells are in math mode):
+Cells read the ledger sections ``blocks``, ``null`` (the calibration block's
+null), ``null_evaluation`` (the same description read on the evaluation block
+with nothing re-fitted) and ``selection`` (the diagnostic replay). A value the
+ledger does not carry or that is undefined prints as the dash and the
+fragment's notes say why. No channel of the 2026-09-07 run has a selected
+operating point: the replay column prints the least-residual point of the
+calibration surface replayed on the evaluation block
+(``selection.diagnostic_*``, claim status ``diagnostic``) and the column head
+says so.
+
+Chapter columns (ledger keys in ``section.key`` form; numeric cells are in
+math mode):
 
 ``ch``
     Physical channel. ``ch^{\\ddagger}`` when the block split is not
     supported (``blocks.status`` other than ``supported``; ``blocks.detail``
-    goes to the notes).
-``calibration block: months, frames``
-    ``blocks.calibration_first_month``--``blocks.calibration_last_month``
-    (the populated months of the block, first and last) and
-    ``blocks.calibration_frames``.
-``evaluation block: months, frames``
-    ``blocks.evaluation_first_month``--``blocks.evaluation_last_month`` and
-    ``blocks.evaluation_frames``.
-``excluded: untimed``
-    ``blocks.frames_without_time_excluded``: frames of the era without a
-    recorded time, excluded from both blocks (one block definition for
-    blocks, anchors, nulls and selection).
+    goes to the notes). The companion repeats the channel and its mark.
 ``calibration null F/mu_0: centre, width``
     ``null.coarse_centre`` (the coarse null centre of ``F/mu_0``; 1 is the
     packed-weight prediction) and ``null.coarse_core_width_factor`` (robust
@@ -58,41 +62,60 @@ Columns (ledger keys in ``section.key`` form; numeric cells are in math mode):
     ``blocks.calibration_finite_estimate_rate`` and
     ``blocks.evaluation_finite_estimate_rate``: the fraction of the block's
     frames with a finite pilot-inferred shelf estimate.
-``flag rate: cal., eval.``
+``diagnostic replay: f q16--q84``
+    ``selection.masked_fraction_evaluation_q16``--``q84``, the acquisition
+    block-bootstrap 16--84% interval of the masked fraction when the
+    diagnostic point is replayed on the evaluation block. When the replay
+    exists (``selection.masked_fraction_evaluation`` finite) but no interval
+    was formed (``selection.bootstrap_blocks_evaluation`` below the minimum)
+    the cell prints the point value followed by ``[--]``. The two bounds are
+    separate math cells joined by a text-mode en dash (``--`` inside math mode
+    would print as two minus signs). The cell is the dash when no replay
+    exists (``selection.status`` ``refused``: the floor is refused and nothing
+    was replayed). A replay that kept no frame has a masked fraction of 1.
+
+Companion columns (``blocked_evaluation_ledger``), the same one row per
+channel:
+
+``calibration block: months, frames``
+    ``blocks.calibration_first_month``--``blocks.calibration_last_month``
+    (the populated months of the block, first and last) and
+    ``blocks.calibration_frames``.
+``evaluation block: months, frames``
+    ``blocks.evaluation_first_month``--``blocks.evaluation_last_month`` and
+    ``blocks.evaluation_frames``.
+``excluded: untimed``
+    ``blocks.frames_without_time_excluded``: frames of the era without a
+    recorded time, excluded from both blocks (one block definition for
+    blocks, anchors, nulls and selection).
+``flag rate: cal., eval.`` (the survey flag)
     ``blocks.calibration_flag_rate`` and ``blocks.evaluation_flag_rate``: the
     fraction of the block's frames the survey flag rejects (``F > mu_0``).
     The product's shelf estimate is finite exactly where the survey flag is
-    set, so the two rates coincide by construction; the notes say when they
-    do.
-``diagnostic replay (eval.): f q16--q84, kept``
-    ``selection.masked_fraction_evaluation_q16``--``q84``, the acquisition
-    block-bootstrap 16--84% interval of the masked fraction when the
-    diagnostic point is replayed on the evaluation block, and
-    ``selection.kept_evaluation``, the frames that replay keeps. When the
-    replay exists (``selection.masked_fraction_evaluation`` finite) but no
-    interval was formed (``selection.bootstrap_blocks_evaluation`` below the
-    minimum) the cell prints the point value followed by ``[--]``. The two
-    bounds are separate math cells joined by a text-mode en dash (``--`` inside
-    math mode would print as two minus signs). Both cells
-    are the dash when no replay exists (``selection.status`` ``refused``: the
-    floor is refused and nothing was replayed). A replay that kept no frame
-    prints its masked fraction of 1 and ``kept`` 0.
+    set, so this rate and the chapter table's finite-estimate rate coincide by
+    construction; the notes of both fragments say when they do.
+``replay: kept``
+    ``selection.kept_evaluation``, the frames the diagnostic replay keeps on
+    the evaluation block. Dashed where no replay exists; a replay that kept no
+    frame prints 0 against a masked fraction of 1 in the chapter table.
 
-Numbers: ``ch05.blocked_evaluation.<column>.chNN`` for every printed cell
-(``calibration_first_month``, ``calibration_last_month``,
-``calibration_frames``, the evaluation counterparts,
-``frames_without_time_excluded``, ``split_status`` (text, when marked),
-``calibration_centre``, ``calibration_width_factor``,
-``calibration_null_source`` (text, with the mark as a rendering), the
-evaluation counterparts, ``centre_drift_db`` and ``width_factor_ratio``
-(status ``derived``), ``calibration_finite_estimate_rate``,
-``calibration_flag_rate`` and the evaluation counterparts,
-``masked_fraction_evaluation``, ``masked_fraction_evaluation_q16``/``_q84``,
-``kept_evaluation``), and the band-level counts
+Numbers: ``ch05.blocked_evaluation.<column>.chNN``. The chapter fragment
+emits ``split_status`` (text, when marked), ``calibration_centre``,
+``calibration_width_factor``, ``calibration_null_source`` (text, with the mark
+as a rendering), the evaluation counterparts, ``centre_drift_db`` and
+``width_factor_ratio`` (status ``derived``),
+``calibration_finite_estimate_rate`` and its evaluation counterpart,
+``masked_fraction_evaluation`` and
+``masked_fraction_evaluation_q16``/``_q84``, and the band-level counts
 ``ch05.blocked_evaluation.n_channels``, ``n_split_supported``,
 ``n_channels_off_population``, ``n_channels_no_null_population``,
 ``n_channels_drift_defined``, ``n_channels_replayed``,
-``n_channels_no_replay``, ``frames_without_time_excluded_total``.
+``n_channels_no_replay``, ``frames_without_time_excluded_total``. The
+companion fragment emits the keys of the columns it took over:
+``calibration_first_month``, ``calibration_last_month``,
+``calibration_frames``, the evaluation counterparts,
+``frames_without_time_excluded``, ``calibration_flag_rate`` and its
+evaluation counterpart, and ``kept_evaluation``.
 """
 from __future__ import annotations
 
@@ -104,6 +127,8 @@ from .core import DASH, Channel, Fragment, Run, booktabs, fmt, fmt_int, fmt_mont
 NAME = "blocked_evaluation"
 LABEL = "tab:estimator:blocked"
 KEY = "ch05.blocked_evaluation"
+LEDGER_NAME = "blocked_evaluation_ledger"
+LEDGER_LABEL = "tab:archive:blocked_evaluation"
 
 OFF_SOURCE_PREFIX = "verified transmitter-off era"
 BULK = "bulk"                               # the bulk of the block's mixture, read as a null
@@ -114,15 +139,24 @@ MARKS = {BULK: "", BULK_NO_NULL: r"^{\ast}", OFF: r"^{\mathrm{off}}", OFF_NOT_NU
 SPLIT_MARK = r"^{\ddagger}"
 _STATUS_TEXT = {"supported": "supported", "insufficient_support": "insufficient", "empty": "empty"}
 
-HEADER = ["ch", "months", "frames", "months", "frames", "untimed", "centre", "width", "centre", "width",
-          "centre [dB]", "width ratio", "cal.", "eval.", "cal.", "eval.", r"$f$ q16--q84", "kept"]
-GROUPS = [("", 1), ("calibration block", 2), ("evaluation block", 2), ("excluded", 1),
-          (r"calibration null $F/\mu_0$", 2), ("evaluation null", 2), ("drift", 2), ("finite-estimate rate", 2),
-          ("flag rate", 2), ("diagnostic replay (eval.)", 2)]
-ALIGN = "lrrrrrrrrrrrrrrrcr"
+# the chapter table: exactly the columns the ch05 stub names, plus the channel
+HEADER = ["ch", "centre", "width", "centre", "width", "centre [dB]", "width ratio", "cal.", "eval.", r"$f$ q16--q84"]
+GROUPS = [("", 1), (r"calibration null $F/\mu_0$", 2), ("evaluation null", 2), ("drift", 2),
+          ("finite-estimate rate", 2), ("diagnostic replay", 1)]
+ALIGN = "lrrrrrrrrc"
+
+# the appendix companion: the per-channel evidence the stub does not name
+LEDGER_HEADER = ["ch", "months", "frames", "months", "frames", "untimed", "cal.", "eval.", "kept"]
+LEDGER_GROUPS = [("", 1), ("calibration block", 2), ("evaluation block", 2), ("excluded", 1),
+                 ("flag rate", 2), ("replay", 1)]
+LEDGER_ALIGN = "lrrrrrrrr"
+
 BLOCKS = ("calibration", "evaluation")
 NULL_SECTIONS = {"calibration": "null", "evaluation": "null_evaluation"}
 SHORT = {"calibration": "cal", "evaluation": "eval"}
+MOVED_NOTE = ("block month spans, block frame counts, untimed frames, survey flag rates and the frames the replay keeps "
+              "are one row per channel in the companion Table~\\ref{" + LEDGER_LABEL + "} (blocks.*, "
+              "selection.kept_evaluation), not in this table")
 
 
 # ------------------------------------------------------------------ helpers
@@ -188,6 +222,17 @@ def replay_exists(ch: Channel) -> bool:
     return _finite(ch.selection.get("masked_fraction_evaluation"))
 
 
+def split_marked(ch: Channel) -> bool:
+    """Whether the channel's block split is not supported (``blocks.status`` other than ``supported``)."""
+    status = ch.blocks.get("status")
+    return bool(status) and str(status) != "supported"
+
+
+def channel_cell(ch: Channel) -> str:
+    """The channel column of either table: the number, daggered where the split is not supported."""
+    return f"{ch.channel}${SPLIT_MARK}$" if split_marked(ch) else str(ch.channel)
+
+
 def group_header(groups) -> str:
     """The first header row (``\\multicolumn`` group titles) and its ``\\cmidrule`` line."""
     cells, rules, start = [], [], 1
@@ -199,49 +244,24 @@ def group_header(groups) -> str:
     return " & ".join(cells) + " \\\\\n" + " ".join(rules) + "\n"
 
 
-# ------------------------------------------------------------------ one row
-def _row(ch: Channel, frag: Fragment) -> list[str]:
-    n = ch.channel
+def _adder(frag: Fragment, n: int):
+    """``add(column, value, ...)`` writing ``KEY.column.chNN`` with the channel as the number's row."""
     row = {"channel": n}
-    b, sel = ch.blocks, ch.selection
-    cells = []
 
     def add(column, value, *, precision=None, kind="float", status="measured", renderings=()):
         frag.add(f"{KEY}.{column}.ch{n:02d}", value, precision=precision, kind=kind, status=status,
                  renderings=renderings, row=row, column=column)
+    return add
 
-    # the channel, marked when the split is not supported
-    status = b.get("status")
-    if status and str(status) != "supported":
-        printed = _STATUS_TEXT.get(str(status), str(status))
-        cells.append(f"{n}${SPLIT_MARK}$")
-        add("split_status", str(status), kind="text", renderings=(printed, str(status)))
-    else:
-        cells.append(str(n))
 
-    # the two blocks: month span and frames
-    for block in BLOCKS:
-        first, last = b.get(f"{block}_first_month"), b.get(f"{block}_last_month")
-        if first and last:
-            cells.append(f"{tex(fmt_month(first))}--{tex(fmt_month(last))}")
-            add(f"{block}_first_month", str(first), kind="text", renderings=(str(first),))
-            add(f"{block}_last_month", str(last), kind="text", renderings=(str(last),))
-        else:
-            cells.append(DASH)
-        frames = b.get(f"{block}_frames")
-        if _finite(frames) and int(frames) > 0:
-            cells.append(_math(fmt_int(frames)))
-            add(f"{block}_frames", int(frames), kind="int", precision=0)
-        else:
-            cells.append(DASH)
-
-    # frames without a recorded time, excluded from both blocks
-    untimed = b.get("frames_without_time_excluded")
-    if ch.has("blocks") and _finite(untimed):
-        cells.append(_math(fmt_int(untimed)))
-        add("frames_without_time_excluded", int(untimed), kind="int", precision=0)
-    else:
-        cells.append(DASH)
+# ------------------------------------------------------------------ one chapter row
+def _row(ch: Channel, frag: Fragment) -> list[str]:
+    """The chapter table's row: the two blocks' nulls, the drift, the finite-estimate rates and the replay interval."""
+    add = _adder(frag, ch.channel)
+    cells = [channel_cell(ch)]
+    if split_marked(ch):
+        status = str(ch.blocks.get("status"))
+        add("split_status", status, kind="text", renderings=(_STATUS_TEXT.get(status, status), status))
 
     # the null on each block, its centre marked for the population it describes
     for block in BLOCKS:
@@ -279,17 +299,17 @@ def _row(ch: Channel, frag: Fragment) -> list[str]:
     else:
         cells.append(DASH)
 
-    # finite-estimate rate and survey flag rate on each block
-    for rate_key in ("finite_estimate_rate", "flag_rate"):
-        for block in BLOCKS:
-            rate = b.get(f"{block}_{rate_key}")
-            if _finite(rate):
-                cells.append(_math(fmt(rate, 3)))
-                add(f"{block}_{rate_key}", float(rate), precision=3)
-            else:
-                cells.append(DASH)
+    # the finite-estimate rate on each block (the survey flag rate is the companion's)
+    for block in BLOCKS:
+        rate = ch.blocks.get(f"{block}_finite_estimate_rate")
+        if _finite(rate):
+            cells.append(_math(fmt(rate, 3)))
+            add(f"{block}_finite_estimate_rate", float(rate), precision=3)
+        else:
+            cells.append(DASH)
 
-    # the diagnostic replay on the evaluation block: masked-fraction interval and kept frames
+    # the diagnostic replay on the evaluation block: the block-bootstrap masked-fraction interval
+    sel = ch.selection
     if replay_exists(ch):
         value = float(sel.get("masked_fraction_evaluation"))
         q16, q84 = sel.get("masked_fraction_evaluation_q16"), sel.get("masked_fraction_evaluation_q84")
@@ -300,14 +320,59 @@ def _row(ch: Channel, frag: Fragment) -> list[str]:
             add("masked_fraction_evaluation_q84", float(q84), precision=4, renderings=(fmt_range(q16, q84, 4),))
         else:
             cells.append(f"${fmt(value, 4)}$ [{DASH}]")
-        kept = sel.get("kept_evaluation")
-        if _finite(kept):
-            cells.append(_math(fmt_int(kept)))
-            add("kept_evaluation", int(kept), kind="int", precision=0)
+    else:
+        cells.append(DASH)
+    return cells
+
+
+# ------------------------------------------------------------------ one companion row
+def _ledger_row(ch: Channel, frag: Fragment) -> list[str]:
+    """The companion's row: the block spans and frame counts, the untimed frames, the flag rates, the kept frames."""
+    n = ch.channel
+    add = _adder(frag, n)
+    b = ch.blocks
+    cells = [channel_cell(ch)]
+
+    # the two blocks: month span and frames
+    for block in BLOCKS:
+        first, last = b.get(f"{block}_first_month"), b.get(f"{block}_last_month")
+        if first and last:
+            cells.append(f"{tex(fmt_month(first))}--{tex(fmt_month(last))}")
+            add(f"{block}_first_month", str(first), kind="text", renderings=(str(first),))
+            add(f"{block}_last_month", str(last), kind="text", renderings=(str(last),))
         else:
             cells.append(DASH)
+        frames = b.get(f"{block}_frames")
+        if _finite(frames) and int(frames) > 0:
+            cells.append(_math(fmt_int(frames)))
+            add(f"{block}_frames", int(frames), kind="int", precision=0)
+        else:
+            cells.append(DASH)
+
+    # frames without a recorded time, excluded from both blocks
+    untimed = b.get("frames_without_time_excluded")
+    if ch.has("blocks") and _finite(untimed):
+        cells.append(_math(fmt_int(untimed)))
+        add("frames_without_time_excluded", int(untimed), kind="int", precision=0)
     else:
-        cells += [DASH, DASH]
+        cells.append(DASH)
+
+    # the survey flag rate on each block
+    for block in BLOCKS:
+        rate = b.get(f"{block}_flag_rate")
+        if _finite(rate):
+            cells.append(_math(fmt(rate, 3)))
+            add(f"{block}_flag_rate", float(rate), precision=3)
+        else:
+            cells.append(DASH)
+
+    # the frames the diagnostic replay keeps
+    kept = ch.selection.get("kept_evaluation")
+    if replay_exists(ch) and _finite(kept):
+        cells.append(_math(fmt_int(kept)))
+        add("kept_evaluation", int(kept), kind="int", precision=0)
+    else:
+        cells.append(DASH)
     return cells
 
 
@@ -316,43 +381,61 @@ def _chlist(channels) -> str:
     return ", ".join(str(c) for c in channels)
 
 
-def _summary(run: Run, frag: Fragment) -> list[str]:
-    chans = run.channels
-    total = len(chans)
-    notes = []
+def _blocks_absent(chans) -> list[int]:
+    return [c.channel for c in chans if not c.has("blocks")]
 
-    # the split and the untimed frames
-    no_blocks = [c.channel for c in chans if not c.has("blocks")]
+
+def _unsupported(chans):
+    return [(c.channel, c.blocks.get("status"), c.blocks.get("detail", "")) for c in chans
+            if c.has("blocks") and split_marked(c)]
+
+
+def _split_notes(chans, total: int) -> list[str]:
+    """The blocks-absent and ddagger notes, shared by both fragments (both print the mark)."""
+    notes = []
+    no_blocks = _blocks_absent(chans)
     if no_blocks:
-        notes.append(f"blocks section absent on ch {_chlist(no_blocks)}: block, untimed and rate cells dashed")
-    unsupported = [(c.channel, c.blocks.get("status"), c.blocks.get("detail", "")) for c in chans
-                   if c.has("blocks") and str(c.blocks.get("status")) != "supported"]
-    supported = total - len(no_blocks) - len(unsupported)
+        notes.append(f"blocks section absent on ch {_chlist(no_blocks)}: block and rate cells dashed")
+    unsupported = _unsupported(chans)
     if unsupported:
         notes.append("ddagger: split not supported on " + "; ".join(f"ch{n} {s}: {d}" if d else f"ch{n} {s}" for n, s, d in unsupported)
                      + " (blocks.status, blocks.detail)")
     else:
-        notes.append(f"block split supported on all {supported} channels with a blocks section (blocks.status); chronological, "
-                     "whole acquisitions, balanced frame counts")
-    untimed = [(c.channel, int(c.blocks["frames_without_time_excluded"])) for c in chans
-               if c.has("blocks") and _finite(c.blocks.get("frames_without_time_excluded"))]
-    untimed_total = sum(k for _, k in untimed)
-    nonzero = [(n, k) for n, k in untimed if k]
-    notes.append(f"untimed: {untimed_total} frames without a recorded time excluded from both blocks on "
-                 f"{len(nonzero)} of {total} channels (blocks.frames_without_time_excluded"
-                 + (": " + ", ".join(f"ch{n} {k}" for n, k in nonzero) if nonzero else "") + ")")
+        notes.append(f"block split supported on all {total - len(no_blocks)} channels with a blocks section (blocks.status); "
+                     "chronological, whole acquisitions, balanced frame counts")
+    return notes
+
+
+def _rate_note(chans) -> list[str]:
+    """Whether the finite-estimate rate (chapter table) and the survey flag rate (companion) coincide."""
+    rated = [c for c in chans if all(_finite(c.blocks.get(f"{b}_{k}")) for b in BLOCKS for k in ("finite_estimate_rate", "flag_rate"))]
+    same = [c.channel for c in rated if all(math.isclose(float(c.blocks[f"{b}_finite_estimate_rate"]), float(c.blocks[f"{b}_flag_rate"]),
+                                                          rel_tol=0, abs_tol=5e-4) for b in BLOCKS)]
+    if rated and len(same) == len(rated):
+        return [f"the finite-estimate rate equals the survey flag rate on every channel ({len(rated)}): the product's shelf "
+                "estimate is finite exactly where F > mu_0, the frames the survey flag rejects"]
+    if rated:
+        return [f"the finite-estimate rate differs from the survey flag rate on ch {_chlist(c.channel for c in rated if c.channel not in same)}"]
+    return []
+
+
+def _summary(run: Run, frag: Fragment) -> list[str]:
+    """The chapter fragment's notes, and the band-level counts both tables' prose quotes."""
+    chans = run.channels
+    total = len(chans)
+    notes = _split_notes(chans, total)
+    no_blocks = _blocks_absent(chans)
+    supported = total - len(no_blocks) - len(_unsupported(chans))
 
     # the null populations
     no_eval = [c.channel for c in chans if not c.has("null_evaluation")]
     if no_eval:
         notes.append(f"null_evaluation absent on ch {_chlist(no_eval)}: evaluation null and drift dashed")
-    populations = {block: Counter() for block in BLOCKS}
     by_population = {kind: set() for kind in MARKS}
     for c in chans:
         for block in BLOCKS:
             kind = null_population(c.section(NULL_SECTIONS[block]))
             if kind:
-                populations[block][kind] += 1
                 by_population[kind].add(c.channel)
     off_channels = sorted(by_population[OFF] | by_population[OFF_NOT_NULL_LIKE])
     if off_channels:
@@ -403,15 +486,7 @@ def _summary(run: Run, frag: Fragment) -> list[str]:
                  f"calibration core width factor, printed on {len(defined)} of {total} channels (each block's null its own frames)")
 
     # the rates
-    rated = [c for c in chans if all(_finite(c.blocks.get(f"{b}_{k}")) for b in BLOCKS for k in ("finite_estimate_rate", "flag_rate"))]
-    same = [c.channel for c in rated if all(math.isclose(float(c.blocks[f"{b}_finite_estimate_rate"]), float(c.blocks[f"{b}_flag_rate"]),
-                                                          rel_tol=0, abs_tol=5e-4) for b in BLOCKS)]
-    if rated and len(same) == len(rated):
-        notes.append(f"the finite-estimate rate equals the survey flag rate on every channel ({len(rated)}): the product's shelf "
-                     "estimate is finite exactly where F > mu_0, the frames the survey flag rejects")
-    elif rated:
-        differ = [c.channel for c in rated if c.channel not in same]
-        notes.append(f"the finite-estimate rate differs from the survey flag rate on ch {_chlist(differ)}")
+    notes += _rate_note(chans)
 
     # the replay
     replayed = [c.channel for c in chans if replay_exists(c)]
@@ -421,29 +496,27 @@ def _summary(run: Run, frag: Fragment) -> list[str]:
     selected = [c.channel for c in chans if c.selection.get("rho") is not None]
     notes.append("diagnostic replay: the interval is the acquisition block-bootstrap 16--84% of the masked fraction when the "
                  "least-residual point of the calibration surface (selection.diagnostic_rho/eta, selection.diagnostic_basis) is "
-                 "replayed on the evaluation block, and kept is the frames that replay keeps (selection.kept_evaluation); a "
-                 "diagnostic, not a selected operating point"
+                 "replayed on the evaluation block; a diagnostic, not a selected operating point"
                  + (f" (selected points on ch {_chlist(selected)})" if selected else
                     f": no channel has one (selection.status {', '.join(f'{k}: {v}' for k, v in sorted(statuses.items()))}"
                     + (f"; claim_status of the replayed channels {', '.join(f'{k}: {v}' for k, v in sorted(claims.items()))}" if claims else "") + ")"))
     if no_replay:
         reasons = Counter(str(c.selection.get("refusal") or ("absent" if not c.has("selection") else c.selection.get("status") or "")) for c in no_replay)
-        notes.append(f"replay cells dashed on ch {_chlist(c.channel for c in no_replay)}: no evaluation replay exists "
+        notes.append(f"replay cell dashed on ch {_chlist(c.channel for c in no_replay)}: no evaluation replay exists "
                      f"(selection.masked_fraction_evaluation null; " + "; ".join(f"{k} ({v})" for k, v in reasons.most_common()) + ")")
     no_interval = [c.channel for c in chans if replay_exists(c) and not (_finite(c.selection.get("masked_fraction_evaluation_q16"))
                                                                           and _finite(c.selection.get("masked_fraction_evaluation_q84")))]
     if no_interval:
         notes.append(f"replay on ch {_chlist(no_interval)} has no bootstrap interval (selection.bootstrap_blocks_evaluation below the "
                      "minimum): the point value prints with [--]")
-    kept_none = [c.channel for c in chans if replay_exists(c) and _finite(c.selection.get("kept_evaluation")) and int(c.selection["kept_evaluation"]) == 0]
-    if kept_none:
-        notes.append(f"the replay kept no frame on ch {_chlist(kept_none)} (selection.kept_evaluation 0): the masked fraction is 1 "
-                     "and its interval degenerate")
     refusals = Counter(str(c.selection.get("refusal") or "").split(":")[0] for c in chans if c.selection.get("refusal"))
     if refusals:
         notes.append("selector refusals (selection.refusal): " + "; ".join(f"{k} ({v})" for k, v in refusals.most_common()))
+    notes.append(MOVED_NOTE)
 
     # band-level counts for the text
+    untimed_total = sum(int(c.blocks["frames_without_time_excluded"]) for c in chans
+                        if c.has("blocks") and _finite(c.blocks.get("frames_without_time_excluded")))
     counts = {"n_channels": total, "n_split_supported": supported,
               "n_channels_off_population": len(off_channels), "n_channels_no_null_population": len(no_null),
               "n_channels_drift_defined": len(defined), "n_channels_replayed": len(replayed),
@@ -453,7 +526,39 @@ def _summary(run: Run, frag: Fragment) -> list[str]:
     return notes
 
 
+def _ledger_summary(run: Run) -> list[str]:
+    """The companion fragment's notes: the split, the untimed frames, the flag rates and the replay's kept frames."""
+    chans = run.channels
+    total = len(chans)
+    notes = [f"the per-channel evidence behind Table~\\ref{{{LABEL}}} (ch05): the same {total} channels in the same order, "
+             "the block definition and the frames each block and each replay kept"]
+    notes += _split_notes(chans, total)
+
+    untimed = [(c.channel, int(c.blocks["frames_without_time_excluded"])) for c in chans
+               if c.has("blocks") and _finite(c.blocks.get("frames_without_time_excluded"))]
+    untimed_total = sum(k for _, k in untimed)
+    nonzero = [(n, k) for n, k in untimed if k]
+    notes.append(f"untimed: {untimed_total} frames without a recorded time excluded from both blocks on "
+                 f"{len(nonzero)} of {total} channels (blocks.frames_without_time_excluded"
+                 + (": " + ", ".join(f"ch{n} {k}" for n, k in nonzero) if nonzero else "") + ")")
+    notes.append("months are the block's first and last populated month (blocks.*_first_month, *_last_month); a block boundary "
+                 "month appears in both blocks because the split is by whole acquisition, never by dividing one")
+    notes += _rate_note(chans)
+
+    no_replay = [c.channel for c in chans if not replay_exists(c)]
+    if no_replay:
+        notes.append(f"kept dashed on ch {_chlist(no_replay)}: no evaluation replay exists (selection.masked_fraction_evaluation null)")
+    kept_none = [c.channel for c in chans if replay_exists(c) and _finite(c.selection.get("kept_evaluation")) and int(c.selection["kept_evaluation"]) == 0]
+    if kept_none:
+        notes.append(f"the replay kept no frame on ch {_chlist(kept_none)} (selection.kept_evaluation 0): the masked fraction is 1 "
+                     "and its interval degenerate")
+    notes.append(f"kept is the frames the diagnostic replay retains on the evaluation block (selection.kept_evaluation), against "
+                 f"the block's frames in this table; the masked fraction and its interval are in Table~\\ref{{{LABEL}}}")
+    return notes
+
+
 def build(run: Run) -> Fragment:
+    """The ch05 chapter table: the stub's columns only, one row per channel, one tabular."""
     frag = Fragment(NAME, LABEL, "")
     rows = [_row(c, frag) for c in run.channels]
     table = booktabs(HEADER, rows, ALIGN)
@@ -463,5 +568,20 @@ def build(run: Run) -> Fragment:
     return frag
 
 
-__all__ = ["NAME", "LABEL", "KEY", "HEADER", "GROUPS", "ALIGN", "MARKS", "build", "drift_db", "width_ratio",
-           "null_population", "own_frames", "drift_defined", "replay_exists", "group_header"]
+def build_ledger(run: Run) -> Fragment:
+    """The Appendix~C companion: the per-channel evidence the ch05 stub does not name."""
+    frag = Fragment(LEDGER_NAME, LEDGER_LABEL, "")
+    rows = [_ledger_row(c, frag) for c in run.channels]
+    table = booktabs(LEDGER_HEADER, rows, LEDGER_ALIGN)
+    frag.tex = table.replace("\\toprule\n", "\\toprule\n" + group_header(LEDGER_GROUPS), 1)
+    frag.inputs = list(run.inputs())
+    frag.notes = _ledger_summary(run)
+    return frag
+
+
+BUILDERS = (build, build_ledger)
+
+__all__ = ["NAME", "LABEL", "KEY", "LEDGER_NAME", "LEDGER_LABEL", "HEADER", "GROUPS", "ALIGN", "LEDGER_HEADER",
+           "LEDGER_GROUPS", "LEDGER_ALIGN", "MARKS", "BUILDERS", "build", "build_ledger", "drift_db", "width_ratio",
+           "null_population", "own_frames", "drift_defined", "replay_exists", "split_marked", "channel_cell",
+           "group_header"]

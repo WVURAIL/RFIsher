@@ -40,19 +40,33 @@ Columns ``disposition`` / ``channels`` / ``value``; rows in four groups:
   ``selection.diagnostic_masked_fraction``.
 
 ``build_atlas_counts`` -> ``archive_atlas_counts`` (tab:archive:atlas-counts),
-one row per channel: ``ch``; ``freq_id``; ``frames`` (``product.n_frames``);
-``valid`` (``product.n_valid``); ``excluded (reason)`` (``product.health_excluded``
-frames removed by the input-health gate with the gate's reason counts
-``product.health_reasons`` abbreviated by :data:`REASON_LABELS`); ``current era``
+one row per channel and one column per name in the appendix C stub, and no
+others: ``ch``; ``freq_id``; ``valid`` (``product.n_valid``, the valid frames
+in the archive); ``excluded (reason)`` (``product.health_excluded``, the frames
+the input-health gate removed, with the gate's reason counts
+``product.health_reasons`` abbreviated by :data:`REASON_LABELS`; a list of more
+than one reason is set one reason to a line, so the longest list and not the
+column sets the width); ``current era``
 (``era.current_first_month``--``era.current_last_month``); ``era frames``
-(``era.current_frames``); ``kept, cal. block`` (frames the point keeps on the
-calibration block, ``round((1 - f) x selection.calibration_frames)``);
-``kept, eval. replay`` (``selection.kept_evaluation``, the frames the point's
-replay on the evaluation block kept, present when
-``selection.masked_fraction_evaluation`` is finite); and ``plate digest`` (the
-dash until the plates are rendered). A dagger on the kept cells marks the
-diagnostic point; both kept cells are the dash on a channel without a point
+(``era.current_frames``); ``kept at point`` (the frames the point keeps,
+``round((1 - f) x selection.calibration_frames)`` on the calibration block plus
+``selection.kept_evaluation`` on the evaluation replay: their sum is the
+plate's denominator); and ``plate digest`` (the dash until the plates are
+rendered). A dagger on the kept cell marks the diagnostic point and a double
+dagger a cell that is the calibration block alone (the point was never
+replayed); the cell is the dash on a channel without a point
 (``selection.status`` ``refused``, or no selection record).
+
+Three columns of the first draft are no longer printed, because the stub does
+not name them: ``frames`` (``product.n_frames``, the archive count before the
+health gate; the stub's denominator is the valid count) and the two blocks of
+the kept count, now one summed column. Every number they carried is still
+emitted under its own key (``appC.atlas_counts.n_frames``,
+``kept_calibration``, ``kept_evaluation``, ``kept_total``) with the column
+:data:`NOT_PRINTED`, and the notes say where each went. The trim takes the
+fragment from 715pt to 407pt at 11pt, inside the 469.8pt text block, so the
+appendix sets it upright and needs neither a sideways page nor a
+``\resizebox``; no companion ledger and no stacked panels are needed.
 
 ``build_headline`` -> ``headline``: numbers only (the ``.tex`` is a comment),
 every value emitted under both ``ch11.headline.<name>`` and
@@ -119,7 +133,12 @@ REASON_LABELS: Mapping[str, str] = {
     "detector_powers_all_zero": "all-zero",
 }
 
-DAGGER = r"^{\dagger}"        # inside math mode: the diagnostic point, not a selection
+MARK_DIAGNOSTIC = r"\dagger"    # the point is the diagnostic least-residual point of the surface, not a selection
+MARK_NO_REPLAY = r"\ddagger"    # the kept count is the calibration block alone: the point was never replayed
+DAGGER = f"^{{{MARK_DIAGNOSTIC}}}"    # inside math mode: the diagnostic point, not a selection
+NOT_PRINTED = "(numbers only)"        # the number is emitted; the stub names no column for it
+STACK_OPEN = r"\begin{tabular}[t]{@{}l@{}}"     # a cell on more than one line, its first line on the row's baseline
+STACK_CLOSE = r"\end{tabular}"
 WITHIN_FACTOR = 10.0          # 'least residual within 10x of tolerance': min_R <= WITHIN_FACTOR
 CENTRE_TOLERANCE_DB = 0.1     # 'coarse centre at mu_0': |null.coarse_centre_db| <= CENTRE_TOLERANCE_DB
 DEFAULT_E_MIN = 0.9
@@ -213,8 +232,8 @@ def kept_at_point(ch: Channel) -> dict:
     return {"basis": basis, "calibration": calibration, "evaluation": evaluation}
 
 
-def render_reasons(reasons) -> str:
-    """``name:count;name:count`` -> ``rail 7, invalid 4`` (plain text, escaped)."""
+def reason_parts(reasons) -> list[str]:
+    """``name:count;name:count`` -> ``['rail 7', 'invalid 4']`` (plain text, escaped)."""
     parts = []
     for item in str(reasons or "").split(";"):
         item = item.strip()
@@ -225,7 +244,43 @@ def render_reasons(reasons) -> str:
             name, count = count, ""
         label = REASON_LABELS.get(name, name)
         parts.append(f"{tex(label)} {tex(count)}".strip())
-    return ", ".join(parts)
+    return parts
+
+
+def render_reasons(reasons) -> str:
+    """``name:count;name:count`` -> ``rail 7, invalid 4``: the one-line rendering the prose may use."""
+    return ", ".join(reason_parts(reasons))
+
+
+def _head(top: str, bottom: str) -> str:
+    """A column head on two lines, so a wordy head does not set the column's width."""
+    return r"\shortstack{%s\\%s}" % (top, bottom)
+
+
+def _stacked(lines: Sequence[str]) -> str:
+    """One cell on several lines, the first on the row's baseline and the rest hanging below it."""
+    return lines[0] if len(lines) == 1 else STACK_OPEN + r"\\".join(lines) + STACK_CLOSE
+
+
+def excluded_cell(excluded, reasons) -> str:
+    """``7 (rail 7)``; a list of more than one reason is set one reason to a line, the dash for no count."""
+    count = _num(excluded)
+    if count is None:
+        return DASH
+    text = _math(fmt_int(count))
+    parts = reason_parts(reasons)
+    if not parts:
+        return text
+    if len(parts) == 1:
+        return f"{text} ({parts[0]})"
+    return _stacked([f"{text} ({parts[0]},"] + [f"{p}," for p in parts[1:-1]] + [f"{parts[-1]})"])
+
+
+def kept_cell(value, marks: Sequence[str]) -> str:
+    """A kept count with its marks in one superscript, or the dash where the count is undefined."""
+    if value is None:
+        return DASH
+    return f"${fmt_int(value)}" + ("^{" + "".join(marks) + "}$" if marks else "$")
 
 
 def band_level(run: Run) -> dict:
@@ -388,12 +443,17 @@ def build(run: Run) -> Fragment:
 
 # ------------------------------------------------------------------ (b) the atlas counts
 def build_atlas_counts(run: Run) -> Fragment:
-    """tab:archive:atlas-counts: the per-channel denominators of the diagnostic plates."""
+    """tab:archive:atlas-counts: the per-channel denominators of the diagnostic plates.
+
+    The columns are the appendix C stub's own and no others; the frame count
+    ``product.n_frames`` and the two blocks behind the kept count keep their
+    numbers under :data:`NOT_PRINTED` without a column.
+    """
     frag = Fragment("archive_atlas_counts", "tab:archive:atlas-counts", "")
-    header = ["ch", r"\texttt{freq\_id}", "frames", "valid", "excluded (reason)", "current era", "era frames",
-              r"kept, cal.\ block", r"kept, eval.\ replay", "plate digest"]
+    header = ["ch", r"\texttt{freq\_id}", "valid", _head("excluded", "(reason)"), "current era", _head("era", "frames"),
+              _head("kept at point", r"(cal.\ + eval.)"), _head("plate", "digest")]
     rows = []
-    no_point, daggered, no_replay, empty_replay, no_era = [], [], [], [], []
+    no_point, daggered, no_replay, empty_replay, no_era, gated = [], [], [], [], [], []
     refusals: dict[str, list[int]] = {}
     for ch in run.channels:
         row_id = {"channel": ch.channel}
@@ -401,18 +461,20 @@ def build_atlas_counts(run: Run) -> Fragment:
         cells = [str(ch.channel), str(ch.freq_id)]
         frag.add(f"appC.atlas_counts.freq_id.ch{ch.channel}", ch.freq_id, kind="int", row=row_id, column="freq_id")
 
-        for key, column in (("n_frames", "frames"), ("n_valid", "valid")):
+        counts = {}
+        for key, column in (("n_frames", NOT_PRINTED), ("n_valid", "valid")):
             value = _num(prod.get(key))
-            cells.append(_math(fmt_int(value)))
+            counts[key] = None if value is None else int(round(value))
             if value is not None:
-                frag.add(f"appC.atlas_counts.{key}.ch{ch.channel}", int(round(value)), kind="int", row=row_id, column=column)
+                frag.add(f"appC.atlas_counts.{key}.ch{ch.channel}", counts[key], kind="int", row=row_id, column=column)
+        cells.append(_math(fmt_int(counts["n_valid"])))
+        if counts["n_frames"] is not None and counts["n_frames"] != counts["n_valid"]:
+            gated.append(ch.channel)
 
         excluded = _num(prod.get("health_excluded"))
         reasons = render_reasons(prod.get("health_reasons"))
-        if excluded is None:
-            cells.append(DASH)
-        else:
-            cells.append(_math(fmt_int(excluded)) + (f" ({reasons})" if reasons else ""))
+        cells.append(excluded_cell(excluded, prod.get("health_reasons")))
+        if excluded is not None:
             frag.add(f"appC.atlas_counts.health_excluded.ch{ch.channel}", int(round(excluded)), kind="int", row=row_id, column="excluded")
             if reasons:
                 frag.add(f"appC.atlas_counts.health_reasons.ch{ch.channel}", str(prod.get("health_reasons")), kind="text",
@@ -433,54 +495,68 @@ def build_atlas_counts(run: Run) -> Fragment:
             frag.add(f"appC.atlas_counts.current_frames.ch{ch.channel}", int(round(frames)), kind="int", row=row_id, column="era frames")
 
         kept = kept_at_point(ch)
-        mark = DAGGER if kept["basis"] == "diagnostic" else ""
+        marks = [MARK_DIAGNOSTIC] if kept["basis"] == "diagnostic" else []
         status = "derived" if kept["basis"] == "diagnostic" else "measured"
         if kept["basis"] == "diagnostic":
             daggered.append(ch.channel)
-        for block, column in (("calibration", "kept, cal. block"), ("evaluation", "kept, eval. replay")):
+        for block in ("calibration", "evaluation"):       # the blocks are numbers only: the stub asks for one kept column
             value = kept[block]
-            cells.append(DASH if value is None else f"${fmt_int(value)}{mark}$")
             if value is not None:
-                frag.add(f"appC.atlas_counts.kept_{block}.ch{ch.channel}", value, kind="int", status=status, row=row_id, column=column)
+                frag.add(f"appC.atlas_counts.kept_{block}.ch{ch.channel}", value, kind="int", status=status, row=row_id,
+                         column=NOT_PRINTED)
+        total = None
         if kept["calibration"] is not None and kept["evaluation"] is not None:
-            frag.add(f"appC.atlas_counts.kept_total.ch{ch.channel}", kept["calibration"] + kept["evaluation"], kind="int",
-                     status="derived", row=row_id, column="kept, cal. block + kept, eval. replay")
+            total = kept["calibration"] + kept["evaluation"]
+            frag.add(f"appC.atlas_counts.kept_total.ch{ch.channel}", total, kind="int", status="derived", row=row_id,
+                     column="kept at point")
+        elif kept["calibration"] is not None:             # no replay: the cell is the calibration block alone
+            total = kept["calibration"]
+            marks.append(MARK_NO_REPLAY)
+            no_replay.append(ch.channel)
+        cells.append(kept_cell(total, marks))
         if kept["calibration"] is None:
             no_point.append(ch.channel)
             refusals.setdefault(str(ch.selection.get("refusal") or selection_status(ch)), []).append(ch.channel)
-        elif kept["evaluation"] is None:
-            no_replay.append(ch.channel)
         elif kept["evaluation"] == 0:
             empty_replay.append(ch.channel)
 
         cells.append(DASH)
         rows.append(cells)
 
-    frag.tex = booktabs(header, rows, "rrrrlcrrrl")
+    frag.tex = booktabs(header, rows, "rrrlcrrl")
     frag.inputs = run.inputs()
-    frag.notes.append("kept, cal. block = round((1 - f) x selection.calibration_frames) with f the point's masked fraction on the "
-                      "calibration block; kept, eval. replay = selection.kept_evaluation, the frames the point's replay on the "
-                      "evaluation block kept; the plate's denominator is their sum (appC.atlas_counts.kept_total)")
+    frag.notes.append("the printed columns are the appendix C stub's own and no others: freq_id, the valid frames in the archive, the "
+                      "frames excluded by reason, the current era and its frame count, the frames kept by the point, and the plate digest")
+    frag.notes.append("kept at point = round((1 - f) x selection.calibration_frames), the frames the point keeps on the calibration block "
+                      "with f its masked fraction there, plus selection.kept_evaluation, the frames the point's replay on the evaluation "
+                      "block kept; that sum is the plate's denominator (appC.atlas_counts.kept_total)")
+    frag.notes.append("the two blocks are not printed as separate columns: their counts stay in the numbers "
+                      "(appC.atlas_counts.kept_calibration, appC.atlas_counts.kept_evaluation)")
     if daggered:
-        frag.notes.append(f"dagger: no selected (rho*, eta*) on channels {_channel_list(daggered)}; the kept cells are at the diagnostic "
+        frag.notes.append(f"dagger: no selected (rho*, eta*) on channels {_channel_list(daggered)}; the kept cell is at the diagnostic "
                           "point (selection.diagnostic_masked_fraction, the least-residual point of the calibration surface, "
                           "claim_status diagnostic), not at an operating point")
+    if no_replay:
+        frag.notes.append(f"double dagger: the kept cell on channels {_channel_list(no_replay)} is the calibration block alone; the point "
+                          "was not replayed on the evaluation block (selection.masked_fraction_evaluation absent), so no plate denominator "
+                          "is defined")
     if no_point:
-        frag.notes.append(f"kept cells are the dash on channels {_channel_list(no_point)}: no point of any kind "
+        frag.notes.append(f"kept at point is the dash on channels {_channel_list(no_point)}: no point of any kind "
                           "(selection.status refused, no evaluated surface)")
         for why, chans in refusals.items():
             frag.notes.append(f"  {_channel_list(chans)}: {why}")
-    if no_replay:
-        frag.notes.append(f"kept, eval. replay is the dash on channels {_channel_list(no_replay)}: the point was not replayed on the "
-                          "evaluation block (selection.masked_fraction_evaluation absent)")
     if empty_replay:
-        frag.notes.append(f"the replay kept no frame on channels {_channel_list(empty_replay)} (kept_evaluation 0, printed as 0: a "
-                          "count, not an absent value)")
+        frag.notes.append(f"the replay kept no frame on channels {_channel_list(empty_replay)} (kept_evaluation 0: the kept cell counts "
+                          "the calibration block alone, and 0 is a count, not an absent value)")
     if no_era:
         frag.notes.append(f"no current-era span in the ledger: {_channel_list(no_era)}")
     frag.notes.append("excluded (reason): frames removed by the input-health gate; the gate's reason counts "
                       f"({', '.join(f'{k} = {v}' for k, v in REASON_LABELS.items())}) cover every frame it saw, "
-                      "so a reason can also cover frames already outside the valid count")
+                      "so a reason can also cover frames already outside the valid count; a list of more than one reason is set one "
+                      "reason to a line inside the cell")
+    frag.notes.append("product.n_frames, the archive frame count before the input-health gate, is not printed (the stub's denominator is "
+                      "the valid count); it stays in the numbers (appC.atlas_counts.n_frames) and differs from the valid count on "
+                      + (f"channels {_channel_list(gated)}" if gated else "no channel of this run"))
     frag.notes.append("plate digest is the dash: the plates are pending (rendered from channels/chNN/spectra_window.json by the figure step)")
     return frag
 
