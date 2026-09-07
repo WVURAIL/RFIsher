@@ -143,3 +143,17 @@ def test_rows_carry_the_unmasked_residual_and_the_evaluation_intervals(tmp_path)
     assert row["r_sys_unmasked_calibration"] == 0.5 and row["bootstrap_blocks_evaluation"] == 0
     for key in ("masked_fraction_evaluation_q16", "r_sys_evaluation_q84", "r_sys_unmasked_evaluation"):
         assert key in row
+
+
+def test_an_undefined_floor_bounds_nothing_and_frames_without_a_shelf_still_need_one(product):
+    import numpy as np
+    from rfisher_results.archive import selection as sel_mod
+    rows = np.flatnonzero(np.isfinite(product.shelf_db))[:5]
+    r = sel_mod.systematic_residuals(product, rows, sel_mod.Floor(float("nan"), "refused", "none"), 2.0)
+    assert np.allclose(r, 2.0 * 10.0 ** (product.shelf_db[rows] / 10.0))
+    bounded = sel_mod.systematic_residuals(product, rows, sel_mod.Floor(0.0, "stated", "x"), 1.0)     # 0 dB = 1.0 linear
+    assert (bounded >= 1.0).all()
+    without = np.flatnonzero(~np.isfinite(product.shelf_db))[:3]
+    if without.size:
+        with pytest.raises(ValueError, match="finite floor"):
+            sel_mod.systematic_residuals(product, without, sel_mod.Floor(float("nan"), "refused", "none"))
