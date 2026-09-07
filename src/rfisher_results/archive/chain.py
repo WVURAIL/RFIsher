@@ -138,6 +138,44 @@ def residual_chain(product_path: Path | str, *, off_through: str | None = None, 
 LARGE_UNUSED_KEYS = ("psd_frame_db_i16",)
 
 
+def masked_valid(valid: np.ndarray, frames: np.ndarray) -> np.ndarray:
+    """The product's ``valid`` array with frames outside ``frames`` cleared, in the array's own shape and dtype."""
+    valid = np.asarray(valid)
+    flat = valid.reshape(-1).astype(bool) & np.asarray(frames, dtype=bool).reshape(-1)
+    return flat.reshape(valid.shape).astype(valid.dtype)
+
+
+ZEROED_WHEN_INVALID = ("p_ref_sum_u64", "p_ref_lower_u64", "p_ref_upper_u64", "reject_mask")
+NAN_WHEN_INVALID = ("coarse_power_ratio", "normalized_coarse_power_ratio_db", "normalized_pilot_excess", "pilot_excess_db",
+                    "estimated_data_shelf_snr_db")
+
+
+def invalidate_frames(arrays: dict, frames) -> dict:
+    """Make the frames outside ``frames`` invalid under the v5 product contract.
+
+    The contract ties the flags together (``valid`` iff ``p_ref_sum != 0``;
+    ``reject_mask`` equals the exact decision on valid frames; the derived
+    per-frame ratios are NaN where the reference sum is zero), so an
+    era-restricted copy clears the reference terms and the flag together and
+    blanks the derived fields on the excluded frames.
+    """
+    keep = np.asarray(frames, dtype=bool).reshape(-1)
+    out = dict(arrays)
+    out["valid"] = masked_valid(arrays["valid"], keep)
+    drop = ~keep
+    for key in ZEROED_WHEN_INVALID:
+        if key in out:
+            a = np.array(out[key], copy=True)
+            a.reshape(-1)[drop] = 0
+            out[key] = a
+    for key in NAN_WHEN_INVALID:
+        if key in out:
+            a = np.array(out[key], dtype=np.float64, copy=True)
+            a.reshape(-1)[drop] = np.nan
+            out[key] = a
+    return out
+
+
 def residual_chain_on_frames(product: Product, frames, *, population: str, off_through: str | None = None,
                              off_from: str | None = None, delay_key: str = residual.DEFAULT_DELAY_KEY) -> ChainResult:
     """The chain on a frame mask: ``valid`` is cleared outside ``frames`` in a temporary copy of the product."""
@@ -150,8 +188,8 @@ def residual_chain_on_frames(product: Product, frames, *, population: str, off_t
             if key in LARGE_UNUSED_KEYS:
                 continue
             arrays[key] = z[key]
-    valid = np.asarray(arrays["valid"]).astype(bool) & frames
-    arrays["valid"] = valid.astype(arrays["valid"].dtype)
+    arrays = invalidate_frames(arrays, frames)
+    valid = np.asarray(arrays["valid"]).reshape(-1).astype(bool)
     fd, tmp = tempfile.mkstemp(prefix=f"chain_{product.path.stem}_", suffix=".npz")
     os.close(fd)
     try:

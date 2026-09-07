@@ -130,3 +130,14 @@ def test_calibrate_null_on_the_fixture_declares_its_source_and_floor(product):
     header = (product.path.parent / "nulls.csv").read_text().splitlines()[0]
     assert header.startswith("channel,freq_id,era,era_frames,null_source")
     assert math.isfinite(cal.fine.iid_sigma)
+
+
+def test_a_carrier_bulk_has_no_stated_floor(product):
+    """A block whose bulk sits far above mu_0 carries no null: the floor is refused, not read off the carrier."""
+    coarse = nulls.describe_null(1.5 + 0.02 * np.random.default_rng(5).standard_normal(5000), nulls.COARSE_DOF)
+    kept = nulls.kept_half_null(np.full(10, 1.5))
+    est = nulls.floor_estimate(product, None, coarse, kept)
+    assert est.evidence == "refused" and est.basis == "none" and "no null population" in est.population
+    near = nulls.describe_null(1.05 + 0.02 * np.random.default_rng(6).standard_normal(5000), nulls.COARSE_DOF)
+    est = nulls.floor_estimate(product, None, near, kept)
+    assert est.evidence == "stated" and est.basis == "bulk left side (not H0)"
