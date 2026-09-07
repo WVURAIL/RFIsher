@@ -66,7 +66,8 @@ Columns printed, in panel order (ledger key under ``null.`` unless stated)::
                        population), or ``refused`` (floor_basis ``none``: the bulk centre is
                        beyond 0.1 of mu_0, so the block carries no null population); an older
                        ledger without floor_basis has it inferred from floor_population
-    plate              the channel's histogram plate, ``\ref{fig:archive:plate:chNN}``
+    plate              the channel's diagnostic plate in appendix C,
+                       ``\ref{fig:archive:atlas:NN}`` (the label that appendix defines)
 
 Columns the builder used to print beyond the stub go to
 ``tab:archive:calibration_nulls`` (:func:`build_ledger`, the
@@ -100,7 +101,8 @@ LABEL = "tab:calibration:nulls"
 LEDGER_NAME = "calibration_nulls_ledger"
 LEDGER_LABEL = "tab:archive:calibration_nulls"
 KEY = "ch08.nulls"
-PLATE_LABEL = "fig:archive:plate:ch{channel:02d}"
+# the label appendix C actually defines for each channel's diagnostic plate
+PLATE_LABEL = "fig:archive:atlas:{channel:d}"
 CENTRE_TOLERANCE_DB = 0.1
 DAGGER = r"^\dagger"                      # inside the rank cell's math mode: a diagnostic rank, not a selected one
 DIAGNOSTIC_RANK = "diagnostic point"      # null.exchangeability_rank_basis when no point was selected
