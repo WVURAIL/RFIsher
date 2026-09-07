@@ -26,15 +26,44 @@ multiplication sign -> 'x', digit-group commas removed, TeX comments stripped):
                are present, so fixing either side clears it.
 
 CSV-driven checks recompute their needles from the shipped tables in the
-results tree (`RFISHER_OUT`; see docs/releases.md)
-(`optimal_thresholds.csv`, `fine_operating_points.csv`, and the forecast
-headline tables: `fig31_validation.csv`, `required_times.csv`,
+results tree (`RFISHER_OUT`; see docs/releases.md) (`three_worlds.csv` and
+the forecast headline tables: `fig31_validation.csv`, `required_times.csv`,
 `bin_level_targets.csv`, `forecast_completion_all_dtv_bins.json`,
-`forecast_completion_template_comparison.csv`, `three_worlds.csv`) at the
-dissertation's rounding, so a forecast rerun moves the expectation
-automatically. Current-era checks read
-`scripts/dissertation/data/bao_era_points.csv`. JSON checks read the
+`forecast_completion_template_comparison.csv`) at the dissertation's
+rounding, so a forecast rerun moves the expectation automatically. The
+worlds rows are additionally authenticated against
+`scripts/dissertation/data/bao_era_points.csv`, which supplies two of their
+four products and channel 35's off-era floor. JSON checks read the
 pilot-proxy snapshot (`--summary-json`); they SKIP when it is not supplied.
+Archive-produced numbers are guarded by `--archive-report` /
+`--rerun-inventory`, which hold the dissertation's `\\rerun{}` markers
+against the v5 report's `numbers/*.numbers.json` by key.
+
+History. The archive chapters were rewritten from the v5 archive run
+(RFIsher 806c618 on the v5 products), and on 2026-09-07 three groups of
+CSV-driven checks were retired because the numbers they guarded are no
+longer printed anywhere in the dissertation (verified by grep over
+`dissertation.tex` and `chapters/`):
+
+  * Table 9.4 <- `out/optimal_thresholds.csv` (eta*, kept fraction,
+    residual, margin and time penalty for channels 31 and 33). Table 9.4 is
+    now `tables/archive/tolerance_eta.tex`, one row per channel from the
+    archive run; the same quantities are the report's `ch09.eta.*` keys
+    (`.eta`, `.masked_fraction`, `.r_proxy`, `.cost`, `.R`), and the
+    selection now returns no operating point at all, so no margin or
+    penalty column survives to be quoted.
+  * Table 8.1 <- `out/fine_operating_points.csv` (eta*_q16, r_late).
+    eta*_q16 is now a column of Table 9.4, the report's
+    `ch09.eta.eta_q16`; r_late has no successor -- the within-era
+    early/late drift screen is reported as prose, not per-channel numbers.
+  * Current-era endpoints <- `bao_era_points.csv` (channel 32's coherence
+    bound and adopted-coherence excess; channel 35's calibrated endpoint,
+    best-cost endpoint and measured coherence time). Superseded by the
+    per-channel current-era rows of the archive run:
+    `ch09.channels.masked_fraction`, `.tau_c_minutes`, `.tau_quality` and
+    `ch09.eta.R`. That CSV's two provenance checks are kept, moved into the
+    worlds section, because the printed worlds rows still take two products
+    and channel 35's floor from it.
 
 Exit status 0 = all checks pass; 1 = at least one FAIL. A red run is the
 to-do list: each FAIL line says what to change and where the truth lives.
@@ -266,34 +295,6 @@ def read_csv(name: str) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
-def threshold_rows() -> dict[int, dict]:
-    """Operating rows of out/optimal_thresholds.csv.
-
-    The dissertation's Table 9.4 quotes the *product-basis* operating points;
-    the sigma_null rows differ in margin/penalty for the same eta.
-    """
-    rows = {}
-    for r in read_csv("optimal_thresholds.csv"):
-        if r.get("eta") and r.get("basis") == "product":
-            rows[int(r["ch"])] = r
-    return rows
-
-
-def fine_rows() -> dict[int, dict]:
-    """Product-basis operating rows of out/fine_operating_points.csv.
-
-    Only era-certified rows bind the dissertation: the script records
-    archive-only pairs (era_stable False) for the era-mixture demonstration,
-    and those are not operating points the text is required to quote.
-    """
-    rows = {}
-    for r in read_csv("fine_operating_points.csv"):
-        if (r.get("multiplier_q16") and r.get("basis") == "product"
-                and r.get("era_stable") == "True"):
-            rows[int(r["ch"])] = r
-    return rows
-
-
 WORLD_ORDER = ("none", "peak1", "peak2", "deployed")
 
 
@@ -467,8 +468,26 @@ def world_results_ok(rows: dict[tuple[str, int], dict]) -> bool:
     return True
 
 
-def world_margin(row: dict) -> str:
-    return f"{float(row['tol_fs8']) / float(row['r_fine']):.2g}"
+WORLDS_HEADER = "f\\sigma_8 margin & no filter"
+
+
+def world_ratio(row: dict) -> float:
+    """The quantity the worlds table prints: R = r_sys / r_tol(fs8), the
+    direction used everywhere else in the chapter (R <= 1 passes), not the
+    reciprocal margin the CSV's column names suggest."""
+    return float(row["r_fine"]) / float(row["tol_fs8"])
+
+
+def worlds_row_cells(text: str, ch: int) -> list[str] | None:
+    """The four world cells of one worlds-table row. Scoped past the table's
+    own header because 'ch35 &' also opens a column of the flagger table."""
+    return table_row_cells(text, f"ch{ch} &", after=WORLDS_HEADER)
+
+
+def strip_marks(cell: str) -> str:
+    r"""A printed cell without the \rerun{} rerun marker or the \mathbf{}
+    that marks a pass, so the number itself can be compared."""
+    return re.sub(r"\\(?:rerun|mathbf)\{|\}", "", cell).strip()
 
 
 def fig31_clean_columns() -> list[tuple[float, float]]:
@@ -697,22 +716,6 @@ def template_rows(family: str = "noise_shaped") -> list[dict]:
             if r["family"] == family]
 
 
-def frac_needles(x: float) -> list[str]:
-    """A fraction as quoted raw (4 dp) or as a percentage (1 dp)."""
-    return [f"{100 * x:.1f}%", f"{100 * x:.1f} %", f"{x:.4f}"]
-
-
-def num_needles(x: float, nds: tuple[int, ...] = (3, 2)) -> list[str]:
-    """A number at fixed roundings; every needle keeps >= 3 significant
-    characters so short strings like '2.1' can never match by accident."""
-    out = []
-    for nd in nds + ((1,) if x >= 100 else ()):
-        s = f"{x:.{nd}f}"
-        if len(s.replace(".", "").lstrip("0")) >= 3 and s not in out:
-            out.append(s)
-    return out
-
-
 # ---------------------------------------------------------------- registry
 def run_checks(ck: Checker, summary: dict | None) -> None:
     # ---- Fig. 9.4 / SS9.7: one comparison population --------------------
@@ -750,30 +753,15 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
                "keep 2.35 -> 1566x on the acquisitions>=8 base (prose or"
                " figure data)", wide=True)
 
-    # ---- Table 9.4 <- out/optimal_thresholds.csv ------------------------
-    ck.section("Table 9.4 <- out/optimal_thresholds.csv")
-    for ch, r in sorted(threshold_rows().items()):
-        # Needles follow the table's own renderings: eta 2 dp, f as a 1 dp
-        # percentage, r at 4 dp, margin as "N.Nx", penalty 2 dp (whole "Nx"
-        # when it is quoted in prose, e.g. channel 31's 177x time cost).
-        pen = float(r["penalty"])
-        ck.value(f"ch {ch}: eta*", [f"{float(r['eta']):.2f}"],
-                 "quote the CSV at the table's rounding")
-        ck.value(f"ch {ch}: kept fraction f", frac_needles(float(r["f"])),
-                 "quote the CSV at the table's rounding")
-        ck.value(f"ch {ch}: residual r", [f"{float(r['r_fine']):.4f}"],
-                 "quote the CSV at the table's rounding")
-        ck.value(f"ch {ch}: margin",
-                 [f"{float(r['margin']):.1f}x", f"{float(r['margin']):.2f}"],
-                 "quote the CSV at the table's rounding")
-        ck.value(f"ch {ch}: penalty",
-                 num_needles(pen) + ([f"{pen:.0f}x"] if pen >= 100 else []),
-                 "quote the CSV at the table's rounding")
-
     # ---- Worlds table <- out/three_worlds.csv --------------------------
     ck.section("Worlds table <- out/three_worlds.csv")
     worlds = worlds_rows()
-    worlds_provenance = world_provenance_ok(worlds, era_rows())
+    # bao_era_points.csv now backs this table alone: it supplies channels 32
+    # and 35's products and the off-era floor channel 35's rows are computed
+    # against, so its provenance is checked here rather than in a section of
+    # its own.
+    era = era_rows()
+    worlds_provenance = world_provenance_ok(worlds, era)
     ck._emit("PASS" if worlds_provenance else "FAIL",
              "worlds recorded source identities preserved",
              "" if worlds_provenance else
@@ -784,17 +772,37 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
              "worlds residuals and verdicts are internally consistent",
              "" if worlds_results else
              "regenerate the direct worlds table")
+    # The table prints R = r_sys/r_tol at two significant digits, bold where
+    # the world passes. Cell-wise rather than one regex over the row: a
+    # printed cell is held at its own last printed place, so the failure
+    # names the cell and the value it should carry.
     for ch in (33, 35):
-        cells = []
-        for world in WORLD_ORDER:
-            row = worlds[(world, ch)]
-            value = re.escape(world_margin(row))
-            if row["pass_fs8"] == "True":
-                value = rf"\\mathbf\{{{value}\}}"
-            cells.append(value)
-        pattern = rf"ch{ch}\s*&\s*" + r"\s*&\s*".join(cells)
-        ck.require(f"ch {ch}: direct fs8 margins", pattern,
-                   "quote out/three_worlds.csv at two significant digits")
+        label = f"ch {ch}: direct fs8 ratios R = r_sys/r_tol"
+        hint = ("recompute r_fine/tol_fs8 from out/three_worlds.csv at two"
+                " significant digits; inverting the old margin column"
+                " double-rounds")
+        cells = worlds_row_cells(ck.text, ch)
+        want = [world_ratio(worlds[(world, ch)]) for world in WORLD_ORDER]
+        if cells is None or len(cells) < len(want):
+            ck._emit("FAIL", label,
+                     f"row 'ch{ch}' not found under the worlds header;"
+                     " keep the row label and its four world cells on one"
+                     " line")
+            continue
+        bad = []
+        for i, (cell, value) in enumerate(zip(cells, want)):
+            printed = strip_marks(cell)
+            if not cell_matches(printed, value):
+                bad.append(f"cell {i + 1} prints {printed} but R recomputes"
+                           f" to {value:.3g}")
+            passes = worlds[(WORLD_ORDER[i], ch)]["pass_fs8"] == "True"
+            bold = "\\mathbf{" in cell
+            if passes and not bold:
+                bad.append(f"cell {i + 1} passes (R <= 1) but is not bold")
+            elif bold and not passes:
+                bad.append(f"cell {i + 1} is bold but its world fails")
+        ck._emit("PASS" if not bad else "FAIL", label,
+                 "" if not bad else "; ".join(bad) + f"; {hint}")
 
     ch32 = [worlds[(world, 32)] for world in WORLD_ORDER]
     refusal_ok = all(
@@ -840,66 +848,19 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
         r"Channel 35.{0,300}measured off-era floor",
         "state the floor basis used by the direct worlds row")
 
-    # ---- Current-era endpoints ----------------------------------------
-    ck.section("Current-era endpoints <- bao_era_points.csv")
-    era = era_rows()
-    ch32, ch35 = era[32], era[35]
-    provenance_ok = era_provenance_ok(era)
-    ck._emit("PASS" if provenance_ok else "FAIL",
-             "current-era recorded source identity and ratios preserved",
-             "" if provenance_ok else
-             "restore the authenticated snapshot or regenerate from its"
-             " recorded inputs")
-    quality_ok = (
-        ch32["tau_quality"] == "bounded_above"
-        and ch35["tau_quality"] == "measured"
-    )
+    era_ok = era_provenance_ok(era)
+    ck._emit("PASS" if era_ok else "FAIL",
+             "worlds products: recorded source identity and ratios preserved",
+             "" if era_ok else
+             "restore the authenticated bao_era_points.csv snapshot or"
+             " regenerate it from its recorded inputs")
+    quality_ok = (era[32]["tau_quality"] == "bounded_above"
+                  and era[35]["tau_quality"] == "measured")
     ck._emit("PASS" if quality_ok else "FAIL",
-             "current-era coherence provenance preserved",
+             "worlds products: coherence provenance preserved",
              "" if quality_ok else
-             "expected ch32 bounded_above and ch35 measured")
-
-    ch32_minutes = float(ch32["tau_seconds"]) / 60.0
-    ch32_best = float(ch32["best_cost_r_over_rtol"])
-    ck.require(
-        "ch 32: bound and adopted-coherence excess",
-        rf"Channel 32.{{0,500}}(?:upper bound.{{0,120}}"
-        rf"\\tau_c\\leq ?{ch32_minutes:g}|"
-        rf"\\tau_c\\leq ?{ch32_minutes:g}.{{0,120}}upper bound)"
-        rf".{{0,500}}{ch32_best:.2f}x",
-        "quote the upper bound and best-cost adopted-coherence excess")
-
-    ch35_minutes = float(ch35["tau_seconds"]) / 60.0
-    ch35_mask = 100.0 * float(ch35["masked_fraction"])
-    ch35_endpoint = float(ch35["r_over_rtol"])
-    ch35_best_mask = 100.0 * float(ch35["best_cost_masked_fraction"])
-    ch35_best = float(ch35["best_cost_r_over_rtol"])
-    ck.require(
-        "ch 35: calibrated endpoint",
-        rf"[Cc]hannel 35.{{0,500}}{ch35_mask:.1f}%"
-        rf".{{0,300}}{ch35_endpoint:.0f}x",
-        "quote the calibrated eta_mu=1 endpoint")
-    ck.require(
-        "ch 35: best-cost endpoint",
-        rf"{ch35_best_mask:.2f}%.*{ch35_best:.0f}x",
-        "quote the best-cost masked fraction and tolerance excess")
-    ck.require(
-        "ch 35: measured coherence",
-        rf"current-era.{{0,200}}(?:tau_c=)?{ch35_minutes:.1f}"
-        rf".{{0,20}}min.{{0,80}}measured"
-        rf"|measured.{{0,80}}{ch35_minutes:.1f}.{{0,20}}min",
-        "quote the current-era measured coherence time")
-
-    # ---- Table 8.1 <- out/fine_operating_points.csv ---------------------
-    ck.section("Table 8.1 <- out/fine_operating_points.csv")
-    for ch, r in sorted(fine_rows().items()):
-        ck.value(f"ch {ch}: eta_q16 filled",
-                 [str(int(float(r["multiplier_q16"])))],
-                 "fill the pending cells from the epoch-restricted rerun of"
-                 " scripts/fine_operating_point.py; CSV is authoritative")
-        if r.get("r_late"):
-            ck.value(f"ch {ch}: r_late", [f"{float(r['r_late']):.3f}"],
-                     "quote the CSV at the table's rounding")
+             "expected ch32 bounded_above and ch35 measured in"
+             " bao_era_points.csv")
 
     # ---- Ch.9 clean-baseline mini-table <- out/fig31_validation.csv -----
     ck.section("Ch.9 baseline mini-table <- out/fig31_validation.csv")
@@ -1218,13 +1179,22 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     ck.section("Evidence anchors (red until the artifact exists and is cited)")
     ck.require("bootstrap-rule P_fa stated", r"48\.5 ?(%|per ?cent)",
                "the null_power_ratio point spends 48.5% of verified-quiet"
-               " time (docs/DESIGN_DECISIONS.md); put it in SS5.5 and Ch. 9")
+               " time by construction (pilot-proxy"
+               " docs/DESIGN_DECISIONS.md, candidate-selection record"
+               " 2026-07); state it in Ch. 6 beside"
+               " Eq.~\\eqref{eq:survey-bootstrap-rule} and the held-out"
+               " false-alarm rates -- the old SS5.5 home is gone")
     ck.require("fine-gain Monte Carlo cited", r"fine_gain_mc|measure_fine_gain",
-               "run tools/measure_fine_gain.py, commit docs/evidence/"
-               "fine_gain_mc_<date>/, cite it for the coherent-gain credit")
+               "the measurement exists: pilot-proxy"
+               " docs/evidence/fine_gain_mc_2026-08-19/ (produced by"
+               " pilot-proxy tools/measure_fine_gain.py; 9.32 dB at"
+               " Pfa=1e-2, 9.77 dB at 1e-3). Only the citation is missing --"
+               " cite it where the chain books the fine-stage credit")
     ck.require("ROC / Youden-J analysis cited", r"[Yy]ouden",
-               "commit youden_j.py with the survey analysis and cite the"
-               " coarse-vs-fine ROC table")
+               "pilot-proxy analysis/youden_j.py is committed but its output"
+               " is not: run it on the released per-pilot products, commit"
+               " the coarse-vs-fine ROC / Youden-J table under pilot-proxy"
+               " docs/evidence/, and cite it")
 
     # ---- revision-artifact phrasing --------------------------------------
     ck.section("Revision-artifact phrasing (editor's notes to remove)")
