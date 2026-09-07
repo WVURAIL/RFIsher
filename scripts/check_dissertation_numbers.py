@@ -290,9 +290,44 @@ class Checker:
 
 
 # ---------------------------------------------------------------- sources
+class MissingTable(FileNotFoundError):
+    """A shipped table the CSV-driven checks read is not in the results tree.
+
+    The tables live outside the repository (``$RFISHER_OUT``; see
+    docs/releases.md), so a checkout that has not been pointed at a results
+    tree can run every TeX-only check and must skip the rest rather than
+    crash: a gate that dies on a missing input tells the author nothing.
+    """
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.name = name
+
+    def __str__(self) -> str:
+        return (f"{self.name} is not in the results tree ({OUT}): set $RFISHER_OUT "
+                f"to a tree that carries it (docs/releases.md)")
+
+
 def read_csv(name: str) -> list[dict]:
-    with open(OUT / name, newline="") as fh:
-        return list(csv.DictReader(fh))
+    try:
+        with open(OUT / name, newline="") as fh:
+            return list(csv.DictReader(fh))
+    except FileNotFoundError as exc:
+        raise MissingTable(name) from exc
+
+
+def guarded(ck: "Checker", label: str):
+    """Run a block of CSV-driven checks, skipping the section if its table is absent."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _guard():
+        try:
+            yield
+        except MissingTable as exc:
+            ck.skip(label, str(exc))
+
+    return _guard()
 
 
 WORLD_ORDER = ("none", "peak1", "peak2", "deployed")
@@ -717,7 +752,34 @@ def template_rows(family: str = "noise_shaped") -> list[dict]:
 
 
 # ---------------------------------------------------------------- registry
+SHIPPED_TABLES = ("three_worlds.csv", "fig31_validation.csv", "required_times.csv", "bin_level_targets.csv",
+                  "forecast_completion_all_dtv_bins.json", "forecast_completion_template_comparison.csv")
+
+
+def missing_tables() -> set[str]:
+    """The shipped tables this results tree does not carry.
+
+    The tables live outside the repository, so a checkout pointed at no tree
+    (or at one produced before a table existed) must skip the checks that read
+    them and run the rest. Probed once, so a section skips with a reason
+    instead of the run dying part way through and reporting a failure count
+    that means nothing.
+    """
+    return {name for name in SHIPPED_TABLES if not (OUT / name).is_file()}
+
+
 def run_checks(ck: Checker, summary: dict | None) -> None:
+    absent = missing_tables()
+
+    def have(*names: str) -> bool:
+        """Whether every table a section reads is present; skips the section with a reason if not."""
+        gone = [n for n in names if n in absent]
+        if not gone:
+            return True
+        ck.skip("section skipped: shipped table absent",
+                f"{', '.join(gone)} not in the results tree ({OUT}); set $RFISHER_OUT (docs/releases.md)")
+        return False
+
     # ---- Fig. 9.4 / SS9.7: one comparison population --------------------
     ck.section("Fig. 9.4 / SS9.7 -- keep-everything on one population")
     if summary is None:
@@ -755,240 +817,243 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
 
     # ---- Worlds table <- out/three_worlds.csv --------------------------
     ck.section("Worlds table <- out/three_worlds.csv")
-    worlds = worlds_rows()
-    # bao_era_points.csv now backs this table alone: it supplies channels 32
-    # and 35's products and the off-era floor channel 35's rows are computed
-    # against, so its provenance is checked here rather than in a section of
-    # its own.
-    era = era_rows()
-    worlds_provenance = world_provenance_ok(worlds, era)
-    ck._emit("PASS" if worlds_provenance else "FAIL",
-             "worlds recorded source identities preserved",
-             "" if worlds_provenance else
-             "restore the authenticated snapshot or regenerate from its"
-             " recorded inputs")
-    worlds_results = world_results_ok(worlds)
-    ck._emit("PASS" if worlds_results else "FAIL",
-             "worlds residuals and verdicts are internally consistent",
-             "" if worlds_results else
-             "regenerate the direct worlds table")
-    # The table prints R = r_sys/r_tol at two significant digits, bold where
-    # the world passes. Cell-wise rather than one regex over the row: a
-    # printed cell is held at its own last printed place, so the failure
-    # names the cell and the value it should carry.
-    for ch in (33, 35):
-        label = f"ch {ch}: direct fs8 ratios R = r_sys/r_tol"
-        hint = ("recompute r_fine/tol_fs8 from out/three_worlds.csv at two"
-                " significant digits; inverting the old margin column"
-                " double-rounds")
-        cells = worlds_row_cells(ck.text, ch)
-        want = [world_ratio(worlds[(world, ch)]) for world in WORLD_ORDER]
-        if cells is None or len(cells) < len(want):
-            ck._emit("FAIL", label,
-                     f"row 'ch{ch}' not found under the worlds header;"
-                     " keep the row label and its four world cells on one"
-                     " line")
-            continue
-        bad = []
-        for i, (cell, value) in enumerate(zip(cells, want)):
-            printed = strip_marks(cell)
-            if not cell_matches(printed, value):
-                bad.append(f"cell {i + 1} prints {printed} but R recomputes"
-                           f" to {value:.3g}")
-            passes = worlds[(WORLD_ORDER[i], ch)]["pass_fs8"] == "True"
-            bold = "\\mathbf{" in cell
-            if passes and not bold:
-                bad.append(f"cell {i + 1} passes (R <= 1) but is not bold")
-            elif bold and not passes:
-                bad.append(f"cell {i + 1} is bold but its world fails")
-        ck._emit("PASS" if not bad else "FAIL", label,
-                 "" if not bad else "; ".join(bad) + f"; {hint}")
+    if have("three_worlds.csv"):
+        worlds = worlds_rows()
+        # bao_era_points.csv now backs this table alone: it supplies channels 32
+        # and 35's products and the off-era floor channel 35's rows are computed
+        # against, so its provenance is checked here rather than in a section of
+        # its own.
+        era = era_rows()
+        worlds_provenance = world_provenance_ok(worlds, era)
+        ck._emit("PASS" if worlds_provenance else "FAIL",
+                 "worlds recorded source identities preserved",
+                 "" if worlds_provenance else
+                 "restore the authenticated snapshot or regenerate from its"
+                 " recorded inputs")
+        worlds_results = world_results_ok(worlds)
+        ck._emit("PASS" if worlds_results else "FAIL",
+                 "worlds residuals and verdicts are internally consistent",
+                 "" if worlds_results else
+                 "regenerate the direct worlds table")
+        # The table prints R = r_sys/r_tol at two significant digits, bold where
+        # the world passes. Cell-wise rather than one regex over the row: a
+        # printed cell is held at its own last printed place, so the failure
+        # names the cell and the value it should carry.
+        for ch in (33, 35):
+            label = f"ch {ch}: direct fs8 ratios R = r_sys/r_tol"
+            hint = ("recompute r_fine/tol_fs8 from out/three_worlds.csv at two"
+                    " significant digits; inverting the old margin column"
+                    " double-rounds")
+            cells = worlds_row_cells(ck.text, ch)
+            want = [world_ratio(worlds[(world, ch)]) for world in WORLD_ORDER]
+            if cells is None or len(cells) < len(want):
+                ck._emit("FAIL", label,
+                         f"row 'ch{ch}' not found under the worlds header;"
+                         " keep the row label and its four world cells on one"
+                         " line")
+                continue
+            bad = []
+            for i, (cell, value) in enumerate(zip(cells, want)):
+                printed = strip_marks(cell)
+                if not cell_matches(printed, value):
+                    bad.append(f"cell {i + 1} prints {printed} but R recomputes"
+                               f" to {value:.3g}")
+                passes = worlds[(WORLD_ORDER[i], ch)]["pass_fs8"] == "True"
+                bold = "\\mathbf{" in cell
+                if passes and not bold:
+                    bad.append(f"cell {i + 1} passes (R <= 1) but is not bold")
+                elif bold and not passes:
+                    bad.append(f"cell {i + 1} is bold but its world fails")
+            ck._emit("PASS" if not bad else "FAIL", label,
+                     "" if not bad else "; ".join(bad) + f"; {hint}")
 
-    ch32 = [worlds[(world, 32)] for world in WORLD_ORDER]
-    refusal_ok = all(
-        r["residual_status"] == "insufficient_kept_frames"
-        and r["n_eta1_kept"] == "16"
-        and r["n_eta1_valid"] == "8359"
-        and r["min_eta1_kept"] == "30"
-        and not r["r_fine"]
-        and all(not r[f"pass_{p}"] for p in ("aperp", "apar", "fs8"))
-        for r in ch32)
-    ck._emit("PASS" if refusal_ok else "FAIL",
-             "ch 32: eta=1 refusal preserved in CSV",
-             "" if refusal_ok else
-             "expected 16/8359 kept, minimum 30, with blank margins")
-    ck.require(
-        "ch 32: insufficient population in worlds table",
-        r"ch32\s*&\s*\\multicolumn\{4\}\{c\}\{not evaluated: "
-        r"16<30 kept frames at \\eta=1 in its transmitter-on era\}",
-        "render the machine-readable refusal rather than a numeric margin")
+        ch32 = [worlds[(world, 32)] for world in WORLD_ORDER]
+        refusal_ok = all(
+            r["residual_status"] == "insufficient_kept_frames"
+            and r["n_eta1_kept"] == "16"
+            and r["n_eta1_valid"] == "8359"
+            and r["min_eta1_kept"] == "30"
+            and not r["r_fine"]
+            and all(not r[f"pass_{p}"] for p in ("aperp", "apar", "fs8"))
+            for r in ch32)
+        ck._emit("PASS" if refusal_ok else "FAIL",
+                 "ch 32: eta=1 refusal preserved in CSV",
+                 "" if refusal_ok else
+                 "expected 16/8359 kept, minimum 30, with blank margins")
+        ck.require(
+            "ch 32: insufficient population in worlds table",
+            r"ch32\s*&\s*\\multicolumn\{4\}\{c\}\{not evaluated: "
+            r"16<30 kept frames at \\eta=1 in its transmitter-on era\}",
+            "render the machine-readable refusal rather than a numeric margin")
 
-    deployed29 = worlds[("deployed", 29)]
-    aperp_over = (float(deployed29["r_fine"])
-                  / float(deployed29["tol_aperp"]))
-    ck.require(
-        "ch 29: deployed-cut perpendicular excess",
-        rf"ch29\s*&\s*fails all\s*&\s*fails all\s*&\s*fails all"
-        rf"\s*&\s*fails all \(\\alpha_\\perp {aperp_over:.1f}x over\)",
-        "quote out/three_worlds.csv at one decimal place")
-    ck.require(
-        "ch 35: isolated parallel-dilation pass disclosed",
-        r"Channel 35.{0,300}parallel dilation alone passes at 110 ns",
-        "the direct bank passes apar only; aperp and fs8 still fail")
-    ch35_provenance = all(
-        worlds[(world, 35)].get("floor_evidence") == "measured"
-        and worlds[(world, 35)].get("tau_quality") == "measured"
-        for world in WORLD_ORDER)
-    ck._emit("PASS" if ch35_provenance else "FAIL",
-             "ch 35: measured floor and coherence preserved in CSV",
-             "" if ch35_provenance else
-             "expected measured floor_evidence and tau_quality")
-    ck.require(
-        "ch 35: measured off-era floor disclosed",
-        r"Channel 35.{0,300}measured off-era floor",
-        "state the floor basis used by the direct worlds row")
+        deployed29 = worlds[("deployed", 29)]
+        aperp_over = (float(deployed29["r_fine"])
+                      / float(deployed29["tol_aperp"]))
+        ck.require(
+            "ch 29: deployed-cut perpendicular excess",
+            rf"ch29\s*&\s*fails all\s*&\s*fails all\s*&\s*fails all"
+            rf"\s*&\s*fails all \(\\alpha_\\perp {aperp_over:.1f}x over\)",
+            "quote out/three_worlds.csv at one decimal place")
+        ck.require(
+            "ch 35: isolated parallel-dilation pass disclosed",
+            r"Channel 35.{0,300}parallel dilation alone passes at 110 ns",
+            "the direct bank passes apar only; aperp and fs8 still fail")
+        ch35_provenance = all(
+            worlds[(world, 35)].get("floor_evidence") == "measured"
+            and worlds[(world, 35)].get("tau_quality") == "measured"
+            for world in WORLD_ORDER)
+        ck._emit("PASS" if ch35_provenance else "FAIL",
+                 "ch 35: measured floor and coherence preserved in CSV",
+                 "" if ch35_provenance else
+                 "expected measured floor_evidence and tau_quality")
+        ck.require(
+            "ch 35: measured off-era floor disclosed",
+            r"Channel 35.{0,300}measured off-era floor",
+            "state the floor basis used by the direct worlds row")
 
-    era_ok = era_provenance_ok(era)
-    ck._emit("PASS" if era_ok else "FAIL",
-             "worlds products: recorded source identity and ratios preserved",
-             "" if era_ok else
-             "restore the authenticated bao_era_points.csv snapshot or"
-             " regenerate it from its recorded inputs")
-    quality_ok = (era[32]["tau_quality"] == "bounded_above"
-                  and era[35]["tau_quality"] == "measured")
-    ck._emit("PASS" if quality_ok else "FAIL",
-             "worlds products: coherence provenance preserved",
-             "" if quality_ok else
-             "expected ch32 bounded_above and ch35 measured in"
-             " bao_era_points.csv")
+        era_ok = era_provenance_ok(era)
+        ck._emit("PASS" if era_ok else "FAIL",
+                 "worlds products: recorded source identity and ratios preserved",
+                 "" if era_ok else
+                 "restore the authenticated bao_era_points.csv snapshot or"
+                 " regenerate it from its recorded inputs")
+        quality_ok = (era[32]["tau_quality"] == "bounded_above"
+                      and era[35]["tau_quality"] == "measured")
+        ck._emit("PASS" if quality_ok else "FAIL",
+                 "worlds products: coherence provenance preserved",
+                 "" if quality_ok else
+                 "expected ch32 bounded_above and ch35 measured in"
+                 " bao_era_points.csv")
 
     # ---- Ch.9 clean-baseline mini-table <- out/fig31_validation.csv -----
     ck.section("Ch.9 baseline mini-table <- out/fig31_validation.csv")
-    for i, (z, v) in enumerate(fig31_clean_columns()):
-        # Column-anchored so a matching digit string elsewhere in the text
-        # cannot green-light a stale cell; 2 dp accepted as a prefix of the
-        # table's 3 dp rendering.
-        alt = f"(?:{re.escape(f'{v:.2f}')}|{re.escape(f'{v:.3f}')})"
-        ck.require(f"z = {z:.2f}: sigma(D_V)/D_V clean, 1 on-sky yr",
-                   rf", clean, 1 on-sky yr( & \d[\d.]*){{{i}}} & {alt}",
-                   "quote out/fig31_validation.csv sigma_dv_clean_pct at the"
-                   " mini-table's rounding")
+    if have("fig31_validation.csv"):
+        for i, (z, v) in enumerate(fig31_clean_columns()):
+            # Column-anchored so a matching digit string elsewhere in the text
+            # cannot green-light a stale cell; 2 dp accepted as a prefix of the
+            # table's 3 dp rendering.
+            alt = f"(?:{re.escape(f'{v:.2f}')}|{re.escape(f'{v:.3f}')})"
+            ck.require(f"z = {z:.2f}: sigma(D_V)/D_V clean, 1 on-sky yr",
+                       rf", clean, 1 on-sky yr( & \d[\d.]*){{{i}}} & {alt}",
+                       "quote out/fig31_validation.csv sigma_dv_clean_pct at the"
+                       " mini-table's rounding")
 
     # ---- Table 9.1 <- out/required_times.csv + out/bin_level_targets.csv
     ck.section("Table 9.1 <- out/required_times.csv / bin_level_targets.csv")
-    yrs = required_times_years()
-    byrs = bin_target_years()
-    ck.value("survey 5-sigma clean on-sky years", [f"{yrs['clean']:.4f}"],
-             "quote out/required_times.csv years_5sig at the table's"
-             " rounding")
-    ck.value("survey 5-sigma legacy rate-table on-sky years",
-             [f"{yrs['legacy_rate_table']:.4f}"],
-             "quote out/required_times.csv years_5sig at the table's"
-             " rounding")
-    ck.value("z=1.40-1.50 bin clean years", [f"{byrs['clean']:.3f}"],
-             "quote out/bin_level_targets.csv years_bin5sig at the table's"
-             " rounding")
-    ck.value("z=1.40-1.50 bin legacy rate-table years",
-             [f"{byrs['legacy_rate_table']:.3f}"],
-             "quote out/bin_level_targets.csv years_bin5sig at the table's"
-             " rounding")
-    ck.value("z=1.40-1.50 bin penalty (legacy/clean years)",
-             [f"{byrs['legacy_rate_table'] / byrs['clean']:.3f}"],
-             "the bin penalty is the years_bin5sig ratio at 3 dp")
-    # The table must also agree with itself: the quoted bin penalty has to
-    # equal quoted-legacy / quoted-clean within the rounding slack of its
-    # own printed cells, whatever record the row happens to hold.
-    row_pat = r" & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*)"
-    clean_m = re.search(r"uncontaminated baseline" + row_pat, ck.text)
-    legacy_m = (re.search(row_pat, ck.text[clean_m.end():])
-                if clean_m else None)
-    if legacy_m is None:
-        ck._emit("FAIL", "Table 9.1 bin penalty consistent with its years",
-                 "rows not found; keep the 'uncontaminated baseline' label and four"
-                 " numeric columns per row")
-    else:
-        c_bin = clean_m.group(3)
-        legacy_bin = legacy_m.group(3)
-        pen = legacy_m.group(4)
-        lo = (float(legacy_bin) - half_ulp(legacy_bin)) / (float(c_bin)
-                                                           + half_ulp(c_bin))
-        hi = (float(legacy_bin) + half_ulp(legacy_bin)) / (float(c_bin)
-                                                           - half_ulp(c_bin))
-        ok = lo - half_ulp(pen) <= float(pen) <= hi + half_ulp(pen)
-        ck._emit("PASS" if ok else "FAIL",
-                 "Table 9.1 bin penalty consistent with its years",
-                 "" if ok else
-                 f"quoted penalty {pen} outside {legacy_bin}/{c_bin} ="
-                 f" [{lo:.3f}, {hi:.3f}]; recompute the row from"
-                 " out/bin_level_targets.csv")
-
-    # The survey-penalty column. Only the published legacy row is a row of
-    # required_times.csv, so it is pinned to the artifact. The products-
-    # substituted and band-wide rows are absent from that CSV only because
-    # run_forecast.py's table_scens dict does not build them: both are
-    # reproducible from shipped constructors --
-    # scenarios.survey_product_scenario([537, 521, 506], fill_missing="csv")
-    # and scenarios.uniform(0.942, DTV_BAND, excise_threshold=0.5) -- and
-    # they DO move when the pinned bank is rebuilt. Until those two are added
-    # to run_forecast.py they cannot be pinned to an artifact here, so the
-    # check below is a floor, not a ceiling: it holds each row against the
-    # table's own baseline within the rounding slack of its printed cells,
-    # which catches a stale or mistyped row but not a shared drift.
-    ck.value("survey penalty, legacy rate table (published row)",
-             [f"{required_time_penalties()['legacy_rate_table']:.3f}"],
-             "quote out/required_times.csv time_penalty_vs_clean at the"
-             " table's rounding")
-    survey_pat = r"[^&]*& (\d[\d.]*) & (\d[\d.]*)"
-    base_s = re.search(r"uncontaminated baseline" + survey_pat, ck.text)
-    for label, name in (("legacy detector rate table", "legacy rate table"),
-                        ("with products substituted", "products on ch 34-36"),
-                        ("bootstrap rule band-wide", "bootstrap band-wide")):
-        row_s = re.search(re.escape(label) + survey_pat, ck.text)
-        if base_s is None or row_s is None:
-            ck._emit("FAIL", f"Table 9.1 survey penalty self-consistent:"
-                             f" {name}",
-                     "row not found; keep the row label and its two survey"
-                     " columns numeric")
-            continue
-        base_yr, row_yr, spen = (base_s.group(1), row_s.group(1),
-                                 row_s.group(2))
-        slo = (float(row_yr) - half_ulp(row_yr)) / (float(base_yr)
-                                                    + half_ulp(base_yr))
-        shi = (float(row_yr) + half_ulp(row_yr)) / (float(base_yr)
-                                                    - half_ulp(base_yr))
-        sok = slo - half_ulp(spen) <= float(spen) <= shi + half_ulp(spen)
-        ck._emit("PASS" if sok else "FAIL",
-                 f"Table 9.1 survey penalty self-consistent: {name}",
-                 "" if sok else
-                 f"quoted penalty {spen} outside {row_yr}/{base_yr} ="
-                 f" [{slo:.3f}, {shi:.3f}]; recompute the row from"
-                 " out/required_times.csv")
-
-    # Recomputed cover for the same two rows. The self-consistency checks
-    # above catch a mistyped or stale row; these catch a shared drift the
-    # baseline moves with, which is what a bank rebuild produces.
-    hist = table91_historical_rows()
-    if hist is None:
-        ck.skip("Table 9.1 historical rows recomputed",
-                "the pinned forecast bank could not be loaded")
-    else:
-        check_row(ck, "Table 9.1 band-wide row recomputed",
-                  "bootstrap rule band-wide",
-                  [hist["band"]["survey_years"],
-                   hist["band"]["survey_penalty"]],
-                  "recompute with scenarios.uniform(0.942, DTV_BAND,"
-                  " excise_threshold=0.5)")
-        if "sub" in hist:
-            sub = hist["sub"]
-            check_row(ck, "Table 9.1 products-substituted row recomputed",
-                      "with products substituted",
-                      [sub["survey_years"], sub["survey_penalty"],
-                       sub["bin_years"], sub["bin_penalty"]],
-                      "recompute with scenarios.survey_product_scenario"
-                      "([537, 521, 506], fill_missing='csv')")
+    if have("required_times.csv", "bin_level_targets.csv"):
+        yrs = required_times_years()
+        byrs = bin_target_years()
+        ck.value("survey 5-sigma clean on-sky years", [f"{yrs['clean']:.4f}"],
+                 "quote out/required_times.csv years_5sig at the table's"
+                 " rounding")
+        ck.value("survey 5-sigma legacy rate-table on-sky years",
+                 [f"{yrs['legacy_rate_table']:.4f}"],
+                 "quote out/required_times.csv years_5sig at the table's"
+                 " rounding")
+        ck.value("z=1.40-1.50 bin clean years", [f"{byrs['clean']:.3f}"],
+                 "quote out/bin_level_targets.csv years_bin5sig at the table's"
+                 " rounding")
+        ck.value("z=1.40-1.50 bin legacy rate-table years",
+                 [f"{byrs['legacy_rate_table']:.3f}"],
+                 "quote out/bin_level_targets.csv years_bin5sig at the table's"
+                 " rounding")
+        ck.value("z=1.40-1.50 bin penalty (legacy/clean years)",
+                 [f"{byrs['legacy_rate_table'] / byrs['clean']:.3f}"],
+                 "the bin penalty is the years_bin5sig ratio at 3 dp")
+        # The table must also agree with itself: the quoted bin penalty has to
+        # equal quoted-legacy / quoted-clean within the rounding slack of its
+        # own printed cells, whatever record the row happens to hold.
+        row_pat = r" & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*) & (\d[\d.]*)"
+        clean_m = re.search(r"uncontaminated baseline" + row_pat, ck.text)
+        legacy_m = (re.search(row_pat, ck.text[clean_m.end():])
+                    if clean_m else None)
+        if legacy_m is None:
+            ck._emit("FAIL", "Table 9.1 bin penalty consistent with its years",
+                     "rows not found; keep the 'uncontaminated baseline' label and four"
+                     " numeric columns per row")
         else:
-            ck.skip("Table 9.1 products-substituted row recomputed",
-                    "set RFISHER_PRODUCT_DIRS for the ch34-36 products")
+            c_bin = clean_m.group(3)
+            legacy_bin = legacy_m.group(3)
+            pen = legacy_m.group(4)
+            lo = (float(legacy_bin) - half_ulp(legacy_bin)) / (float(c_bin)
+                                                               + half_ulp(c_bin))
+            hi = (float(legacy_bin) + half_ulp(legacy_bin)) / (float(c_bin)
+                                                               - half_ulp(c_bin))
+            ok = lo - half_ulp(pen) <= float(pen) <= hi + half_ulp(pen)
+            ck._emit("PASS" if ok else "FAIL",
+                     "Table 9.1 bin penalty consistent with its years",
+                     "" if ok else
+                     f"quoted penalty {pen} outside {legacy_bin}/{c_bin} ="
+                     f" [{lo:.3f}, {hi:.3f}]; recompute the row from"
+                     " out/bin_level_targets.csv")
+
+        # The survey-penalty column. Only the published legacy row is a row of
+        # required_times.csv, so it is pinned to the artifact. The products-
+        # substituted and band-wide rows are absent from that CSV only because
+        # run_forecast.py's table_scens dict does not build them: both are
+        # reproducible from shipped constructors --
+        # scenarios.survey_product_scenario([537, 521, 506], fill_missing="csv")
+        # and scenarios.uniform(0.942, DTV_BAND, excise_threshold=0.5) -- and
+        # they DO move when the pinned bank is rebuilt. Until those two are added
+        # to run_forecast.py they cannot be pinned to an artifact here, so the
+        # check below is a floor, not a ceiling: it holds each row against the
+        # table's own baseline within the rounding slack of its printed cells,
+        # which catches a stale or mistyped row but not a shared drift.
+        ck.value("survey penalty, legacy rate table (published row)",
+                 [f"{required_time_penalties()['legacy_rate_table']:.3f}"],
+                 "quote out/required_times.csv time_penalty_vs_clean at the"
+                 " table's rounding")
+        survey_pat = r"[^&]*& (\d[\d.]*) & (\d[\d.]*)"
+        base_s = re.search(r"uncontaminated baseline" + survey_pat, ck.text)
+        for label, name in (("legacy detector rate table", "legacy rate table"),
+                            ("with products substituted", "products on ch 34-36"),
+                            ("bootstrap rule band-wide", "bootstrap band-wide")):
+            row_s = re.search(re.escape(label) + survey_pat, ck.text)
+            if base_s is None or row_s is None:
+                ck._emit("FAIL", f"Table 9.1 survey penalty self-consistent:"
+                                 f" {name}",
+                         "row not found; keep the row label and its two survey"
+                         " columns numeric")
+                continue
+            base_yr, row_yr, spen = (base_s.group(1), row_s.group(1),
+                                     row_s.group(2))
+            slo = (float(row_yr) - half_ulp(row_yr)) / (float(base_yr)
+                                                        + half_ulp(base_yr))
+            shi = (float(row_yr) + half_ulp(row_yr)) / (float(base_yr)
+                                                        - half_ulp(base_yr))
+            sok = slo - half_ulp(spen) <= float(spen) <= shi + half_ulp(spen)
+            ck._emit("PASS" if sok else "FAIL",
+                     f"Table 9.1 survey penalty self-consistent: {name}",
+                     "" if sok else
+                     f"quoted penalty {spen} outside {row_yr}/{base_yr} ="
+                     f" [{slo:.3f}, {shi:.3f}]; recompute the row from"
+                     " out/required_times.csv")
+
+        # Recomputed cover for the same two rows. The self-consistency checks
+        # above catch a mistyped or stale row; these catch a shared drift the
+        # baseline moves with, which is what a bank rebuild produces.
+        hist = table91_historical_rows()
+        if hist is None:
+            ck.skip("Table 9.1 historical rows recomputed",
+                    "the pinned forecast bank could not be loaded")
+        else:
+            check_row(ck, "Table 9.1 band-wide row recomputed",
+                      "bootstrap rule band-wide",
+                      [hist["band"]["survey_years"],
+                       hist["band"]["survey_penalty"]],
+                      "recompute with scenarios.uniform(0.942, DTV_BAND,"
+                      " excise_threshold=0.5)")
+            if "sub" in hist:
+                sub = hist["sub"]
+                check_row(ck, "Table 9.1 products-substituted row recomputed",
+                          "with products substituted",
+                          [sub["survey_years"], sub["survey_penalty"],
+                           sub["bin_years"], sub["bin_penalty"]],
+                          "recompute with scenarios.survey_product_scenario"
+                          "([537, 521, 506], fill_missing='csv')")
+            else:
+                ck.skip("Table 9.1 products-substituted row recomputed",
+                        "set RFISHER_PRODUCT_DIRS for the ch34-36 products")
 
     # ---- flagger comparison table <- incumbent.compare_flaggers ---------
     # Recomputed, not read: this table is serialized in no provenance
@@ -1073,35 +1138,37 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     # ---- per-bin r_tol table <- forecast_completion_all_dtv_bins.json ---
     ck.section("Per-bin r_tol table <- out/forecast_completion_all_dtv_bins"
                ".json")
-    tol = perbin_fs8_tolerances()
-    # Columns run 1.30-1.40 .. 1.90-2.04 (bin indices 5..11); the binding
-    # pair and the last two bins are the drift-prone cells worth pinning.
-    for b, col, zbin in ((5, 0, "1.30-1.40"), (6, 1, "1.40-1.50"),
-                         (10, 5, "1.80-1.90"), (11, 6, "1.90-2.04")):
-        needle = re.escape(f"{1e3 * tol[b]:.2f}")
-        ck.require(f"bin {zbin}: min accepted fs8 r_tol x1e3",
-                   rf"\(x 10\^\{{-3\}}\)( & \d[\d.]*){{{col}}} & {needle}",
-                   "quote the perbin_noise_normalized ledger minimum at the"
-                   " table's rounding")
+    if have("forecast_completion_all_dtv_bins.json"):
+        tol = perbin_fs8_tolerances()
+        # Columns run 1.30-1.40 .. 1.90-2.04 (bin indices 5..11); the binding
+        # pair and the last two bins are the drift-prone cells worth pinning.
+        for b, col, zbin in ((5, 0, "1.30-1.40"), (6, 1, "1.40-1.50"),
+                             (10, 5, "1.80-1.90"), (11, 6, "1.90-2.04")):
+            needle = re.escape(f"{1e3 * tol[b]:.2f}")
+            ck.require(f"bin {zbin}: min accepted fs8 r_tol x1e3",
+                       rf"\(x 10\^\{{-3\}}\)( & \d[\d.]*){{{col}}} & {needle}",
+                       "quote the perbin_noise_normalized ledger minimum at the"
+                       " table's rounding")
 
     # ---- template table <- forecast_completion_template_comparison.csv --
     ck.section("Template table <- out/forecast_completion_template_"
                "comparison.csv")
-    trs = template_rows()
-    per = [float(r["perbin_binding_tolerance"]) for r in trs]
-    joint = [float(r["combined_binding_tolerance"]) for r in trs]
-    ck.value("noise-shaped per-bin fs8 tolerance range",
-             [f"{min(per):.6f}-{max(per):.6f}"],
-             "quote the CSV's perbin_binding_tolerance span at the table's"
-             " rounding")
-    ck.value("noise-shaped joint fs8 tolerance range",
-             [f"{min(joint):.6f}-{max(joint):.6f}"],
-             "quote the CSV's combined_binding_tolerance span at the table's"
-             " rounding")
-    ck.value("noise-shaped per-bin accepted/rejected count",
-             [f"{sum(int(r['perbin_accepted']) for r in trs)}"
-              f"/{sum(int(r['perbin_rejected']) for r in trs)}"],
-             "quote the CSV's per-bin acceptance tally")
+    if have("forecast_completion_template_comparison.csv"):
+        trs = template_rows()
+        per = [float(r["perbin_binding_tolerance"]) for r in trs]
+        joint = [float(r["combined_binding_tolerance"]) for r in trs]
+        ck.value("noise-shaped per-bin fs8 tolerance range",
+                 [f"{min(per):.6f}-{max(per):.6f}"],
+                 "quote the CSV's perbin_binding_tolerance span at the table's"
+                 " rounding")
+        ck.value("noise-shaped joint fs8 tolerance range",
+                 [f"{min(joint):.6f}-{max(joint):.6f}"],
+                 "quote the CSV's combined_binding_tolerance span at the table's"
+                 " rounding")
+        ck.value("noise-shaped per-bin accepted/rejected count",
+                 [f"{sum(int(r['perbin_accepted']) for r in trs)}"
+                  f"/{sum(int(r['perbin_rejected']) for r in trs)}"],
+                 "quote the CSV's per-bin acceptance tally")
 
     # ---- SS9.3 quarterly-table provenance --------------------------------
     ck.section("SS9.3 quarterly-table provenance")
