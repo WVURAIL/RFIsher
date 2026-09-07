@@ -221,20 +221,41 @@ def test_matrix_band_level_edge_cases(tmp_path):
 
 
 # ------------------------------------------------------------------ (b) the atlas counts
+def _head_cells(tex: str) -> list[str]:
+    """The header cells of a booktabs tabular."""
+    lines = tex.splitlines()
+    return [c.strip() for c in lines[lines.index(r"\toprule") + 1][:-2].split(" & ")]
+
+
+def test_atlas_counts_prints_the_stub_columns_and_no_others(tmp_path):
+    """The appendix C stub names six columns; the table prints them beside the channel and nothing more."""
+    frag = cm.build_atlas_counts(_ledger(tmp_path))
+    assert _head_cells(frag.tex) == ["ch", r"\texttt{freq\_id}", "valid", r"\shortstack{excluded\\(reason)}", "current era",
+                                     r"\shortstack{era\\frames}", r"\shortstack{kept at point\\(cal.\ + eval.)}",
+                                     r"\shortstack{plate\\digest}"]
+    assert frag.tex.splitlines()[0] == r"\begin{tabular}{rrrlcrrl}"     # eight columns, one tabular: no stacked panels
+    assert all(len(r) == 8 for r in _rows(frag.tex))
+    for dropped in ("frames &", "kept, cal.", "kept, eval."):            # the three columns of the first draft
+        assert dropped not in frag.tex
+    assert any(s.startswith("the printed columns are the appendix C stub's own and no others") for s in frag.notes)
+    assert [b.__name__ for b in cm.BUILDERS] == ["build", "build_atlas_counts", "build_headline"]   # no companion ledger
+
+
 def test_atlas_counts_columns_and_absent_cases(tmp_path):
     run = _ledger(tmp_path)
     frag = cm.build_atlas_counts(run)
     assert frag.name == "archive_atlas_counts" and frag.label == "tab:archive:atlas-counts" and frag.inputs == run.inputs()
     rows = {int(r[0]): r for r in _rows(frag.tex)}
-    assert list(rows) == [19, 21, 22, 23, 24, 40] and all(len(r) == 10 for r in rows.values())
-    dag = cm.DAGGER
-    assert rows[21] == ["21", "736", "$2{,}100$", "$2{,}090$", r"$10$ (rail 6, weird\_reason 4)", "2019-01--2026-08", "$2{,}000$",
-                        "$600$", "$500$", "--"]
-    assert rows[23] == ["23", "706", "$3{,}000$", "$3{,}000$", "$0$", "2020-02--2026-08", "$1{,}000$", f"$50{dag}$", f"$0{dag}$", "--"]
-    assert rows[22][4] == "--" and rows[22][7] == f"$35{dag}$" and rows[22][8] == "--"
-    assert rows[24][4] == "$2$ (rail 2)" and rows[24][7] == "--" and rows[24][8] == "--"
-    assert rows[19] == ["19", "767", "$500$", "$480$", "$3$ (invalid 20)", "--", "$300$", "--", "--", "--"]
-    assert rows[40][5] == "2024-01--2024-02" and rows[40][7] == "--" and rows[40][8] == "--"
+    assert list(rows) == [19, 21, 22, 23, 24, 40] and all(len(r) == 8 for r in rows.values())
+    dag, both = cm.DAGGER, "^{" + cm.MARK_DIAGNOSTIC + cm.MARK_NO_REPLAY + "}"
+    stacked = cm.STACK_OPEN + r"$10$ (rail 6,\\weird\_reason 4)" + cm.STACK_CLOSE   # two reasons: one to a line
+    assert rows[21] == ["21", "736", "$2{,}090$", stacked, "2019-01--2026-08", "$2{,}000$", "$1{,}100$", "--"]
+    assert rows[23] == ["23", "706", "$3{,}000$", "$0$", "2020-02--2026-08", "$1{,}000$", f"$50{dag}$", "--"]
+    assert rows[22][3] == "--" and rows[22][6] == f"$35{both}$"          # diagnostic point, never replayed
+    assert rows[24][3] == "$2$ (rail 2)" and rows[24][6] == "--"
+    assert rows[19] == ["19", "767", "$480$", "$3$ (invalid 20)", "--", "$300$", "--", "--"]
+    assert rows[40][4] == "2024-01--2024-02" and rows[40][6] == "--"
+    assert cm.render_reasons(f"{RAIL}:6;weird_reason:4") == r"rail 6, weird\_reason 4"    # the one-line rendering the prose may use
 
     n = _by_key(frag)
     assert n["appC.atlas_counts.freq_id.ch21"].value == 736 and n["appC.atlas_counts.n_frames.ch21"].value == 2100
@@ -252,21 +273,30 @@ def test_atlas_counts_columns_and_absent_cases(tmp_path):
     assert not any(k.startswith("appC.atlas_counts.kept_") and k.endswith(("ch24", "ch19", "ch40")) for k in n)
     assert "appC.atlas_counts.health_excluded.ch22" not in n and "appC.atlas_counts.health_reasons.ch23" not in n
     assert "appC.atlas_counts.current_era.ch19" not in n
-    assert n["appC.atlas_counts.n_frames.ch21"].source == {"table": "archive_atlas_counts.tex", "row": {"channel": 21}, "column": "frames"}
+    printed = {"freq_id", "valid", "excluded", "current era", "era frames", "kept at point"}
+    assert {v.source["column"] for v in n.values()} == printed | {cm.NOT_PRINTED}
+    for key in ("n_frames.ch21", "kept_calibration.ch21", "kept_evaluation.ch21"):    # the three unprinted columns keep their numbers
+        assert n[f"appC.atlas_counts.{key}"].source == {"table": "archive_atlas_counts.tex",
+                                                        "row": {"channel": int(key[-2:])}, "column": cm.NOT_PRINTED}
+    assert n["appC.atlas_counts.kept_total.ch21"].source["column"] == "kept at point"
     assert any(s.startswith("dagger: no selected (rho*, eta*) on channels 22, 23") for s in frag.notes)
-    assert any("kept cells are the dash on channels 19, 24, 40" in s for s in frag.notes)
+    assert any(s.startswith("double dagger: the kept cell on channel 22 is the calibration block alone") for s in frag.notes)
+    assert any("kept at point is the dash on channels 19, 24, 40" in s for s in frag.notes)
     assert any(s.strip().startswith("24: " + NO_FLOOR) for s in frag.notes)
     assert any(s.strip().startswith("19, 40: no selection record") for s in frag.notes)
-    assert any("kept, eval. replay is the dash on channels 22" in s for s in frag.notes)
-    assert any("replay kept no frame on channels 23" in s for s in frag.notes)
+    assert any("the two blocks are not printed as separate columns" in s for s in frag.notes)
+    assert any("replay kept no frame on channel 23" in s for s in frag.notes)
     assert any("no current-era span" in s and "19" in s for s in frag.notes)
+    assert any(s.startswith("product.n_frames") and "not printed" in s and "channels 19, 21, 22" in s for s in frag.notes)
     assert any("plate digest is the dash" in s for s in frag.notes)
 
 
 def test_atlas_without_diagnostic_points_has_no_dagger_note(tmp_path):
     frag = cm.build_atlas_counts(_ledger(tmp_path, {21: _sections()[21]}))
-    assert cm.DAGGER not in frag.tex and not any(s.startswith("dagger") for s in frag.notes)
-    assert not any("the dash on channels" in s for s in frag.notes)
+    assert cm.DAGGER not in frag.tex and cm.MARK_NO_REPLAY not in frag.tex
+    assert not any(s.startswith(("dagger", "double dagger")) for s in frag.notes)
+    assert not any("is the dash on channel" in s for s in frag.notes)
+    assert any(s.endswith("differs from the valid count on channel 21") for s in frag.notes)   # singular: one channel
 
 
 # ------------------------------------------------------------------ (c) the headline
@@ -352,12 +382,20 @@ def test_real_run_renders_23_channels(tmp_path):
     manifest = core.write_report(run, tmp_path, list(cm.BUILDERS), commit=run.commit, generated="2026-09-07T09:00:00+00:00")
     atlas = (tmp_path / "tables" / "archive_atlas_counts.tex").read_text()
     rows = _rows(atlas)
-    assert len(rows) == 23 and [int(r[0]) for r in rows] == list(range(14, 37)) and all(len(r) == 10 for r in rows)
+    assert len(rows) == 23 and [int(r[0]) for r in rows] == list(range(14, 37)) and all(len(r) == 8 for r in rows)
+    assert len(_head_cells(atlas)) == 8 and atlas.count(r"\begin{tabular}{") == 1     # the stub's columns, one panel
     refused = {c.channel for c in run.channels if cm.selection_status(c) == "refused"}
-    assert {int(r[0]) for r in rows if r[7] == core.DASH} == refused
+    assert refused == {15, 28, 30, 36}
+    assert {int(r[0]) for r in rows if r[6] == core.DASH} == refused
     for r in rows:
         if int(r[0]) not in refused:
-            assert r[7].startswith("$") and r[8].startswith("$")
+            assert r[6].startswith("$") and r[6].endswith(("$", "}$"))
+    atlas_numbers = json.loads((tmp_path / "numbers" / "archive_atlas_counts.numbers.json").read_text())["numbers"]
+    atlas_keys = {x["key"] for x in atlas_numbers}
+    assert len(atlas_numbers) == len(atlas_keys) == 217          # the key set the number gate verifies: the trim removed none of it
+    for stem in ("n_frames", "n_valid", "kept_calibration", "kept_evaluation", "kept_total"):
+        assert any(k.startswith(f"appC.atlas_counts.{stem}.ch") for k in atlas_keys)
+    assert {k for k in atlas_keys if ".n_frames." in k} == {f"appC.atlas_counts.n_frames.ch{c}" for c in range(14, 37)}
     for a in manifest["artifacts"]:
         doc = json.loads((tmp_path / a["numbers"]).read_text())
         keys = [x["key"] for x in doc["numbers"]]

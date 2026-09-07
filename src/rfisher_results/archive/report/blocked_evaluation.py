@@ -6,10 +6,17 @@ The chapter stub names, per channel, the calibration-block and
 evaluation-block null centre and width, the drift between blocks, the
 finite-estimate rate and the block-bootstrap interval, and the chapter table
 prints exactly those (plus the channel): ten columns, one row per channel
-14--36, a single ``tabular`` that needs no panel split. The block month
-spans, the block frame counts, the untimed frames excluded from both blocks,
-the survey flag rates and the frames the replay keeps are per-channel
-evidence the stub does not ask for; they move to the companion fragment
+14--36, a single ``tabular`` that needs no panel split. Measured on the
+2026-09-07 run at the dissertation's 11pt body with 1in margins, that table
+is 559.4pt wide against 988.6pt for the one wide table it replaces: it sets
+sideways at full size (the 650.4pt landscape text height, no ``resizebox``),
+and the companion is 463.2pt and sets upright inside the 469.8pt text block.
+Bringing the chapter table upright too would cost the ``F/mu_0`` in the group
+head and the ``centre``/``width`` distinction under ``drift``, so it stays
+sideways and unshrunk. The block month spans, the block frame counts, the
+untimed frames excluded from both blocks, the survey flag rates and the frames
+the replay keeps are per-channel evidence the stub does not ask for; they move
+to the companion fragment
 ``blocked_evaluation_ledger`` (``tab:archive:blocked_evaluation``, destined
 for Appendix~C beside the channel's plate), one row per channel in the same
 order. Every number either table printed before is still emitted under its

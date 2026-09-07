@@ -1,30 +1,54 @@
-"""The ``tolerance_eta`` fragment (tab:tolerance:eta): selected or diagnostic points per channel."""
+"""The ``tolerance_eta`` fragments: the chapter table ``tab:tolerance:eta`` (two stacked panels,
+the operating point and the verdict) and its Appendix C evidence ledger ``tab:archive:tolerance_eta``."""
 from __future__ import annotations
 
 import json
 import math
 import os
+import re
 from pathlib import Path
 
 import pytest
 
 from rfisher_results.archive import numbers as nb
-from rfisher_results.archive.report import core, tolerance_eta as te
+from rfisher_results.archive.report import build as rb, core, tolerance_eta as te
 
 REAL_RUN = Path(os.environ.get("RFISHER_ARCHIVE_RESULTS", Path.home() / "rail" / "results" / "archive_v5_2026-09-07"))
 CAP = 2054312.002658844                     # the sidereal-day cap on the chain gain
+STUB_COLUMNS = ["ch", "era", r"$|\mathcal B|$", r"$\rho^\star$", r"$q_\rho$", r"$\eta^\star$", r"$\eta^\star_{q16}$",
+                "$f$", r"$\mathcal C$", "plateau", "floor (dB)", "frames", r"$r_{\rm proxy}$", r"$r_{\rm tol}$", "$R$",
+                "status"]
+MOVED_COLUMNS = ["state", "floor basis", r"$\tau_c$", r"$R_{\rm c}$ ($\eta_{\rm c}$)", "gain (basis)", "screen refusal"]
 
 
-def _rows(frag: core.Fragment) -> list[list[str]]:
-    lines = [ln for ln in frag.tex.splitlines() if ln.endswith(r"\\")]
+def _blocks(frag: core.Fragment) -> list[tuple[str, str]]:
+    """Every ``tabular`` in the fragment as ``(alignment, body)``."""
+    return re.findall(r"\\begin\{tabular\}\{([^}]*)\}\n(.*?)\\end\{tabular\}", frag.tex, re.S)
+
+
+def _rows(frag: core.Fragment, panel: int = 0) -> list[list[str]]:
+    body = _blocks(frag)[panel][1]
+    lines = [ln for ln in body.splitlines() if ln.endswith(r"\\")]
     return [[c.strip() for c in ln[:-2].split(" & ")] for ln in lines[1:]]    # the first is the header
 
 
-def _cells(frag: core.Fragment, channel: int) -> dict[str, str]:
-    for row in _rows(frag):
+def _cells(frag: core.Fragment, channel: int, header, panel: int = 0) -> dict[str, str]:
+    for row in _rows(frag, panel):
         if row[0] == str(channel):
-            return dict(zip(te.HEADER, row))
+            return dict(zip(header, row))
     raise KeyError(channel)
+
+
+def _point(frag: core.Fragment, channel: int) -> dict[str, str]:
+    return _cells(frag, channel, te.POINT_HEADER, 0)
+
+
+def _verdict(frag: core.Fragment, channel: int) -> dict[str, str]:
+    return _cells(frag, channel, te.VERDICT_HEADER, 1)
+
+
+def _ledger_cells(frag: core.Fragment, channel: int) -> dict[str, str]:
+    return _cells(frag, channel, te.LEDGER_HEADER, 0)
 
 
 def _record(channel: int, freq_id: int, sections: dict, notes=()) -> dict:
@@ -136,6 +160,16 @@ def test_short_refusal_reduces_to_the_reason():
     assert te.short_refusal("") == "" and te.short_refusal(None) == ""
 
 
+def test_the_ledger_drops_the_prefix_and_the_status_column_keeps_the_reason_in_brief():
+    floor = {"refusal": "no floor for frames without a shelf estimate"}
+    sparse = {"refusal": "x: candidate rho=1, eta=1.0507 retains fewer than 30 frames in one era half"}
+    assert te.refusal_text(floor) == "no floor (frames without a shelf estimate)"       # the ledger's screen column
+    assert te.brief_refusal(floor) == "refused: no floor"                              # the chapter's status column
+    assert te.refusal_text(sparse) == "sparse candidate rho=1 eta=1.05"
+    assert te.brief_refusal(sparse) == "refused: sparse candidate rho=1 eta=1.05"
+    assert te.refusal_text({}) == "" and te.brief_refusal({}) == ""
+
+
 def test_sig_rounds_before_choosing_the_decade():
     assert te.sig(195.461, 3) == "195" and te.sig(0.0471, 3) == "0.0471" and te.sig(0.9145, 4) == "0.9145"
     assert te.sig(-42.4669, 3) == "-42.5" and te.sig(1.1949615478515625, 4) == "1.195" and te.sig(1594.0, 4) == "1594"
@@ -154,6 +188,15 @@ def test_era_label_falls_back_to_the_era_section(tmp_path):
     assert te.era_label(empty) == ("", "")
 
 
+def test_tau_mark_rides_on_the_bounded_cells(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    by = run.by_channel()
+    assert te.tau_mark(by[35]) == ("measured", "", "measured")
+    assert te.tau_mark(by[33]) == ("bound", r"{}^{\ast}", "bounded")
+    assert te.tau_mark(by[17]) == ("cap", r"{}^{\ddagger}", "bounded")
+    assert te.tau_mark(by[16]) == ("", "", "bounded")          # no chain section: no mark, and the residual is not a measurement
+
+
 def test_resolve_point_prefers_the_selection_then_the_diagnostic(tmp_path):
     run = core.load_run(_ledger(tmp_path))
     by = run.by_channel()
@@ -170,60 +213,150 @@ def test_resolve_point_prefers_the_selection_then_the_diagnostic(tmp_path):
     assert pt.rho == 2 and math.isnan(pt.q_rho) and pt.eta_q16 is None and math.isnan(pt.cost)
 
 
-def test_build_renders_every_column(tmp_path):
+def test_the_chapter_prints_the_stub_columns_and_the_ledger_carries_the_rest():
+    """The chapter table prints exactly what the stub names; the six columns beyond it are the ledger's."""
+    assert te.POINT_HEADER + te.VERDICT_HEADER[1:] == STUB_COLUMNS
+    assert te.LEDGER_HEADER == ["ch"] + MOVED_COLUMNS
+    assert te.POINT_HEADER[0] == te.VERDICT_HEADER[0] == te.LEDGER_HEADER[0] == "ch"    # every panel shares the channel
+    assert len(te.POINT_ALIGN) == len(te.POINT_HEADER) and len(te.VERDICT_ALIGN) == len(te.VERDICT_HEADER)
+    assert len(te.LEDGER_ALIGN) == len(te.LEDGER_HEADER)
+    assert not set(MOVED_COLUMNS) & set(STUB_COLUMNS)
+
+
+def test_build_stacks_two_panels_sharing_the_channel_column(tmp_path):
     run = core.load_run(_ledger(tmp_path))
     frag = te.build(run)
     assert frag.name == "tolerance_eta" and frag.label == "tab:tolerance:eta"
-    rows = _rows(frag)
-    assert [r[0] for r in rows] == ["15", "16", "17", "19", "33", "35"] and all(len(r) == len(te.HEADER) for r in rows)
-    assert frag.tex.startswith("% tab:tolerance:eta: a dagger") and "\n\\begin{tabular}{" + te.ALIGN + "}\n" in frag.tex
+    assert frag.tex.startswith("% tab:tolerance:eta: two panels")
+    blocks = _blocks(frag)
+    assert len(blocks) == 2 and [a for a, _ in blocks] == [te.POINT_ALIGN, te.VERDICT_ALIGN]
+    assert te.POINT_CAPTION in frag.tex and te.VERDICT_CAPTION in frag.tex
+    assert frag.tex.index(te.POINT_CAPTION) < frag.tex.index(r"\begin{tabular}") < frag.tex.index("\n\\medskip\n") \
+        < frag.tex.index(te.VERDICT_CAPTION) < frag.tex.rindex(r"\begin{tabular}")
+    order = ["15", "16", "17", "19", "33", "35"]
+    assert [r[0] for r in _rows(frag, 0)] == order and [r[0] for r in _rows(frag, 1)] == order
+    assert all(len(r) == len(te.POINT_HEADER) for r in _rows(frag, 0))
+    assert all(len(r) == len(te.VERDICT_HEADER) for r in _rows(frag, 1))
 
-    c33 = _cells(frag, 33)          # the diagnostic point: dagger, derived q_rho, stated floor with its population, tau bound
-    assert c33["era"] == "2023-12--2026-08" and c33["state"] == "proxy-low" and c33[r"$|\mathcal B|$"] == "$125$"
+
+def test_panel_one_prints_the_point(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    frag = te.build(run)
+
+    c33 = _point(frag, 33)          # the diagnostic point: dagger on the rank, derived q_rho, no plateau
+    assert c33["era"] == "2023-12--2026-08" and c33[r"$|\mathcal B|$"] == "$125$"
     assert c33[r"$\rho^\star$"] == r"$1^\dagger$" and c33[r"$q_\rho$"] == "$0.0079$"
     assert c33[r"$\eta^\star$"] == "$1.195$" and c33[r"$\eta^\star_{q16}$"] == "$78{,}313$" and c33["$f$"] == "$0.9971$"
-    assert c33["floor (dB)"] == "$-35.9$" and c33["floor basis"] == "bulk left side, $11{,}853$"
-    assert c33[r"$r_{\rm proxy}$"] == "$546$" and c33[r"$r_{\rm tol}$"] == "$0.0156$" and c33["$R$"] == "$35000$"
-    assert c33[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == "$33500$ ($1.000$)" and c33[r"$\mathcal C$"] == "$349$"
-    assert c33["plateau"] == core.DASH and c33[r"$\tau_c$"] == "bound" and c33["gain"] == "$1{,}181$" and c33["gain basis"] == "era"
-    assert c33["status"] == "no feasible point (diagnostic)"
-    assert c33["screen"] == r"refused: sparse candidate $\rho=$1 $\eta=$1.18"
+    assert c33[r"$\mathcal C$"] == "$349$" and c33["plateau"] == core.DASH
 
-    c35 = _cells(frag, 35)          # a selected point: no dagger, bold R and R_c, plateau, measured off-era floor
+    c35 = _point(frag, 35)          # a selected point: no dagger, the plateau with its eta range
     assert c35[r"$\rho^\star$"] == "$3$" and c35[r"$q_\rho$"] == "$0.0236$" and c35[r"$\eta^\star$"] == "$1.068$"
-    assert c35[r"$\eta^\star_{q16}$"] == "$70{,}000$" and c35["$f$"] == "$0.4321$" and c35["floor (dB)"] == "$-28.4$"
-    assert c35["floor basis"] == "off era p90, $4{,}954$" and c35[r"$r_{\rm proxy}$"] == "$0.0291$"
-    assert c35["$R$"] == r"$\mathbf{0.827}$" and c35[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == r"$\mathbf{0.570}$ ($1.020$)"
-    assert c35[r"$\mathcal C$"] == "$1.76$" and c35["plateau"] == "$3$ ($1.050$--$1.120$)" and c35[r"$\tau_c$"] == "measured"
-    assert c35["gain"] == "$440$" and c35["status"] == "feasible (screening)" and c35["screen"] == core.DASH
+    assert c35[r"$\eta^\star_{q16}$"] == "$70{,}000$" and c35["$f$"] == "$0.4321$" and c35[r"$\mathcal C$"] == "$1.76$"
+    assert c35["plateau"] == "$3$ ($1.050$--$1.120$)"
 
-    c17 = _cells(frag, 17)          # a diagnostic point on a refused floor: no floor, no basis, no coarse frontier; cap
+    c17 = _point(frag, 17)
     assert c17[r"$\rho^\star$"] == r"$124^\dagger$" and c17[r"$q_\rho$"] == "$0.9841$" and c17[r"$\eta^\star$"] == "$1.868$"
-    assert c17["floor (dB)"] == core.DASH and c17["floor basis"] == core.DASH and c17[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == core.DASH
-    assert c17[r"$r_{\rm proxy}$"] == r"$5.71\times10^{5}$" and c17["$R$"] == r"$2.84\times10^{7}$" and c17[r"$\mathcal C$"] == "$210$"
-    assert c17[r"$\tau_c$"] == "cap" and c17["gain"] == "$2{,}054{,}312$" and c17["screen"] == "refused: early half 3 months $<$ 6"
+    assert c17[r"$\eta^\star_{q16}$"] == "$122{,}397$" and c17[r"$\mathcal C$"] == "$210$"
 
-    c15 = _cells(frag, 15)          # the selector refused outright: no point at all, the bulk, tolerance and chain survive
-    assert c15["status"] == "refused" and c15["screen"] == "refused: no floor (frames without a shelf estimate)"
-    assert c15[r"$|\mathcal B|$"] == "$125$" and c15[r"$r_{\rm tol}$"] == "$0.0201$" and c15[r"$\tau_c$"] == "cap"
-    assert c15["gain"] == "$2{,}054{,}312$" and c15["gain basis"] == "era"
-    for h in (r"$\rho^\star$", r"$q_\rho$", r"$\eta^\star$", r"$\eta^\star_{q16}$", "$f$", "floor (dB)", "floor basis",
-              r"$r_{\rm proxy}$", "$R$", r"$R_{\rm c}$ ($\eta_{\rm c}$)", r"$\mathcal C$", "plateau"):
-        assert c15[h] == core.DASH, h
+    c15 = _point(frag, 15)          # the selector refused outright: no point at all; the era and the bulk survive
+    assert c15["era"] == "2025-05--2026-08" and c15[r"$|\mathcal B|$"] == "$125$"
+    assert all(c15[h] == core.DASH for h in te.POINT_HEADER if h not in ("ch", "era", r"$|\mathcal B|$"))
 
-    c19 = _cells(frag, 19)          # an off-era channel with the archive-wide gain
-    assert c19["state"] == "proxy-low (off)" and c19["floor basis"] == "off era p90, $5{,}503$" and c19["floor (dB)"] == "$-32.6$"
-    assert c19["gain"] == "$1{,}181$" and c19["gain basis"] == "archive" and c19["screen"] == "refused: early half 167 days $<$ 270"
-    assert c19[r"$r_{\rm proxy}$"] == "$1120$" and c19["$R$"] == "$93600$" and c19[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == "$93600$ ($1.000$)"
+    c19 = _point(frag, 19)
+    assert c19["era"] == "2024-12--2026-04" and c19["$f$"] == "$0.8680$" and c19[r"$\mathcal C$"] == "$7.57$"
 
-    c16 = _cells(frag, 16)          # no selection, null or chain section: the era survives, everything else is the dash
-    assert c16["era"] == "2018-12--2026-08" and c16["state"] == "proxy-low"
-    assert all(c16[h] == core.DASH for h in te.HEADER if h not in ("ch", "era", "state"))
+    c16 = _point(frag, 16)          # no selection section: the era survives, everything else is the dash
+    assert c16["era"] == "2018-12--2026-08"
+    assert all(c16[h] == core.DASH for h in te.POINT_HEADER if h not in ("ch", "era"))
 
-    # numbers: one per printed value, keyed ch09.eta.<column>.chNN, no duplicates, statuses as the chapter's vocabulary
-    keys = [n.key for n in frag.numbers]
-    assert len(keys) == len(set(keys))
-    by_key = {n.key: n for n in frag.numbers}
+
+def test_panel_two_prints_the_floor_its_population_and_the_verdict(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    frag = te.build(run)
+
+    c33 = _verdict(frag, 33)        # tau bounded above: the star rides on r_proxy and R
+    assert c33["floor (dB)"] == "$-35.9$" and c33["frames"] == "$11{,}853$"
+    assert c33[r"$r_{\rm proxy}$"] == r"$546{}^{\ast}$" and c33[r"$r_{\rm tol}$"] == "$0.0156$"
+    assert c33["$R$"] == r"$35000{}^{\ast}$" and c33["status"] == "no feasible point (diagnostic)"
+
+    c35 = _verdict(frag, 35)        # tau measured: no mark; R <= 1 passes and prints bold
+    assert c35["floor (dB)"] == "$-28.4$" and c35["frames"] == "$4{,}954$" and c35[r"$r_{\rm proxy}$"] == "$0.0291$"
+    assert c35["$R$"] == r"$\mathbf{0.827}$" and c35["status"] == "feasible (screening)"
+
+    c17 = _verdict(frag, 17)        # a refused floor: no floor, no population; tau refused (cap): the double dagger
+    assert c17["floor (dB)"] == core.DASH and c17["frames"] == core.DASH
+    assert c17[r"$r_{\rm proxy}$"] == r"$5.71\times10^{5}{}^{\ddagger}$" and c17["$R$"] == r"$2.84\times10^{7}{}^{\ddagger}$"
+    assert c17["status"] == "no feasible point (diagnostic)"
+
+    c15 = _verdict(frag, 15)        # refused with reason: the status carries the reason in brief
+    assert c15["status"] == "refused: no floor" and c15[r"$r_{\rm tol}$"] == "$0.0201$"
+    assert all(c15[h] == core.DASH for h in ("floor (dB)", "frames", r"$r_{\rm proxy}$", "$R$"))
+
+    c19 = _verdict(frag, 19)
+    assert c19["floor (dB)"] == "$-32.6$" and c19["frames"] == "$5{,}503$" and c19[r"$r_{\rm proxy}$"] == "$1120$"
+    assert c19["$R$"] == "$93600$"
+
+    c16 = _verdict(frag, 16)
+    assert all(c16[h] == core.DASH for h in te.VERDICT_HEADER if h != "ch")
+
+
+def test_build_ledger_prints_the_moved_columns(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    frag = te.build_ledger(run)
+    assert frag.name == "tolerance_eta_ledger" and frag.label == "tab:archive:tolerance_eta"
+    assert len(_blocks(frag)) == 1 and _blocks(frag)[0][0] == te.LEDGER_ALIGN
+    assert [r[0] for r in _rows(frag)] == ["15", "16", "17", "19", "33", "35"]
+
+    c33 = _ledger_cells(frag, 33)
+    assert c33["state"] == "proxy-low" and c33["floor basis"] == "bulk left side" and c33[r"$\tau_c$"] == "bound"
+    assert c33[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == "$33500$ ($1.000$)" and c33["gain (basis)"] == "$1{,}181$ (era)"
+    assert c33["screen refusal"] == r"sparse candidate $\rho=$1 $\eta=$1.18"
+
+    c35 = _ledger_cells(frag, 35)   # the coarse frontier passes: bold, like the chapter table's R
+    assert c35["floor basis"] == "off era p90" and c35[r"$\tau_c$"] == "measured"
+    assert c35[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == r"$\mathbf{0.570}$ ($1.020$)" and c35["gain (basis)"] == "$440$ (era)"
+    assert c35["screen refusal"] == core.DASH
+
+    c17 = _ledger_cells(frag, 17)   # a refused floor: no basis, no coarse frontier; the cap gain
+    assert c17["floor basis"] == core.DASH and c17[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == core.DASH
+    assert c17[r"$\tau_c$"] == "cap" and c17["gain (basis)"] == "$2{,}054{,}312$ (era)"
+    assert c17["screen refusal"] == "early half 3 months $<$ 6"
+
+    c15 = _ledger_cells(frag, 15)   # the floor's own refusal, printed without the 'refused:' prefix
+    assert c15["screen refusal"] == "no floor (frames without a shelf estimate)" and c15[r"$\tau_c$"] == "cap"
+
+    c19 = _ledger_cells(frag, 19)   # the off era and the archive-wide gain
+    assert c19["state"] == "proxy-low (off)" and c19["floor basis"] == "off era p90"
+    assert c19["gain (basis)"] == "$1{,}181$ (archive)" and c19["screen refusal"] == "early half 167 days $<$ 270"
+    assert c19[r"$R_{\rm c}$ ($\eta_{\rm c}$)"] == "$93600$ ($1.000$)"
+
+    c16 = _ledger_cells(frag, 16)   # no selection, null or chain section: the state survives, everything else dashes
+    assert c16["state"] == "proxy-low"
+    assert all(c16[h] == core.DASH for h in te.LEDGER_HEADER if h not in ("ch", "state"))
+
+    notes = "\n".join(frag.notes)
+    assert "natural width 633pt" in notes and "dashed floor basis: floor refused (null.floor_basis 'none'): ch15, ch17" in notes
+    assert "dashed R_c: no coarse frontier (floor refused): ch15, ch17" in notes and "dashed R_c: no coarse frontier: ch16" in notes
+
+
+def test_the_numbers_keep_every_key_across_the_two_fragments(tmp_path):
+    """The split moved which fragment prints a column, not which numbers the report emits."""
+    run = core.load_run(_ledger(tmp_path))
+    chapter, ledger = te.build(run), te.build_ledger(run)
+    keys = [n.key for n in chapter.numbers] + [n.key for n in ledger.numbers]
+    assert len(keys) == len(set(keys))                       # no key is emitted twice
+    by_key = {n.key: n for n in chapter.numbers + ledger.numbers}
+    chapter_keys = {n.key for n in chapter.numbers}
+    ledger_keys = {n.key for n in ledger.numbers}
+    columns = lambda ks: {k.split(".")[2] for k in ks if not k.startswith("ch09.eta.n_")}
+    assert columns(chapter_keys) == {"era", "bulk_size", "point_basis", "rho", "q_rho", "eta", "eta_q16", "masked_fraction",
+                                     "cost", "plateau_members", "plateau_eta_low", "plateau_eta_high", "floor_evidence",
+                                     "floor_db", "floor_frames", "r_proxy", "r_tol", "R", "status", "claim_status"}
+    assert columns(ledger_keys) == {"state", "floor_basis", "tau_quality", "coarse_min_R", "coarse_min_R_eta",
+                                    "chain_gain", "gain_basis", "refusal"}
+    assert {k for k in chapter_keys if k.startswith("ch09.eta.n_")} == {f"ch09.eta.n_{n}" for n in te.COUNTS}
+    assert not any(k.startswith("ch09.eta.n_") for k in ledger_keys)
+
     assert by_key["ch09.eta.rho.ch33"].value == 1 and by_key["ch09.eta.eta_q16.ch33"].value == 78313
     assert by_key["ch09.eta.cost.ch33"].value == pytest.approx(348.617647) and "349" in by_key["ch09.eta.cost.ch33"].renderings
     assert by_key["ch09.eta.q_rho.ch33"].value == pytest.approx(1 / 126) and by_key["ch09.eta.q_rho.ch33"].status == "derived"
@@ -246,6 +379,9 @@ def test_build_renders_every_column(tmp_path):
     assert by_key["ch09.eta.chain_gain.ch33"].value == pytest.approx(1180.96588) and by_key["ch09.eta.chain_gain.ch35"].status == "measured"
     assert by_key["ch09.eta.gain_basis.ch19"].value == "archive" and "archive-wide chain (era chain refused)" in by_key["ch09.eta.gain_basis.ch19"].renderings
     assert by_key["ch09.eta.refusal.ch15"].value == "refused: no floor (frames without a shelf estimate)" and by_key["ch09.eta.refusal.ch15"].status == "refused"
+    # the ledger prints the reason bare and the chapter's status column prints it in brief: both are renderings of the one number
+    assert "no floor (frames without a shelf estimate)" in by_key["ch09.eta.refusal.ch15"].renderings
+    assert "refused: no floor" in by_key["ch09.eta.refusal.ch15"].renderings
     assert by_key["ch09.eta.refusal.ch33"].value == "refused: sparse candidate rho=1 eta=1.18"
     assert by_key["ch09.eta.tau_quality.ch17"].value == "cap" and "refused" in by_key["ch09.eta.tau_quality.ch17"].renderings
     assert by_key["ch09.eta.status.ch15"].value == "refused" and "ch09.eta.claim_status.ch15" not in by_key
@@ -260,41 +396,53 @@ def test_build_renders_every_column(tmp_path):
     assert by_key["ch09.eta.n_tau_cap"].value == 2 and by_key["ch09.eta.n_tau_bound"].value == 1 and by_key["ch09.eta.n_tau_measured"].value == 2
     assert by_key["ch09.eta.n_off_era"].value == 1 and by_key["ch09.eta.n_gain_archive"].value == 1
     assert by_key["ch09.eta.rho.ch33"].source == {"table": "tolerance_eta.tex", "row": {"channel": 33}, "column": "rho"}
+    assert by_key["ch09.eta.state.ch33"].source == {"table": "tolerance_eta_ledger.tex", "row": {"channel": 33}, "column": "state"}
 
-    # inputs: the ledger only; notes say what is dashed and why
+
+def test_the_notes_say_what_is_dashed_and_how_the_fragment_is_laid_out(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    frag = te.build(run)
     assert frag.inputs == run.inputs() and len(frag.inputs) == 7
     notes = "\n".join(frag.notes)
+    assert "two stacked panels" in notes and "452pt" in notes and "458pt" in notes and "469.8pt text block" in notes
+    assert "tolerance_eta_ledger (tab:archive:tolerance_eta, Appendix C" in notes
     assert "3 of 6 channels have no selected point" in notes and "2 channels have no point at all" in notes
     assert "dashed plateau: no selected point: ch15, ch16, ch17, ch19, ch33" in notes
     assert "dashed floor_db: floor refused (the block carries no null population): ch15, ch17" in notes
-    assert "dashed R_c: no coarse frontier (floor refused): ch15, ch17" in notes and "dashed R_c: no coarse frontier: ch16" in notes
+    assert "dashed floor frames: floor refused (no null population): ch15, ch17" in notes
     assert "dashed rho: no diagnostic point: the selector refused before a surface existed: ch15" in notes
     assert "dashed status: no selection section: ch16" in notes and "upper bounds on 3 channels" in notes
     assert "1 channels are evaluated on a verified off era" in notes
+    assert "R_c" not in notes.split("dashed")[0] or "the tolerance_eta_ledger columns" in notes
 
 
-def test_write_report_with_the_builder(tmp_path):
+def test_write_report_with_both_builders(tmp_path):
     run = core.load_run(_ledger(tmp_path))
-    manifest = core.write_report(run, tmp_path / "out", [te.build], commit="d" * 40, generated="2026-09-07T09:00:00+00:00")
-    art = manifest["artifacts"][0]
-    assert art["name"] == "tolerance_eta" and art["label"] == "tab:tolerance:eta" and art["count"] == len(te.build(run).numbers)
+    assert te.BUILDERS == (te.build, te.build_ledger)
+    assert te.build_ledger in rb.table_builders()                 # the registry picks the companion up
+    manifest = core.write_report(run, tmp_path / "out", list(te.BUILDERS), commit="d" * 40, generated="2026-09-07T09:00:00+00:00")
+    chapter, ledger = manifest["artifacts"]
+    assert chapter["name"] == "tolerance_eta" and chapter["label"] == "tab:tolerance:eta"
+    assert ledger["name"] == "tolerance_eta_ledger" and ledger["label"] == "tab:archive:tolerance_eta"
+    assert chapter["count"] == len(te.build(run).numbers) and ledger["count"] == len(te.build_ledger(run).numbers)
     doc = json.loads((tmp_path / "out" / "numbers" / "tolerance_eta.numbers.json").read_text())
     assert doc["producer"]["script"] == "rfisher_results.archive.report.tolerance_eta"
     assert len(doc["inputs"]) == 7 and all(i["sha256"] for i in doc["inputs"])
     assert (tmp_path / "out" / "tables" / "tolerance_eta.tex").read_text() == te.build(run).tex
+    assert (tmp_path / "out" / "tables" / "tolerance_eta_ledger.tex").read_text() == te.build_ledger(run).tex
 
 
 @pytest.mark.skipif(not (REAL_RUN / "ledger" / "run.json").is_file(), reason="the v5 archive results are not on this machine")
-def test_real_run_renders_23_rows_without_duplicate_keys():
+def test_real_run_renders_23_rows_in_every_panel_without_duplicate_keys():
     run = core.load_run(REAL_RUN)
-    frag = te.build(run)
-    rows = _rows(frag)
-    assert len(rows) == 23 and [r[0] for r in rows] == [str(c) for c in range(14, 37)]
-    doc = nb.NumbersDocument.new(frag.name, repository="r", commit="c", script="s", generated="g")
-    for number in frag.numbers:
-        doc.add(number)                       # raises on a duplicate key
-    by_key = {n.key: n for n in frag.numbers}
+    frag, ledger = te.build(run), te.build_ledger(run)
     channels = range(14, 37)
+    for rows in (_rows(frag, 0), _rows(frag, 1), _rows(ledger, 0)):
+        assert [r[0] for r in rows] == [str(c) for c in channels]
+    doc = nb.NumbersDocument.new("tolerance_eta", repository="r", commit="c", script="s", generated="g")
+    for number in frag.numbers + ledger.numbers:
+        doc.add(number)                       # raises on a duplicate key, across the two fragments
+    by_key = {n.key: n for n in frag.numbers + ledger.numbers}
     refused = [15, 28, 30, 36]                # no floor for frames without a shelf estimate: no surface, no point
     assert by_key["ch09.eta.n_selected"].value == 0 and by_key["ch09.eta.n_diagnostic"].value == 19
     assert by_key["ch09.eta.n_no_point"].value == 4 and by_key["ch09.eta.n_pass"].value == 0 and r"\mathbf" not in frag.tex
@@ -303,18 +451,27 @@ def test_real_run_renders_23_rows_without_duplicate_keys():
     assert all(f"ch09.eta.claim_status.ch{c:02d}" not in by_key for c in refused)
     for c in channels:
         if c in refused:
-            assert f"ch09.eta.rho.ch{c:02d}" not in by_key and _cells(frag, c)["$R$"] == core.DASH
+            assert f"ch09.eta.rho.ch{c:02d}" not in by_key and _verdict(frag, c)["$R$"] == core.DASH
+            assert _verdict(frag, c)["status"] == "refused: no floor"        # the stub's 'refused with reason', in brief
+            assert _ledger_cells(ledger, c)["screen refusal"] == "no floor (frames without a shelf estimate)"
         else:                                 # every diagnostic point carries its exact eta_q16 and cost; q_rho is derived
             assert by_key[f"ch09.eta.point_basis.ch{c:02d}"].value == "diagnostic"
             assert f"ch09.eta.eta_q16.ch{c:02d}" in by_key and f"ch09.eta.cost.ch{c:02d}" in by_key
             assert by_key[f"ch09.eta.q_rho.ch{c:02d}"].status == "derived"
-        assert _cells(frag, c)["plateau"] == core.DASH and by_key[f"ch09.eta.gain_basis.ch{c:02d}"].value == "era"
+            assert _verdict(frag, c)["status"] == "no feasible point (diagnostic)"
+        assert _point(frag, c)["plateau"] == core.DASH and by_key[f"ch09.eta.gain_basis.ch{c:02d}"].value == "era"
+        assert _point(frag, c)[r"$\rho^\star$"].endswith(r"\dagger$") or c in refused
     assert sorted(c for c in channels if by_key[f"ch09.eta.floor_evidence.ch{c:02d}"].value == "measured") == [19, 20, 26, 27, 32, 35]
     assert sorted(c for c in channels if by_key[f"ch09.eta.floor_evidence.ch{c:02d}"].value == "refused") == [15, 17, 22, 24, 28, 30, 31, 36]
     assert all(f"ch09.eta.floor_db.ch{c:02d}" not in by_key for c in (15, 17, 22, 24, 28, 30, 31, 36))
+    assert all(_verdict(frag, c)["frames"] == core.DASH for c in (15, 17, 22, 24, 28, 30, 31, 36))
     assert all(f"ch09.eta.coarse_min_R.ch{c:02d}" not in by_key for c in (15, 17, 22, 24, 28, 30, 31, 36))
     assert by_key["ch09.eta.n_coarse"].value == 15 and by_key["ch09.eta.n_floor_refused"].value == 8
     assert sorted(c for c in channels if by_key[f"ch09.eta.tau_quality.ch{c:02d}"].value == "bound") == [18, 21, 29]
     assert sorted(c for c in channels if by_key[f"ch09.eta.tau_quality.ch{c:02d}"].value == "measured") == [20, 24, 26, 31, 32, 35]
-    assert by_key["ch09.eta.n_off_era"].value == 5 and all(_cells(frag, c)["state"].endswith("(off)") for c in (19, 20, 26, 27, 32))
+    # the tau_c mark rides on r_proxy and R in the chapter table; the word itself is the ledger's
+    assert all(_verdict(frag, c)[r"$r_{\rm proxy}$"].endswith(r"{}^{\ast}$") for c in (18, 21, 29))
+    assert all(_verdict(frag, c)["$R$"].endswith(r"{}^{\ddagger}$") for c in (14, 17, 19, 22, 23, 25, 27, 33, 34))
+    assert all(not _verdict(frag, c)["$R$"].endswith("}$") for c in (20, 26, 31, 32, 35))
+    assert by_key["ch09.eta.n_off_era"].value == 5 and all(_ledger_cells(ledger, c)["state"].endswith("(off)") for c in (19, 20, 26, 27, 32))
     assert by_key["ch09.eta.chain_gain.ch33"].value == pytest.approx(2054312.0027) and by_key["ch09.eta.chain_gain.ch33"].status == "bounded"
