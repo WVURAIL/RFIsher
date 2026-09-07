@@ -396,3 +396,27 @@ def test_baseline_ratchet(tmp_path):
     assert cdn.main(["--tex", str(red), "--baseline", str(base)]) == 1
     assert cdn.main(["--tex", str(red),
                      "--baseline", str(tmp_path / "missing")]) == 1
+
+
+def test_archive_report_checks_verify_markers_against_the_numbers_documents(tmp_path, capsys):
+    """The archive report's numbers verify bound and unbound markers; a changed marker fails, an unsourced one skips."""
+    import json
+    from rfisher_results.archive import numbers as nb
+    report = tmp_path / "dissertation"
+    doc = nb.NumbersDocument.new("demo", repository="WVURAIL/RFIsher", commit="a" * 40, script="x", generated="2026-09-07T00:00:00Z")
+    doc.add(nb.Number("ch08.demo.width.ch29", 1.654, precision=2))
+    doc.add(nb.Number("ch08.demo.floor.ch33", -35.9, precision=1))
+    doc.write(report / "numbers" / "demo.numbers.json")
+    (report / "export_manifest.json").write_text(json.dumps({"schema": {"name": "rfisher-archive-report", "version": 1},
+                                                             "source": {"repository": "WVURAIL/RFIsher", "commit": "a" * 40}, "artifacts": []}))
+    inv = tmp_path / "inv.csv"
+    inv.write_text("file,line,section,value,context,key\n"
+                   "chapters/ch08.tex,10,Nulls,$1.65$,...,ch08.demo.width.ch29\n"
+                   "chapters/ch08.tex,12,Floors,$-38.5$~dB,...,ch08.demo.floor.ch33\n"
+                   "chapters/ch09.tex,20,Eta,\\rerun{$99$},...,\n")
+    ck = cdn.Checker("")
+    report_by_chapter = cdn.archive_report_checks(ck, report, inv)
+    out = capsys.readouterr().out
+    assert ck.failures == 1 and "update the marker" in out and "no source" in out
+    assert report_by_chapter["chapters/ch08.tex"]["verified"] == 1 and report_by_chapter["chapters/ch08.tex"]["changed"] == 1
+    assert "flip to black" not in out.split("ch08.tex:")[1].split("\n")[0]

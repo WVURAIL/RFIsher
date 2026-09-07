@@ -1236,6 +1236,48 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
 
 
 # ---------------------------------------------------------------- main
+def archive_report_checks(ck: Checker, report_dir: Path, inventory: Path) -> dict:
+    """The v5 archive report's ``numbers.json`` documents against the
+    dissertation's ``\\rerun{}`` marker inventory (``STUBS_rerun_inventory.csv``).
+
+    A marker bound to a key (the inventory's ``key`` column) is checked against
+    that number; an unbound marker against every number whose value or
+    rendering fits. ``changed`` (a source exists and disagrees) is a FAIL, the
+    number the rerun moved; ``verified`` is a PASS; ``no-source`` is reported,
+    not failed, until the marker is bound. Returns the per-chapter report.
+    """
+    from rfisher_results.archive import numbers as nb
+    ck.section("v5 archive report <- numbers/*.numbers.json vs STUBS_rerun_inventory.csv")
+    docs = sorted(Path(report_dir).glob("numbers/*.numbers.json"))
+    if not docs:
+        ck.skip("archive report numbers", f"no numbers/*.numbers.json under {report_dir}")
+        return {}
+    manifest_path = Path(report_dir) / "export_manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        commit = str(manifest.get("source", {}).get("commit", ""))
+        ok = re.fullmatch(r"[0-9a-f]{40}", commit) is not None and not manifest.get("producer", {}).get("dirty", False)
+        ck._emit("PASS" if ok else "FAIL", "archive report names an immutable producing commit",
+                 "" if ok else f"commit {commit!r}; re-render the report from a committed tree")
+    numbers = nb.load_numbers(docs)
+    markers = nb.load_inventory(inventory)
+    matches = nb.match_markers(markers, numbers)
+    report = nb.chapter_report(matches)
+    for m in matches:
+        label = f"{Path(m.marker.file).name}:{m.marker.line} {nb.normalize_marker(m.marker.value)[:28]}"
+        if m.status == "verified":
+            ck._emit("PASS", label, "")
+        elif m.status == "changed":
+            ck._emit("FAIL", label, f"the report gives {m.number_value!r} ({m.key}); update the marker")
+        else:
+            ck.skip(label, "no source in the report yet: bind the marker to a key or fill the stub")
+    for chapter, counts in sorted(report.items()):
+        flip = "flip to black" if counts.get("flip") else "keep blue"
+        print(f"      {Path(chapter).name}: verified {counts.get('verified', 0)}, changed {counts.get('changed', 0)},"
+              f" no-source {counts.get('no-source', 0)} -> {flip}")
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tex", nargs="+", required=True,
@@ -1255,6 +1297,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="pilot-proxy data/provenance/"
                          "dissertation_summary_v3.json (policy invariants"
                          " SKIP without it)")
+    ap.add_argument("--archive-report", default=None,
+                    help="an archive run's dissertation/ report directory"
+                         " (numbers/*.numbers.json, export_manifest.json)")
+    ap.add_argument("--rerun-inventory", default=None,
+                    help="the dissertation's STUBS_rerun_inventory.csv"
+                         " (file, line, section, value, context[, key])")
     args = ap.parse_args(argv)
 
     text, files = load_tex(args.tex)
@@ -1278,6 +1326,8 @@ def main(argv: list[str] | None = None) -> int:
 
     ck = Checker(text, extra)
     run_checks(ck, summary)
+    if args.archive_report and args.rerun_inventory:
+        archive_report_checks(ck, Path(args.archive_report), Path(args.rerun_inventory))
     print(f"\n{ck.n - ck.failures}/{ck.n} checks passed.")
     if ck.failures:
         print("Each FAIL line above names the fix and the authoritative"
