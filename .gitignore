@@ -39,3 +39,6 @@ paper/*.fdb_latexmk
 paper/*.fls
 paper/*.log
 paper/*.out
+
+# harness worktrees for parallel agents
+.claude/
