@@ -290,7 +290,7 @@ its status; changing one is a new run.
   width factor at most 5: `nulls.null_like`) is reported beside it
   (`off_null_like`, `off_check`). Channels 20 and 27 fail the check (centres
   1.11 and 1.03, width factors 19 and 10: a carrier persists after the
-  recorded sign-off) and keep their measured floors (-25.8 and -25.4 dB, the
+  recorded sign-off) and keep their measured floors (-26.9 and -25.4 dB, the
   conservative numbers) and their off-era class; the tables say so.
 - Which stated floor. On channels without an off era the sigma-implied floor
   is read from the kept half about `mu_0` (the register's convention) only
@@ -396,7 +396,7 @@ pure function of `report.Run`; the columns below name the ledger keys
 
 | fragment | label | columns (ledger keys) |
 |---|---|---|
-| `calibration_eras` | tab:calibration:eras | era.current_first_month .. current_last_month, current_boundary_uncertainty_months, current_evidence with the current era's `record_agreement` and `unmatched_station_records`, stale_latest (stale_lag_months), earlier eras (tables/eras.csv spans), current_frames, coverage (eras.csv `coverage` of the current era) |
+| `calibration_eras` | tab:calibration:eras | era.current_first_month .. current_last_month, current_state, current_boundary_uncertainty_months, current_evidence with the current era's `record_agreement` and `unmatched_station_records`, stale_latest (stale_lag_months), earlier eras (tables/eras.csv spans), current_frames, coverage (eras.csv `coverage` of the current era), current_peak_drift_bins_per_month and current_peak_range_bins (marked where the range exceeds `anchors.DESIGNATED_HALF_WIDTH`), unconfirmed_instrument_change_last_month |
 | `calibration_anchors` | tab:calibration:anchors | anchor.anchor_bin, anchor_rf_offset_hz, method, boot_rf_hz_q16/q84, source; containment.dominant_refined_offset_hz, dominant_db, in_span_refined_offset_hz, anchor_lobe_offset_bins; peak_abs_median/p90/p99_hz; anchor_previous.anchor_rf_offset_hz, shift_from_previous_bins |
 | `calibration_containment` | fig:calibration:containment (compact table) | containment.frames_in_span_K, e_K, straddle_loss_db_K, margin_hz_K, ref_contamination_K (+ ref_aliased_K), disposition, reasons; K* rows from tables/kstar.csv |
 | `calibration_nulls` | tab:calibration:nulls | null.era_frames, bulk_size, null_source, mixture_declared, coarse_centre, coarse_core_sigma, coarse_raw/core_width_factor, fine_raw/core_width_factor, coarse_tail_fraction, kept_width_factor, exch_rho, exch_measured, exch_predicted, floor_db, floor_evidence, floor_population; the plate label |
