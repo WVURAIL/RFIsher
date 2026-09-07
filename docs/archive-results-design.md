@@ -283,14 +283,67 @@ its status; changing one is a new run.
   bulk's median lies above `mu_0` and its left side is the detections' lower
   tail (channel 33: bulk width factor 25 against a kept-half factor near 1),
   so the floor is read from the kept half.
-- Off population. A recorded off epoch counts as a null population only when
-  the frames of the procedure's proxy-low eras inside it read as a null:
-  coarse centre within 2% of `mu_0` and robust-core width factor at most 5
-  (`nulls.OFF_CENTRE_TOLERANCE`, `OFF_WIDTH_LIMIT`, recorded per row). A
-  post-sign-off epoch that still carries a carrier (channel 20: centre 1.12,
-  width factor 21; channel 27: 1.03, 10) gets a `stated` floor and its era is
-  not an off era for screening. Channels 19, 26, 32 and 35's pre-sign-on
-  epoch pass.
+- Off population. The frames of the recorded off epoch inside the
+  procedure's proxy-low eras are the null population, and the floor is their
+  90th-percentile shelf (`measured`), as chapter 8 says; whether that
+  population also reads as a null (coarse centre within 2% of `mu_0`, core
+  width factor at most 5: `nulls.null_like`) is reported beside it
+  (`off_null_like`, `off_check`). Channels 20 and 27 fail the check (centres
+  1.11 and 1.03, width factors 19 and 10: a carrier persists after the
+  recorded sign-off) and keep their measured floors (-25.8 and -25.4 dB, the
+  conservative numbers) and their off-era class; the tables say so.
+- Which stated floor. On channels without an off era the sigma-implied floor
+  is read from the kept half about `mu_0` (the register's convention) only
+  when the calibration block's bulk centre lies within 2% of `mu_0` and the
+  three probes agree to a factor 3 (`nulls.KEPT_SPREAD_LIMIT`); otherwise
+  from the bulk's left-side scale about its median (the chapter 8 mixture
+  read), labelled `bulk left side (not H0)`. Channel 33's calibration block
+  (bulk median 1.0715, 97% rejected) is the case: its 2.7% "kept" frames are
+  the carrier-on distribution's lower tail. `floor_basis` and both values are
+  in every row. The superseded feasibility of channel 33 rested on the
+  mu_0-implied floor (-44.7 dB, from `|mu_0 - 1|`) and a blanket 10 dB
+  fine-stage credit, neither of which this analysis uses.
+- The residual convention is floor-bounded: a frame with a shelf estimate
+  carries `max(10^(shelf/10), floor)`, a frame without one the floor. The
+  residual is a functional of the coarse statistic alone, so the coarse rule
+  is the lower envelope of the (f, r_sys) plane by construction; the coarse
+  frontier (`channels/chNN/coarse_frontier.csv`, `selection.coarse_min_R`)
+  is written beside the fine surface and the chapter 9 sentence claiming the
+  fine selection measures a competitive intermediate point is the author's
+  to reword.
+- The chain is evaluated on the current era (the previous on era for an
+  off-era channel) by `chain.residual_chain_on_frames` (a temporary copy of
+  the product with `valid` cleared outside the era, the unchanged
+  `rfisher.residual` functions), as chapter 9 states; the archive-wide chain
+  is recorded beside it (`chain_archive`). On channel 33 the era-restricted
+  correlation time is refused where the archive-wide one was bounded.
+- Diagnostic replay. Where no point is feasible, the least-residual point of
+  the calibration surface is replayed on the evaluation block as a declared
+  diagnostic (`selection.diagnostic_*`), never as a selection, so a verified
+  off era reports a false-alarm rate at a stated point.
+- Anchors. The table's anchor is the current era's (eq 8.1, with its
+  bootstrap); the selector's is the calibration block's (held out from the
+  evaluation block); both are recorded (`anchor`, `anchor_calibration`). The
+  on-minus-quiet estimator is used only where the mask's coarse bulk sits at
+  `mu_0` (`quiet_cohort_is_null`), else the plain median of the on cohort. An
+  out-of-window anchor is an alias only when it folds onto the out-of-span
+  feature by one coarse bin. A suspect anchor (disagreeing with the in-span
+  lobe by more than the designated half-width, folding, or with bootstrap
+  mode mass below 0.5) excludes the nominal window from the fine null's bulk
+  and hands the selector the spectrum's in-span lobe bin, labelled.
+- Frames without a recorded time are excluded from every block (one block
+  definition for blocks, anchors, nulls and selection);
+  `blocks.frames_without_time_excluded` counts them.
+- Eras carry the peak location's least-squares drift (bins/month) and range
+  per era: on channels 15, 17, 31 and 35 the "station change" boundaries
+  are a slow monotonic drift of 0.2-0.6 bins/month sliced by the running
+  median, and the within-era range exceeds the designated half-width; the
+  rule is the text's and is kept, the columns let the author judge it. An
+  instrument map entering in the campaign's last month is reported as
+  unconfirmed (`unconfirmed_instrument_change_last_month`).
+- Provenance: the producer's commit, dirty flag and a digest of this
+  package's sources are read before the run starts and written to
+  `run.json`; a commit that moves during the run is flagged.
 - Off-era channels read the anchor of record and the containment from the
   previous (on) era, labelled as such; the selection and the null are on the
   off era itself (false-alarm basis).
