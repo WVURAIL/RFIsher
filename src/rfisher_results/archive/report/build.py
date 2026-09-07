@@ -20,10 +20,10 @@ from .core import Fragment, Run, load_run, write_report
 TABLE_MODULES: tuple[str, ...] = (
     "accounting", "census", "calibration_eras", "calibration_anchors", "calibration_nulls", "blocked_evaluation",
     "held_out_summary", "tolerance_eta", "tolerance_channels", "conclusions_matrix", "handover", "flagger_survey",
-    "crossbuild", "detection",
+    "crossbuild", "detection", "worlds",
 )
 FIGURE_MODULES: tuple[str, ...] = ("figures_status", "figures_two_walls", "figures_census_psd",
-                                   "figures_masking_cost", "worked_example", "detection")
+                                   "figures_masking_cost", "worked_example", "detection", "plates")
 
 
 def _module(name: str):

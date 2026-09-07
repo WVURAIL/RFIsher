@@ -162,6 +162,7 @@ def test_a_disjoint_pair_reports_what_can_still_be_compared(tmp_path):
     frag = m.build(_run(tmp_path, root))
     assert "do not overlap and cannot be compared frame by frame" in " ".join(frag.notes)
     assert core.DASH in frag.tex
+    assert core.DASH in m.build_fields(_run(tmp_path, root)).tex
 
 
 def test_missing_and_invalid_records_are_counted(tmp_path):
@@ -219,32 +220,69 @@ def test_reexecution_says_why_there_are_no_rows(tmp_path):
 
 
 # ------------------------------------------------------------------ the fragment
-def test_fragment_prints_every_panel_and_keys_every_number(tmp_path):
+def test_the_chapter_fragment_prints_its_panels_and_keys_every_number(tmp_path):
     root = _campaign(tmp_path, reference_changes={"detector_version": _detector("e" * 64, "f" * 64)},
                      campaign_changes={"detector_version": _detector("3" * 64, "9" * 64)})
     frag = m.build(_run(tmp_path, root))
     assert frag.name == m.NAME and frag.label == m.LABEL
-    assert frag.tex.count(r"\begin{tabular}") == 5      # the stacking box and four panels
-    assert frag.tex.count(r"\toprule") == 4
-    for caption in ("Build manifests", "Joined denominator", "Mismatches by compared member",
-                    "Independent re-execution"):
+    assert frag.tex.count(r"\begin{tabular}") == 4      # the stacking box and three panels
+    assert frag.tex.count(r"\toprule") == 3
+    for caption in ("what both compared builds record identically", "where they differ", "Joined denominator"):
         assert caption in frag.tex
+    # the manifest splits by the two compared builds: the digests they differ in, and nothing else
+    differing = frag.tex.split("where they differ")[1].split(r"\bottomrule")[0]
+    assert "analyzer source" in differing and "detector binary sha256" in differing
+    assert "weight bank" not in differing and "product schema" not in differing
     keys = {n.key for n in frag.numbers}
     assert f"{m.PREFIX}.mismatches_total" in keys and f"{m.PREFIX}.integer_values_compared" in keys
     assert f"{m.PREFIX}.joined_frames.{m.ARM_QUALIFICATION}" in keys
     assert f"{m.PREFIX}.joined_frames.{m.ARM_RUN}" in keys
-    assert f"{m.PREFIX}.compared.fine_power_u64.{m.ARM_QUALIFICATION}" in keys
+    assert f"{m.PREFIX}.float_mismatches.{m.ARM_QUALIFICATION}" in keys
     assert f"{m.PREFIX}.manifest.detector_binary_sha256.{m.REFERENCE}" in keys
-    assert f"{m.PREFIX}.reexec.completed.fid844" in keys
     assert len(keys) == len(frag.numbers)               # NumbersDocument refuses a duplicate key
     total = next(n for n in frag.numbers if n.key == f"{m.PREFIX}.mismatches_total")
     assert total.value == 0 and total.kind == "int"
-    # a manifest field the fixture does not carry is pending, not invented
-    contract = next(n for n in frag.numbers if n.key.endswith(f"manifest.product_file_sha256.{m.REFERENCE}"))
-    assert contract.value == "a" * 64
+    digest = next(n for n in frag.numbers if n.key.endswith(f"manifest.product_file_sha256.{m.REFERENCE}"))
+    assert digest.value == "a" * 64
     doc = nb.NumbersDocument.new(frag.name, repository="x", commit="y", script="z", generated="w")
     for number in frag.numbers:
         doc.add(number)                                 # raises on a duplicate key
+
+
+def test_the_companion_fragment_carries_the_members_and_the_reexecution(tmp_path):
+    root = _campaign(tmp_path)
+    frag = m.build_fields(_run(tmp_path, root))
+    assert frag.name == m.LEDGER_NAME and frag.label == m.LEDGER_LABEL
+    assert frag.tex.count(r"\begin{tabular}") == 3      # the stacking box and two panels
+    for caption in ("Mismatches by compared integer member", "Independent re-execution"):
+        assert caption in frag.tex
+    keys = {n.key for n in frag.numbers}
+    assert f"{m.PREFIX}.compared.fine_power_u64.{m.ARM_QUALIFICATION}" in keys
+    assert f"{m.PREFIX}.mismatches.p_target_u64.{m.ARM_RUN}" in keys
+    assert f"{m.PREFIX}.reexec.completed.fid844" in keys
+    assert f"{m.PREFIX}.reexecution_units" in keys
+    # the floats are keyed here but not printed: the chapter table counts them
+    assert f"{m.PREFIX}.compared.pilot_excess_db.{m.ARM_QUALIFICATION}" in keys
+    assert "pilot" not in frag.tex.split("Mismatches by compared")[1].split(r"\bottomrule")[0]
+    assert len(keys) == len(frag.numbers)
+    assert m.BUILDERS == (m.build, m.build_fields)
+
+
+def test_the_two_builders_share_one_join(tmp_path):
+    """The join reads gigabytes; the second builder must not repeat it."""
+    root = _campaign(tmp_path)
+    run = _run(tmp_path, root)
+    m._CACHE.clear()
+    m.build(run)
+    assert len(m._CACHE) == 1
+    calls = []
+    original = m._record
+    m._record = lambda *a, **k: calls.append(1) or original(*a, **k)
+    try:
+        m.build_fields(run)
+    finally:
+        m._record = original
+    assert calls == []
 
 
 def test_absent_sha256sums_dashes_the_digest_row(tmp_path):
@@ -252,7 +290,7 @@ def test_absent_sha256sums_dashes_the_digest_row(tmp_path):
     frag = m.build(_run(tmp_path, root))
     digest = next(n for n in frag.numbers if n.key.endswith(f"manifest.product_file_sha256.{m.CAMPAIGN}"))
     assert digest.value is None and digest.status == "pending"
-    assert r"product file sha256 & -- & -- & --" in frag.tex
+    assert "product file sha256 & --" in frag.tex
 
 
 def test_a_run_without_a_campaign_directory_dashes_everything(tmp_path):
@@ -277,6 +315,7 @@ def test_a_run_of_record_without_that_channel_keeps_the_qualification_arm(tmp_pa
 @pytest.mark.skipif(not (REAL_RUN / "ledger" / "run.json").exists(), reason="the archive run of record is not on this machine")
 def test_real_run_reproduces_the_campaign_cross_build():
     run = core.load_run(REAL_RUN)
+    m._CACHE.clear()
     frag = m.build(run)
     values = {n.key: n.value for n in frag.numbers}
     assert values[f"{m.PREFIX}.arms"] == 2
@@ -285,10 +324,13 @@ def test_real_run_reproduces_the_campaign_cross_build():
     assert values[f"{m.PREFIX}.joined_frames.{m.ARM_QUALIFICATION}"] == 22
     assert values[f"{m.PREFIX}.event_completeness.{m.ARM_QUALIFICATION}"] == 1.0
     assert values[f"{m.PREFIX}.joined_frames.{m.ARM_RUN}"] == 22
-    assert values[f"{m.PREFIX}.compared.psd_frame_db_i16.{m.ARM_QUALIFICATION}"] == 22 * 16384
-    assert values[f"{m.PREFIX}.mismatches.fine_power_u64.{m.ARM_RUN}"] == 0
-    assert values[f"{m.PREFIX}.reexecution_channels"] == 4
-    assert values[f"{m.PREFIX}.reexecution_mismatches"] == 0
+    assert values[f"{m.PREFIX}.float_mismatches.{m.ARM_QUALIFICATION}"] == 8
+    companion = {n.key: n.value for n in m.build_fields(run).numbers}
+    assert companion[f"{m.PREFIX}.compared.psd_frame_db_i16.{m.ARM_QUALIFICATION}"] == 22 * 16384
+    assert companion[f"{m.PREFIX}.mismatches.fine_power_u64.{m.ARM_RUN}"] == 0
+    assert companion[f"{m.PREFIX}.reexecution_channels"] == 4
+    assert companion[f"{m.PREFIX}.reexecution_units"] == 34307
+    assert companion[f"{m.PREFIX}.reexecution_mismatches"] == 0
     # the builds differ in the two axes the products record, and agree on the weights
     reference = values[f"{m.PREFIX}.manifest.analyzer_source_digest.{m.REFERENCE}"]
     campaign = values[f"{m.PREFIX}.manifest.analyzer_source_digest.{m.CAMPAIGN}"]

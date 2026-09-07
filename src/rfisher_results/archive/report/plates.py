@@ -19,7 +19,11 @@ which is the run's own era mask (frames without a time are in no block, and
 the count excluded is printed).  The one exception is the offset-containment
 panel, which follows the run and reads the *previous on era* on the five
 channels whose current era is a transmitter-off era, because the peak offsets
-of an off era measure nothing; the panel says which era it drew.
+of an off era measure nothing; the panel says which era it drew.  The gate
+is pilot-proxy's ``pilotproxy_archive_frame_health_gate_v1``; where
+``pilot_proxy`` cannot be imported the mask falls back to valid frames alone,
+which admits the frames the gate would have removed, and the plate's head and
+the fragment's notes say so rather than letting the counts pass for the run's.
 
   (a) coarse ``F/mu_0``   histogram of ``products.Product.statistic`` over the
                           current-era frames, logarithmic counts, with the
@@ -135,6 +139,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
@@ -144,14 +149,15 @@ matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
+from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
 
 from ... import style
 from .. import anchors as anchor_mod
 from .. import blocks as block_mod
 from .. import eras as era_mod
 from .. import nulls as null_mod
-from ..products import (FINE_BIN_HZ, FINE_BINS, NFFT, PSD_BIN_HZ, SAMPLE_RATE_HZ,
-                        Product, fine_hz_of_bin, fine_power_ratio)
+from ..products import (FINE_BIN_HZ, FINE_BINS, HEALTH_GATE_SCHEMA, NFFT, PSD_BIN_HZ,
+                        SAMPLE_RATE_HZ, Product, fine_hz_of_bin, fine_power_ratio)
 from . import core
 from .core import DASH, Fragment, Run, booktabs, fmt, fmt_int, tex
 
@@ -167,8 +173,9 @@ WINDOW_HZ = 15_000.0                       # psd.WINDOW_HZ: the census window th
 CENTRE_LINE_HALF_WIDTH_HZ = 60.0           # psd.CENTRE_LINE_HALF_WIDTH_HZ: the instrumental line, excluded from peaks
 SPANS = (64, 128, 256)                     # psd.SPANS: the candidate capture spans
 FULL_SCALE_NATIVE = 128.0                  # complex-int4 negative-full-scale power, 2 * 8^2
-PSD_CHUNK = 4096                           # frames per decoded spectrum chunk
+PSD_CHUNK = 2048                           # frames per decoded spectrum chunk (psd.DEFAULT_CHUNK)
 HIST_BINS = 72
+MAX_NOTE_SHARE = 0.32                      # most of a panel belongs to its data, whatever the note asks for
 MAX_RANK_CURVES = 24                       # trade curves drawn behind the diagnostic rank
 
 
@@ -277,11 +284,12 @@ class TradeCurves:
     """The candidate surface of ``operating_points.csv``: one entry per rank."""
 
     by_rho: dict[int, np.ndarray]        # rho -> (n, 3): masked fraction, r_sys, eta
-    rows: int
+    rows: int                            # rows the file carried, drawable or not
 
     @property
     def present(self) -> bool:
-        return self.rows > 0
+        """Whether any rank carries a drawable point (a header-only file carries none)."""
+        return bool(self.by_rho)
 
 
 def read_points(path: Path) -> TradeCurves:
@@ -317,6 +325,8 @@ class Plate:
     present: bool = False
     missing_reason: str = ""
     inputs: list = field(default_factory=list)
+    health_schema: str = ""              # the frame-health gate the era mask was taken through
+    ledger_health_schema: str = ""       # the gate the run itself applied
 
     # era
     era_first_month: int = -1
@@ -401,6 +411,11 @@ class Plate:
     @property
     def has_point(self) -> bool:
         return _finite(self.rho) and _finite(self.eta)
+
+    @property
+    def health_gate_agrees(self) -> bool:
+        """Whether this process applied the same frame-health gate the run did."""
+        return bool(self.health_schema) and self.health_schema == (self.ledger_health_schema or HEALTH_GATE_SCHEMA)
 
     @property
     def has_keep(self) -> bool:
@@ -574,6 +589,7 @@ def compute_plate(run: Run, ledger: core.Channel, *, products_dir: Path | str | 
     plate.evaluation_r_sys_q84 = _f(selection.get("r_sys_evaluation_q84"))
     plate.predicted_anchor_hz = wrap_fine_hz(_f(geometry.get("grid_residual_hz")))
     plate.measured_anchor_hz = wrap_fine_hz(_f(anchor_era.get("anchor_fine_hz")))
+    plate.ledger_health_schema = str(ledger.section("product").get("health_schema", "") or "")
     plate.disposition = str(containment.get("disposition", "") or "")
     plate.peak_abs_median_hz = _f(containment.get("peak_abs_median_hz"))
     plate.ledger_in_span = {k: _f(containment.get(f"frames_in_span_{k}")) for k in SPANS}
@@ -612,6 +628,7 @@ def compute_plate(run: Run, ledger: core.Channel, *, products_dir: Path | str | 
 def _fill_from_product(plate: Plate, product: Product, records: Sequence[EraRecord], current: int) -> None:
     """The four measured layers of one plate, from one open product."""
     months = era_mod.frame_months(product)
+    plate.health_schema = product.health.schema
     selected = product.selected
     era = _era_mask(product, months, plate.era_first_month, plate.era_last_month)
     plate.era_frames = float(era.sum())
@@ -716,26 +733,62 @@ AXIS_PT = 5.6
 TITLE_PT = 6.2
 
 
-def _frame(ax, *, title: str = "", subtitle: str = "") -> None:
+def _frame(ax, *, title: str = "", subtitle: str = "", title_pad: float | None = None) -> None:
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.tick_params(**TICKS)
     ax.tick_params(which="minor", length=1.0, width=0.4)
     if title:
-        ax.set_title(title, fontsize=TITLE_PT, pad=(7.5 if subtitle else 2.4), color=style.INK)
+        ax.set_title(title, fontsize=TITLE_PT, color=style.INK,
+                     pad=(7.5 if subtitle else 2.4) if title_pad is None else title_pad)
     if subtitle:
         ax.text(0.5, 1.012, subtitle, transform=ax.transAxes, ha="center", va="bottom",
                 fontsize=NOTE_PT, color=style.MUTED)
+
+
+def reserve_headroom(ax, top_data: float, note_lines: int, *, floor: float = 0.7, pad: float = 0.02) -> None:
+    """Set a logarithmic y limit that leaves the note's own lines clear of the data.
+
+    The note is written in axes coordinates from the top edge down, so the room
+    it needs is a fraction of the panel's height, not a fixed number of
+    decades: a 0.9-inch panel spending five decades hides a three-line note
+    behind the tallest bar unless the limit is raised to make room for it.
+    """
+    height = ax.get_position().height * ax.figure.get_size_inches()[1]
+    needed = (note_lines * NOTE_PT * 1.34 / 72.0) + pad if note_lines else pad
+    share = min(MAX_NOTE_SHARE, needed / height) if height > 0 else 0.25
+    data = math.log10(max(top_data, floor * 10.0) / floor)
+    ax.set_ylim(floor, floor * 10.0 ** (data / (1.0 - share)))
 
 
 def _note(ax, text: str, *, y: float = 0.982, colour: str = style.MUTED, x: float = 0.035, ha: str = "left") -> None:
     ax.text(x, y, text, transform=ax.transAxes, ha=ha, va="top", fontsize=NOTE_PT, color=colour, linespacing=1.3)
 
 
-def _empty(ax, reason: str) -> None:
+def _empty(ax, reason: str, *, width: int = 34) -> None:
     ax.set_axis_off()
-    ax.text(0.5, 0.5, reason, transform=ax.transAxes, ha="center", va="center", fontsize=NOTE_PT + 0.3,
-            color=style.FAILURE, wrap=True)
+    ax.text(0.5, 0.5, "\n".join(textwrap.wrap(reason, width)), transform=ax.transAxes, ha="center", va="center",
+            fontsize=NOTE_PT + 0.3, color=style.FAILURE, linespacing=1.35)
+
+
+def log_axis(ax, axis: str = "x") -> None:
+    """Decade ticks, and plain labels on the 2/3/5 minors when the span is under two decades.
+
+    Matplotlib labels every minor tick of a narrow logarithmic axis in
+    scientific notation, which on a 1.3-inch panel writes one label over
+    another; these panels span anything from a third of a decade to five.
+    """
+    target = ax.xaxis if axis == "x" else ax.yaxis
+    lo, hi = (ax.get_xlim() if axis == "x" else ax.get_ylim())
+    decades = math.log10(hi / lo) if lo > 0 and hi > lo else 0.0
+    target.set_major_locator(LogLocator(base=10.0, numticks=8))
+    target.set_minor_locator(LogLocator(base=10.0, subs=(2.0, 3.0, 5.0), numticks=24))
+    plain = FuncFormatter(lambda value, _pos: f"{value:g}")
+    if decades <= 2.6:
+        target.set_major_formatter(plain)
+        target.set_minor_formatter(plain if decades <= 1.6 else NullFormatter())
+    else:
+        target.set_minor_formatter(NullFormatter())
 
 
 def histogram_edges(values: np.ndarray, *, log: bool, bins: int = HIST_BINS) -> np.ndarray:
@@ -782,9 +835,10 @@ def containment_edges(*, bins: int = HIST_BINS, low: float | None = None, high: 
 
 
 def _histogram_panel(ax, values: np.ndarray, *, log: bool, title: str, subtitle: str, xlabel: str,
-                     tail: bool = False) -> None:
+                     tail: bool = False, note: Sequence[str] = ()) -> None:
     _frame(ax, title=title, subtitle=subtitle)
-    counts, edges = np.histogram(values[np.isfinite(values)], bins=histogram_edges(values, log=log))
+    edges = histogram_edges(values, log=log)
+    counts, _ = np.histogram(values[np.isfinite(values)], bins=edges)
     ax.stairs(counts, edges, **HIST_FILL)
     if tail:
         x, n_above = survival(values)
@@ -793,11 +847,18 @@ def _histogram_panel(ax, values: np.ndarray, *, log: bool, title: str, subtitle:
     if log:
         ax.set_xscale("log")
     ax.set_yscale("log")
-    top = max(float(counts.max()) if counts.size else 1.0, float(values.size))
-    ax.set_ylim(0.7, top * (12.0 if tail else 4.0))     # room above the tallest bar (and the tail's first point) for the note
+    ax.set_xlim(float(edges[0]), float(edges[-1]))
+    top = float(counts.max()) if counts.size else 1.0
+    if tail:
+        top = max(top, float(np.isfinite(values).sum()))          # the survival curve starts at N
+    reserve_headroom(ax, top, len(note))
     ax.set_xlabel(xlabel, fontsize=AXIS_PT, labelpad=1.4)
     ax.grid(True, axis="y", color=style.GRID, lw=0.3)
     ax.set_axisbelow(True)
+    if log:
+        log_axis(ax)
+    if note:
+        _note(ax, "\n".join(note))
 
 
 def _bulk_overlay(ax, centre: float, scale: float) -> None:
@@ -815,17 +876,16 @@ def panel_coarse(ax, plate: Plate) -> None:
         _frame(ax, title=r"(a) coarse $F/\mu_0$")
         _empty(ax, plate.missing_reason or "no current-era frame")
         return
+    lines = [rf"$N = {fmt_int(plate.coarse.size)}$"]
+    if _finite(plate.bulk_centre):
+        lines.append(rf"bulk ${fmt(plate.bulk_centre, 4, sig=True)} \pm {fmt(plate.bulk_scale, 3, sig=True)}$")
+    if _finite(plate.flag_rate):
+        lines.append(rf"flag rate ${fmt(plate.flag_rate, 3)}$")
     _histogram_panel(ax, plate.coarse, log=True, title=r"(a) coarse $F/\mu_0$",
-                     subtitle="current era, log counts", xlabel=r"$F/\mu_0$", tail=True)
+                     subtitle="current era, log counts", xlabel=r"$F/\mu_0$", tail=True, note=lines)
     _bulk_overlay(ax, plate.bulk_centre, plate.bulk_scale)
     ax.axvline(1.0, color=style.MUTED, ls=(0, (1, 1.4)), lw=0.7, zorder=4)
     ax.set_ylabel("frames", fontsize=AXIS_PT, labelpad=1.6)
-    lines = [rf"$N = {fmt_int(plate.coarse.size)}$"]
-    if _finite(plate.bulk_centre):
-        lines.append(rf"bulk ${fmt(plate.bulk_centre, 4)} \pm {fmt(plate.bulk_scale, 4)}$")
-    if _finite(plate.flag_rate):
-        lines.append(rf"flag rate ${fmt(plate.flag_rate, 3)}$")
-    _note(ax, "\n".join(lines))
 
 
 def panel_level(ax, plate: Plate) -> None:
@@ -834,12 +894,12 @@ def panel_level(ax, plate: Plate) -> None:
         _frame(ax, title="(b) normalized level")
         _empty(ax, plate.missing_reason or "no current-era frame")
         return
+    note = [rf"era median ${fmt(plate.level_median_db, 2)}$ dB"] if _finite(plate.level_median_db) else []
     _histogram_panel(ax, plate.level_db, log=False, title="(b) normalized level",
-                     subtitle=r"$10\log_{10}(F/\mu_0)$", xlabel="level [dB]")
+                     subtitle=r"$10\log_{10}(F/\mu_0)$", xlabel="level [dB]", note=note)
     ax.axvline(0.0, color=style.MUTED, ls=(0, (1, 1.4)), lw=0.7, zorder=4)
     if _finite(plate.level_median_db):
         ax.axvline(plate.level_median_db, color=style.MODEL, lw=0.8, zorder=5)
-        _note(ax, rf"era median ${fmt(plate.level_median_db, 2)}$ dB")
 
 
 def panel_input(ax, plate: Plate) -> None:
@@ -850,10 +910,10 @@ def panel_input(ax, plate: Plate) -> None:
         return
     _histogram_panel(ax, plate.input_power, log=True, title="(c) input power",
                      subtitle=r"native complex-\texttt{int4}" if matplotlib.rcParams["text.usetex"]
-                     else "native complex-int4", xlabel="mean power [native units]")
+                     else "native complex-int4", xlabel="mean power [native units]",
+                     note=[rf"median ${fmt(plate.input_median, 2)}$",
+                           rf"rail ${fmt(FULL_SCALE_NATIVE, 0)}$: ${fmt_int(plate.rail_frames)}$ frames"])
     ax.axvline(FULL_SCALE_NATIVE, color=style.FAILURE, ls=(0, (2.4, 1.5)), lw=0.7, zorder=5)
-    _note(ax, "\n".join([rf"median ${fmt(plate.input_median, 2)}$",
-                         rf"rail ${fmt(FULL_SCALE_NATIVE, 0)}$: ${fmt_int(plate.rail_frames)}$ frames"]))
 
 
 def panel_fine(ax, plate: Plate) -> None:
@@ -863,16 +923,16 @@ def panel_fine(ax, plate: Plate) -> None:
         _frame(ax, title=title)
         _empty(ax, plate.missing_reason or plate.no_point_reason or "no diagnostic point")
         return
-    _histogram_panel(ax, plate.z, log=True, title=title,
-                     subtitle=rf"$\rho = {fmt_int(plate.rho)}$, keep $Z \leq \eta$", xlabel=r"$Z(\rho)$", tail=True)
-    _bulk_overlay(ax, plate.z_bulk_centre, plate.z_bulk_scale)
-    if _finite(plate.eta):
-        ax.axvline(plate.eta, color=style.FAILURE, lw=0.9, zorder=7)
     lines = [rf"$\eta = {fmt(plate.eta, 4, sig=True)}$",
              rf"kept ${fmt_int(plate.kept_frames)}$ of ${fmt_int(plate.era_frames)}$"]
     if _finite(plate.masked_fraction_era):
         lines.append(rf"masked ${fmt(plate.masked_fraction_era, 4)}$")
-    _note(ax, "\n".join(lines))
+    _histogram_panel(ax, plate.z, log=True, title=title,
+                     subtitle=rf"$\rho = {fmt_int(plate.rho)}$, keep $Z \leq \eta$", xlabel=r"$Z(\rho)$",
+                     tail=True, note=lines)
+    _bulk_overlay(ax, plate.z_bulk_centre, plate.z_bulk_scale)
+    if _finite(plate.eta):
+        ax.axvline(plate.eta, color=style.FAILURE, lw=0.9, zorder=7)
 
 
 def panel_spectra(ax, plate: Plate) -> None:
@@ -892,6 +952,8 @@ def panel_spectra(ax, plate: Plate) -> None:
     ax.set_ylabel("dB over the all-frame median", fontsize=AXIS_PT, labelpad=1.6)
     ax.grid(True, axis="both", color=style.GRID, lw=0.3)
     ax.set_axisbelow(True)
+    low, high = ax.get_ylim()
+    ax.set_ylim(low, low + (high - low) / 0.70)         # the legend and the tabulated removal live above the data
     handles, labels = ax.get_legend_handles_labels()
     handles.append(Line2D([0], [0], color=style.MODEL, ls=(0, (3.5, 2.2)), lw=0.8))
     labels.append("nominal pilot")
@@ -909,7 +971,8 @@ def panel_spectra(ax, plate: Plate) -> None:
 
 def panel_era(ax, plate: Plate, fig) -> None:
     """The lower panel: the monthly mean fine statistic against UTC, with the era boundary marked."""
-    _frame(ax, title=r"Monthly mean fine statistic $10\log_{10}T$: a detector-statistic heatmap, not a spectrogram")
+    _frame(ax, title=r"Monthly mean fine statistic $10\log_{10}T$: a detector-statistic heatmap, not a spectrogram",
+           title_pad=11.0)
     if not plate.heat_months.size:
         _empty(ax, plate.missing_reason or "no month carries a health-admitted frame")
         return
@@ -945,11 +1008,12 @@ def panel_era(ax, plate: Plate, fig) -> None:
     bar.ax.tick_params(labelsize=4.8, length=1.5, width=0.4, pad=1.0)
     bar.outline.set_linewidth(0.5)
     bar.set_label(r"$10\log_{10}T$", fontsize=AXIS_PT - 0.4, labelpad=1.2)
-    ax.legend(handles=[Line2D([0], [0], color="white", ls=(0, (3.2, 2.0)), lw=0.9),
+    ax.legend(handles=[Line2D([0], [0], color=style.MUTED, ls=(0, (3.2, 2.0)), lw=0.9),
                        Line2D([0], [0], color=style.PURPLE, lw=1.0)],
-              labels=["geometry-predicted anchor", "measured current-era anchor / boundary"],
-              loc="upper left", fontsize=NOTE_PT - 0.2, handlelength=1.7, labelspacing=0.25,
-              borderaxespad=0.2, frameon=True, framealpha=0.70, facecolor=style.PAPER, edgecolor="none")
+              labels=["geometry-predicted anchor (drawn white on the map)",
+                      "measured current-era anchor, and the era boundary"],
+              loc="lower left", bbox_to_anchor=(0.0, 1.004), ncol=2, fontsize=NOTE_PT, handlelength=1.8,
+              labelspacing=0.2, columnspacing=1.4, borderaxespad=0.0, frameon=False)
 
 
 def panel_containment(ax, plate: Plate) -> None:
@@ -969,7 +1033,8 @@ def panel_containment(ax, plate: Plate) -> None:
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(lowest, WINDOW_HZ)
-    ax.set_ylim(0.7, max(float(counts.max()) if counts.size else 1.0, 1.0) * 12.0)
+    log_axis(ax)
+    reserve_headroom(ax, float(counts.max()) if counts.size else 1.0, 4)   # the legend's title and three spans
     ax.set_xlabel("$|$peak offset$|$ from the nominal pilot [Hz]", fontsize=AXIS_PT, labelpad=1.4)
     ax.set_ylabel("frames", fontsize=AXIS_PT, labelpad=1.6)
     ax.grid(True, axis="y", color=style.GRID, lw=0.3)
@@ -1032,6 +1097,8 @@ def plate_subtitle(plate: Plate) -> tuple[str, str]:
     first = rf"${fmt_int(plate.era_frames)}$ timed current-era frames"
     if _finite(plate.era_frames_untimed) and plate.era_frames_untimed > 0:
         first += rf"; ${fmt_int(plate.era_frames_untimed)}$ without a recorded time excluded"
+    if plate.present and not plate.health_gate_agrees:
+        first += rf"; frame-health gate {tex(plate.health_schema)}, not the run's"
     if plate.has_point:
         second = (rf"diagnostic point $\rho = {fmt_int(plate.rho)}$, $\eta = {fmt(plate.eta, 4, sig=True)}$: "
                   "the least-residual point of the calibration surface, a diagnostic and not an operating point")
@@ -1098,6 +1165,8 @@ def _marks(plate: Plate) -> str:
         out.append(rf"${fmt_int(plate.era_frames_untimed)}$ frames without a time excluded")
     if plate.present and not plate.curves.present:
         out.append("no trade curves")
+    if plate.present and not plate.health_gate_agrees:
+        out.append(f"frame-health gate {tex(plate.health_schema)}")
     return "; ".join(out) if out else DASH
 
 
@@ -1112,7 +1181,8 @@ def counts(rows: Sequence[Plate]) -> dict[str, int]:
             "off_era": sum(1 for p in rows if p.era_off),
             "no_after_mask": sum(1 for p in rows if p.present and p.has_point and not p.has_keep),
             "no_product": sum(1 for p in rows if not p.present),
-            "no_curves": sum(1 for p in rows if p.present and not p.curves.present)}
+            "no_curves": sum(1 for p in rows if p.present and not p.curves.present),
+            "other_health_gate": sum(1 for p in rows if p.present and not p.health_gate_agrees)}
 
 
 def build(run: Run, *, products_dir: Path | str | None = None) -> Fragment:
@@ -1174,6 +1244,7 @@ def build(run: Run, *, products_dir: Path | str | None = None) -> Fragment:
         if plate.has_point:
             add("rho", plate.rho, column=r"$\rho$", kind="int")
             add("eta", plate.eta, column=r"$\eta$", precision=4)
+        if plate.has_point and plate.present:
             add("kept_frames", plate.kept_frames, column="kept", kind="int")
             add("masked_fraction_era", plate.masked_fraction_era, column="panel (d)", precision=4)
             add("z_bulk_centre", plate.z_bulk_centre, column="panel (d)", precision=3, status="derived")
@@ -1260,6 +1331,11 @@ def build(run: Run, *, products_dir: Path | str | None = None) -> Fragment:
         frag.notes.append(f"channels {_list(missing)}: the product could not be opened "
                           f"({'; '.join(sorted({p.missing_reason for p in rows if not p.present}))}), so the plate "
                           "carries only its ledger head and the row is dashed")
+    ungated = [p.channel for p in rows if p.present and not p.health_gate_agrees]
+    if ungated:
+        frag.notes.append(f"channels {_list(ungated)}: this process could not apply the run's frame-health gate "
+                          f"({HEALTH_GATE_SCHEMA}, which needs pilot_proxy) and read valid frames alone, so the frame "
+                          "counts are the run's plus whatever the gate would have removed; the plate says so in its head")
     frag.notes.append("the plates print no false-alarm rate, no chain gain and no residual ratio R: those are the "
                       "ledgers' columns, and the trade panel marks r_sys against r_tol rather than their ratio")
     return frag
