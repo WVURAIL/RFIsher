@@ -4,6 +4,7 @@ from __future__ import annotations
 from functools import cmp_to_key
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -18,9 +19,14 @@ from rfisher.preparation import CalibrationEvidence
 from rfisher.thresholds import ALWAYS_MASKED_Q16, MAX_MULTIPLIER_Q16
 
 
-REHEARSAL_PRODUCT = Path(
-    "/home/djg/rail/pilot_proxy_runs/"
-    "local_archive_rehearsal_844_f9ab7d7cfb13/_per_pilot/844.npz")
+# The rehearsal this pins is a generated product, so it lives with the other
+# products rather than in the repository. $RFISHER_REHEARSAL_PRODUCT overrides;
+# the default is where the August rehearsals are kept. The test skips when the
+# file is absent, so a clone without the products still passes.
+REHEARSAL_PRODUCT = Path(os.environ.get(
+    "RFISHER_REHEARSAL_PRODUCT",
+    "/home/djg/rail/products/dev_rehearsals_2026-08/"
+    "local_archive_rehearsal_844_f9ab7d7cfb13/_per_pilot/844.npz"))
 REHEARSAL_SHA256 = (
     "fc65f6566bc5ab215c688c43955b854cd30e9a0f7d8b92b779e3a02dd69db94d")
 
