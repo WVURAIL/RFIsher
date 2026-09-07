@@ -28,6 +28,9 @@ from rfisher.constants import HI_REST_FREQUENCY_MHZ
 from rfisher_results.results_tree import out_dir
 
 OUT = out_dir()
+# The tables the checks below read; a checkout with no results tree (CI, a
+# fresh clone) has none of them, and that is a skip, not a failure.
+REQUIRED_TABLES = ("required_times.csv", "bin_level_targets.csv")
 
 
 # ---------------------------------------------------------------- helpers
@@ -76,6 +79,12 @@ class Checker:
 
 
 def main() -> int:
+    missing = [name for name in REQUIRED_TABLES if not (OUT / name).is_file()]
+    if missing:
+        print(f"tables missing under {OUT}: {', '.join(missing)}")
+        print("The paper number gate needs the results tree; point RFISHER_OUT "
+              "at it (see docs/releases.md). Nothing was checked.")
+        return 0
     tex = ((PAPER / "forecast_section.tex").read_text()
            + (PAPER / "main.tex").read_text())
     ck = Checker(tex)

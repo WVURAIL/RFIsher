@@ -7,6 +7,8 @@ is no reason to re-stamp them.
     python -m rfisher_results.cli estimator-transfer --release DIR --out FILE.pdf
         [--calibration pilot_below_db,bin_enbw_hz,dtv_bandwidth_hz[,efficiency]]
         [--title TEXT] [--y-min DB] [--no-tex]
+    python -m rfisher_results.cli transfer-points --sweep ROOT --out plot_points.csv
+        [--conditioning conditioning.json] [--bootstrap-samples N]
 """
 from __future__ import annotations
 
@@ -17,6 +19,7 @@ from pathlib import Path
 from . import style
 from .census_psd import figure_census_psd
 from .estimator_transfer import Calibration, figure_estimator_transfer, load_release
+from .evaluations import Conditioning, digital_sweep_layout, load_evaluations, transfer_points, write_points
 
 
 def _calibration(text: str | None) -> Calibration | None:
@@ -43,7 +46,19 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--out", type=Path, required=True)
     cp.add_argument("--provenance", required=True, help="one line for the panel key: what was averaged, from which products")
     cp.add_argument("--no-tex", action="store_true")
+    tp = sub.add_parser("transfer-points", help="pool a raw evaluate-snr sweep into the release's plot_points.csv")
+    tp.add_argument("--sweep", type=Path, required=True, help="root of the 40 digital shard directories")
+    tp.add_argument("--out", type=Path, required=True, help="CSV to write")
+    tp.add_argument("--conditioning", type=Path, default=None, help="conditioning.json with the waveform coefficients")
+    tp.add_argument("--bootstrap-samples", type=int, default=10_000, dest="bootstrap_samples")
     args = ap.parse_args(argv)
+
+    if args.command == "transfer-points":
+        shards = load_evaluations(digital_sweep_layout(args.sweep))
+        conditioning = Conditioning.from_json(args.conditioning) if args.conditioning else None
+        print(write_points(transfer_points(shards, conditioning=conditioning,
+                                           bootstrap_samples=args.bootstrap_samples), args.out))
+        return 0
 
     style.configure(require_tex=not args.no_tex)
     if args.command == "census-psd":

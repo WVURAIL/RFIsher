@@ -279,6 +279,16 @@ out/                  ignored scratch; the results tree lives outside (releases.
 tests/                package and workflow regression tests
 ```
 
+`src/rfisher_results/` is the results layer, kept outside the `rfisher`
+namespace because the shipped banks pin a digest of `src/rfisher/`. It holds
+the dissertation style (`style`, byte-identical to the dissertation's copy),
+the results-tree resolver (`results_tree`), the readers for what pilot-proxy
+hands over -- frozen estimator-transfer releases (`estimator_transfer`), the
+census spectra export (`census_psd`), and raw `evaluate-snr` directories with
+the pooling that turns a sweep of them into a release's `plot_points.csv`
+(`evaluations`) -- and the figures rendered from them, driven by
+`python -m rfisher_results.cli`.
+
 Generated results, including the two immutable release roots, live outside
 the repository in the results tree that `rfisher_results.results_tree`
 resolves; see the [release index](releases.md) before changing anything

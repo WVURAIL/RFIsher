@@ -77,10 +77,13 @@ TMPDIR=/tmp python -m pytest tests/ -q
 
 ## Product-dependent work
 
-Point the product registry at the corrected archived survey products:
+Point the product registry at the archived survey products the shipped
+tables were built from (the complete-23 set of 2026-08-20; the September
+2026 rebuild is beside it under `~/rail/products/chime_pilots_rebuild_20260829/products/_per_pilot`
+and is read by the same code):
 
 ```bash
-export RFISHER_PRODUCT_DIRS=~/rail/datasets/canfar_archive_per_pilot
+export RFISHER_PRODUCT_DIRS=~/rail/products/per_pilot_2026-08-20_complete23
 ```
 
 The shipped tables, evidence ledgers and release roots live in the results
