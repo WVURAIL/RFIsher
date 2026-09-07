@@ -38,7 +38,7 @@ from rfisher import residual
 
 from rfisher.channels import channel_edges
 
-from . import anchors, blocks, chain, eras, ledger, nulls, psd, screening, selection, tolerances
+from . import anchors, blocks, chain, eras, flaggers, ledger, nulls, psd, screening, selection, tolerances
 from .numbers import git_commit
 from .products import COARSE_BIN_HZ, FINE_BIN_HZ, Product, sha256_of
 
@@ -464,7 +464,18 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     else:
         record.add("selection", None)
 
-    # 9. screening
+    # 9. the incumbent flaggers on the same frames (chapter 9's flagger table)
+    try:
+        flag_cmp = flaggers.compare(
+            p, era_mask, floor_db=floor.db, floor_evidence=floor.evidence, era_label=era_label,
+            diagnostic=(sel.diagnostic if sel is not None else None), anchor_bin=anchor_bin, bulk_mask=bulk)
+        record.add("flaggers", flaggers.channel_row(flag_cmp))
+    except Exception as exc:
+        flag_cmp = None
+        record.add("flaggers", None)
+        notes.append(f"flaggers: {type(exc).__name__}: {exc}")
+
+    # 10. screening
     flag_rate = float(p.rejected[era_mask].mean()) if era_mask.any() else math.nan
     ev = sel.evaluation if (sel is not None and sel.evaluation is not None) else None
     inputs = screening.ScreeningInputs(
@@ -493,6 +504,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         "selection_row": sel.as_row() if sel is not None else None,
         "chain_row": ch_res.as_row() if ch_res is not None else None,
         "screening_row": {"channel": ch, **screen.as_row()},
+        "flagger_rows": [r.as_row() for r in flag_cmp.rows] if flag_cmp is not None else [],
         "seconds": time.time() - t0,
     }
 
@@ -572,6 +584,7 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
     _write_csv([r["selection_row"] for r in results], tables / "selection.csv")
     _write_csv([r["chain_row"] for r in results], tables / "chain.csv")
     _write_csv([r["screening_row"] for r in results], tables / "screening.csv")
+    _write_csv([row for r in results for row in r["flagger_rows"]], tables / "flaggers.csv")
 
     book = ledger.Ledger(run={
         "generated": generated or dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
