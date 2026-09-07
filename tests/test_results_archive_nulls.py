@@ -45,21 +45,28 @@ def test_a_contaminated_tail_inflates_raw_but_not_core():
     assert 0.006 < d.tail_fraction < 0.009      # 0.5% contamination plus the model tail (0.19%)
 
 
-def test_exchangeability_of_an_exchangeable_bulk_matches_the_leave_one_out_rate():
+def test_exchangeability_of_null_designated_bins_matches_the_combinatorial_rate():
     rng = np.random.default_rng(5)
-    frames, bins = 400, 256
+    frames, bins = 4000, 256
     t = stats.f.rvs(*nulls.FINE_DOF, size=(frames, bins), random_state=rng)
     bulk = np.zeros(bins, dtype=bool)
     bulk[::2] = True
-    bulk[60:66] = False                      # a designated window with guards
+    designated = [126, 127, 128, 129, 130]
+    for b in range(124, 133):
+        bulk[b] = False                       # designated window with guards leaves the bulk
     bulk_size = int(bulk.sum())
     for rho in (1, 64, 120):
-        e = nulls.exchangeability_rate(t, bulk, rho)
-        assert e.bulk_size == bulk_size and e.trials == frames * bulk_size
-        assert e.measured_rate == pytest.approx(e.predicted_leave_one_out, abs=0.01), rho
-        assert e.predicted_text == pytest.approx((bulk_size + 1 - rho) / (bulk_size + 1))
-    with pytest.raises(ValueError):
-        nulls.exchangeability_rate(t, bulk, bulk_size)
+        e = nulls.exchangeability_rate(t, bulk, rho, designated)
+        assert e.bulk_size == bulk_size and e.trials == frames * 5 and e.test_bins == tuple(designated)
+        assert e.predicted_rate == pytest.approx((bulk_size + 1 - rho) / (bulk_size + 1))
+        assert e.measured_rate == pytest.approx(e.predicted_rate, abs=0.012), rho
+        assert e.max_over_test_rate >= e.measured_rate
+    # a designated window carrying a line on 'quiet' frames breaks exchangeability
+    t[:, 128] *= 3.0
+    hot = nulls.exchangeability_rate(t, bulk, 120, designated)
+    assert hot.measured_rate > hot.predicted_rate + 0.1
+    with pytest.raises(ValueError, match="outside the bulk"):
+        nulls.exchangeability_rate(t, bulk, 64, [0])
 
 
 @pytest.fixture
