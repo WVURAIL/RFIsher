@@ -21,7 +21,7 @@ TABLE_MODULES: tuple[str, ...] = (
     "calibration_eras", "calibration_anchors", "calibration_nulls", "blocked_evaluation", "held_out_summary",
     "tolerance_eta", "tolerance_channels", "conclusions_matrix", "handover",
 )
-FIGURE_MODULES: tuple[str, ...] = ("figures_status", "figures_two_walls")
+FIGURE_MODULES: tuple[str, ...] = ("figures_status", "figures_two_walls", "figures_census_psd")
 
 
 def _module(name: str):
