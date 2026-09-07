@@ -188,7 +188,9 @@ def test_end_to_end_exit_codes(tmp_path):
         ["1566x over now", "the fs/2 legacy epoch quarterly table",
            "3.2-7.8 dB", "46748 LRGs", "7.6 yr", "XOR 0x88",
            "48.5% of verified-quiet time", "fine_gain_mc evidence",
-           "Youden-J table", _forecast_headline_rows()])
+           "Youden-J table", r"\input{tables/archive/worlds.tex}",
+           r"\input{tables/archive/saveability.tex}",
+           _forecast_headline_rows()])
     red = green + " eight years; 316x over; 5.9-7.8 dB; ten measured channels"
     g, r = tmp_path / "g.txt", tmp_path / "r.txt"
     g.write_text(green)
@@ -218,6 +220,8 @@ def _green_min() -> str:
     return " ".join(
         ["fs/2 legacy quarterly", "3.2-7.8", "46748", "7.6 yr", "1566x",
            "XOR 0x88", "48.5%", "fine_gain_mc", "Youden",
+           r"\input{tables/archive/worlds.tex}",
+           r"\input{tables/archive/saveability.tex}",
            _forecast_headline_rows()])
 
 
@@ -330,22 +334,19 @@ def test_legacy_projects_excluded_from_tex_sweep(tmp_path):
 
 
 @requires_shipped_tables
-def test_worlds_row_read_in_the_printed_direction(capsys):
-    """The worlds row is R = r_sys/r_tol, not the CSV's reciprocal margin,
-    and it is read under the table's own header: a decoy 'ch33 &' ahead of
-    that header (the flagger table opens columns with the same label) must
-    not be mistaken for the row."""
-    worlds = cdn.worlds_rows()
-    printed = f"{cdn.world_ratio(worlds[('none', 33)]):.4g}"
-    good = "ch33 & ch34 & ch35 & ch36 \\\\ " + _green_min()
-    flipped = good.replace(
-        printed, f"{1 / cdn.world_ratio(worlds[('none', 33)]):.4g}")
-    assert flipped != good
-    for text, want in ((good, "PASS"), (flipped, "FAIL")):
+def test_the_worlds_table_must_be_the_generated_fragment(capsys):
+    """The hand-written four-row worlds table is retired: the check now
+    requires the generated fragment, so a chapter that inlines its own rows
+    again fails rather than being recomputed against a superseded snapshot."""
+    good = _green_min()
+    without = good.replace(r"\input{tables/archive/worlds.tex}", "")
+    assert without != good
+    for text, want in ((good, "PASS"), (without, "FAIL")):
         ck = cdn.Checker(cdn.normalize(text))
         cdn.run_checks(ck, None)
         out = capsys.readouterr().out
-        lines = [ln for ln in out.splitlines() if "ch 33: direct fs8" in ln]
+        lines = [ln for ln in out.splitlines()
+                 if "worlds table generated from the run" in ln]
         assert lines and lines[0].startswith(want), lines
 
 

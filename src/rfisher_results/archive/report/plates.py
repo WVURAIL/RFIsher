@@ -764,7 +764,9 @@ def reserve_headroom(ax, top_data: float, note_lines: int, *, floor: float = 0.7
 
 
 def _note(ax, text: str, *, y: float = 0.982, colour: str = style.MUTED, x: float = 0.035, ha: str = "left") -> None:
-    ax.text(x, y, text, transform=ax.transAxes, ha=ha, va="top", fontsize=NOTE_PT, color=colour, linespacing=1.3)
+    # above every mark the panel draws: the bulk line, eta and the span lines are added after the note
+    ax.text(x, y, text, transform=ax.transAxes, ha=ha, va="top", fontsize=NOTE_PT, color=colour, linespacing=1.3,
+            zorder=12)
 
 
 def _empty(ax, reason: str, *, width: int = 34) -> None:
