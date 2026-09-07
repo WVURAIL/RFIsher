@@ -59,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--results", required=True, help="an archive run directory (ledger/, tables/, channels/)")
     rp.add_argument("--out", default=None, help="output directory (default <results>/dissertation)")
     rp.add_argument("--no-figures", action="store_true", help="tables and numbers only")
+    rp.add_argument("--no-tex", action="store_true",
+                    help="render the figures without LaTeX (a preview; the document's audit refuses the substituted font)")
     ar = sub.add_parser("archive", help="the archive pipeline over the campaign products: eras, anchors, containment, nulls, selection, ledger")
     ar.add_argument("--products", type=Path, required=True, help="directory of the 23 v5 per-pilot products")
     ar.add_argument("--out", type=Path, required=True, help="results tree to write (a new dated directory)")
@@ -70,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "archive-report":
         from .archive.report.build import build_report
-        manifest = build_report(args.results, args.out, figures=not args.no_figures)
+        manifest = build_report(args.results, args.out, figures=not args.no_figures, require_tex=not args.no_tex)
         print(json.dumps({"artifacts": [a["name"] for a in manifest["artifacts"]], "out": str(Path(args.out or Path(args.results) / "dissertation"))}))
         return 0
     if args.command == "archive":
