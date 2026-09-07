@@ -1240,11 +1240,13 @@ def archive_report_checks(ck: Checker, report_dir: Path, inventory: Path) -> dic
     """The v5 archive report's ``numbers.json`` documents against the
     dissertation's ``\\rerun{}`` marker inventory (``STUBS_rerun_inventory.csv``).
 
-    A marker bound to a key (the inventory's ``key`` column) is checked against
-    that number; an unbound marker against every number whose value or
-    rendering fits. ``changed`` (a source exists and disagrees) is a FAIL, the
-    number the rerun moved; ``verified`` is a PASS; ``no-source`` is reported,
-    not failed, until the marker is bound. Returns the per-chapter report.
+    Only a marker bound to a key (the inventory's ``key`` column) is verified
+    here: an unbound marker would match any number of the same value, and a
+    coincidence is not evidence, so unbound markers are reported as unbound
+    and neither pass nor fail. For a bound marker ``changed`` (the report's
+    number disagrees) is a FAIL, the number the rerun moved, and ``verified``
+    is a PASS; a key the report does not carry is reported, not failed, until
+    the fragment that owns it is written. Returns the per-chapter report.
     """
     from rfisher_results.archive import numbers as nb
     ck.section("v5 archive report <- numbers/*.numbers.json vs STUBS_rerun_inventory.csv")
@@ -1261,7 +1263,8 @@ def archive_report_checks(ck: Checker, report_dir: Path, inventory: Path) -> dic
                  "" if ok else f"commit {commit!r}; re-render the report from a committed tree")
     numbers = nb.load_numbers(docs)
     markers = nb.load_inventory(inventory)
-    matches = nb.match_markers(markers, numbers)
+    bound = [k for k in markers if k.key]
+    matches = nb.match_markers(bound, numbers)
     report = nb.chapter_report(matches)
     for m in matches:
         label = f"{Path(m.marker.file).name}:{m.marker.line} {nb.normalize_marker(m.marker.value)[:28]}"
@@ -1270,7 +1273,16 @@ def archive_report_checks(ck: Checker, report_dir: Path, inventory: Path) -> dic
         elif m.status == "changed":
             ck._emit("FAIL", label, f"the report gives {m.number_value!r} ({m.key}); update the marker")
         else:
-            ck.skip(label, "no source in the report yet: bind the marker to a key or fill the stub")
+            ck.skip(label, f"the report carries no number under {m.marker.key!r}: write the fragment that owns it")
+    unbound = len(markers) - len(bound)
+    if unbound:
+        ck.skip(f"{unbound} rerun markers not bound to a report key",
+                "add a 'key' column entry to STUBS_rerun_inventory.csv for each; an unbound marker would verify "
+                "against any number of the same value, which is a coincidence, not evidence")
+    print(f"      {len(bound)} of {len(markers)} markers bound to a report key; "
+          f"{sum(1 for m in matches if m.status == 'verified')} verified, "
+          f"{sum(1 for m in matches if m.status == 'changed')} changed, "
+          f"{sum(1 for m in matches if m.status == 'no-source')} without a number in the report")
     for chapter, counts in sorted(report.items()):
         flip = "flip to black" if counts.get("flip") else "keep blue"
         print(f"      {Path(chapter).name}: verified {counts.get('verified', 0)}, changed {counts.get('changed', 0)},"
