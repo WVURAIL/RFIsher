@@ -1,4 +1,4 @@
-"""Chapter 11 synthesis and appendix C denominators: three fragments from the ledger.
+r"""Chapter 11 synthesis and appendix C denominators: three fragments from the ledger.
 
 No channel of the v5 run has a selected operating point (``selection.status``
 is ``no feasible point`` or ``refused``, ``claim_status`` ``diagnostic``
@@ -64,9 +64,13 @@ the kept count, now one summed column. Every number they carried is still
 emitted under its own key (``appC.atlas_counts.n_frames``,
 ``kept_calibration``, ``kept_evaluation``, ``kept_total``) with the column
 :data:`NOT_PRINTED`, and the notes say where each went. The trim takes the
-fragment from 715pt to 407pt at 11pt, inside the 469.8pt text block, so the
-appendix sets it upright and needs neither a sideways page nor a
-``\resizebox``; no companion ledger and no stacked panels are needed.
+fragment from 715.4pt to 435.4pt, the width of the boxed ``tabular`` at 11pt
+on the run of 2026-09-07, inside the 469.8pt text block: the appendix sets it
+upright and needs neither a sideways page nor a ``\resizebox``. The three
+columns are per-channel evidence, but the appendix already prints the plate
+beside the row, so they go to the numbers rather than to a companion
+``archive_atlas_counts_ledger`` fragment; no companion and no stacked panels
+are needed, and :data:`BUILDERS` keeps its three builders.
 
 ``build_headline`` -> ``headline``: numbers only (the ``.tex`` is a comment),
 every value emitted under both ``ch11.headline.<name>`` and
@@ -173,6 +177,11 @@ def _sig(value, digits: int = 3) -> tuple[str, int | None]:
 
 def _channel_list(channels: Sequence[int]) -> str:
     return ", ".join(str(c) for c in channels)
+
+
+def _channel_phrase(channels: Sequence[int]) -> str:
+    """``channel 17`` / ``channels 19, 21``: a channel list with the noun a note reads with."""
+    return f"channel{'' if len(channels) == 1 else 's'} {_channel_list(channels)}"
 
 
 def _slug(text: str) -> str:
@@ -533,20 +542,20 @@ def build_atlas_counts(run: Run) -> Fragment:
     frag.notes.append("the two blocks are not printed as separate columns: their counts stay in the numbers "
                       "(appC.atlas_counts.kept_calibration, appC.atlas_counts.kept_evaluation)")
     if daggered:
-        frag.notes.append(f"dagger: no selected (rho*, eta*) on channels {_channel_list(daggered)}; the kept cell is at the diagnostic "
+        frag.notes.append(f"dagger: no selected (rho*, eta*) on {_channel_phrase(daggered)}; the kept cell is at the diagnostic "
                           "point (selection.diagnostic_masked_fraction, the least-residual point of the calibration surface, "
                           "claim_status diagnostic), not at an operating point")
     if no_replay:
-        frag.notes.append(f"double dagger: the kept cell on channels {_channel_list(no_replay)} is the calibration block alone; the point "
+        frag.notes.append(f"double dagger: the kept cell on {_channel_phrase(no_replay)} is the calibration block alone; the point "
                           "was not replayed on the evaluation block (selection.masked_fraction_evaluation absent), so no plate denominator "
                           "is defined")
     if no_point:
-        frag.notes.append(f"kept at point is the dash on channels {_channel_list(no_point)}: no point of any kind "
+        frag.notes.append(f"kept at point is the dash on {_channel_phrase(no_point)}: no point of any kind "
                           "(selection.status refused, no evaluated surface)")
         for why, chans in refusals.items():
             frag.notes.append(f"  {_channel_list(chans)}: {why}")
     if empty_replay:
-        frag.notes.append(f"the replay kept no frame on channels {_channel_list(empty_replay)} (kept_evaluation 0: the kept cell counts "
+        frag.notes.append(f"the replay kept no frame on {_channel_phrase(empty_replay)} (kept_evaluation 0: the kept cell counts "
                           "the calibration block alone, and 0 is a count, not an absent value)")
     if no_era:
         frag.notes.append(f"no current-era span in the ledger: {_channel_list(no_era)}")
@@ -556,7 +565,7 @@ def build_atlas_counts(run: Run) -> Fragment:
                       "reason to a line inside the cell")
     frag.notes.append("product.n_frames, the archive frame count before the input-health gate, is not printed (the stub's denominator is "
                       "the valid count); it stays in the numbers (appC.atlas_counts.n_frames) and differs from the valid count on "
-                      + (f"channels {_channel_list(gated)}" if gated else "no channel of this run"))
+                      + (_channel_phrase(gated) if gated else "no channel of this run"))
     frag.notes.append("plate digest is the dash: the plates are pending (rendered from channels/chNN/spectra_window.json by the figure step)")
     return frag
 

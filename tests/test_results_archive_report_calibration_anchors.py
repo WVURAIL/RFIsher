@@ -1,7 +1,9 @@
-"""``calibration_anchors`` and ``calibration_containment``: every column on a synthetic ledger, then the real run."""
+"""``calibration_anchors``, its Appendix C ledger and ``calibration_containment``: every column on a synthetic
+ledger, the widths the page needs, then the real run."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -33,6 +35,9 @@ _CAL = {**_ANCHOR, "label": "calibration", "method": "on_minus_quiet", "fallback
 _SEL = {"status": "no feasible point", "claim_status": "diagnostic", "anchor_bin": 178, "anchor_source": "calibration",
         "anchor_sentinel": ""}
 _LOBE = "psd in-span lobe (fine anchor suspect)"
+# the columns the ch08 stub names (Section 8, tab:calibration:anchors), and the evidence that moved to Appendix C
+STUB_COLUMNS = ("ch", "estimator", "bin", "f_a", "boot", "dom_hz", "dom_db", "p50", "p90", "p99", "disposition", "prev")
+MOVED_COLUMNS = ("era", "shift", "selector", "in_span", "delta", "reasons")
 
 
 def _record(ch, fid, sections):
@@ -100,9 +105,13 @@ def _ledger(tmp_path, *, kstar=True):
     return tmp_path
 
 
-def _body(tex: str) -> list[list[str]]:
-    """The data rows of the first tabular, split into cells."""
-    lines = tex.splitlines()
+def _tabulars(tex: str) -> list[str]:
+    return re.findall(r"\\begin\{tabular\}.*?\\end\{tabular\}", tex, re.S)
+
+
+def _body(tex: str, panel: int = 0) -> list[list[str]]:
+    """The data rows of the ``panel``-th tabular, split into cells."""
+    lines = _tabulars(tex)[panel].splitlines()
     rows = []
     for line in lines[lines.index(r"\midrule") + 1:]:
         if line == r"\bottomrule":
@@ -111,6 +120,11 @@ def _body(tex: str) -> list[list[str]]:
             continue
         rows.append([cell.strip() for cell in line[:-len(r" \\")].split(" & ")])
     return rows
+
+
+def _header(tex: str, panel: int = 0) -> list[str]:
+    lines = _tabulars(tex)[panel].splitlines()
+    return [cell.strip() for cell in lines[lines.index(r"\toprule") + 1][:-len(r" \\")].split(" & ")]
 
 
 def _keys(frag):
@@ -147,22 +161,34 @@ def test_method_text_and_window_aliased():
     assert not m.window_aliased({}) and not m.window_aliased({"window_aliased_hz": None})
 
 
-def test_anchors_every_column(tmp_path):
+def test_column_split_is_the_stub_and_its_ledger():
+    """The chapter prints the stub's columns and the channel; the ledger prints the rest, and nothing is lost."""
+    assert m.ANCHOR_COLUMNS == STUB_COLUMNS and m.LEDGER_COLUMNS == ("ch",) + MOVED_COLUMNS
+    assert len(m.ANCHOR_ALIGN) == len(m.ANCHOR_HEADER) == len(m.ANCHOR_COLUMNS) == 12
+    assert len(m.LEDGER_ALIGN) == len(m.LEDGER_HEADER) == len(m.LEDGER_COLUMNS) == 7
+    assert set(m.ANCHOR_COLUMNS) | set(m.LEDGER_COLUMNS) == set(STUB_COLUMNS) | set(MOVED_COLUMNS)
+    assert set(m.ANCHOR_COLUMNS) & set(m.LEDGER_COLUMNS) == {"ch"}
+    assert m.BUILDERS == (m.build, m.build_ledger, m.build_containment)
+
+
+def test_anchors_prints_the_stub_columns(tmp_path):
     run = core.load_run(_ledger(tmp_path))
     frag = m.build(run)
     assert frag.name == "calibration_anchors" and frag.label == "tab:calibration:anchors"
+    assert _header(frag.tex) == ["ch", "estimator", "bin", r"$\widehat f_a$ (Hz)", r"$[q_{16}, q_{84}]$ (Hz)",
+                                "dom.\\ (Hz)", "dom.\\ (dB)", r"$|\delta f|_{50}$ (Hz)", r"$|\delta f|_{90}$ (Hz)",
+                                r"$|\delta f|_{99}$ (Hz)", "disposition", "prev.\\ (Hz)"]
     rows = _body(frag.tex)
-    assert len(rows) == 4 and all(len(r) == len(m.ANCHOR_HEADER) for r in rows)
-    assert len(m.ANCHOR_ALIGN) == len(m.ANCHOR_HEADER) == 17
+    assert len(_tabulars(frag.tex)) == 1 and len(rows) == 4 and all(len(r) == len(m.ANCHOR_HEADER) for r in rows)
     r18, r21, r33, r36 = rows
-    assert r18 == ["18", "current", "median (on)", "$175$", "$-3.7$", r"$[-3.7,\,-3.7]$", "cal $178$", "$-20.8$", "$18.4$",
-                   "$-20.8$", "$+1.4$", "$39$", "$421$", "$14{,}297$", "supported", "--", "--"]
-    assert r21 == ["21", "current", "on-quiet", r"$112^{\mathrm{s}}$", "$14.9$", r"$[14.9,\,14.9]$", "lobe $126$ (cal $111$)",
-                   r"$-151.5^{\mathrm{a}}$", "$20.0$", "$-151.5$", "$+0.3$", "$39$", "$421$", "$14{,}297$", "supported", "--", "--"]
-    assert r33 == ["33", "previous", "median (on)", r"$116^{\mathrm{s}}$", "$89.3$", "--", "lobe $126$ (cal $124$)", "$-3719.9$",
-                   "$23.0$", "$-29.2$", r"$+9.9^{*\mathrm{f}}$", "$39$", "$421$", "$14{,}297$", "sentinel: oos, E, ref, alias, lobe",
-                   "$458.8$", "$+31$"]
-    assert r36 == ["36", "current", "--", "--", "--", "--", "nominal $62$"] + ["--"] * 10
+    assert r18 == ["18", "median (on)", "$175$", "$-3.7$", r"$[-3.7,\,-3.7]$", "$-20.8$", "$18.4$", "$39$", "$421$",
+                   "$14{,}297$", "supported", "--"]
+    assert r21 == ["21", "on-quiet", r"$112^{\mathrm{s}}$", "$14.9$", r"$[14.9,\,14.9]$", r"$-151.5^{\mathrm{a}}$",
+                   "$20.0$", "$39$", "$421$", "$14{,}297$", "supported", "--"]
+    # ch33's anchor of record is the previous era's: f_a carries the p mark, and the disposition prints the word alone
+    assert r33 == ["33", "median (on)", r"$116^{\mathrm{s}}$", r"$89.3^{\mathrm{p}}$", "--", "$-3719.9$", "$23.0$",
+                   "$39$", "$421$", "$14{,}297$", "sentinel", "$458.8$"]
+    assert r36 == ["36"] + ["--"] * 11
     keys = _keys(frag)
     assert len(keys) == len(set(keys))
     # the anchor of record
@@ -175,38 +201,78 @@ def test_anchors_every_column(tmp_path):
     assert _value(frag, "ch08.anchors.anchor_bin.ch18").kind == "int" and _value(frag, "ch08.anchors.anchor_bin.ch33").value == 116
     assert "ch08.anchors.boot_rf_hz_q16.ch18" in keys and "ch08.anchors.boot_rf_hz_q16.ch33" not in keys
     assert _value(frag, "ch08.anchors.anchor_suspect.ch21").renderings == ("s",) and "ch08.anchors.anchor_suspect.ch18" not in keys
-    # the selector's anchor
-    assert _value(frag, "ch08.anchors.calibration_anchor_bin.ch18").value == 178 and _value(frag, "ch08.anchors.selector_anchor_bin.ch18").value == 178
-    assert _value(frag, "ch08.anchors.selector_anchor_source.ch18").value == "calibration" and _value(frag, "ch08.anchors.selector_anchor_source.ch18").renderings == ("cal",)
-    assert _value(frag, "ch08.anchors.calibration_anchor_bin.ch21").value == 111 and _value(frag, "ch08.anchors.selector_anchor_bin.ch21").value == 126
-    assert _value(frag, "ch08.anchors.selector_anchor_source.ch33").value == _LOBE and _value(frag, "ch08.anchors.selector_anchor_source.ch33").renderings == ("lobe",)
-    assert _value(frag, "ch08.anchors.selector_anchor_source.ch36").renderings == ("nominal",) and _value(frag, "ch08.anchors.selector_anchor_bin.ch36").value == 62
-    assert "ch08.anchors.calibration_anchor_bin.ch36" not in keys
     # the spectrum
     assert _value(frag, "ch08.anchors.window_aliased_hz.ch21").value == 10246.5 and _value(frag, "ch08.anchors.edge_distance_hz.ch21").value == 4753.5
     assert "ch08.anchors.window_aliased_hz.ch18" not in keys and "ch08.anchors.window_aliased_hz.ch33" not in keys
-    assert _value(frag, "ch08.anchors.anchor_lobe_disagree.ch33").renderings == ("*",) and "ch08.anchors.anchor_lobe_disagree.ch21" not in keys
-    assert _value(frag, "ch08.anchors.anchor_folds_out_of_span.ch33").renderings == ("f",) and "ch08.anchors.anchor_folds_out_of_span.ch21" not in keys
-    assert _value(frag, "ch08.anchors.anchor_lobe_offset_bins.ch33").value == 9.94
-    assert _value(frag, "ch08.anchors.disposition.ch33").renderings == ("sentinel: oos, E, ref, alias, lobe",)
-    assert _value(frag, "ch08.anchors.reasons.ch33").value.startswith("stronger out-of-span") and "ch08.anchors.reasons.ch18" not in keys
     assert _value(frag, "ch08.anchors.peak_abs_p99_hz.ch18").value == 14297
-    # the previous era
-    assert "ch08.anchors.previous_anchor_rf_offset_hz.ch18" not in keys and _value(frag, "ch08.anchors.shift_from_previous_bins.ch33").value == 31
-    assert sorted(k for k in keys if k.endswith(".ch36")) == ["ch08.anchors.selector_anchor_bin.ch36", "ch08.anchors.selector_anchor_source.ch36",
-                                                              "ch08.anchors.source.ch36"]
+    # the disposition prints the word; the number keeps the reason rendering the prose may quote
+    assert _value(frag, "ch08.anchors.disposition.ch33").renderings == ("sentinel", "sentinel: oos, E, ref, alias, lobe")
+    assert _value(frag, "ch08.anchors.disposition.ch18").renderings == ("supported",)
+    assert _value(frag, "ch08.anchors.previous_anchor_rf_offset_hz.ch33").value == 458.81
+    assert "ch08.anchors.previous_anchor_rf_offset_hz.ch18" not in keys
     notes = "\n".join(frag.notes)
+    assert m.MOVED_NOTE in frag.notes and "marked p on f_a" in notes
     assert "channels 33 have an off current era" in notes and "ch33: insufficient_blocks" in notes
     assert "estimator median (on) on channels 18, 33" in notes
     assert ("fine anchor suspect (bin marked s) on channels 21, 33: ch21: bootstrap mode mass 0.30; "
             "ch33: +9.9 bins from the in-span lobe; folds onto the out-of-span feature") in notes
-    assert "selector bin taken from the PSD in-span lobe on channels 21, 33" in notes
-    assert "selector bin is the nominal fine bin on channels 36" in notes and "no channel has a selected operating point" in notes
-    assert "spectrum window aliased (dom.\\ marked a): ch21: pilot 4754 Hz from the coarse-channel edge, 10246 Hz" in notes
-    assert "fine anchor folds onto the out-of-span feature on channels 33" in notes
+    assert "disposition reason codes are printed by the companion ledger, not here: ch33: oos, E, ref, alias, lobe" in notes
     assert "one era only on channels 18, 21" in notes and "anchor not measured (status ch36: empty)" in notes and "oos = stronger" in notes
     assert "previous-era anchor not measured (ch36: empty)" in notes and "containment section absent on channels 36" in notes
-    assert "selection did not run" not in notes
+    assert "spectrum window aliased (dom.\\ marked a): ch21: pilot 4754 Hz from the coarse-channel edge, 10246 Hz" in notes
+    assert m.LEDGER_LABEL in notes
+
+
+def test_anchors_keys_the_moved_columns_it_no_longer_prints(tmp_path):
+    """Every number the wide table emitted is still emitted, with the same key, printed or not."""
+    frag = m.build(core.load_run(_ledger(tmp_path)))
+    keys = _keys(frag)
+    printed = frag.tex
+    for key, value in (("ch08.anchors.source.ch18", "current_era"),
+                       ("ch08.anchors.selector_anchor_source.ch33", _LOBE),
+                       ("ch08.anchors.in_span_refined_offset_hz.ch33", -29.24),
+                       ("ch08.anchors.anchor_lobe_offset_bins.ch33", 9.94),
+                       ("ch08.anchors.shift_from_previous_bins.ch33", 31)):
+        assert _value(frag, key).value == value
+    assert _value(frag, "ch08.anchors.calibration_anchor_bin.ch18").value == 178 and _value(frag, "ch08.anchors.selector_anchor_bin.ch18").value == 178
+    assert _value(frag, "ch08.anchors.selector_anchor_source.ch18").value == "calibration" and _value(frag, "ch08.anchors.selector_anchor_source.ch18").renderings == ("cal",)
+    assert _value(frag, "ch08.anchors.calibration_anchor_bin.ch21").value == 111 and _value(frag, "ch08.anchors.selector_anchor_bin.ch21").value == 126
+    assert _value(frag, "ch08.anchors.selector_anchor_source.ch36").renderings == ("nominal",) and _value(frag, "ch08.anchors.selector_anchor_bin.ch36").value == 62
+    assert "ch08.anchors.calibration_anchor_bin.ch36" not in keys
+    assert _value(frag, "ch08.anchors.anchor_lobe_disagree.ch33").renderings == ("*",) and "ch08.anchors.anchor_lobe_disagree.ch21" not in keys
+    assert _value(frag, "ch08.anchors.anchor_folds_out_of_span.ch33").renderings == ("f",) and "ch08.anchors.anchor_folds_out_of_span.ch21" not in keys
+    assert _value(frag, "ch08.anchors.reasons.ch33").value.startswith("stronger out-of-span") and "ch08.anchors.reasons.ch18" not in keys
+    assert _value(frag, "ch08.anchors.reasons.ch33").source["column"] == "reasons"
+    assert sorted(k for k in keys if k.endswith(".ch36")) == ["ch08.anchors.selector_anchor_bin.ch36", "ch08.anchors.selector_anchor_source.ch36",
+                                                              "ch08.anchors.source.ch36"]
+    # none of those cells is in the chapter table: the ledger prints them
+    assert "cal $178$" not in printed and "lobe $126$" not in printed and "$+31$" not in printed and "previous" not in printed
+
+
+def test_ledger_prints_the_moved_columns_and_keys_none(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    frag = m.build_ledger(run)
+    assert frag.name == "calibration_anchors_ledger" and frag.label == "tab:archive:calibration_anchors"
+    assert _header(frag.tex) == ["ch", "era", "shift (bins)", "selector bin", "in-span (Hz)", r"$\Delta$ (bins)", "reasons"]
+    rows = _body(frag.tex)
+    assert len(_tabulars(frag.tex)) == 1 and len(rows) == 4 and all(len(r) == len(m.LEDGER_HEADER) for r in rows)
+    r18, r21, r33, r36 = rows
+    assert r18 == ["18", "current", "--", "cal $178$", "$-20.8$", "$+1.4$", "--"]
+    assert r21 == ["21", "current", "--", "lobe $126$ (cal $111$)", "$-151.5$", "$+0.3$", "--"]
+    assert r33 == ["33", "previous", "$+31$", "lobe $126$ (cal $124$)", "$-29.2$", r"$+9.9^{*\mathrm{f}}$",
+                   "oos, E, ref, alias, lobe"]
+    assert r36 == ["36", "current", "--", "nominal $62$", "--", "--", "--"]
+    # one row per channel, in the chapter table's order, and no number of its own
+    assert [r[0] for r in rows] == [r[0] for r in _body(m.build(run).tex)]
+    assert frag.numbers == [] and frag.inputs == []
+    notes = "\n".join(frag.notes)
+    assert "no number is keyed here: every cell is keyed by the chapter fragment as ch08.anchors.<column>.chNN" in notes
+    assert "tab:calibration:anchors leaves out" in notes and "oos = stronger" in notes
+    assert "selector bin taken from the PSD in-span lobe on channels 21, 33" in notes
+    assert "selector bin is the nominal fine bin on channels 36" in notes and "no channel has a selected operating point" in notes
+    assert "channels 33 have an off current era" in notes and "one era only on channels 18, 21" in notes
+    assert "fine anchor folds onto the out-of-span feature on channels 33" in notes
+    assert "containment section absent on channels 36" in notes and "selection did not run" not in notes
 
 
 def test_anchors_absent_cases(tmp_path):
@@ -217,38 +283,51 @@ def test_anchors_absent_cases(tmp_path):
     _mutate(root, "ch21_fid736.json", lambda s: s.update({"selection": None}))                 # selection did not run
     _mutate(root, "ch33_fid552.json", lambda s: s.update({"selection": None, "anchor_calibration": None}))
     _mutate(root, "ch36_fid506.json", lambda s: s.update({"anchor": None, "selection": {**_SEL, "anchor_bin": None}}))
-    frag = m.build(core.load_run(root))
+    run = core.load_run(root)
+    frag, ledger = m.build(run), m.build_ledger(run)
     r18, r21, r33, r36 = _body(frag.tex)
-    assert r18[9] == "--" and r18[10] == "--" and r18[14] == "unsupported"
-    assert r21[6] == "$111$" and r33[6] == "--" and r36[1:7] == ["--"] * 6
+    assert r18[10] == "unsupported" and r36 == ["36"] + ["--"] * 11
+    l18, l21, l33, l36 = _body(ledger.tex)
+    assert l18[4] == "--" and l18[5] == "--" and l18[6] == "--"            # in-span not recovered, Delta undefined
+    assert l21[3] == "$111$" and l33[3] == "--" and l36[1:] == ["--"] * 6  # the calibration block's bin, untagged
     keys = _keys(frag)
     assert "ch08.anchors.in_span_refined_offset_hz.ch18" not in keys
     assert "ch08.anchors.calibration_anchor_bin.ch21" in keys and "ch08.anchors.selector_anchor_bin.ch18" in keys
     assert not [k for k in keys if "selector" in k and not k.endswith(".ch18")]
     assert not [k for k in keys if k.endswith(".ch36")]
-    notes = "\n".join(frag.notes)
+    for notes in ("\n".join(frag.notes), "\n".join(ledger.notes)):
+        assert "anchor section absent on channels 36" in notes or "containment section absent" in notes
+    notes = "\n".join(ledger.notes)
     assert "no in-span lobe recovered on channels 18" in notes and "selection did not run on channels 21, 33" in notes
-    assert "selection carries no anchor bin on channels 36" in notes and "anchor section absent on channels 36" in notes
+    assert "selection carries no anchor bin on channels 36" in notes
+    assert "anchor section absent on channels 36" in "\n".join(frag.notes)
 
 
-def test_containment_every_column(tmp_path):
+def test_containment_two_panels(tmp_path):
     run = core.load_run(_ledger(tmp_path))
     frag = m.build_containment(run)
     assert frag.name == "calibration_containment" and frag.label == "fig:calibration:containment"
-    rows = _body(frag.tex)
-    assert len(rows) == 7 and all(len(r) == len(m.containment_header()) for r in rows)
-    r18, r21, r33, r36, k90, k95, k99 = rows
-    assert r18[:7] == ["18", "supported", "$0.962$", "$0.997$", "$0.00$", "$3{,}031$", "$0.000$"]
-    assert r18[7:12] == ["$0.957$", "$0.996$", "$0.00$", "$1{,}505$", "$0.000$"]
-    assert r18[12:] == ["$0.943$", "$0.992$", "$0.00$", "$742$", "$0.002$"]
-    assert r21[1] == r"supported$^{\mathrm{a}}$" and r21[6] == r"$0.000^{\mathrm{a}}$" and r21[11] == r"$0.000^{\mathrm{a}}$" and r21[16] == "$0.002$"
-    assert r33[1] == "sentinel" and r33[8] == "$0.008$" and r33[11] == r"$0.195^{\mathrm{a}}$" and r33[15] == "$-12$" and r33[16] == "$137.416$"
-    assert r36 == ["36"] + ["--"] * 16
-    assert k90[:2] == [r"$K^\star$ ($E_{\min} = 0.9$)", "3 eligible; sentinel 33"] and k90[8] == r"$K^\star$" and k90[13] == "fails: ch18 ($0.992$)"
-    assert k90[2:8] == [""] * 6 and k90[9:13] == [""] * 4 and k90[14:] == [""] * 3
-    assert k95[3] == r"$K^\star$" and k95[8] == "fails: ch18 ($0.996$)" and k95[13] == ""
-    assert k99[:2] == [r"$K^\star$ ($E_{\min} = 0.99$)", "3 eligible; sentinel 18, 21, 33"] and k99[2:] == [""] * 15
-    assert frag.tex.count(r"\midrule") == 2          # header rule and the K* rule
+    assert len(_tabulars(frag.tex)) == 2 and frag.tex.count(r"\medskip") == 1
+    assert frag.tex.count(r"\emph{") == 2 and frag.tex.startswith(m.CONTAINMENT_PANEL_CAPTIONS[0])
+    assert m.CONTAINMENT_PANEL_CAPTIONS[1] in frag.tex and frag.tex.count(r"\midrule") == 3   # two headers, one K* rule
+    assert _header(frag.tex, 0) == ["ch", "disp.", "$F_{64}$", "$E_{64}$", "$F_{128}$", "$E_{128}$", "$F_{256}$", "$E_{256}$"]
+    assert _header(frag.tex, 1) == ["ch", "$L_{64}$ (dB)", "$M_{64}$ (Hz)", "$C_{64}$", "$L_{128}$ (dB)", "$M_{128}$ (Hz)",
+                                    "$C_{128}$", "$L_{256}$ (dB)", "$M_{256}$ (Hz)", "$C_{256}$"]
+    assert [len(m.containment_header(p)) == len(m.CONTAINMENT_ALIGN[p]) for p in (0, 1)] == [True, True]
+    a, b = _body(frag.tex, 0), _body(frag.tex, 1)
+    assert len(a) == 7 and len(b) == 4 and all(len(r) == 8 for r in a) and all(len(r) == 10 for r in b)
+    a18, a21, a33, a36, k90, k95, k99 = a
+    b18, b21, b33, b36 = b
+    assert a18 == ["18", "supported", "$0.962$", "$0.997$", "$0.957$", "$0.996$", "$0.943$", "$0.992$"]
+    assert b18 == ["18", "$0.00$", "$3{,}031$", "$0.000$", "$0.00$", "$1{,}505$", "$0.000$", "$0.00$", "$742$", "$0.002$"]
+    assert a21[1] == r"supported$^{\mathrm{a}}$" and b21[3] == r"$0.000^{\mathrm{a}}$" and b21[6] == r"$0.000^{\mathrm{a}}$"
+    assert a33[1] == "sentinel" and a33[5] == "$0.008$" and b33[6] == r"$0.195^{\mathrm{a}}$" and b33[8] == "$-12$" and b33[9] == "$137.416$"
+    assert a36 == ["36"] + ["--"] * 7 and b36 == ["36"] + ["--"] * 9
+    # the K* rows stay in the panel that carries the E_K columns they mark, labelled by their E_min
+    assert k90[:2] == [r"$E_{\min} = 0.9$", "3 eligible; sentinel 33"] and k90[5] == r"$K^\star$" and k90[7] == "fails: ch18 ($0.992$)"
+    assert k90[2:5] == [""] * 3 and k90[6] == ""
+    assert k95[3] == r"$K^\star$" and k95[5] == "fails: ch18 ($0.996$)" and k95[7] == ""
+    assert k99[:2] == [r"$E_{\min} = 0.99$", "3 eligible; sentinel 18, 21, 33"] and k99[2:] == [""] * 6
     keys = _keys(frag)
     assert len(keys) == len(set(keys))
     assert _value(frag, "ch08.containment.ref_aliased_128.ch33").renderings == ("a",) and "ch08.containment.ref_aliased_64.ch33" not in keys
@@ -256,6 +335,8 @@ def test_containment_every_column(tmp_path):
                                                                "ch08.containment.ref_aliased_64.ch21"]
     assert _value(frag, "ch08.containment.window_aliased_hz.ch21").value == 10246.5 and "ch08.containment.window_aliased_hz.ch33" not in keys
     assert _value(frag, "ch08.containment.margin_hz_256.ch33").value == -12 and _value(frag, "ch08.containment.e_128.ch18").precision == 3
+    assert _value(frag, "ch08.containment.frames_in_span_64.ch18").value == 0.962
+    assert _value(frag, "ch08.containment.straddle_loss_db_256.ch18").precision == 2
     assert _value(frag, "ch08.containment.disposition.ch33").renderings == ("sentinel",) and not [k for k in keys if k.endswith(".ch36")]
     assert _value(frag, "ch04.kstar.k_star.emin0.9").value == 128 and _value(frag, "ch04.kstar.failing_k.emin0.9").value == 256
     assert _value(frag, "ch04.kstar.binding_channel.emin0.9").value == 18 and _value(frag, "ch04.kstar.binding_e.emin0.9").value == 0.992
@@ -263,6 +344,8 @@ def test_containment_every_column(tmp_path):
     assert "ch04.kstar.k_star.emin0.99" not in keys and _value(frag, "ch04.kstar.sentinels.emin0.99").renderings == ("sentinel 18, 21, 33",)
     assert frag.inputs[-1] == tmp_path / "tables" / "kstar.csv" and len(frag.inputs) == 6
     notes = "\n".join(frag.notes)
+    assert "stacked as two panels one above the other, each with the ch column" in notes
+    assert "at footnotesize the two panels stand on one portrait page" in notes
     assert "K* undefined at E_min = 0.99" in notes and "ch21 K=64, ch21 K=128, ch33 K=128" in notes
     assert "disp.\\ marked a" in notes and "ch21 (10246 Hz aliased, edge 4754 Hz away)" in notes
     assert "containment section absent on channels 36" in notes
@@ -271,40 +354,50 @@ def test_containment_every_column(tmp_path):
 def test_containment_without_kstar(tmp_path):
     run = core.load_run(_ledger(tmp_path, kstar=False))
     frag = m.build_containment(run)
-    assert len(_body(frag.tex)) == 4 and frag.tex.count(r"\midrule") == 1 and frag.inputs == []
+    assert len(_body(frag.tex, 0)) == 4 and len(_body(frag.tex, 1)) == 4
+    assert frag.tex.count(r"\midrule") == 2 and frag.inputs == []
     assert not [k for k in _keys(frag) if k.startswith("ch04.")] and "tables/kstar.csv absent: no K* rows" in frag.notes
 
 
 def test_write_report_round_trip(tmp_path):
     run = core.load_run(_ledger(tmp_path))
     manifest = core.write_report(run, tmp_path / "out", list(m.BUILDERS), commit="d" * 40, generated="2026-09-07T09:00:00+00:00")
-    assert [a["name"] for a in manifest["artifacts"]] == ["calibration_anchors", "calibration_containment"]
+    assert [a["name"] for a in manifest["artifacts"]] == ["calibration_anchors", "calibration_anchors_ledger", "calibration_containment"]
+    assert [a["label"] for a in manifest["artifacts"]][1] == "tab:archive:calibration_anchors"
     docs = [nb.load_numbers([tmp_path / "out" / "numbers" / f"{a['name']}.numbers.json"]) for a in manifest["artifacts"]]
-    assert [len(d) for d in docs] == [a["count"] for a in manifest["artifacts"]]
-    assert (tmp_path / "out" / "tables" / "calibration_anchors.tex").read_text().startswith(r"\begin{tabular}{lllrrrlrrrrrrrlrr}")
-    assert (tmp_path / "out" / "tables" / "calibration_containment.tex").read_text().startswith(r"\begin{tabular}{llrrrrrrrrrrrrrrr}")
+    assert [len(d) for d in docs] == [a["count"] for a in manifest["artifacts"]] and docs[1] == []
+    keys = {n.key for doc in docs for n in doc}
+    assert {"ch08.anchors.source.ch18", "ch08.anchors.selector_anchor_bin.ch18", "ch08.anchors.shift_from_previous_bins.ch33"} <= keys
+    assert (tmp_path / "out" / "tables" / "calibration_anchors.tex").read_text().startswith(r"\begin{tabular}{llrrrrrrrrlr}")
+    assert (tmp_path / "out" / "tables" / "calibration_anchors_ledger.tex").read_text().startswith(r"\begin{tabular}{llrlrrl}")
+    assert r"\begin{tabular}{llrrrrrr}" in (tmp_path / "out" / "tables" / "calibration_containment.tex").read_text()
 
 
 @pytest.mark.skipif(not (REAL_RUN / "ledger" / "run.json").is_file(), reason="real archive run not on this machine")
 def test_real_run_renders_23_channels():
     run = core.load_run(REAL_RUN)
-    anchors, containment = m.build(run), m.build_containment(run)
-    for frag, extra in ((anchors, 0), (containment, 3)):
-        rows = _body(frag.tex)
+    anchors, ledger, containment = m.build(run), m.build_ledger(run), m.build_containment(run)
+    for frag, panel, extra in ((anchors, 0, 0), (ledger, 0, 0), (containment, 0, 3), (containment, 1, 0)):
+        rows = _body(frag.tex, panel)
         assert len(rows) == 23 + extra and [r[0] for r in rows[:23]] == [str(c) for c in range(14, 37)]
         keys = _keys(frag)
         assert len(keys) == len(set(keys))
         doc = nb.NumbersDocument.new(frag.name, repository="r", commit="c", script="s", generated="g")
         for n in frag.numbers:
             doc.add(n)                                    # raises on a duplicate key
-        assert sorted(int(k.rsplit(".ch", 1)[1]) for k in keys if ".window_aliased_hz." in k) == [21, 32]
+    for frag in (anchors, containment):
+        assert sorted(int(k.rsplit(".ch", 1)[1]) for k in _keys(frag) if ".window_aliased_hz." in k) == [21, 32]
     by = {r[0]: r for r in _body(anchors.tex)}
-    assert [ch for ch, r in by.items() if r[1] == "previous"] == ["19", "20", "26", "27", "32"]
-    assert [ch for ch, r in by.items() if r[2] == "on-quiet"] == ["16", "21", "23", "25", "29"]
-    assert by["33"][14] == "sentinel: oos, E, ref, lobe" and by["18"][14] == "supported"
-    assert by["18"][6] == "cal $178$" and by["21"][6] == "lobe $126$ (cal $111$)" and by["27"][6] == "cal $246$"
-    assert by["14"][15] == "--" and by["33"][15] == "$458.8$" and by["33"][16] == "$+31$" and by["27"][16] == "$-14$"
-    assert by["21"][7].endswith(r"^{\mathrm{a}}$") and by["27"][10] == "$+0.0$".replace("+", "")
+    led = {r[0]: r for r in _body(ledger.tex)}
+    # the five off-era channels: the anchor of record is the previous era's (p on f_a, era = previous in the ledger)
+    assert [ch for ch, r in led.items() if r[1] == "previous"] == ["19", "20", "26", "27", "32"]
+    assert [ch for ch, r in by.items() if r[3].endswith(r"^{\mathrm{p}}$")] == ["19", "20", "26", "27", "32"]
+    assert [ch for ch, r in by.items() if r[1] == "on-quiet"] == ["16", "21", "23", "25", "29"]
+    assert by["33"][10] == "sentinel" and by["18"][10] == "supported" and led["33"][6] == "oos, E, ref, lobe"
+    assert [ch for ch, r in led.items() if r[6] != "--"] == ["21", "23", "25", "29", "33"]
+    assert led["18"][3] == "cal $178$" and led["21"][3] == "lobe $126$ (cal $111$)" and led["27"][3] == "cal $246$"
+    assert by["14"][11] == "--" and by["33"][11] == "$458.8$" and led["33"][2] == "$+31$" and led["27"][2] == "$-14$"
+    assert by["21"][5].endswith(r"^{\mathrm{a}}$") and led["27"][5] == "$0.0$"
     assert _value(anchors, "ch08.anchors.anchor_bin.ch33").value == 116 and _value(anchors, "ch08.anchors.calibration_anchor_bin.ch33").value == 124
     assert _value(anchors, "ch08.anchors.selector_anchor_bin.ch33").value == 126
     keys = _keys(anchors)
@@ -316,4 +409,17 @@ def test_real_run_renders_23_channels():
     aliased = sorted(k for k in _keys(containment) if ".ref_aliased_" in k)
     assert aliased == ["ch08.containment.ref_aliased_128.ch21", "ch08.containment.ref_aliased_64.ch21", "ch08.containment.ref_aliased_64.ch32"]
     notes = "\n".join(anchors.notes)
-    assert "channels 19, 20, 26, 27, 32 have an off current era" in notes and "selector bin taken from the PSD in-span lobe on channels 21, 23, 25, 29, 33" in notes
+    assert "channels 19, 20, 26, 27, 32 have an off current era" in notes
+    assert "selector bin taken from the PSD in-span lobe on channels 21, 23, 25, 29, 33" in "\n".join(ledger.notes)
+
+
+@pytest.mark.skipif(not (REAL_RUN / "ledger" / "run.json").is_file(), reason="real archive run not on this machine")
+def test_real_run_fragments_fit_the_page():
+    """The measured natural widths (pdflatex, 11pt): the chapter table scales into landscape, the ledger fits
+    portrait, and each containment panel fits landscape unscaled. See the module docstring."""
+    run = core.load_run(REAL_RUN)
+    anchors, ledger, containment = m.build(run), m.build_ledger(run), m.build_containment(run)
+    assert len(_header(anchors.tex)) == 12 and len(_header(ledger.tex)) == 7
+    assert len(_header(containment.tex, 0)) == 8 and len(_header(containment.tex, 1)) == 10
+    # no cell of the widest columns the trim removed is left in the chapter table
+    assert "in-span" not in anchors.tex and "selector" not in anchors.tex and "sentinel:" not in anchors.tex
