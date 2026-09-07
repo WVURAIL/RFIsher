@@ -219,12 +219,12 @@ def test_every_printed_column_on_a_synthetic_ledger(tmp_path):
     q14, q15, q17, q20, q29, q35 = two
     # a channel without a null section: every cell but the channel dashed (and the plate, which is a label)
     assert p17[1:] == [core.DASH] * (len(cn.PANEL1_HEADER) - 1)
-    assert q17[1:-1] == [core.DASH] * (len(cn.PANEL2_HEADER) - 2) and q17[-1] == r"Fig.~\ref{fig:archive:plate:ch17}"
+    assert q17[1:-1] == [core.DASH] * (len(cn.PANEL2_HEADER) - 2) and q17[-1] == r"Fig.~\ref{fig:archive:atlas:17}"
     # channel 29: panel 1 is the population and its widths, panel 2 the bulk, the check, the floor and the plate
     assert p29 == ["29", "$20{,}218$", "bulk (mixture)", "$1.0012$", "$0.00314$", "$1{,}014$", "$1.55$", "$20.94$",
                    "$1.18$", "$18.76$"]
     assert q29 == ["29", "$125$", "$0.971$ / $0.968$", r"$4^\dagger$ ($6{,}716$)", "$-46.7$",
-                   r"stated: kept half ($7{,}830$)", r"Fig.~\ref{fig:archive:plate:ch29}"]
+                   r"stated: kept half ($7{,}830$)", r"Fig.~\ref{fig:archive:atlas:29}"]
     # channel 35: off era, measured p90 floor, exchangeability skipped
     assert p35[P1["source"]] == "off era" and p35[P1["centre"]] == "$0.9993$" and p35[P1["wf_core"]] == "$6.33$"
     assert q35[P2["exch"]] == core.DASH and q35[P2["rho"]] == core.DASH and q35[P2["bulk"]] == "$126$"
@@ -262,7 +262,7 @@ def test_every_printed_column_on_a_synthetic_ledger(tmp_path):
     assert num["ch08.nulls.floor_basis.ch14"].value == "bulk left side (not H0)" and num["ch08.nulls.floor_frames.ch14"].value == 18032
     assert num["ch08.nulls.floor_basis.ch14"].renderings == ("bulk left side, not H0",)
     assert num["ch08.nulls.floor_evidence.ch15"].value == "refused" and num["ch08.nulls.floor_evidence.ch15"].status == "refused"
-    assert num["ch08.nulls.plate.ch35"].value == "fig:archive:plate:ch35" and num["ch08.nulls.plate.ch35"].kind == "text"
+    assert num["ch08.nulls.plate.ch35"].value == "fig:archive:atlas:35" and num["ch08.nulls.plate.ch35"].kind == "text"
     # the i.i.d. tail fraction has no column but is still a number, per channel and once as the caption's constant
     assert abs(num["ch08.nulls.coarse_tail_fraction_iid_pct.ch29"].value - 0.13927) < 1e-4
     assert abs(num["ch08.nulls.coarse_tail_fraction_iid_pct"].value - 0.14) < 1e-9
