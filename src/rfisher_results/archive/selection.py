@@ -109,6 +109,7 @@ class Replay:
     retained_residual_bootstrap: dict | None
     false_alarm_rate: float           # masked fraction when the block is a verified off era; NaN otherwise
     false_alarm_basis: str
+    unmasked_residual: float = math.nan   # mean systematic residual over every frame of the block (keep-everything)
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,7 @@ class SelectionResult:
     cost: float
     plateau: Plateau | None
     evaluation: Replay | None
+    unmasked_residual: float = math.nan   # calibration block, keep-everything residual
     stability: dict = field(default_factory=dict)
     provisional: dict = field(default_factory=dict)
     source_id: str = ""
@@ -157,9 +159,17 @@ class SelectionResult:
             "plateau_eta_high": self.plateau.eta_high if self.plateau else math.nan,
         }
         ev = self.evaluation
+        mf = (ev.masked_fraction_bootstrap or {}) if ev else {}
+        rr = (ev.retained_residual_bootstrap or {}) if ev else {}
         row.update({
+            "r_sys_unmasked_calibration": self.unmasked_residual,
             "masked_fraction_evaluation": ev.masked_fraction if ev else math.nan,
+            "masked_fraction_evaluation_q16": mf.get("q0.16", math.nan), "masked_fraction_evaluation_q84": mf.get("q0.84", math.nan),
             "r_sys_evaluation": ev.retained_residual if ev else math.nan,
+            "r_sys_evaluation_q16": rr.get("q0.16", math.nan), "r_sys_evaluation_q84": rr.get("q0.84", math.nan),
+            "bootstrap_blocks_evaluation": mf.get("blocks", 0),
+            "r_sys_unmasked_evaluation": ev.unmasked_residual if ev else math.nan,
+            "kept_evaluation": ev.kept if ev else 0,
             "R_evaluation": ev.tolerance_fraction if ev else math.nan,
             "survey_flag_rate_evaluation": ev.survey_flag_rate if ev else math.nan,
             "false_alarm_rate": ev.false_alarm_rate if ev else math.nan,
@@ -252,6 +262,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
         return SelectionResult(status="refused", refusal=f"bundle: {exc}", **base, **empty)
     rows = bundle.source_row_index
     residuals = systematic_residuals(product, rows, floor, gain)
+    base["unmasked_residual"] = float(residuals.mean()) if residuals.size else math.nan
     score = _evidence("measured", "exact fine-power terms", product.path.name, product_sha,
                       "Q16 requirements from fine_power_u64")
     correlation = correlation or _evidence("conditional", "correlation time pending", "chapter 8 tau_c estimator not yet run on v5")
@@ -325,7 +336,8 @@ def replay_on_block(product: Product, block: np.ndarray, *, anchor_bin: int, bul
                   tolerance_fraction=r_sys / r_tol if math.isfinite(r_sys) else math.nan,
                   survey_flag_rate=float(flag.mean()), masked_fraction_bootstrap=mf_bs, retained_residual_bootstrap=rr_bs,
                   false_alarm_rate=float(f) if off_era else math.nan,
-                  false_alarm_basis="verified off era: every frame is null" if off_era else "not measurable: no verified off state in this block")
+                  false_alarm_basis="verified off era: every frame is null" if off_era else "not measurable: no verified off state in this block",
+                  unmasked_residual=float(residual.mean()) if n else math.nan)
 
 
 def eta_display(eta_q16: int) -> float:
