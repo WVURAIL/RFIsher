@@ -38,7 +38,8 @@ from rfisher import residual
 
 from rfisher.channels import channel_edges
 
-from . import anchors, blocks, chain, eras, flaggers, ledger, nulls, psd, screening, selection, tolerances
+from . import (anchors, blocks, chain, eras, flaggers, ledger, masked_spectra, nulls, operating, psd,
+               screening, selection, tolerances)
 from .numbers import git_commit
 from .products import COARSE_BIN_HZ, FINE_BIN_HZ, Product, sha256_of
 
@@ -464,6 +465,41 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     else:
         record.add("selection", None)
 
+    # 8b. the operating point: the knee of the calibration block's own mask-against-residual frontier,
+    # applied to the evaluation block the calibration never saw, with the before-and-after spectra it produces
+    op = None
+    if sel is not None and sel.points:
+        op = operating.choose(ch, list(sel.points))
+        operating.write_operating_points([op], ch_dir / "operating_point.csv")
+        record.add("operating", op.as_row())
+        for note in op.notes:
+            notes.append(f"operating point: {note}")
+    else:
+        record.add("operating", None)
+    spectra = []
+    if op is not None and op.point is not None and split.evaluation.any() and "psd_frame_db_i16" in p.archive.files:
+        for basis, rho, eta_q16, eta in (("operating point", op.point.rho, op.point.eta_q16, op.point.eta),):
+            try:
+                kept_frames = masked_spectra.kept_at_point(p, split.evaluation, anchor_bin=anchor_bin, bulk_mask=bulk,
+                                                           rho=rho, eta_q16=eta_q16)
+                spectra.append(masked_spectra.measure(p, split.evaluation, kept_frames, basis=basis, rho=rho,
+                                                      eta_q16=eta_q16, eta=eta))
+            except Exception as exc:
+                notes.append(f"held-out spectra ({basis}): {type(exc).__name__}: {exc}")
+        # the survey flag on the same block, as the reference the operating point is measured against
+        try:
+            spectra.append(masked_spectra.measure(p, split.evaluation, split.evaluation & ~p.rejected,
+                                                  basis="survey flag", rho=0, eta_q16=selection.Q16_SCALE, eta=1.0))
+        except Exception as exc:
+            notes.append(f"held-out spectra (survey flag): {type(exc).__name__}: {exc}")
+    if spectra:
+        masked_spectra.write_spectra_rows(spectra, ch_dir / "held_out_spectra.csv")
+        masked_spectra.write_spectra_npz(spectra, ch_dir / "held_out_spectra.npz")
+        record.add("held_out", {f"{s.basis.replace(' ', '_')}_{k}": v for s in spectra for k, v in s.as_row().items()
+                                if k not in ("channel", "freq_id", "basis")})
+    else:
+        record.add("held_out", None)
+
     # 9. the incumbent flaggers on the same frames (chapter 9's flagger table)
     try:
         flag_cmp = flaggers.compare(
@@ -505,6 +541,8 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         "chain_row": ch_res.as_row() if ch_res is not None else None,
         "screening_row": {"channel": ch, **screen.as_row()},
         "flagger_rows": [r.as_row() for r in flag_cmp.rows] if flag_cmp is not None else [],
+        "operating_row": op.as_row() if op is not None else None,
+        "held_out_rows": [s.as_row() for s in spectra],
         "seconds": time.time() - t0,
     }
 
@@ -585,6 +623,8 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
     _write_csv([r["chain_row"] for r in results], tables / "chain.csv")
     _write_csv([r["screening_row"] for r in results], tables / "screening.csv")
     _write_csv([row for r in results for row in r["flagger_rows"]], tables / "flaggers.csv")
+    _write_csv([r["operating_row"] for r in results], tables / "operating_points.csv")
+    _write_csv([row for r in results for row in r["held_out_rows"]], tables / "held_out_spectra.csv")
 
     book = ledger.Ledger(run={
         "generated": generated or dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),

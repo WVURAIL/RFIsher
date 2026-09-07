@@ -18,11 +18,12 @@ from typing import Callable, Sequence
 from .core import Fragment, Run, load_run, write_report
 
 TABLE_MODULES: tuple[str, ...] = (
-    "calibration_eras", "calibration_anchors", "calibration_nulls", "blocked_evaluation", "held_out_summary",
-    "tolerance_eta", "tolerance_channels", "conclusions_matrix", "handover", "flagger_survey",
+    "accounting", "census", "calibration_eras", "calibration_anchors", "calibration_nulls", "blocked_evaluation",
+    "held_out_summary", "tolerance_eta", "tolerance_channels", "conclusions_matrix", "handover", "flagger_survey",
+    "crossbuild", "detection",
 )
 FIGURE_MODULES: tuple[str, ...] = ("figures_status", "figures_two_walls", "figures_census_psd",
-                                   "figures_masking_cost")
+                                   "figures_masking_cost", "worked_example", "detection")
 
 
 def _module(name: str):
@@ -68,6 +69,7 @@ def build_report(results_dir: Path | str, out_dir: Path | str | None = None, *, 
         for name in figure_modules:
             mod = _module(name)
             extra.extend(Path(p) for p in mod.render(run, fig_dir))
-            if hasattr(mod, "build"):
+            # a module registered in both registries (a table beside its figure) is already built
+            if hasattr(mod, "build") and name not in modules:
                 builders.append(mod.build)
     return write_report(run, out, builders, commit=commit, generated=generated, extra_artifacts=extra)
