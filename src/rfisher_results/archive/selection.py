@@ -138,6 +138,7 @@ class SelectionResult:
     plateau: Plateau | None
     evaluation: Replay | None
     unmasked_residual: float = math.nan   # calibration block, keep-everything residual
+    points: tuple = ()                    # every evaluated (rho, eta) pair of the calibration surface, as dicts
     stability: dict = field(default_factory=dict)
     provisional: dict = field(default_factory=dict)
     source_id: str = ""
@@ -287,10 +288,11 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
     except PreparationRefused as exc:
         refusal = str(exc)
         claim, opt = "diagnostic", optimize_threshold(family.histograms_by_rho, float(r_tol))
+    points = tuple(_point_row(pt) for pt in opt.points)
     if opt.selected is None:
         status = {"no_feasible_threshold": "no feasible point", "no_evaluable_threshold": "no evaluable point"}.get(opt.status, opt.status)
         return SelectionResult(status=status, refusal=refusal, stability=stability, source_id=bundle.source_id,
-                               policy_sha256=family.policy_sha256, **base, **{**empty, "claim_status": claim})
+                               policy_sha256=family.policy_sha256, points=points, **base, **{**empty, "claim_status": claim})
     sel = opt.selected
     replay = None
     if eva.any():
@@ -302,8 +304,46 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
         rank_fraction=float(sel.rank_fraction), eta_q16=int(sel.multiplier_q16), eta=float(sel.eta),
         masked_fraction=float(sel.masked_fraction), systematic_residual=float(sel.systematic_residual),
         tolerance_fraction=float(sel.tolerance_fraction), cost=float(sel.cost),
-        plateau=_plateau(opt.points, sel), evaluation=replay, stability=stability,
+        plateau=_plateau(opt.points, sel), evaluation=replay, stability=stability, points=points,
         source_id=bundle.source_id, policy_sha256=family.policy_sha256, **base)
+
+
+POINT_COLUMNS = ("rho", "rank_fraction", "eta_q16", "eta", "frames", "kept", "masked_fraction", "r_sys",
+                 "tolerance_fraction", "cost", "feasible")
+
+
+def _point_row(pt) -> dict:
+    return {"rho": int(pt.rho), "rank_fraction": float(pt.rank_fraction), "eta_q16": int(pt.multiplier_q16), "eta": float(pt.eta),
+            "frames": int(pt.frame_count), "kept": int(pt.kept_frames), "masked_fraction": float(pt.masked_fraction),
+            "r_sys": float(pt.systematic_residual), "tolerance_fraction": float(pt.tolerance_fraction),
+            "cost": float(pt.cost), "feasible": bool(pt.feasible)}
+
+
+def write_operating_points(result: SelectionResult, path: Path | str) -> Path:
+    """The calibration surface: one row per evaluated (rho, eta) pair (the two-walls curves read this)."""
+    import csv
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["channel", *POINT_COLUMNS, "selected"], lineterminator="\n")
+        writer.writeheader()
+        for row in result.points:
+            selected = result.rho == row["rho"] and result.eta_q16 == row["eta_q16"]
+            writer.writerow({"channel": result.channel, **{k: (repr(v) if isinstance(v, float) else v) for k, v in row.items()},
+                             "selected": selected})
+    return path
+
+
+def surface_summary(result: SelectionResult) -> dict:
+    """The least residual and the least cost on the evaluated surface, and how far the residual is from tolerance."""
+    pts = [p for p in result.points if math.isfinite(p["r_sys"])]
+    if not pts:
+        return {"surface_points": len(result.points), "min_r_sys": math.nan, "min_r_sys_rho": None, "min_r_sys_eta": math.nan,
+                "min_r_sys_masked_fraction": math.nan, "min_R": math.nan, "feasible_points": 0}
+    best = min(pts, key=lambda p: p["r_sys"])
+    return {"surface_points": len(result.points), "min_r_sys": best["r_sys"], "min_r_sys_rho": best["rho"], "min_r_sys_eta": best["eta"],
+            "min_r_sys_masked_fraction": best["masked_fraction"], "min_R": best["r_sys"] / result.r_tol if result.r_tol else math.nan,
+            "feasible_points": sum(1 for p in pts if p["feasible"])}
 
 
 def replay_on_block(product: Product, block: np.ndarray, *, anchor_bin: int, bulk_mask, rho: int, eta_q16: int,

@@ -114,6 +114,14 @@ def test_refusals_are_reported_not_raised(product):
     assert short.status in ("feasible", "no feasible point") and short.stability["status"].startswith("refused")
     if short.status == "feasible":
         assert short.rho is not None and short.evaluation is not None
+    # the evaluated surface is kept and written, with the selected point marked
+    assert short.points and all(set(p) == set(selection.POINT_COLUMNS) for p in short.points)
+    summary = selection.surface_summary(short)
+    assert summary["surface_points"] == len(short.points) and summary["min_r_sys"] <= min(p["r_sys"] for p in short.points if p["r_sys"] == p["r_sys"])
+    out = selection.write_operating_points(short, product.path.parent / "op.csv")
+    lines = out.read_text().splitlines()
+    assert lines[0] == "channel," + ",".join(selection.POINT_COLUMNS) + ",selected" and len(lines) == len(short.points) + 1
+    assert sum(line.endswith(",True") for line in lines[1:]) == (1 if short.status == "feasible" else 0)
 
 
 def test_rows_carry_the_unmasked_residual_and_the_evaluation_intervals(tmp_path):
