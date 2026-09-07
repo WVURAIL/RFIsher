@@ -330,3 +330,33 @@ its status; changing one is a new run.
 4. `archive.selection`, `archive.screening`, `archive.ledger`.
 5. Table fragments, figures, `numbers.json`, the marker matcher; then the
    dissertation edits, the number-gate re-pinning and the vendoring.
+
+## 9. The report: stub tables from the ledger
+
+`rfisher_results.archive.report` renders one fragment per stub table from the
+ledger alone, with a `numbers.json` beside it and an `export_manifest.json`
+(schema `rfisher-archive-report`, producing commit, run identity, artifact
+digests) for the dissertation's importer. Cells are plain `tabular` rows; the
+chapter keeps the `table` environment, caption and label. Every builder is a
+pure function of `report.Run`; the columns below name the ledger keys
+(`section.key`) each cell reads.
+
+| fragment | label | columns (ledger keys) |
+|---|---|---|
+| `calibration_eras` | tab:calibration:eras | era.current_first_month .. current_last_month, current_boundary_uncertainty_months, current_evidence with the current era's `record_agreement` and `unmatched_station_records`, stale_latest (stale_lag_months), earlier eras (tables/eras.csv spans), current_frames, coverage (eras.csv `coverage` of the current era) |
+| `calibration_anchors` | tab:calibration:anchors | anchor.anchor_bin, anchor_rf_offset_hz, method, boot_rf_hz_q16/q84, source; containment.dominant_refined_offset_hz, dominant_db, in_span_refined_offset_hz, anchor_lobe_offset_bins; peak_abs_median/p90/p99_hz; anchor_previous.anchor_rf_offset_hz, shift_from_previous_bins |
+| `calibration_containment` | fig:calibration:containment (compact table) | containment.frames_in_span_K, e_K, straddle_loss_db_K, margin_hz_K, ref_contamination_K (+ ref_aliased_K), disposition, reasons; K* rows from tables/kstar.csv |
+| `calibration_nulls` | tab:calibration:nulls | null.era_frames, bulk_size, null_source, mixture_declared, coarse_centre, coarse_core_sigma, coarse_raw/core_width_factor, fine_raw/core_width_factor, coarse_tail_fraction, kept_width_factor, exch_rho, exch_measured, exch_predicted, floor_db, floor_evidence, floor_population; the plate label |
+| `blocked_evaluation` | ch05 blocked-evaluation stub | blocks.calibration/evaluation months and frames, null.coarse_centre and core width against null_evaluation.*, the drift (difference), blocks.*_finite_estimate_rate, selection.masked_fraction_evaluation_q16/q84 |
+| `held_out_summary` | ch06 held-out stub | selection.rho, eta, masked_fraction_calibration, masked_fraction_evaluation (+q16/q84), r_sys_evaluation (+q16/q84), R_evaluation, false_alarm_rate, claim_status |
+| `tolerance_eta` | tab:tolerance:eta | selection.era, bulk_size, rho, q_rho, eta, eta_q16, masked_fraction_calibration, floor_db (evidence, population), r_sys_calibration, r_tol, R_calibration, cost, plateau_members/eta_low/eta_high, status + claim_status + refusal; chain.tau_quality marks bounds |
+| `tolerance_channels` | tab:tolerance:channels | geometry.allocation_low/high_mhz, tolerance.z_low/z_high, geometry.pilot_hz (monitored bin), era span, screening.survey_flag_rate_era, selection.masked_fraction_evaluation, chain.on_shelf_db, null.coarse_frames, null.floor_db, chain.intraday_share, ground_filter_db, tau_quality/tau_c_minutes, selection.r_sys_unmasked_evaluation (r_keep), r_sys_evaluation (r_proxy), R_evaluation, r_sys_evaluation / tolerance.r_tol_fs8 (unpriced where fs8_status says so), screening.screening_class |
+| `conclusions_matrix` | tab:conclusions:matrix | counts of screening.screening_class; handover policy derived from the class (excision candidates: excised interior + monitoring tap; others kept-and-masked); band-level masked fraction (frame-weighted over kept channels) and the time-cost factor 1/(1-f) |
+| `archive_atlas_counts` | tab:archive:atlas-counts | product.n_frames, n_valid, health_excluded (health_reasons), era.current_frames, selection.kept_evaluation + calibration kept (frames x (1-f)), plate digest (pending the plates) |
+| `headline` | numbers only | counts by class, off-era channels, K* (kstar.csv), fraction of channels whose coarse centre is within 0.1 dB of mu_0, width-factor ranges |
+
+Not produced by this run and named as pending in the manifest: the four-world
+table (needs the delay-cut banks rebuilt under the 3.0.0 identity), the
+cross-build record and the archive accounting paragraph (product QA, from
+pilot-proxy's inventory), and the plate digests (the plates are rendered from
+`channels/chNN/spectra_window.json` by the figure step).

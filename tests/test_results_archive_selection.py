@@ -114,3 +114,16 @@ def test_refusals_are_reported_not_raised(product):
     assert short.status in ("feasible", "no feasible point") and short.stability["status"].startswith("refused")
     if short.status == "feasible":
         assert short.rho is not None and short.evaluation is not None
+
+
+def test_rows_carry_the_unmasked_residual_and_the_evaluation_intervals(tmp_path):
+    from rfisher_results.archive import selection as sel_mod
+    row = sel_mod.SelectionResult(
+        channel=35, freq_id=521, era_label="e", anchor_bin=1, bulk_size=125, r_tol=0.03, floor=FLOOR, calibration_frames=10,
+        evaluation_frames=10, frames_without_time=0, status="refused", refusal="x", claim_status="", rho=None,
+        rank_fraction=float("nan"), eta_q16=None, eta=float("nan"), masked_fraction=float("nan"),
+        systematic_residual=float("nan"), tolerance_fraction=float("nan"), cost=float("nan"), plateau=None, evaluation=None,
+        unmasked_residual=0.5).as_row()
+    assert row["r_sys_unmasked_calibration"] == 0.5 and row["bootstrap_blocks_evaluation"] == 0
+    for key in ("masked_fraction_evaluation_q16", "r_sys_evaluation_q84", "r_sys_unmasked_evaluation"):
+        assert key in row

@@ -48,6 +48,8 @@ def test_driver_runs_every_stage_and_writes_the_tree(tmp_path):
         assert r["era_n_eras"] and r["blocks_status"] in ("supported", "insufficient_support", "empty")
         assert r["anchor_status"] in ("ok", "empty")
         assert r["containment_present"] == "False"          # fixtures carry no per-frame spectra
+        assert r["geometry_allocation_low_mhz"] and r["product_n_frames"] and r["product_health_schema"]
+        assert r["null_evaluation_present"] == "False"       # no era on the small fixture, so no evaluation block
         assert r["null_null_source"]
         assert r["screening_screening_class"]
         assert "skipped" in r["notes"]           # no per-frame spectra, or no populated era on the small fixture

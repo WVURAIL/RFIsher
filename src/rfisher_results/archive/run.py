@@ -36,9 +36,11 @@ import numpy as np
 
 from rfisher import residual
 
+from rfisher.channels import channel_edges
+
 from . import anchors, blocks, chain, eras, ledger, nulls, psd, screening, selection, tolerances
 from .numbers import git_commit
-from .products import Product, sha256_of
+from .products import COARSE_BIN_HZ, FINE_BIN_HZ, Product, sha256_of
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -108,6 +110,12 @@ def verified_off(product: Product, months: np.ndarray, table: eras.EraTable | No
     return OffEpoch(mask if mask.any() else None, off_through, off_from, int(record.sum()), int(mask.sum()), "; ".join(notes))
 
 
+def _rate(flag: np.ndarray, block: np.ndarray) -> float:
+    """Fraction of a block's frames carrying ``flag`` (NaN on an empty block)."""
+    block = np.asarray(block, dtype=bool)
+    return float(np.asarray(flag, dtype=bool)[block].mean()) if block.any() else math.nan
+
+
 def _label(era: eras.Era | None) -> str:
     return f"{era.first_label}..{era.last_label} ({era.state})" if era else "no era"
 
@@ -125,6 +133,32 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     config = era_config or eras.DEFAULT_CONFIG
     record = ledger.ChannelRecord(ch, g.freq_id, p.path.name, sha256_of(p.path))
     notes = record.notes
+
+    # 0. what the product is: its geometry and its frame accounting
+    lo_mhz, hi_mhz = channel_edges(ch)
+    record.add("geometry", {
+        "pilot_hz": g.pilot_hz, "centre_hz": g.centre_hz, "sense": g.sense, "grid_residual_hz": g.grid_residual_hz,
+        "nominal_fine_bin": g.nominal_fine_bin, "nominal_psd_bin": g.nominal_psd_bin,
+        "centre_line_rf_offset_hz": g.centre_line_rf_offset_hz, "stored_window_centre": g.stored_window_centre,
+        "allocation_low_mhz": lo_mhz, "allocation_high_mhz": hi_mhz, "coarse_bin_hz": COARSE_BIN_HZ, "fine_bin_hz": FINE_BIN_HZ,
+        "fine_pad_factor": p.fine_pad_factor, "fine_guard_bins": p.fine_guard_bins,
+        "census_excluded_bins": ";".join(str(int(b)) for b in np.atleast_1d(p.fine_census_excluded_bins)),
+        "mu0": p.mu0, "shelf_offset_db": float(p.view.shelf_offset_db),
+    })
+    months_all = eras.frame_months(p)
+    sel_months = months_all[p.selected & (months_all >= 0)]
+    record.add("product", {
+        "n_frames": p.n_frames, "n_valid": int(p.valid.sum()), "n_selected": int(p.selected.sum()),
+        "n_units": int(np.unique(p.frame_unit_index[p.selected]).size) if p.selected.any() else 0,
+        "n_rejected_flag": int((p.selected & p.rejected).sum()),
+        "n_with_shelf_estimate": int((p.selected & np.isfinite(p.shelf_db)).sum()),
+        "n_without_time": int((p.selected & ~np.isfinite(p.frame_time)).sum()),
+        "health_schema": p.health.schema, "health_excluded": int((p.valid & ~p.health.include).sum()),
+        "health_reasons": ";".join(f"{k}:{v}" for k, v in sorted(p.health.reason_counts.items())),
+        "first_month": blocks.month_label(int(sel_months.min())) if sel_months.size else "",
+        "last_month": blocks.month_label(int(sel_months.max())) if sel_months.size else "",
+        "per_frame_spectra": "psd_frame_db_i16" in p.archive.files,
+    })
 
     # 1. eras
     table = eras.era_table(p, config=config, campaign_last_month=campaign_last_month, station_record=station_records(ch))
@@ -164,6 +198,13 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         "calibration_units": split.calibration_units, "evaluation_units": split.evaluation_units,
         "calibration_months": len(split.calibration_months), "evaluation_months": len(split.evaluation_months),
         "boundary_month": blocks.month_label(int(blocks.month_index([split.boundary_time])[0])) if math.isfinite(split.boundary_time) else "",
+        "calibration_finite_estimate_rate": _rate(np.isfinite(p.shelf_db), split.calibration),
+        "evaluation_finite_estimate_rate": _rate(np.isfinite(p.shelf_db), split.evaluation),
+        "calibration_flag_rate": _rate(p.rejected, split.calibration), "evaluation_flag_rate": _rate(p.rejected, split.evaluation),
+        "calibration_first_month": blocks.month_label(split.calibration_months[0].month) if split.calibration_months else "",
+        "calibration_last_month": blocks.month_label(split.calibration_months[-1].month) if split.calibration_months else "",
+        "evaluation_first_month": blocks.month_label(split.evaluation_months[0].month) if split.evaluation_months else "",
+        "evaluation_last_month": blocks.month_label(split.evaluation_months[-1].month) if split.evaluation_months else "",
     })
 
     # 3. anchors
@@ -266,6 +307,13 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         null_cal = nulls.calibrate_null(p, null_block, anchor_bin=anchor_bin, bulk_mask=bulk, era_label=null_label,
                                         off_era=off_mask, rho=sel.rho, quiet_block=split.evaluation, fine_t=ratio)
     record.add("null", null_cal.as_row())
+    # the same description on the evaluation block (the blocked-evaluation table's drift columns)
+    if split.evaluation.any():
+        null_eval = nulls.calibrate_null(p, split.evaluation, anchor_bin=anchor_bin, bulk_mask=bulk,
+                                         era_label=f"{era_label}/evaluation", off_era=off_mask, fine_t=ratio)
+        record.add("null_evaluation", null_eval.as_row())
+    else:
+        record.add("null_evaluation", None)
     record.add("selection", sel.as_row() if sel is not None else None)
 
     # 9. screening
