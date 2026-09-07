@@ -117,7 +117,7 @@ def test_decode_follows_the_product_contract(channel14):
         spec = psd.accumulate_spectra(p, mask)
         assert spec.frames == p.n_frames - len(EXCURSION_ROWS)
         assert spec.frames_with_spectrum == spec.frames - 1
-        order = np.argsort(g.psd_rf_offset_hz(np.arange(NFFT)), kind="stable")
+        order = np.argsort(psd.centred_offset_hz(g.psd_rf_offset_hz(np.arange(NFFT))), kind="stable")
         np.testing.assert_allclose(spec.mean, spectrum[order], rtol=1e-9)
         counts = dict(zip(spec.rf_offset_hz, spec.count))
         assert counts[marks["pilot"][1]] == spec.frames - 2
@@ -270,9 +270,13 @@ def test_k_star_rule_names_the_binding_channel_and_drops_sentinels():
     # every eligible channel passing every K: K* is the largest candidate and nothing binds
     clean = psd.k_star([_row(1, 1.0, 0.99, 0.97), _row(2, 0.99, 0.96, 0.95)], 0.9)
     assert clean.k_star == 256 and clean.failing_k is None and clean.binding_channel is None and math.isnan(clean.binding_e)
-    # a channel failing already at K = 64 is a sentinel and does not make K* undefined
+    # a channel failing already at K = 64 is a sentinel; with nothing else counted the rule is undefined
     only_sentinel = psd.k_star([_row(1, 0.5, 0.4, 0.3)], 0.9)
-    assert only_sentinel.k_star == 256 and only_sentinel.sentinels == (1,)
+    assert only_sentinel.k_star is None and only_sentinel.sentinels == (1,) and only_sentinel.eligible == (1,)
+    assert psd.k_star([], 0.9).k_star is None
+    # a sentinel beside a counted channel does not drag the choice
+    with_sentinel = psd.k_star([_row(1, 0.5, 0.4, 0.3), _row(2, 0.99, 0.96, 0.95)], 0.9)
+    assert with_sentinel.k_star == 256 and with_sentinel.sentinels == (1,)
 
 
 def test_writers_round_trip(tmp_path, channel14):
@@ -307,3 +311,44 @@ def test_writers_round_trip(tmp_path, channel14):
     with np.load(npz_path) as z:
         assert list(z["channels"]) == [14] and z["mean_14"].shape == (NFFT,)
         assert np.all(np.diff(z["rf_offset_hz_14"]) > 0)
+
+
+def test_pilot_near_the_coarse_channel_edge_reads_the_window_on_the_circular_axis(tmp_path):
+    """Channel 21's pilot sits about 4.7 kHz from a coarse-channel edge: the far side of W and the lower
+    reference passbands are content aliased from the channel's other edge, read where the detector reads it."""
+    path, g, spectrum, marks = _write_psd_product(tmp_path, 21, [("pilot", 0.0), (-6100.0, 12.0), (-12200.0, 9.0)])
+    edge = psd.edge_distance_hz(g)
+    assert 4000.0 < edge < 5000.0
+    with Product(path) as p:
+        row = psd.containment(p, p.selected).row
+    assert row.edge_distance_hz == pytest.approx(edge)
+    assert row.window_aliased_hz == pytest.approx(psd.WINDOW_HZ - edge, abs=1e-6)
+    assert row.in_span_recovered and abs(row.in_span_refined_offset_hz) < 2 * PSD_BIN_HZ
+    # the lines beyond the edge are found at their aliased offsets, inside the K = 128 and K = 64 lower passbands
+    assert row.ref_aliased_128 and row.ref_aliased_64 and not row.ref_aliased_256
+    at = lambda rf: f"feature@{psd.centred_offset_hz(marks[rf][1]):.0f}Hz"      # the placed bin's centre, on the circular axis
+    assert row.ref_contamination_128 > 0 and at(-6100.0) in row.ref_contaminant_128
+    assert row.ref_contamination_64 > 0 and at(-12200.0) in row.ref_contaminant_64
+    assert marks[-6100.0][1] > 300_000.0                                          # unwrapped, the bin sits at the far edge
+    # the window arrays cover the full +-W about the pilot
+    with Product(path) as p:
+        window, _ = psd.window_spectrum(psd.accumulate_spectra(p, p.selected), g)
+    assert window.rf_offset_hz.min() < -psd.WINDOW_HZ + PSD_BIN_HZ and window.rf_offset_hz.max() > psd.WINDOW_HZ - PSD_BIN_HZ
+    # channel 36's pilot is far from both edges: nothing is aliased
+    path36, g36, _, _ = _write_psd_product(tmp_path, 36, [("pilot", 0.0)])
+    with Product(path36) as p:
+        row36 = psd.containment(p, p.selected).row
+    assert row36.window_aliased_hz == 0.0 and not (row36.ref_aliased_64 or row36.ref_aliased_128 or row36.ref_aliased_256)
+    assert row36.edge_distance_hz > psd.WINDOW_HZ + 2 * SAMPLE_RATE_HZ / 64
+
+
+def test_anchor_lobe_disagreement_is_measured_in_fine_bins_and_sets_the_sentinel():
+    from rfisher_results.archive.products import FINE_BIN_HZ
+    assert psd.anchor_lobe_offset_bins(14.87, -151.5) == pytest.approx((14.87 + 151.5) / FINE_BIN_HZ)
+    assert math.isnan(psd.anchor_lobe_offset_bins(float("nan"), -151.5))
+    assert math.isnan(psd.anchor_lobe_offset_bins(3.0, float("nan")))
+    lobe = psd.Lobe(index=0, offset_hz=0.0, refined_offset_hz=0.0, db=20.0, refined_db=20.0, excess_db=20.0)
+    verdict, reasons = psd.disposition(lobe, float("nan"), 0.99, 0.0, anchor_aliases=True,
+                                       anchor_note="fine anchor +14.0 bins from the PSD in-span lobe")
+    assert verdict == psd.SUPPORTED_SENTINEL and reasons == "fine anchor +14.0 bins from the PSD in-span lobe"
+    assert psd.disposition(lobe, float("nan"), 0.99, 0.0)[0] == psd.SUPPORTED

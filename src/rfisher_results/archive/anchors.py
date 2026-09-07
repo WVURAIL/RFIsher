@@ -113,7 +113,7 @@ from typing import Sequence
 import numpy as np
 
 from . import blocks
-from .products import FINE_BINS, Geometry, Product, fine_hz_of_bin, fine_offset_to_rf_hz, fine_power_ratio
+from .products import FINE_BIN_HZ, FINE_BINS, Geometry, Product, fine_hz_of_bin, fine_power_ratio
 
 MIN_COHORT_FRAMES = 30
 WINDOW_HALF_WIDTH = 30
@@ -137,8 +137,17 @@ def unwrap_bins(bin_index, reference_bin: int, fine_bins: int = FINE_BINS):
 
 
 def rf_offset_of_bin(bin_index, geometry: Geometry):
-    """RF offset from the nominal pilot, in Hz, of padded fine bins."""
-    return fine_offset_to_rf_hz(fine_hz_of_bin(bin_index), geometry.grid_residual_hz, geometry.sense)
+    """RF offset from the nominal pilot, in Hz, of padded fine bins.
+
+    The bin offset is unwrapped about the nominal bin, the same wrap
+    :func:`unwrap_bins` gives ``anchor_offset_bins``, so the two coordinates
+    agree at every offset including -128 (wrapping about the real-valued grid
+    residual instead would put that one bin a full coarse bin away whenever
+    the residual lies above the nominal bin's centre).
+    """
+    nominal = int(geometry.nominal_fine_bin)
+    fine_hz = unwrap_bins(bin_index, nominal) * FINE_BIN_HZ + fine_hz_of_bin(nominal)
+    return float(np.sign(geometry.sense) or 1) * (fine_hz - geometry.grid_residual_hz)
 
 
 def designated_set(anchor_bin: int, half_width: int = DESIGNATED_HALF_WIDTH,
@@ -433,7 +442,7 @@ def anchor_from_ratio(ratio: np.ndarray, *, mask, valid, rejected, unit_index, g
     outside = np.ones(FINE_BINS, dtype=bool)
     outside[list(designated)] = False
     runner_up = int(np.flatnonzero(outside)[np.argmax(contrast[outside])]) if outside.any() else -1
-    window = window_bins(geometry.nominal_fine_bin, params["window_half_width"])
+    window = np.sort(window_bins(geometry.nominal_fine_bin, params["window_half_width"]))   # ties: lowest bin
     window_anchor = int(window[np.argmax(contrast[window])])
     bulk = bulk_mask(anchor_bin, pad_factor=params["pad_factor"], guard_fine_bins=params["guard_fine_bins"],
                      census_excluded_bins=census, designated_half_width=params["designated_half_width"])
@@ -533,6 +542,23 @@ def anchor_row(result: AnchorResult) -> dict[str, str]:
     return {name: _cell(getattr(result, name)) for name in ANCHOR_COLUMNS}
 
 
+def _native(value):
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (float, np.floating)):
+        return float(value)
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, tuple):
+        return ";".join(str(int(v)) for v in value)
+    return value
+
+
+def anchor_record(result: AnchorResult) -> dict:
+    """The ledger record of one result: native ints, floats (NaN kept) and bools; tuples joined with ';'."""
+    return {name: _native(getattr(result, name)) for name in ANCHOR_COLUMNS}
+
+
 def write_anchor_table(results: Sequence[AnchorResult], path: Path | str) -> Path:
     """One row per result (channel and mask label), columns ``ANCHOR_COLUMNS``."""
     path = Path(path)
@@ -555,7 +581,9 @@ def contrast_rows(result: AnchorResult) -> list[dict[str, str]]:
         in_designated[list(result.designated_bins)] = True
     offsets = unwrap_bins(bins, result.nominal_fine_bin)
     fine_hz = fine_hz_of_bin(bins)
-    rf = fine_offset_to_rf_hz(fine_hz, result.grid_residual_hz, result.sense)
+    # the same wrap as rf_offset_of_bin: about the nominal bin, so offsets -128 and 127 are one fine bin apart
+    rf = float(np.sign(result.sense) or 1) * (offsets * FINE_BIN_HZ + fine_hz_of_bin(result.nominal_fine_bin)
+                                              - result.grid_residual_hz)
     rows = []
     for b in bins:
         rows.append({
