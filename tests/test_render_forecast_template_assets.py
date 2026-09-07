@@ -241,8 +241,9 @@ def test_kept_release_manifests_are_valid_records():
 @pytest.mark.parametrize("release", sorted(KEPT_MANIFESTS))
 def test_results_tree_matches_the_kept_manifests(release):
     kept, shipped = KEPT_MANIFESTS[release]
-    assert shipped.read_bytes() == kept.read_bytes()
     manifest = json.loads(kept.read_text(encoding="utf-8"))
+    # the same record, whatever line endings the checkout gave the kept copy
+    assert json.loads(shipped.read_text(encoding="utf-8")) == manifest
     for item in manifest["artifacts"]:
         path = results_tree.release_path(item["path"], OUT)
         assert path.stat().st_size == item["size_bytes"], item["path"]
