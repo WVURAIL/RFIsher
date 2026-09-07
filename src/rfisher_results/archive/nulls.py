@@ -46,8 +46,10 @@ centre is within ``OFF_CENTRE_TOLERANCE`` of ``mu_0`` and the three probes
 agree (``kept.spread <= KEPT_SPREAD_LIMIT``; channel 14's probes disagree by
 8x because its kept sample mixes a narrow null with the bulk's tail), and
 otherwise the bulk's left-side scale about its median (the chapter 8
-mixture-read convention), labelled ``stated (bulk, not H0)``. Both values
-are always reported.
+mixture-read convention), labelled ``stated (bulk, not H0)``, provided the bulk centre lies within
+``BULK_CENTRE_LIMIT`` of ``mu_0`` (a bulk at 1.3 or 150 is the carrier, not
+a mixture with a null, and the floor is refused: channels 15, 17, 22, 24,
+28, 30, 31, 36). Both values are always reported.
 
 Off population. The floor of a channel whose current era is a recorded off
 era is the 90th percentile of that era's shelf estimates on the calibration
@@ -104,6 +106,7 @@ MIN_NULL_FRAMES = 30
 OFF_CENTRE_TOLERANCE = 0.02
 OFF_WIDTH_LIMIT = 5.0
 KEPT_SPREAD_LIMIT = 3.0      # the kept-half probes must agree to this factor for the kept half to state the floor
+BULK_CENTRE_LIMIT = 0.1      # beyond this the block's bulk is the carrier, not a mixture with a null: no stated floor
 
 
 def iid_width(dof: tuple[int, int]) -> tuple[float, float]:
@@ -298,8 +301,12 @@ def floor_estimate(product: Product, off_era: np.ndarray | None, coarse: NullWid
     bulk_db = _sigma_implied_db(coarse.core_sigma, offset)
     bulk_at_mu0 = math.isfinite(coarse.centre) and abs(coarse.centre - 1.0) <= OFF_CENTRE_TOLERANCE
     probes_agree = kept is not None and math.isfinite(kept.spread) and kept.spread <= KEPT_SPREAD_LIMIT
+    bulk_is_mixture = math.isfinite(coarse.centre) and abs(coarse.centre - 1.0) <= BULK_CENTRE_LIMIT
     if math.isfinite(kept_db) and bulk_at_mu0 and probes_agree:
         stated, basis, population = kept_db, "kept half about mu_0", f"kept half about mu_0, {kept.frames} frames"
+    elif math.isfinite(bulk_db) and not bulk_is_mixture:
+        stated, basis = math.nan, "none"
+        population = f"bulk centre {coarse.centre:.3g} is beyond {BULK_CENTRE_LIMIT:g} of mu_0: the block carries no null population"
     elif math.isfinite(bulk_db):
         why = []
         if not bulk_at_mu0:
@@ -324,7 +331,8 @@ def floor_estimate(product: Product, off_era: np.ndarray | None, coarse: NullWid
         return FloorEstimate(stated, "stated", f"no verified off era; sigma-implied substitute: {population}",
                              kept.frames if (kept is not None and basis.startswith("kept")) else int(coarse.frames),
                              stated_kept_half_db=kept_db, stated_bulk_db=bulk_db, basis=basis)
-    return FloorEstimate(math.nan, "refused", "no off era and no measurable null width", 0, basis="none")
+    return FloorEstimate(math.nan, "refused", f"no off era; {population}", 0, stated_kept_half_db=kept_db, stated_bulk_db=bulk_db,
+                         basis="none")
 
 
 @dataclass(frozen=True)

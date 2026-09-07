@@ -354,18 +354,22 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
 
     # 5. chain on the reference era (chapter 9: the chain terms on the channel's current era), with the
     # archive-wide chain beside it for comparison with the superseded numbers
+    gain_basis = ""
     try:
         ch_res = chain.residual_chain_on_frames(p, reference_mask, population=reference_label, off_through=off_through, off_from=off_from)
         record.add("chain", ch_res.as_row())
-        gain, tau_quality = ch_res.gain, ch_res.tau_quality
+        gain, tau_quality, gain_basis = ch_res.gain, ch_res.tau_quality, "era chain"
     except Exception as exc:  # the chain refuses loudly on some channels; record, do not stop
         ch_res = None
         record.add("chain", None)
         notes.append(f"chain on the {reference_label}: {type(exc).__name__}: {exc}")
-        gain, tau_quality = 1.0, "unmeasured"
+        gain, tau_quality = math.nan, "unmeasured"
     try:
         ch_all = chain.residual_chain(p.path, off_through=off_through, off_from=off_from)
         record.add("chain_archive", ch_all.as_row())
+        if not math.isfinite(gain):
+            gain, tau_quality, gain_basis = ch_all.gain, ch_all.tau_quality, "archive-wide chain (era chain refused)"
+            notes.append("chain gain taken from the archive-wide chain: the era chain refused")
     except Exception as exc:
         record.add("chain_archive", None)
         notes.append(f"archive-wide chain: {type(exc).__name__}: {exc}")
@@ -399,8 +403,10 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
                                     off_era=off_for_null, fine_t=ratio, exclude_fine_bins=exclude)
     floor = selection.Floor(null_cal.floor.db, null_cal.floor.evidence, null_cal.floor.population)
 
-    # 8. selection on the calibration block, replayed on the evaluation block
-    if math.isfinite(r_tol) and split.calibration.any():
+    # 8. selection on the calibration block, replayed on the evaluation block (never without a chain gain)
+    if not math.isfinite(gain):
+        notes.append("selection skipped: no chain gain (both chains refused)")
+    if math.isfinite(r_tol) and split.calibration.any() and math.isfinite(gain):
         sel = selection.select_operating_point(
             p, split.calibration, split.evaluation, anchor_bin=anchor_bin, bulk_mask=bulk, r_tol=r_tol, floor=floor,
             era_label=era_label, gain=gain, latest_era=True, off_era=off_era_current,
@@ -441,7 +447,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         frontier = _coarse_frontier(p, split.calibration, floor, gain, r_tol)
         _write_csv([{"channel": ch, **row} for row in frontier], ch_dir / "coarse_frontier.csv")
         record.add("selection", {**sel.as_row(), **selection.surface_summary(sel), **keep, "anchor_source": anchor_source,
-                                 **_frontier_summary(frontier)})
+                                 "gain_basis": gain_basis, **_frontier_summary(frontier)})
     else:
         record.add("selection", None)
 
@@ -557,7 +563,7 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
     book = ledger.Ledger(run={
         "generated": generated or dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "producer": {**producer, "commit_at_end": git_commit(ROOT),
-                     "commit_changed_during_run": git_commit(ROOT) != producer["commit"]},
+                     "source_changed_during_run": _producer()["source_digest"] != producer["source_digest"]},
         "products_dir": str(products_dir), "products": {p.name: sha256_of(p) for p in paths},
         "channels": sorted(by_channel), "campaign_last_month": blocks.month_label(campaign_last),
         "era_config": json.loads(config.canonical_json()), "era_config_digest": config.digest,
