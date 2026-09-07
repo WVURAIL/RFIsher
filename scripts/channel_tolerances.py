@@ -17,8 +17,9 @@ import json
 import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LEDGER = os.path.join(ROOT, "out", "forecast_completion_all_dtv_bins.json")
-MAPPING = os.path.join(ROOT, "out", "forecast_completion_channel_mapping.csv")
+from rfisher_results.results_tree import out_dir  # noqa: E402
+LEDGER = str(out_dir() / "forecast_completion_all_dtv_bins.json")
+MAPPING = str(out_dir() / "forecast_completion_channel_mapping.csv")
 ESTIMATOR = "perbin_noise_normalized"
 TARGETS = ("aperp", "apar", "fs8")
 

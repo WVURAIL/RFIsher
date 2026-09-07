@@ -274,12 +274,15 @@ scripts/dissertation dissertation-specific figures and compact tables
 data/                 research comparison banks
 docs/                 architecture, methods, release contracts, and schemas
 paper/                BAO masking-cost manuscript source
-out/                  tracked results and two immutable release roots
+docs/releases/        manifests of the two immutable release roots
+out/                  ignored scratch; the results tree lives outside (releases.md)
 tests/                package and workflow regression tests
 ```
 
-The `out/` directory contains historical material as well as working results;
-see the [release index](releases.md) before changing anything there. Detector
+Generated results, including the two immutable release roots, live outside
+the repository in the results tree that `rfisher_results.results_tree`
+resolves; see the [release index](releases.md) before changing anything
+there. Scripts write their scratch output to the ignored `out/`. Detector
 kernels, non-pilot selection, and new survey-product generation remain outside
 this repository. The [archived roadmap](archive/legacy-roadmap.md) records the
 remaining cross-project evidence dependencies.

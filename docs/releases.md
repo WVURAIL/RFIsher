@@ -1,8 +1,17 @@
 # Release index
 
-RFIsher currently has two immutable forecast-completion release roots. They
-share artifact basenames but represent different provenance states. Neither
+RFIsher has two immutable forecast-completion release roots. They share
+artifact basenames but represent different provenance states. Neither
 directory should be renamed, moved, rewritten, or collapsed into the other.
+
+Both live in the results tree, outside the repository, with the rest of the
+generated tables, ledgers and figures that were tracked under `out/` until
+September 2026. The repository keeps their manifests under `docs/releases/`
+and the manifest schema under `docs/`. The tree is resolved by
+`rfisher_results.results_tree.out_dir()`: `$RFISHER_OUT`, else `out_dir` in
+`data/products.local.json`, else the repository's own ignored `out/`. Paths
+below are relative to that tree; manifest entries keep their recorded `out/`
+prefix, which resolves to the same place.
 
 ## Software API v3
 
@@ -34,7 +43,7 @@ The removed convenience aggregators in `layout` and `residual` had no live
 callers. Compose their underlying explicit operations if an external workflow
 still needs equivalent behavior.
 
-The ordinary dissertation inputs `out/three_worlds.csv` and
+The ordinary dissertation inputs `three_worlds.csv` (in the results tree) and
 `scripts/dissertation/data/bao_era_points.csv` are also authenticated pre-v3
 scientific snapshots. Their embedded source hashes identify the code that
 produced their values; they are checked against those recorded identities, not
@@ -46,11 +55,12 @@ pipeline.
 
 ### First release
 
-The first release is stored directly in `out/` under the
-`forecast_completion_*` basenames. Its manifest is:
+The first release is stored at the top of the results tree under the
+`forecast_completion_*` basenames. Its manifest is
+`forecast_completion_release_manifest.json` there, kept in the repository as:
 
 ```text
-out/forecast_completion_release_manifest.json
+docs/releases/forecast_completion_first_release.manifest.json
 ```
 
 This is the frozen historical release. Its four evidence ledgers were built at
@@ -66,7 +76,7 @@ The release contains:
 - a TeX summary; and
 - the manifest's referenced schema document.
 
-`out/forecast_completion_evidence.json` is a smaller bounded evidence example
+`forecast_completion_evidence.json` is a smaller bounded evidence example
 and is not one of the 12 manifest entries.
 
 ### Reconciliation release
@@ -74,13 +84,14 @@ and is not one of the 12 manifest entries.
 The current reconciled release is:
 
 ```text
-out/forecast_completion_20260824_reconciliation/
+forecast_completion_20260824_reconciliation/
 ```
 
-Its manifest is:
+Its manifest is `forecast_completion_release_manifest.json` inside that
+directory, kept in the repository as:
 
 ```text
-out/forecast_completion_20260824_reconciliation/forecast_completion_release_manifest.json
+docs/releases/forecast_completion_20260824_reconciliation.manifest.json
 ```
 
 It retains the same 12 release basenames, records `epsilon_fg = 0` for all four
@@ -89,9 +100,9 @@ the ledgers. Four small response banks may exist locally under its ignored
 `banks/` directory. They are build prerequisites, not release artifacts, and
 must not be committed as part of the bundle.
 
-The dissertation repository vendors both releases under its own `evidence/`
-directory. Those copies are independently covered by the dissertation
-manifest and are also immutable.
+The dissertation keeps its own `evidence/` copy of both releases, likewise
+outside its repository (on the WVU OneDrive). Those copies are independently
+covered by the dissertation manifest and are also immutable.
 
 ## Why both remain
 
@@ -119,10 +130,20 @@ change the represented bundle even if its bytes stayed fixed.
 - If a scientific or presentation change is needed, create a new dated
   release.
 
+## Verifying a copy
+
+A results tree is checked against the repository's record of both releases
+by the regression tests, which skip when no tree is configured:
+
+```bash
+RFISHER_OUT=/path/to/results python -m pytest \
+  tests/test_render_forecast_template_assets.py -k manifests
+```
+
 ## Future layout
 
-New release bundles should no longer be mixed with ordinary generated files
-at the root of `out/`. Use:
+New release bundles go in the results tree, not the repository, and should
+not be mixed with ordinary generated files at its root. Use:
 
 ```text
 releases/
@@ -146,8 +167,8 @@ README should state:
 - artifact inventory and manifest contract; and
 - any prior release it supersedes without deleting.
 
-Ordinary regenerated results can remain under `out/` or move to a future
-`artifacts/working/` directory. They should not be called releases unless they
+Ordinary regenerated results stay in the repository's ignored `out/` scratch
+directory or wherever `--out` points. They should not be called releases unless they
 have a manifest, immutable input identities, and a documented validation
 boundary.
 

@@ -83,6 +83,14 @@ Point the product registry at the corrected archived survey products:
 export RFISHER_PRODUCT_DIRS=~/rail/datasets/canfar_archive_per_pilot
 ```
 
+The shipped tables, evidence ledgers and release roots live in the results
+tree outside the repository (see [releases.md](releases.md)); point the
+number gates and the release regression tests at it, or they skip:
+
+```bash
+export RFISHER_OUT=~/rail/results/forecasts/rfisher_out_c1302f4
+```
+
 The archived and current pilot-proxy products can share filename patterns
 while using different schemas. Confirm the intended product set before a
 threshold, coherence, or dissertation calculation.
@@ -250,7 +258,9 @@ Overview profile, Planck-2018, and unit normalization `P_res = 1.0`.
 The complete estimator, time-scaling families, refusal ledger, and exact
 three-point evidence-bank commands are documented in
 [forecast-completion.md](forecast-completion.md). After producing the four
-all-bin evidence ledgers, rebuild the comparison and rendered assets with:
+all-bin evidence ledgers, rebuild the comparison and rendered assets with
+(the commands write to the repository's ignored `out/`; the shipped ledgers
+are in the results tree):
 
 ```bash
 PYTHONPATH=src python3 scripts/forecast_template_comparison.py \

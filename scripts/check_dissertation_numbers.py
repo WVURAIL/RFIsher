@@ -25,7 +25,8 @@ multiplication sign -> 'x', digit-group commas removed, TeX comments stripped):
   FORBID-PAIR  two numbers that cannot both be right; fails only while both
                are present, so fixing either side clears it.
 
-CSV-driven checks recompute their needles from the shipped out/ artifacts
+CSV-driven checks recompute their needles from the shipped tables in the
+results tree (`RFISHER_OUT`; see docs/releases.md)
 (`optimal_thresholds.csv`, `fine_operating_points.csv`, and the forecast
 headline tables: `fig31_validation.csv`, `required_times.csv`,
 `bin_level_targets.csv`, `forecast_completion_all_dtv_bins.json`,
@@ -50,7 +51,19 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "out"
+
+
+def _results_tree() -> Path:
+    """The shipped tables live outside the repository; the TeX-only
+    checks must still run where the package is not installed."""
+    try:
+        from rfisher_results.results_tree import out_dir
+    except ImportError:
+        return ROOT / "out"
+    return out_dir()
+
+
+OUT = _results_tree()
 FIGURE_DATA = ROOT / "scripts" / "dissertation" / "data"
 ERA_PRODUCT_PINS = {
     32: ("568.npz",

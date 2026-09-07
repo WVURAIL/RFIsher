@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Consistency check: every number quoted in the paper regenerates from
-the machine-readable tables in out/ (written by scripts/run_forecast.py and
-scripts/fg_sensitivity.py).
+the machine-readable tables in the results tree (written by
+scripts/run_forecast.py and scripts/fg_sensitivity.py; RFISHER_OUT points at
+the shipped copies, see docs/releases.md).
 
 Two guarantees, so neither side can drift silently:
   1. RECOMPUTE: each paper value is recomputed from out/*.csv (or from
@@ -21,10 +22,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "out"
 PAPER = ROOT / "paper"
 from rfisher import channels, survey
 from rfisher.constants import HI_REST_FREQUENCY_MHZ
+from rfisher_results.results_tree import out_dir
+
+OUT = out_dir()
 
 
 # ---------------------------------------------------------------- helpers

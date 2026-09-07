@@ -12,6 +12,8 @@ import subprocess
 import matplotlib
 import pytest
 
+from rfisher_results import results_tree
+
 
 FIGURE_TOOLCHAIN = ("latex", "dvipng", "kpsewhich", "pdffonts", "pdfinfo")
 _MISSING_TOOLS = [t for t in FIGURE_TOOLCHAIN if shutil.which(t) is None]
@@ -31,10 +33,28 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 renderer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(renderer)
-DATED_RELEASE = ROOT / "out" / "forecast_completion_20260824_reconciliation"
+OUT = results_tree.out_dir()
+DATED_RELEASE = OUT / "forecast_completion_20260824_reconciliation"
+requires_results_tree = pytest.mark.skipif(
+    not (DATED_RELEASE / "forecast_completion_release_manifest.json").is_file(),
+    reason=f"forecast-completion releases not found under {OUT}; "
+           "point RFISHER_OUT at the results tree")
+# The repository keeps each release's manifest; the artifacts it names live in
+# the results tree at the paths the manifest recorded when out/ was tracked.
+KEPT_MANIFESTS = {
+    "first": (
+        results_tree.RELEASE_MANIFESTS
+        / "forecast_completion_first_release.manifest.json",
+        OUT / "forecast_completion_release_manifest.json"),
+    "reconciliation": (
+        results_tree.RELEASE_MANIFESTS
+        / "forecast_completion_20260824_reconciliation.manifest.json",
+        DATED_RELEASE / "forecast_completion_release_manifest.json"),
+}
 
 
 @requires_figure_toolchain
+@requires_results_tree
 def test_renderer_exports_figure_table_and_complete_caption(tmp_path):
     figure = tmp_path / "comparison.png"
     table = tmp_path / "summary.tex"
@@ -42,11 +62,11 @@ def test_renderer_exports_figure_table_and_complete_caption(tmp_path):
     manifest = tmp_path / "manifest.json"
     argv = [
         "--comparison",
-        str(ROOT / "out" / "forecast_completion_template_comparison.csv"),
+        str(OUT / "forecast_completion_template_comparison.csv"),
         "--channels",
-        str(ROOT / "out" / "forecast_completion_channel_mapping.csv"),
+        str(OUT / "forecast_completion_channel_mapping.csv"),
         "--status",
-        str(ROOT / "out" / "forecast_completion_template_status.csv"),
+        str(OUT / "forecast_completion_template_status.csv"),
         "--figure", str(figure),
         "--table", str(table),
         "--caption", str(caption),
@@ -129,12 +149,13 @@ def test_renderer_exports_figure_table_and_complete_caption(tmp_path):
                for output, content in expected_bytes.items())
 
 
+@requires_results_tree
 def test_aggregate_retains_exact_disposition_counts():
     comparisons = renderer._read_rows(
-        ROOT / "out" / "forecast_completion_template_comparison.csv",
+        OUT / "forecast_completion_template_comparison.csv",
         renderer.COMPARISON_SCHEMA)
     channels = renderer._read_rows(
-        ROOT / "out" / "forecast_completion_channel_mapping.csv",
+        OUT / "forecast_completion_channel_mapping.csv",
         renderer.CHANNEL_SCHEMA)
     renderer._validate(comparisons, channels)
     summary = renderer._aggregate(comparisons, channels)
@@ -155,6 +176,7 @@ def test_commit_note_matches_the_evaluation_history():
         {"a" * 40, "b" * 40})
 
 
+@requires_results_tree
 def test_dated_manifest_is_complete_and_self_consistent():
     manifest = json.loads((
         DATED_RELEASE / "forecast_completion_release_manifest.json"
@@ -167,14 +189,11 @@ def test_dated_manifest_is_complete_and_self_consistent():
             "1d7de4f0329772a18320d390bbe7eab12c3d9a0c"]
     assert all("banks/" not in item["path"]
                for item in manifest["artifacts"])
-    for item in manifest["artifacts"]:
-        path = ROOT / item["path"]
-        assert path.stat().st_size == item["size_bytes"]
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == item["sha256"]
 
 
 @requires_figure_toolchain
 @requires_release_renderer
+@requires_results_tree
 def test_dated_renderer_reproduces_the_released_assets(tmp_path):
     figure = tmp_path / "forecast_completion_channel_tolerances.png"
     table = tmp_path / "forecast_completion_template_summary.tex"
@@ -201,3 +220,31 @@ def test_dated_renderer_reproduces_the_released_assets(tmp_path):
         (caption, DATED_RELEASE / caption.name),
     ):
         assert generated.read_bytes() == released.read_bytes()
+
+
+def test_kept_release_manifests_are_valid_records():
+    """A fresh clone carries the identity of both releases even when the
+    results tree is elsewhere: each kept manifest validates against the
+    schema and names twelve repository-relative artifacts."""
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(renderer.MANIFEST_SCHEMA_PATH.read_text(
+        encoding="utf-8"))
+    for kept, _ in KEPT_MANIFESTS.values():
+        manifest = json.loads(kept.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator(schema).validate(manifest)
+        assert manifest["artifact_count"] == 12 == len(manifest["artifacts"])
+        assert all(item["path"].startswith(("out/", "docs/"))
+                   for item in manifest["artifacts"])
+
+
+@requires_results_tree
+@pytest.mark.parametrize("release", sorted(KEPT_MANIFESTS))
+def test_results_tree_matches_the_kept_manifests(release):
+    kept, shipped = KEPT_MANIFESTS[release]
+    assert shipped.read_bytes() == kept.read_bytes()
+    manifest = json.loads(kept.read_text(encoding="utf-8"))
+    for item in manifest["artifacts"]:
+        path = results_tree.release_path(item["path"], OUT)
+        assert path.stat().st_size == item["size_bytes"], item["path"]
+        assert hashlib.sha256(path.read_bytes()).hexdigest() \
+            == item["sha256"], item["path"]

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from rfisher_results import results_tree
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -18,26 +20,21 @@ comparison = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(comparison)
 
 
+OUT = results_tree.out_dir()
+DATED_RELEASE = OUT / "forecast_completion_20260824_reconciliation"
+pytestmark = pytest.mark.skipif(
+    not (DATED_RELEASE / "forecast_completion_release_manifest.json").is_file(),
+    reason=f"forecast-completion releases not found under {OUT}; "
+           "point RFISHER_OUT at the results tree")
 EVIDENCE = {
-    "noise_shaped": ROOT / "out" / "forecast_completion_all_dtv_bins.json",
-    "low_kparallel": ROOT / "out"
-        / "forecast_completion_all_dtv_bins_low_kparallel.json",
-    "wedge_like": ROOT / "out"
-        / "forecast_completion_all_dtv_bins_wedge_like.json",
-    "k_shell_localized": ROOT / "out"
-        / "forecast_completion_all_dtv_bins_k_shell_localized.json",
+    "noise_shaped": OUT / "forecast_completion_all_dtv_bins.json",
+    "low_kparallel": OUT / "forecast_completion_all_dtv_bins_low_kparallel.json",
+    "wedge_like": OUT / "forecast_completion_all_dtv_bins_wedge_like.json",
+    "k_shell_localized":
+        OUT / "forecast_completion_all_dtv_bins_k_shell_localized.json",
 }
-DATED_RELEASE = ROOT / "out" / "forecast_completion_20260824_reconciliation"
 DATED_EVIDENCE = {
-    "noise_shaped": DATED_RELEASE / "forecast_completion_all_dtv_bins.json",
-    "low_kparallel": DATED_RELEASE
-        / "forecast_completion_all_dtv_bins_low_kparallel.json",
-    "wedge_like": DATED_RELEASE
-        / "forecast_completion_all_dtv_bins_wedge_like.json",
-    "k_shell_localized": DATED_RELEASE
-        / "forecast_completion_all_dtv_bins_k_shell_localized.json",
-}
-
+    family: DATED_RELEASE / path.name for family, path in EVIDENCE.items()}
 
 def _read_csv(path):
     with path.open(encoding="utf-8", newline="") as stream:

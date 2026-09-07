@@ -200,7 +200,8 @@ alone is not accepted as proof of identical scientific source.
 
 ## Reproducible bounded evidence run
 
-The committed `out/forecast_completion_evidence.json` is generated from only
+The shipped `forecast_completion_evidence.json` in the results tree is
+generated from only
 three integration-time grid points and one reported redshift bin. The combined
 estimator still assembles every redshift bin before its survey-wide inversion;
 `--bin 6` limits the number of independent residual injections and output
@@ -387,8 +388,10 @@ not eligible for propagation. The export records `none` for both policy-change
 fields on every row. It is a sensitivity envelope for a later policy analysis,
 not a replacement policy decision.
 
-The unversioned assets below are the frozen first release and are not
-rewritten. The reconciled release lives at
+The assets below are the frozen first release and are not rewritten. Both
+releases live in the results tree outside the repository (see
+[releases.md](releases.md)); the `out/` prefixes here are the paths their
+manifests record, resolved against that tree. The reconciled release lives at
 `out/forecast_completion_20260824_reconciliation/` with the same 12 artifact
 basenames. Its four evidence ledgers were built and evaluated from clean RFIsher
 commit `1d7de4f0329772a18320d390bbe7eab12c3d9a0c`, with `epsilon_fg=0` in every
@@ -415,7 +418,8 @@ The frozen machine-readable assets are:
 absolute-path-free release index for those inputs, derived assets, and its
 schema document. It records each relative path, byte count, and SHA-256, plus
 the two generator source hashes, model-only scope, policy non-change, and all
-three empirical refusals. It intentionally does not hash itself. Its strict
+three empirical refusals. It intentionally does not hash itself; the
+repository keeps a copy of each release's manifest under `docs/releases/`. Its strict
 Draft 2020-12 contract is
 `docs/forecast-completion-release-manifest.schema.json`.
 Manifest v2 additionally records the exact audited figure-font inventory.

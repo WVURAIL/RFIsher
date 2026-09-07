@@ -168,6 +168,12 @@ python -m pytest tests/ -q
 python scripts/check_paper_numbers.py
 ```
 
+Generated results, including the two forecast-completion release roots, live
+outside the repository. Point `RFISHER_OUT` at that results tree so the
+number gates and the release regression tests read the shipped copies;
+without it the tests skip and the gate reports the tables missing. See
+[releases](docs/releases.md).
+
 The command-line entry points are:
 
 ```bash

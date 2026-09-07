@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from rfisher import survey
+from rfisher_results import results_tree
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -15,6 +16,22 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 taucut = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(taucut)
+
+
+def _copy_shipped_taucut_tables(tmp_path, *also_needed):
+    """The sweep tables the figures-only path redraws from; skipped when the
+    results tree holding the shipped run is not configured."""
+    import shutil
+    out = results_tree.out_dir()
+    names = ("taucut_sweep.csv", "taucut_thresholds.csv",
+             "taucut_calibration.csv")
+    missing = [n for n in names + also_needed if not (out / n).is_file()]
+    if missing:
+        pytest.skip(f"shipped {', '.join(missing)} not found under {out}; "
+                    "point RFISHER_OUT at the results tree")
+    for name in names:
+        shutil.copy(out / name, tmp_path / name)
+    return out
 
 
 def test_delay_grid_and_markers_are_the_proposal_figure_s():
@@ -194,19 +211,15 @@ def test_fig10_format_figure_renders_on_the_delay_axis(tmp_path):
 
 
 def test_figures_only_rebuilds_figures_and_caption_from_the_csvs(tmp_path):
-    """The committed tables are enough to redraw both figures and the
-    caption without a sweep; the redrawn caption must match the committed
+    """The shipped tables are enough to redraw both figures and the
+    caption without a sweep; the redrawn caption must match the shipped
     one, which the full run wrote."""
-    import shutil
     from rfisher.backend import find_radiofisher_dir
     try:
         find_radiofisher_dir()
     except FileNotFoundError:
         pytest.skip("figures-only needs the backend for the delay mapping")
-    out = ROOT / "out"
-    for name in ("taucut_sweep.csv", "taucut_thresholds.csv",
-                 "taucut_calibration.csv"):
-        shutil.copy(out / name, tmp_path / name)
+    out = _copy_shipped_taucut_tables(tmp_path, "fig_taucut_bao_caption.txt")
 
     assert taucut.main(["--out", str(tmp_path), "--figures-only"]) == 0
 
@@ -221,17 +234,13 @@ def test_proposal_style_draws_at_textwidth_with_a_suffix(tmp_path):
     """--style proposal applies scripts/figstyle.py (Times, 9 pt) and writes
     _proposal files at the proposal's textwidth, leaving the repo-style
     files alone."""
-    import shutil
     import matplotlib
     from rfisher.backend import find_radiofisher_dir
     try:
         find_radiofisher_dir()
     except FileNotFoundError:
         pytest.skip("figures-only needs the backend for the delay mapping")
-    out = ROOT / "out"
-    for name in ("taucut_sweep.csv", "taucut_thresholds.csv",
-                 "taucut_calibration.csv"):
-        shutil.copy(out / name, tmp_path / name)
+    _copy_shipped_taucut_tables(tmp_path)
 
     assert taucut.main(["--out", str(tmp_path), "--figures-only",
                         "--style", "proposal"]) == 0

@@ -5,7 +5,7 @@ The checker is only trustworthy if its matching surface is: normalization
 must fold the unicode variants LaTeX and PDF extraction produce into one
 form, the three check kinds must fail in exactly their advertised
 directions, and the CSV row selectors must keep resolving the operating rows
-of the shipped out/ tables (so a column rename breaks CI here, loudly,
+of the shipped tables (so a column rename breaks CI here, loudly,
 rather than silently green-lighting the dissertation).
 """
 from __future__ import annotations
@@ -23,6 +23,16 @@ spec = importlib.util.spec_from_file_location(
 cdn = importlib.util.module_from_spec(spec)
 sys.modules["check_dissertation_numbers"] = cdn
 spec.loader.exec_module(cdn)
+
+SHIPPED_TABLES = (
+    "optimal_thresholds.csv", "fine_operating_points.csv", "three_worlds.csv",
+    "fig31_validation.csv", "required_times.csv", "bin_level_targets.csv",
+    "forecast_completion_all_dtv_bins.json",
+    "forecast_completion_template_comparison.csv")
+requires_shipped_tables = pytest.mark.skipif(
+    not all((cdn.OUT / name).is_file() for name in SHIPPED_TABLES),
+    reason=f"shipped tables not found under {cdn.OUT}; "
+           "point RFISHER_OUT at the results tree")
 
 
 @pytest.fixture(autouse=True)
@@ -88,6 +98,7 @@ def test_num_needles_never_too_short():
                    for n in cdn.num_needles(x))
 
 
+@requires_shipped_tables
 def test_csv_operating_rows_resolve():
     # The channel set follows the threshold sweep's conventions and may
     # move with a regeneration; what must stay fixed is that the selectors
@@ -131,6 +142,7 @@ def test_era_provenance_rejects_changed_inputs_and_ratios():
         assert not cdn.era_provenance_ok(rows)
 
 
+@requires_shipped_tables
 def test_world_provenance_rejects_changed_inputs():
     original = cdn.worlds_rows()
     for key, value in (
@@ -145,6 +157,7 @@ def test_world_provenance_rejects_changed_inputs():
         assert not cdn.world_provenance_ok(rows, cdn.era_rows())
 
 
+@requires_shipped_tables
 def test_world_results_reject_changed_values():
     original = cdn.worlds_rows()
     for item, key, value in (
@@ -160,6 +173,7 @@ def test_world_results_reject_changed_values():
         assert not cdn.world_results_ok(rows)
 
 
+@requires_shipped_tables
 def test_world_results_reject_coordinated_changes():
     original = cdn.worlds_rows()
     rows = {item: dict(row) for item, row in original.items()}
@@ -177,6 +191,7 @@ def test_world_results_reject_coordinated_changes():
     assert not cdn.world_results_ok(rows)
 
 
+@requires_shipped_tables
 def test_end_to_end_exit_codes(tmp_path):
     # A source containing every stale literal must fail; the same source
     # with requires satisfied and forbids absent must pass. Build the green
@@ -203,6 +218,7 @@ def test_end_to_end_exit_codes(tmp_path):
     assert cdn.main(["--tex", str(r)]) == 1
 
 
+@requires_shipped_tables
 def test_summary_invariant_flags_split_population(tmp_path, capsys):
     src = tmp_path / "s.txt"
     src.write_text("316x 1587x 382x 24x 1566x over; " + _green_min())
@@ -325,6 +341,7 @@ def _forecast_headline_rows() -> str:
          f"{ch35_minutes:.1f} min is measured"])
 
 
+@requires_shipped_tables
 def test_forecast_sources_resolve():
     cols = cdn.fig31_clean_columns()
     assert len(cols) == 7
@@ -351,6 +368,7 @@ def test_legacy_projects_excluded_from_tex_sweep(tmp_path):
     assert "the present draft" not in text
 
 
+@requires_shipped_tables
 def test_table91_penalty_consistency_direction(capsys):
     byrs = cdn.bin_target_years()
     pen = f"{byrs['legacy_rate_table'] / byrs['clean']:.3f}"
@@ -367,6 +385,7 @@ def test_table91_penalty_consistency_direction(capsys):
         assert lines and lines[0].startswith(want)
 
 
+@requires_shipped_tables
 def test_baseline_ratchet(tmp_path):
     red = tmp_path / "r.txt"
     red.write_text(_green_min() + " eight years")   # exactly one regression
