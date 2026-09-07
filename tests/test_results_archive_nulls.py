@@ -113,12 +113,15 @@ def test_calibrate_null_on_the_fixture_declares_its_source_and_floor(product):
     finite = np.isfinite(product.shelf_db[off]).sum()
     null_like = nulls.off_population_check(product, off)[0]
     assert cal_off.off_null_like is null_like and cal_off.off_coarse is not None and cal_off.off_check
-    if null_like and finite >= nulls.FLOOR_MIN_FRAMES:
-        assert cal_off.floor.evidence == "measured" and cal_off.null_source.startswith("verified")
+    # the recorded off population is the null whatever its likeness to one (chapter 8); the check is reported beside it
+    assert cal_off.null_source.startswith("verified")
+    if finite >= nulls.FLOOR_MIN_FRAMES:
+        assert cal_off.floor.evidence == "measured" and cal_off.floor.basis == "off era p90"
     else:
         assert cal_off.floor.evidence == "stated"
     if not null_like:
         assert "not null-like" in cal_off.null_source and any("not null-like" in n for n in cal_off.notes)
+    assert cal.floor.basis in ("kept half about mu_0", "bulk left side (not H0)", "none")
     # the stated floor follows the kept half about mu_0; the bulk value is carried for comparison
     assert cal.floor.evidence != "measured" and math.isfinite(cal.floor.stated_bulk_db) or math.isnan(cal.floor.stated_bulk_db)
     assert cal.kept is not None and "kept_width_factor" in row and "off_null_like" in row

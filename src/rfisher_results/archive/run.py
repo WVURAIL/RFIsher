@@ -110,6 +110,69 @@ def verified_off(product: Product, months: np.ndarray, table: eras.EraTable | No
     return OffEpoch(mask if mask.any() else None, off_through, off_from, int(record.sum()), int(mask.sum()), "; ".join(notes))
 
 
+def _producer() -> dict:
+    """The producing code: commit, dirty flag and a digest of this package's sources, read before the run starts."""
+    import hashlib
+    import subprocess
+    here = Path(__file__).resolve().parent
+    h = hashlib.sha256()
+    for f in sorted(here.glob("*.py")):
+        h.update(f.name.encode()); h.update(f.read_bytes())
+    try:
+        status = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", "src/rfisher_results/archive"], cwd=ROOT, capture_output=True,
+                                text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        status = "unknown"
+    return {"repository": "WVURAIL/RFIsher", "commit": git_commit(ROOT), "dirty": bool(status), "dirty_files": status,
+            "module": "rfisher_results.archive.run", "source_digest": h.hexdigest()}
+
+
+def _quiet_cohort_is_null(product: Product, mask) -> bool:
+    """Whether a mask's coarse-quiet frames are a null population: the bulk's centre lies at mu_0."""
+    frames = np.asarray(mask, dtype=bool) & product.selected
+    if frames.sum() < nulls.MIN_NULL_FRAMES:
+        return True
+    widths = nulls.describe_null(product.statistic[frames], nulls.COARSE_DOF)
+    return bool(math.isfinite(widths.centre) and abs(widths.centre - 1.0) <= nulls.OFF_CENTRE_TOLERANCE)
+
+
+def _fine_bin_of_rf(rf_offset_hz: float, geometry) -> int:
+    """The padded fine bin an RF offset from the nominal pilot falls on (the inverse of anchors.rf_offset_of_bin)."""
+    fine_hz = geometry.grid_residual_hz + float(np.sign(geometry.sense) or 1) * float(rf_offset_hz)
+    return int(round(fine_hz / FINE_BIN_HZ)) % anchors.FINE_BINS
+
+
+COARSE_ETA_GRID = tuple(np.round(np.arange(1.0, 1.5001, 0.005), 3)) + (1.6, 1.8, 2.0, 3.0, 5.0, 10.0, 100.0)
+
+
+def _coarse_frontier(product: Product, block, floor: selection.Floor, gain: float, r_tol: float) -> list[dict]:
+    """The coarse rule F > eta_c mu_0 on a block: masked fraction and floor-bounded residual per eta_c."""
+    rows = np.flatnonzero(np.asarray(block, dtype=bool))
+    if rows.size == 0 or not math.isfinite(floor.linear):
+        return []
+    q = product.statistic[rows]
+    residual = selection.systematic_residuals(product, rows, floor, gain)
+    out = []
+    for eta in COARSE_ETA_GRID:
+        kept = q <= float(eta)
+        n_kept = int(kept.sum())
+        r = float(residual[kept].mean()) if n_kept else math.nan
+        out.append({"eta_c": float(eta), "frames": int(rows.size), "kept": n_kept, "masked_fraction": 1.0 - n_kept / rows.size,
+                    "r_sys": r, "R": r / r_tol if (math.isfinite(r) and math.isfinite(r_tol) and r_tol > 0) else math.nan,
+                    "evaluable": n_kept >= 30})
+    return out
+
+
+def _frontier_summary(frontier: list[dict]) -> dict:
+    ok = [f for f in frontier if f["evaluable"] and math.isfinite(f["R"])]
+    if not ok:
+        return {"coarse_min_R": math.nan, "coarse_min_R_eta": math.nan, "coarse_min_R_masked_fraction": math.nan, "coarse_R_at_flag": math.nan}
+    best = min(ok, key=lambda f: f["R"])
+    at_flag = next((f for f in frontier if f["eta_c"] == 1.0), None)
+    return {"coarse_min_R": best["R"], "coarse_min_R_eta": best["eta_c"], "coarse_min_R_masked_fraction": best["masked_fraction"],
+            "coarse_R_at_flag": at_flag["R"] if at_flag else math.nan}
+
+
 def _rate(flag: np.ndarray, block: np.ndarray) -> float:
     """Fraction of a block's frames carrying ``flag`` (NaN on an empty block)."""
     block = np.asarray(block, dtype=bool)
@@ -164,39 +227,46 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     table = eras.era_table(p, config=config, campaign_last_month=campaign_last_month, station_record=station_records(ch))
     eras.write_era_json(table, ch_dir / "eras.json")
     era = table.current_era
-    era_mask = table.current_era_mask(p)
+    timed = np.isfinite(p.frame_time)
+    era_mask_all = table.current_era_mask(p)
+    era_mask = era_mask_all & timed          # one block definition for every module: frames without a time are excluded
+    untimed_excluded = int((era_mask_all & ~timed).sum())
     months = eras.frame_months(p)
     off = verified_off(p, months, table)
     off_mask, off_through, off_from = off.mask, off.off_through, off.off_from
     if off.note:
         notes.append(off.note)
-    # the current era is an off era when the recorded off epoch covers most of it AND that population reads as a
-    # null (nulls.null_like); proxy-low is a level state (a weak but present carrier reads proxy-low), and a
-    # post-sign-off epoch that still carries a carrier is neither a null population nor an off era
+    # the current era is an off era when the recorded off epoch covers most of it (chapter 8: the off state is
+    # established by the era and the record); whether that population also reads as a null is reported beside it
     off_ok, off_widths, off_reason = nulls.off_population_check(p, off_mask)
     off_majority = bool(off_mask is not None and era_mask.any() and off_mask[era_mask].mean() > 0.5)
-    off_era_current = off_majority and off_ok
+    off_era_current = off_majority
     if off_mask is not None and not off_ok:
-        notes.append(f"recorded off population is not null-like: {off_reason}")
+        notes.append(f"recorded off population is not null-like ({off_reason}): a carrier persists after the record")
     record.add("era", {**eras.channel_row(table), "off_record_frames": off.record_frames, "off_population_frames": off.off_frames,
                        "off_null_like": off_ok if off_widths is not None else None, "off_majority_of_current_era": off_majority,
-                       "off_era_current": off_era_current})
+                       "off_era_current": off_era_current, "current_level_median_db": era.level_median_db if era else math.nan})
     era_label = _label(era)
-    # on an off era the transmitter's position and containment are read from the last on era (the previous era)
+    # on an off era the transmitter's position, containment and chain are read from the last on era (the previous era)
     reference_index = table.current_index - 1 if (off_era_current and table.current_index > 0) else table.current_index
-    reference_mask = table.era_mask(p, reference_index) if reference_index >= 0 and reference_index != table.current_index else era_mask
-    reference_label = era_label if reference_index == table.current_index else f"previous era {_label(table.eras[reference_index])} (current era is off)"
-    if reference_index != table.current_index:
-        notes.append(f"anchor and containment read on the {reference_label}")
+    if reference_index >= 0 and reference_index != table.current_index:
+        reference_mask = table.era_mask(p, reference_index) & timed
+        reference_label = f"previous era {_label(table.eras[reference_index])} (current era is off)"
+        notes.append(f"anchor, containment and chain read on the {reference_label}")
+    else:
+        reference_mask, reference_label = era_mask, f"current era {era_label}"
 
     # 2. blocks (month support on the era procedure's own gate)
     split = blocks.split_blocks(p.frame_unit_index, p.unit_time, era_mask, frame_time=p.frame_time, minimum_months=1,
                                 month_kwargs=dict(min_frames=config.min_frames, min_units=config.min_units, min_days=config.min_days))
+    off_for_null = (off_mask & ~split.evaluation) if off_mask is not None else None      # the evaluation block never enters the null
+    off_for_eval = (off_mask & split.evaluation) if off_mask is not None else None
     record.add("blocks", {
         "status": split.status, "detail": split.detail, "boundary_time": split.boundary_time,
         "calibration_frames": split.calibration_frames, "evaluation_frames": split.evaluation_frames,
         "calibration_units": split.calibration_units, "evaluation_units": split.evaluation_units,
         "calibration_months": len(split.calibration_months), "evaluation_months": len(split.evaluation_months),
+        "frames_without_time_excluded": untimed_excluded,
         "boundary_month": blocks.month_label(int(blocks.month_index([split.boundary_time])[0])) if math.isfinite(split.boundary_time) else "",
         "calibration_finite_estimate_rate": _rate(np.isfinite(p.shelf_db), split.calibration),
         "evaluation_finite_estimate_rate": _rate(np.isfinite(p.shelf_db), split.evaluation),
@@ -207,23 +277,31 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         "evaluation_last_month": blocks.month_label(split.evaluation_months[-1].month) if split.evaluation_months else "",
     })
 
-    # 3. anchors
+    # 3. anchors. The on-minus-quiet estimator needs a quiet cohort that is a null: where a mask's coarse bulk sits
+    # far above mu_0 the frames below mu_0 are the carrier's lower tail, and the plain median is used instead.
     ratio = anchors.fine_ratio(p)
     anchor_results = []
     anc = {}
-    for label, mask in (("calibration", split.calibration), ("evaluation", split.evaluation), ("current_era", era_mask)):
-        anc[label] = anchors.anchor(p, mask, label, ratio=ratio, replicates=replicates, seed=seed)
-        anchor_results.append(anc[label])
+    quiet_ok = {}
+    masks = [("calibration", split.calibration), ("evaluation", split.evaluation), ("current_era", era_mask)]
     if table.current_index > 0:
-        anc["previous_era"] = anchors.anchor(p, table.era_mask(p, table.current_index - 1), "previous_era", ratio=ratio,
-                                             replicates=replicates, seed=seed)
-        anchor_results.append(anc["previous_era"])
+        masks.append(("previous_era", table.era_mask(p, table.current_index - 1) & timed))
+    for label, mask in masks:
+        quiet_ok[label] = _quiet_cohort_is_null(p, mask)
+        anc[label] = anchors.anchor(p, mask, label, ratio=ratio, replicates=replicates, seed=seed, quiet_usable=quiet_ok[label])
+        anchor_results.append(anc[label])
     anchors.write_contrast_curves(anchor_results, ch_dir / "anchor_contrast.csv")
-    if reference_index != table.current_index and "previous_era" in anc and anc["previous_era"].status == "ok":
-        of_record = anc["previous_era"]
+    # the table's anchor: the current era's (eq 8.1), or the previous era's on an off-era channel
+    if reference_index != table.current_index and anc.get("previous_era") is not None and anc["previous_era"].status == "ok":
+        table_anchor = anc["previous_era"]
     else:
-        of_record = anc["calibration"] if anc["calibration"].status == "ok" else anc["current_era"]
-    record.add("anchor", {**anchors.anchor_record(of_record), "source": of_record.label})
+        table_anchor = anc["current_era"]
+    # the selector's anchor: the calibration block's (held out from the evaluation block)
+    selector_anchor = anc["calibration"] if anc["calibration"].status == "ok" else table_anchor
+    record.add("anchor", {**anchors.anchor_record(table_anchor), "source": table_anchor.label,
+                          "quiet_cohort_is_null": quiet_ok.get(table_anchor.label)})
+    record.add("anchor_calibration", {**anchors.anchor_record(selector_anchor), "source": selector_anchor.label,
+                                      "quiet_cohort_is_null": quiet_ok.get(selector_anchor.label)})
     record.add("anchor_evaluation", anchors.anchor_record(anc["evaluation"]))
     record.add("anchor_era", anchors.anchor_record(anc["current_era"]))
     if "previous_era" in anc:
@@ -234,56 +312,83 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     else:
         record.add("anchor_previous", None)
 
-    # 4. containment (current era; needs the per-frame spectra the campaign products carry). The fine anchor
-    # is compared with the spectrum's in-span lobe: a disagreement beyond the designated half-width sets the
-    # sentinel (design section 6), and the difference is recorded beside both estimates.
+    # 4. containment on the reference era (needs the per-frame spectra the campaign products carry). The table's
+    # fine anchor is compared with the spectrum's in-span lobe: a disagreement beyond the designated half-width
+    # sets the sentinel (design section 6); an out-of-window anchor is an alias only when it folds onto the
+    # out-of-span feature by one coarse bin.
+    anchor_suspect, anchor_note, lobe_bin = False, "", None
     if reference_mask.any() and "psd_frame_db_i16" in p.archive.files:
         spectrum = psd.accumulate_spectra(p, reference_mask)
         first = psd.analyse(spectrum, g)
         lobe_hz = first.row.in_span_refined_offset_hz if first.row.in_span_recovered else math.nan
-        anchor_hz = float(of_record.anchor_rf_offset_hz) if of_record.status == "ok" else math.nan
+        anchor_hz = float(table_anchor.anchor_rf_offset_hz) if table_anchor.status == "ok" else math.nan
         offset_bins = psd.anchor_lobe_offset_bins(anchor_hz, lobe_hz)
         disagree = math.isfinite(offset_bins) and abs(offset_bins) > anchors.DESIGNATED_HALF_WIDTH + 0.5
-        aliases = bool(of_record.aliased_out_of_window)
+        folds = False
+        if math.isfinite(first.row.out_of_span_offset_hz) and math.isfinite(anchor_hz):
+            tol = (anchors.DESIGNATED_HALF_WIDTH + 0.5) * FINE_BIN_HZ
+            folds = any(abs(anchor_hz - (first.row.out_of_span_offset_hz + k * COARSE_BIN_HZ)) <= tol for k in (-1, 1))
         reasons = []
-        if aliases:
-            reasons.append("fine anchor aliases an out-of-span feature")
+        if folds:
+            reasons.append(f"fine anchor aliases the out-of-span feature at {first.row.out_of_span_offset_hz:.0f} Hz by one coarse bin")
+        elif table_anchor.status == "ok" and table_anchor.aliased_out_of_window:
+            notes.append("fine anchor lies beyond the +-30-bin acquisition window (no fold onto an out-of-span feature)")
         if disagree:
             reasons.append(f"fine anchor {offset_bins:+.1f} bins from the PSD in-span lobe")
-        cont = psd.analyse(spectrum, g, anchor_aliases=aliases or disagree, anchor_note="; ".join(reasons))
+        anchor_note = "; ".join(reasons)
+        cont = psd.analyse(spectrum, g, anchor_aliases=bool(folds or disagree), anchor_note=anchor_note)
         psd.write_spectra_json([cont], ch_dir / "spectra_window.json", provenance=reference_label)
         containment_row = cont.row
+        mode_mass = float(table_anchor.boot_mode_mass) if table_anchor.status == "ok" else math.nan
+        anchor_suspect = bool(disagree or folds or (math.isfinite(mode_mass) and mode_mass < 0.5))
+        if first.row.in_span_recovered:
+            lobe_bin = _fine_bin_of_rf(lobe_hz, g)
         record.add("containment", {**dataclasses.asdict(cont.row), "anchor_lobe_offset_bins": offset_bins,
-                                   "anchor_lobe_disagree": bool(disagree), "era": reference_label})
+                                   "anchor_lobe_disagree": bool(disagree), "anchor_folds_out_of_span": bool(folds),
+                                   "anchor_suspect": anchor_suspect, "lobe_fine_bin": lobe_bin, "era": reference_label})
     else:
         cont, containment_row = None, None
         record.add("containment", None)
         if reference_mask.any():
             notes.append("containment skipped: product carries no per-frame spectra")
 
-    # 5. chain (archive-wide on population outside the declared off epoch)
+    # 5. chain on the reference era (chapter 9: the chain terms on the channel's current era), with the
+    # archive-wide chain beside it for comparison with the superseded numbers
     try:
-        ch_res = chain.residual_chain(p.path, off_through=off_through, off_from=off_from)
+        ch_res = chain.residual_chain_on_frames(p, reference_mask, population=reference_label, off_through=off_through, off_from=off_from)
         record.add("chain", ch_res.as_row())
         gain, tau_quality = ch_res.gain, ch_res.tau_quality
     except Exception as exc:  # the chain refuses loudly on some channels; record, do not stop
         ch_res = None
         record.add("chain", None)
-        notes.append(f"chain: {type(exc).__name__}: {exc}")
+        notes.append(f"chain on the {reference_label}: {type(exc).__name__}: {exc}")
         gain, tau_quality = 1.0, "unmeasured"
+    try:
+        ch_all = chain.residual_chain(p.path, off_through=off_through, off_from=off_from)
+        record.add("chain_archive", ch_all.as_row())
+    except Exception as exc:
+        record.add("chain_archive", None)
+        notes.append(f"archive-wide chain: {type(exc).__name__}: {exc}")
 
     # 6. tolerance
     tol_row = tolerance_row or {}
     r_tol = float(tol_row.get("r_tol_dilation", math.nan))
     record.add("tolerance", tol_row or None)
 
-    # 7. null calibration on the calibration block (floor first; exchangeability after the selection).
-    # The evaluation block never enters the null: the floor and the widths that score both blocks are
-    # read from the calibration block (or from the verified off population, which lies outside the era).
-    anchor_bin = int(of_record.anchor_bin) if of_record.status == "ok" else g.nominal_fine_bin
-    bulk = of_record.bulk if of_record.status == "ok" else anchors.bulk_mask(anchor_bin, pad_factor=p.fine_pad_factor,
-                                                                             guard_fine_bins=p.fine_guard_bins,
-                                                                             census_excluded_bins=p.fine_census_excluded_bins)
+    # 7. null calibration on the calibration block (floor first; exchangeability after the selection). The
+    # evaluation block never enters the null: the floor and the widths that score both blocks are read from the
+    # calibration block, or from the verified off population outside the evaluation block. When the fine anchor is
+    # suspect the nominal window is excluded from the fine null's bulk (the bulk may carry the pilot). The selector's
+    # anchor is the calibration block's; when that anchor is suspect and the spectrum recovered an in-span lobe, the
+    # lobe's fine bin is used instead, labelled.
+    anchor_bin = int(selector_anchor.anchor_bin) if selector_anchor.status == "ok" else g.nominal_fine_bin
+    anchor_source = selector_anchor.label if selector_anchor.status == "ok" else "nominal bin"
+    if anchor_suspect and lobe_bin is not None:
+        anchor_bin, anchor_source = int(lobe_bin), "psd in-span lobe (fine anchor suspect)"
+        notes.append(f"selector anchor taken from the PSD in-span lobe (bin {anchor_bin}): {anchor_note or 'anchor bootstrap mode mass below 0.5'}")
+    bulk = anchors.bulk_mask(anchor_bin, pad_factor=p.fine_pad_factor, guard_fine_bins=p.fine_guard_bins,
+                             census_excluded_bins=p.fine_census_excluded_bins)
+    exclude = anchors.window_bins(g.nominal_fine_bin, anchors.WINDOW_HALF_WIDTH) if anchor_suspect else None
     if split.calibration.any():
         null_block, null_label = split.calibration, f"{era_label}/calibration"
     else:
@@ -291,7 +396,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         if era_mask.any():
             notes.append("null calibrated on the whole era: no calibration block")
     null_cal = nulls.calibrate_null(p, null_block, anchor_bin=anchor_bin, bulk_mask=bulk, era_label=null_label,
-                                    off_era=off_mask, fine_t=ratio)
+                                    off_era=off_for_null, fine_t=ratio, exclude_fine_bins=exclude)
     floor = selection.Floor(null_cal.floor.db, null_cal.floor.evidence, null_cal.floor.population)
 
     # 8. selection on the calibration block, replayed on the evaluation block
@@ -300,17 +405,25 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
             p, split.calibration, split.evaluation, anchor_bin=anchor_bin, bulk_mask=bulk, r_tol=r_tol, floor=floor,
             era_label=era_label, gain=gain, latest_era=True, off_era=off_era_current,
             bootstrap_replicates=replicates, bootstrap_seed=seed)
+        sel = dataclasses.replace(sel, anchor_sentinel=anchor_note)
     else:
         sel = None
         notes.append("selection skipped: no tolerance or no calibration frames")
-    if sel is not None and sel.rho is not None:
+    exch_rho = None
+    if sel is not None:
+        exch_rho = sel.rho if sel.rho is not None else sel.diagnostic.get("rho")
+    if exch_rho is not None:
         null_cal = nulls.calibrate_null(p, null_block, anchor_bin=anchor_bin, bulk_mask=bulk, era_label=null_label,
-                                        off_era=off_mask, rho=sel.rho, quiet_block=split.evaluation, fine_t=ratio)
-    record.add("null", null_cal.as_row())
+                                        off_era=off_for_null, rho=int(exch_rho), quiet_block=split.evaluation, fine_t=ratio,
+                                        exclude_fine_bins=exclude)
+    record.add("null", {**null_cal.as_row(), "anchor_bin": anchor_bin, "anchor_source": anchor_source,
+                        "exchangeability_rank_basis": ("selected point" if (sel is not None and sel.rho is not None) else
+                                                       ("diagnostic point" if exch_rho is not None else ""))})
     # the same description on the evaluation block (the blocked-evaluation table's drift columns)
     if split.evaluation.any():
         null_eval = nulls.calibrate_null(p, split.evaluation, anchor_bin=anchor_bin, bulk_mask=bulk,
-                                         era_label=f"{era_label}/evaluation", off_era=off_mask, fine_t=ratio)
+                                         era_label=f"{era_label}/evaluation", off_era=off_for_eval, fine_t=ratio,
+                                         exclude_fine_bins=exclude)
         record.add("null_evaluation", null_eval.as_row())
     else:
         record.add("null_evaluation", None)
@@ -324,7 +437,11 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
                 keep[f"keep_everything_r_sys_{name}"] = float(selection.systematic_residuals(p, rows, floor, gain).mean()) if rows.size else math.nan
             except ValueError:
                 keep[f"keep_everything_r_sys_{name}"] = math.nan
-        record.add("selection", {**sel.as_row(), **selection.surface_summary(sel), **keep})
+        # the coarse rule's own frontier (f, r_sys) on the calibration block, beside the fine surface
+        frontier = _coarse_frontier(p, split.calibration, floor, gain, r_tol)
+        _write_csv([{"channel": ch, **row} for row in frontier], ch_dir / "coarse_frontier.csv")
+        record.add("selection", {**sel.as_row(), **selection.surface_summary(sel), **keep, "anchor_source": anchor_source,
+                                 **_frontier_summary(frontier)})
     else:
         record.add("selection", None)
 
@@ -334,14 +451,18 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     inputs = screening.ScreeningInputs(
         off_era=off_era_current,
         selection_status=sel.status if sel is not None else "refused",
-        tolerance_fraction=(ev.tolerance_fraction if ev is not None else (sel.tolerance_fraction if sel is not None else math.nan)),
-        masked_fraction=(ev.masked_fraction if ev is not None else (sel.masked_fraction if sel is not None else math.nan)),
+        tolerance_fraction=(sel.tolerance_fraction if (sel is not None and sel.status == "feasible") else math.nan),
+        masked_fraction=(sel.masked_fraction if (sel is not None and sel.status == "feasible") else math.nan),
         survey_flag_rate=flag_rate, floor_evidence=floor.evidence, correlation_quality=tau_quality,
         refusal=sel.refusal if sel is not None else "no selection",
-        claim_status=sel.claim_status if sel is not None else "")
+        claim_status=sel.claim_status if sel is not None else "",
+        era_state=era.state if era else "", era_level_db=float(era.level_median_db) if era else math.nan,
+        anchor_sentinel=anchor_note, stability_status=sel.stability.get("status", "") if sel is not None else "")
     screen = screening.screen(inputs)
     record.add("screening", {**screen.as_row(), "survey_flag_rate_era": flag_rate, "off_era_current": off_era_current,
-                             "off_through": off_through or "", "off_from": off_from or ""})
+                             "off_through": off_through or "", "off_from": off_from or "",
+                             "evaluation_masked_fraction_at_diagnostic": ev.masked_fraction if ev is not None else math.nan,
+                             "evaluation_R_at_diagnostic": ev.tolerance_fraction if ev is not None else math.nan})
 
     p.close()
     return {
@@ -390,6 +511,7 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
                 era_config: eras.EraConfig | None = None, generated: str | None = None) -> dict:
     products_dir, out = Path(products_dir), Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    producer = _producer()                     # read once, before any work: the code that runs is the code named
     paths = sorted(products_dir.glob("*.npz"))
     opened = [Product(p) for p in paths]
     all_channels = {p.geometry.physical_channel: p for p in opened}
@@ -434,7 +556,8 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
 
     book = ledger.Ledger(run={
         "generated": generated or dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "producer": {"repository": "WVURAIL/RFIsher", "commit": git_commit(ROOT), "module": "rfisher_results.archive.run"},
+        "producer": {**producer, "commit_at_end": git_commit(ROOT),
+                     "commit_changed_during_run": git_commit(ROOT) != producer["commit"]},
         "products_dir": str(products_dir), "products": {p.name: sha256_of(p) for p in paths},
         "channels": sorted(by_channel), "campaign_last_month": blocks.month_label(campaign_last),
         "era_config": json.loads(config.canonical_json()), "era_config_digest": config.digest,

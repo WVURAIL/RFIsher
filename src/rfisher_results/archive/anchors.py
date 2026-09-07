@@ -264,8 +264,15 @@ class ContrastEstimator:
 
 
 def build_estimator(ratio: np.ndarray, *, mask, valid, rejected, nominal_fine_bin: int,
-                    min_cohort_frames: int = MIN_COHORT_FRAMES) -> ContrastEstimator:
-    """Cohorts and method from the per-frame ratio ``(N, 256)`` and the frame flags."""
+                    min_cohort_frames: int = MIN_COHORT_FRAMES, quiet_usable: bool = True) -> ContrastEstimator:
+    """Cohorts and method from the per-frame ratio ``(N, 256)`` and the frame flags.
+
+    ``quiet_usable`` is False when the caller knows the coarse-quiet frames
+    are not a null population (the block's bulk sits far above ``mu_0``, so
+    the frames below it are the carrier-on distribution's lower tail, and
+    on-minus-quiet would contrast the carrier against itself); the plain
+    median of the on cohort is used instead, labelled.
+    """
     mask = np.asarray(mask, dtype=bool)
     valid = np.asarray(valid, dtype=bool)
     rejected = np.asarray(rejected, dtype=bool)
@@ -276,10 +283,11 @@ def build_estimator(ratio: np.ndarray, *, mask, valid, rejected, nominal_fine_bi
     quiet = SortedCohort(ratio[quiet_rows], quiet_rows)
     if all_rows.size == 0:
         return ContrastEstimator(on, quiet, None, METHOD_NONE, "", int(nominal_fine_bin))
-    if on_rows.size >= min_cohort_frames and quiet_rows.size >= min_cohort_frames:
+    if on_rows.size >= min_cohort_frames and quiet_rows.size >= min_cohort_frames and quiet_usable:
         return ContrastEstimator(on, quiet, None, METHOD_ON_MINUS_QUIET, "", int(nominal_fine_bin))
     if on_rows.size >= min_cohort_frames:
-        return ContrastEstimator(on, quiet, on, METHOD_MEDIAN_FALLBACK, "on", int(nominal_fine_bin))
+        label = "on" if quiet_usable else "on (quiet cohort is not a null)"
+        return ContrastEstimator(on, quiet, on, METHOD_MEDIAN_FALLBACK, label, int(nominal_fine_bin))
     return ContrastEstimator(on, quiet, SortedCohort(ratio[all_rows], all_rows), METHOD_MEDIAN_FALLBACK, "all",
                              int(nominal_fine_bin))
 
@@ -403,7 +411,7 @@ def anchor_from_ratio(ratio: np.ndarray, *, mask, valid, rejected, unit_index, g
                       min_cohort_frames: int = MIN_COHORT_FRAMES, window_half_width: int = WINDOW_HALF_WIDTH,
                       designated_half_width: int = DESIGNATED_HALF_WIDTH,
                       replicates: int = BOOTSTRAP_REPLICATES, seed: int = BOOTSTRAP_SEED,
-                      min_blocks: int = MIN_BOOTSTRAP_BLOCKS) -> AnchorResult:
+                      min_blocks: int = MIN_BOOTSTRAP_BLOCKS, quiet_usable: bool = True) -> AnchorResult:
     """The anchor from a precomputed per-frame ratio ``(N, 256)`` and the frame flags.
 
     ``anchor`` is the product-facing wrapper; this form lets several masks
@@ -422,7 +430,7 @@ def anchor_from_ratio(ratio: np.ndarray, *, mask, valid, rejected, unit_index, g
                   designated_half_width=int(designated_half_width), pad_factor=int(pad_factor),
                   guard_fine_bins=int(guard_fine_bins), census_excluded_bins=census,
                   replicates=int(replicates), seed=int(seed))
-    est = build_estimator(ratio, mask=mask, valid=valid, rejected=rejected,
+    est = build_estimator(ratio, mask=mask, valid=valid, rejected=rejected, quiet_usable=bool(quiet_usable),
                           nominal_fine_bin=geometry.nominal_fine_bin, min_cohort_frames=params["min_cohort_frames"])
     frames_masked = int((mask & valid).sum())
     if est.method == METHOD_NONE:
