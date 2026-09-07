@@ -19,9 +19,10 @@ from .core import Fragment, Run, load_run, write_report
 
 TABLE_MODULES: tuple[str, ...] = (
     "calibration_eras", "calibration_anchors", "calibration_nulls", "blocked_evaluation", "held_out_summary",
-    "tolerance_eta", "tolerance_channels", "conclusions_matrix", "handover",
+    "tolerance_eta", "tolerance_channels", "conclusions_matrix", "handover", "flagger_survey",
 )
-FIGURE_MODULES: tuple[str, ...] = ("figures_status", "figures_two_walls", "figures_census_psd")
+FIGURE_MODULES: tuple[str, ...] = ("figures_status", "figures_two_walls", "figures_census_psd",
+                                   "figures_masking_cost")
 
 
 def _module(name: str):
