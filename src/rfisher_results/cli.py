@@ -4,7 +4,7 @@ Run as a module; there is deliberately no console-script entry, because the
 shipped Fisher banks pin a digest of pyproject.toml and a rendering command
 is no reason to re-stamp them.
 
-    python -m rfisher.results.cli estimator-transfer --release DIR --out FILE.pdf
+    python -m rfisher_results.cli estimator-transfer --release DIR --out FILE.pdf
         [--calibration pilot_below_db,bin_enbw_hz,dtv_bandwidth_hz[,efficiency]]
         [--title TEXT] [--y-min DB] [--no-tex]
 """
@@ -28,7 +28,7 @@ def _calibration(text: str | None) -> Calibration | None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m rfisher.results.cli", description=__doc__.split("\n", 1)[0])
+    ap = argparse.ArgumentParser(prog="python -m rfisher_results.cli", description=__doc__.split("\n", 1)[0])
     sub = ap.add_subparsers(dest="command", required=True)
     et = sub.add_parser("estimator-transfer", help="digital or over-the-air estimator-transfer figure")
     et.add_argument("--release", type=Path, required=True, help="release directory (data/plot_points.csv inside)")

@@ -10,8 +10,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from rfisher.results import style
-from rfisher.results.estimator_transfer import Calibration, figure_estimator_transfer, load_release
+from rfisher_results import style
+from rfisher_results.estimator_transfer import Calibration, figure_estimator_transfer, load_release
 
 HAVE_TEX = all(shutil.which(c) for c in ("latex", "dvipng", "kpsewhich"))
 CAL = Calibration(pilot_below_data_db=11.918446870168612, bin_enbw_hz=3051.7578125, dtv_bandwidth_hz=6.0e6)
@@ -79,5 +79,5 @@ def test_render_is_byte_stable(tmp_path, ota):
 
 def test_the_style_module_is_the_single_source():
     here = Path(style.__file__)
-    scripts_copy = here.parents[3] / "scripts" / "dissertation" / "style.py"
-    assert scripts_copy.read_bytes() == here.read_bytes(), "scripts/dissertation/style.py drifted from rfisher.results.style"
+    scripts_copy = here.parents[2] / "scripts" / "dissertation" / "style.py"
+    assert scripts_copy.read_bytes() == here.read_bytes(), "scripts/dissertation/style.py drifted from rfisher_results.style"
