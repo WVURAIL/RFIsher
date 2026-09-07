@@ -94,8 +94,11 @@ of the five designated bins, the designated maximum, the exact integer pair
 percentile, the ratio, and the operating-point boundary, dashed); panel 2 is
 the cohort and the selector's verdict (era, cohort frames, the ledger's own
 count, anchor bin, designated bins, bulk size, frames the coarse rule keeps,
-the weakest frame of the cohort and its ``F/mu_0``, the selection status,
-surface points, and the refusal text).
+the weakest frame of the cohort and its ``F/mu_0``, the operating-point basis,
+rank and multiplier, the selection status, surface points, and the refusal
+text). The designated bins and whether the weakest frame is the companion are
+keyed but not printed: the five ``T[f]`` rows are labelled by those bins, and
+a companion that is not the weakest is a note.
 
 Numbers are keyed ``ch06.worked_example.<name>.<frame>`` with ``frame`` in
 ``exemplar``/``companion``, and ``ch06.worked_example.<name>`` for a
@@ -654,9 +657,14 @@ def _cohort_panel(ex: Example, frag: Fragment) -> str:
     text_row("era", "era", ex.era_label)
     int_row("cohort frames (current era)", "cohort_frames", ex.cohort_frames)
     int_row("ledger's era frames", "ledger_era_frames", ex.ledger_frames)
-    text_row("frame-health gate", "health_schema", ex.health_schema)
+    rows.append(["frame-health gate", r"\texttt{" + tex(ex.health_schema) + "}" if ex.health_schema else DASH])
+    add("health_schema", ex.health_schema or None, kind="text",
+        renderings=(ex.health_schema,) if ex.health_schema else (),
+        status="measured" if ex.health_schema else "pending")
     int_row("measured anchor bin", "anchor_bin", ex.anchor_bin)
-    text_row("designated bins", "designated_bins", ", ".join(str(b) for b in ex.designated_bins))
+    designated = ", ".join(str(b) for b in ex.designated_bins)     # the five T rows above are keyed by these bins
+    add("designated_bins", designated or None, kind="text", renderings=(designated,) if designated else (),
+        status="measured" if designated else "pending")
     int_row(r"usable bulk $|\mathcal{B}|$", "bulk_size", ex.bulk_size)
     int_row("cohort frames the coarse rule keeps", "kept_frames", ex.kept_frames)
     weakest = _stamp(ex.weakest_time) if math.isfinite(ex.weakest_time) else ""
@@ -665,8 +673,8 @@ def _cohort_panel(ex: Example, frag: Fragment) -> str:
                  if math.isfinite(ex.weakest_statistic) else DASH])
     if math.isfinite(ex.weakest_statistic):
         add("weakest_statistic", ex.weakest_statistic, precision=3)
-    text_row("weakest frame is the companion", "weakest_is_companion",
-             "yes" if ex.weakest_is_companion else "no")
+    companion = "yes" if ex.weakest_is_companion else "no"          # printed as a note when it is not
+    add("weakest_is_companion", companion, kind="text", renderings=(companion,))
     text_row("selection status", "selection_status", ex.status)
     int_row("calibration-surface points evaluated", "surface_points", ex.surface_points)
     star = _star(ex)

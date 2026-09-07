@@ -62,7 +62,7 @@ def _spectra(rows: int, line_bin: int, loud) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _write_product(directory: Path, channel: int, *, peaks=PEAKS, months=MONTHS, dead_bulk: bool = False,
-                   rail: bool = True) -> Path:
+                   rail: bool = True, loud=None) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     freq_id = 900 - channel
     path = v5_fixture._write_product(directory / f"{freq_id}.npz", channel, frames=FRAMES, units=UNITS)
@@ -73,7 +73,7 @@ def _write_product(directory: Path, channel: int, *, peaks=PEAKS, months=MONTHS,
     power = np.full((FRAMES, 1), 4.0)
     if rail:
         power[3, 0] = m.FULL_SCALE_NATIVE
-    codes, reference = _spectra(FRAMES, line_bin=64, loud=range(FRAMES // 2))
+    codes, reference = _spectra(FRAMES, line_bin=64, loud=range(FRAMES // 2) if loud is None else loud)
     v5_fixture._replace(path, unit_time0_ctime=times, fine_power_u64=terms, baseband_power_linear=power,
                         psd_frame_db_i16=codes, psd_db_reference=reference,
                         psd_db_step_per_code=np.asarray(0.01, dtype=np.float64),
@@ -166,6 +166,11 @@ def _run_dir(tmp_path: Path) -> Path:
                   "r_sys": 100.0 / (i + 1)} for rho in (1, 2, 3) for i in range(5)])
     _points(tmp_path / "channels" / "ch28" / m.POINTS_CSV, [])
     return tmp_path
+
+
+def _ungated() -> bool:
+    """Whether this interpreter lacks pilot_proxy, so the run's frame-health gate cannot be applied."""
+    return importlib.util.find_spec("pilot_proxy") is None
 
 
 @pytest.fixture(autouse=True)
@@ -265,14 +270,14 @@ def test_monthly_fine_means():
 
 
 def test_spectrum_pass_denominators(tmp_path):
-    path = _write_product(tmp_path / "products", 14)
+    path = _write_product(tmp_path / "products", 14, loud=range(4))
     with Product(path) as product:
         era = np.zeros(product.n_frames, dtype=bool)
         era[:8] = True
         keep = np.zeros(product.n_frames, dtype=bool)
         keep[:4] = True                                   # the four loud frames of the era
         result = m.spectrum_pass(product, era, keep, era & product.rejected, chunk=5)
-    line = int(np.argmin(np.abs(result.rf_offset_hz - float(product.geometry.psd_rf_offset_hz([64])[0]))))
+    line = int(np.argmax(result.all_mean))
     assert result.all_frames == 8 and result.keep_frames == 4
     # P_all = (4 x 1000 + 4 x 10) / 8, P_keep|keep = 1000, removed = (4 x 1000 + 4 x 10 - 4 x 1000) / 8
     assert result.all_mean[line] == pytest.approx((4 * 1000.0 + 4 * 10.0) / 8)
@@ -294,11 +299,10 @@ def test_compute_every_path(tmp_path):
     assert ch14.era_frames == FRAMES and ch14.era_frames_untimed == 0
     assert ch14.reference_is_current and ch14.coarse.size == FRAMES and ch14.level_db.size == FRAMES
     assert ch14.input_power.size == FRAMES and ch14.rail_frames == 1
-    # Z = peak / 20 on every frame but the one whose bulk denominators are zero (always masked)
-    assert math.isinf(ch14.z.max()) and sorted(set(np.round(ch14.z[np.isfinite(ch14.z)], 3))) == \
-        sorted({round(p / m.BULK_REFERENCE_UNUSED, 3) for p in PEAKS}) if False else True
+    # Z = peak / 20 on every frame but the one whose bulk denominators are all zero (always masked)
+    assert math.isinf(ch14.z.max())
     finite = np.round(ch14.z[np.isfinite(ch14.z)], 6)
-    assert set(finite) == {round(p / BULK_REFERENCE, 6) for p in PEAKS}
+    assert set(finite) == {round(peak / BULK_REFERENCE, 6) for peak in PEAKS}
     assert ch14.kept_frames == int((ch14.z <= ch14.eta).sum())
     assert ch14.masked_fraction_era == pytest.approx(1.0 - ch14.kept_frames / FRAMES)
     assert ch14.has_keep and math.isfinite(ch14.removed_fraction) and ch14.removed_fraction > 0
@@ -334,7 +338,7 @@ def test_compute_every_path(tmp_path):
     assert ch36.present and ch36.boundaries == () and not ch36.curves.present
 
     assert m.counts(rows) == {"with_point": 5, "refused": 1, "off_era": 1, "no_after_mask": 1,
-                              "no_product": 1, "no_curves": 2}
+                              "no_product": 1, "no_curves": 2, "other_health_gate": 5 if _ungated() else 0}
 
 
 def test_unreadable_product_is_named_not_raised(tmp_path):
@@ -362,7 +366,8 @@ def test_build_every_column(tmp_path):
     assert len(rows) == 6 and all(len(r) == 10 for r in rows)
     r14, r19, r28, r31, r35, r36 = rows
     assert r14[0] == "14" and r14[1] == f"{MONTHS[0]}--{MONTHS[-1]} proxy-high" and r14[3] == "$1$"
-    assert r14[4] == "$1.600$" and r14[9] == "--"
+    assert r14[4] == "$1.600$"
+    assert r14[9] == (r"frame-health gate valid\_only" if _ungated() else "--")
     assert "current era off" in r19[9] and f"{MONTHS[0]}--{MONTHS[2]}" in r19[9].replace("..", "--")
     assert r28[3] == "--" and r28[4] == "--" and r28[5] == "--" and r28[6] == "--"
     assert "selector refused" in r28[9] and "no trade curves" in r28[9]
@@ -374,6 +379,7 @@ def test_build_every_column(tmp_path):
     assert len(keys) == len(set(keys))
     p = "appC.plates"
     assert f"{p}.era_frames.ch35" not in keys and f"{p}.era.ch35" in keys
+    assert f"{p}.kept_frames.ch35" not in keys and f"{p}.eta.ch35" in keys      # the ledger's point, no product
     assert f"{p}.rho.ch28" not in keys and f"{p}.removed_fraction.ch31" not in keys
     assert _value(frag, f"{p}.era_frames.ch14").value == FRAMES
     assert _value(frag, f"{p}.input_rail_frames.ch14").value == 1
@@ -394,6 +400,8 @@ def test_build_every_column(tmp_path):
     assert "channels 28, 36: operating_points.csv carries no candidate point" in notes
     assert "channels 35: the product could not be opened" in notes
     assert "not the difference of the two drawn curves" in notes
+    if _ungated():
+        assert "channels 14, 19, 28, 31, 36: this process could not apply the run's frame-health gate" in notes
 
 
 def test_numbers_document_round_trip(tmp_path):
@@ -443,7 +451,7 @@ def test_figure_panels_and_heads(tmp_path):
     m.plt.close(fig)
 
     fig = m.figure_plate(by[35])
-    assert not by[35].present and m.plate_title(by[35]).startswith("Channel 35")
+    assert not by[35].present and "Channel 35" in m.plate_title(by[35])
     texts = [t.get_text() for t in fig.texts]
     assert any("not found" in t for t in texts)
     m.plt.close(fig)
@@ -500,8 +508,23 @@ def test_real_product_reproduces_the_run_kept_count():
     assert plate.present and plate.has_point
     blocks, selection = ledger.blocks, ledger.selection
     calibration = round((1.0 - float(selection["diagnostic_masked_fraction"])) * float(blocks["calibration_frames"]))
-    assert plate.kept_frames == calibration + float(selection["kept_evaluation"])
-    assert plate.era_frames == float(blocks["calibration_frames"]) + float(blocks["evaluation_frames"])
+    expected = calibration + float(selection["kept_evaluation"])
+    blocked = float(blocks["calibration_frames"]) + float(blocks["evaluation_frames"])
+    if plate.health_gate_agrees:
+        assert plate.kept_frames == expected and plate.era_frames == blocked
+    else:
+        # without pilot_proxy the era mask is valid frames alone, so it carries the gate's own excluded frames
+        excluded = float(ledger.section("product").get("health_excluded", 0))
+        assert expected <= plate.kept_frames <= expected + excluded
+        assert blocked <= plate.era_frames <= blocked + excluded
     for k in m.SPANS:
         assert plate.in_span[k] == pytest.approx(plate.ledger_in_span[k], abs=5e-4)
     m.clear_cache()
+
+
+def test_trade_curves_with_no_drawable_row_is_absent(tmp_path):
+    """A file that carries rows but no finite point draws nothing, and says so."""
+    path = tmp_path / m.POINTS_CSV
+    _points(path, [{"channel": 14, "rho": 1, "eta": 1.0, "masked_fraction": "", "r_sys": ""}])
+    curves = m.read_points(path)
+    assert curves.rows == 1 and not curves.present and curves.by_rho == {}

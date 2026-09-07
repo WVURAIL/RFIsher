@@ -63,17 +63,31 @@ member absent from either side is named in the notes and compared nowhere):
   unit identity         ``unit_event_id``, ``unit_time0_fpga`` --- per joined
                         acquisition rather than per frame
 
-The float members are *not* part of the claim and are reported beneath a rule
-as the reason why: ``normalized_coarse_power_ratio_db`` and ``pilot_excess_db``
+The float members are *not* part of the claim and are counted separately, in
+the denominator panel, as the reason why: ``normalized_coarse_power_ratio_db`` and ``pilot_excess_db``
 are ``10 log10`` of exactly-equal integer ratios and are not bit-equal across
 builds (a 1--2 ulp difference in the last place), which is what an exactness
 contract stated over integers buys.
 
-**Panels** (four ``tabular`` blocks stacked in one box; the chapter supplies
-the ``table`` environment, one caption and one label):
+**Two fragments.** Five panels of this content measure 928 pt against a
+650 pt text height, so the record is split the way the chapter's other tables
+are: ``crossbuild_record`` (``tab:impl:crossbuild``) is the chapter table --
+the two build manifests and the joined denominator -- and
+``crossbuild_fields`` (``tab:archive:crossbuild_fields``) is the companion,
+the mismatch count member by member and the same build's re-execution. Each is
+a stack of ``tabular`` blocks in one box, and each fits the text block upright
+(412 pt and 447 pt wide, 559 pt and 341 pt tall, against 470 x 650 pt). The two builders share one join through a
+process-lifetime cache, because the join reads about 1.5 GB of compressed
+members.
 
-  1. *Build manifests.* One row per provenance scalar the products record,
-     one column per cohort. Everything here is read from the product itself
+**Panels** (the chapter supplies the ``table`` environment, one caption and
+one label per fragment):
+
+  1--2. *Build manifest*, split in two by a computed rule: panel 1 is every
+     field whose value is identical in every cohort (one value column), panel
+     2 is every field the cohorts differ in (one column per cohort) --- the
+     build axis the claim rests on. Together they are one row per provenance
+     scalar the products record. Everything here is read from the product itself
      (``Product.archive``) except the file digest, which is the campaign's
      ``SHA256SUMS`` entry for that path, and is dashed when the file is not
      listed there. Rows: the analyzer package and source digest and the
@@ -90,15 +104,18 @@ the ``table`` environment, one caption and one label):
      records no host and no compiler:* the build axis it does record is the
      analyzer source digest and the detector binary digest, and the notes say
      so.
-  2. *Joined denominator and completeness.* One column per arm: events and
+  3. *Joined denominator and completeness.* One column per arm: events and
      frames on each side, joined events and frames, join completeness on the
      reference's denominator, missing records (reference frames with no
      campaign counterpart), invalid records (frames either side marks
-     ``valid = 0``), integer fields compared and mismatches.
-  3. *Mismatches by compared field.* One row per compared member: its integer
+     ``valid = 0``), integer values compared and mismatches, and then the
+     derived floats: their values compared, their mismatches, and the largest
+     difference in units of the last place.
+  4. *Mismatches by compared integer member* (companion fragment). One row per member: its integer
      width per frame, then the values compared and the mismatches for each
-     arm. The two float members follow under a rule, outside the claim.
-  4. *Independent re-execution of the same build.* From
+     arm, in the group order above with a rule between groups. The two float
+     members are keyed but not printed here; panel 3 counts them.
+  5. *Independent re-execution of the same build* (companion fragment). From
      ``logs/channels/summary.csv``: the channels a second scan session
      processed independently of their owner (``shard3_rebuilt`` set and the
      owner not itself that session), with each side's completed and
@@ -114,7 +131,9 @@ Numbers are keyed ``ch06.crossbuild.<name>`` for band-level values,
 ``qualification`` or ``run_of_record``), ``ch06.crossbuild.manifest.<field>.<cohort>``
 for a manifest cell, ``ch06.crossbuild.compared.<field>.<arm>`` and
 ``ch06.crossbuild.mismatches.<field>.<arm>`` for a comparison cell, and
-``ch06.crossbuild.reexec.<name>.fid<NNN>`` for a re-execution row.
+``ch06.crossbuild.reexec.<name>.fid<NNN>`` for a re-execution row. The manifest
+no longer carries the event and frame counts: the denominator panel states
+them, and a number is keyed once.
 """
 from __future__ import annotations
 
@@ -132,14 +151,17 @@ from .core import DASH, Fragment, Run, booktabs, fmt, fmt_int, tex
 
 NAME = "crossbuild_record"
 LABEL = "tab:impl:crossbuild"
+LEDGER_NAME = "crossbuild_fields"
+LEDGER_LABEL = "tab:archive:crossbuild_fields"
 PREFIX = "ch06.crossbuild"
-DIGEST_CHARS = 16                       # hex characters of every digest printed
+DIGEST_CHARS = 12                       # hex characters of every digest printed (the table must fit upright)
 COMPARE_STORED_SPECTRA = True           # psd_frame_db_i16: exact, but 1.2 GB and ~15 s per survey product
 
 QUALIFICATION = "qualification"
 ARM_QUALIFICATION = "qualification"
 ARM_RUN = "run_of_record"
 ARM_LABEL = {ARM_QUALIFICATION: "qualification", ARM_RUN: "run of record"}
+ARM_SHORT = {ARM_QUALIFICATION: "qual.", ARM_RUN: "record"}
 
 REFERENCE = "reference"
 CAMPAIGN = "campaign"
@@ -194,8 +216,6 @@ MANIFEST_FIELDS: tuple[tuple[str, str], ...] = (
     ("collection server", "unit collection server"),
     ("unit scope", "unit scope"),
     ("product file sha256", "product file sha256"),
-    ("events", "events"),
-    ("frames", "frames"),
 )
 
 
@@ -528,8 +548,23 @@ class Record:
     inputs: list[Path] = field(default_factory=list)
 
 
+_CACHE: dict[tuple, Record] = {}
+
+
 def record(run: Run, *, stored_spectra: bool = COMPARE_STORED_SPECTRA) -> Record:
-    """Discover the cohorts, join them, and compare; every failure is a stated reason."""
+    """Discover the cohorts, join them, and compare; every failure is a stated reason.
+
+    The two builders share one pass: the join reads about 1.5 GB of compressed
+    members, so the result is cached on the run's own directories for the life
+    of the process.
+    """
+    key = (str(run.results_dir), str(run.run.get("products_dir", "")), bool(stored_spectra))
+    if key not in _CACHE:
+        _CACHE[key] = _record(run, stored_spectra=stored_spectra)
+    return _CACHE[key]
+
+
+def _record(run: Run, *, stored_spectra: bool = COMPARE_STORED_SPECTRA) -> Record:
     root = campaign_root(run)
     if root is None or not root.is_dir():
         return Record(root, reason=f"the run names no readable campaign directory ({root})")
@@ -584,26 +619,43 @@ def _stack(panels: Sequence[tuple[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _manifest_panel(rec: Record, frag: Fragment) -> str:
+def _manifest_cell(key: str, value: str) -> str:
+    if key in ("events", "frames"):
+        return f"${fmt_int(value)}$" if value else DASH
+    return _digest(value)
+
+
+def _manifest_panels(rec: Record, frag: Fragment) -> tuple[str, str]:
+    """Two panels: the fields every cohort agrees on, then the fields the builds differ in.
+
+    The split is computed, never declared: a field whose value is the same in
+    every cohort prints once; a field that differs prints one column per
+    cohort, and those columns are the build axis the claim rests on. Every
+    cell is keyed either way.
+    """
     cohorts = [c for c in (REFERENCE, CAMPAIGN, RUN_OF_RECORD) if c in rec.builds]
-    header = ["manifest field"] + [tex(COHORT_LABEL[c]) for c in cohorts] if cohorts else ["manifest field", "value"]
-    rows = []
+    compared = [c for c in (REFERENCE, CAMPAIGN) if c in rec.builds] or cohorts
+    shared, differing = [], []
     for label, key in MANIFEST_FIELDS:
-        cells = [tex(label)]
-        for cohort in cohorts:
-            value = rec.builds[cohort].manifest.get(key, "")
-            if key in ("events", "frames"):
-                cells.append(f"${fmt_int(value)}$" if value else DASH)
-            else:
-                cells.append(_digest(value))
+        values = [rec.builds[c].manifest.get(key, "") for c in cohorts]
+        for cohort, value in zip(cohorts, values):
             frag.add(f"{PREFIX}.manifest.{key.replace(' ', '_')}.{cohort}", value or None,
                      kind="text", renderings=(value,) if value else (),
                      status="measured" if value else "pending",
                      row={"manifest_field": label, "cohort": cohort}, column=COHORT_LABEL[cohort])
-        rows.append(cells)
+        # the split is between the two *compared builds*: a field the run of record alone differs in
+        # (it spans the whole survey, not eight events) stays with the shared fields and is a note
+        if cohorts and len({rec.builds[c].manifest.get(key, "") for c in compared}) == 1:
+            shared.append([tex(label), _manifest_cell(key, rec.builds[compared[0]].manifest.get(key, ""))])
+        else:
+            differing.append([tex(label)] + [_manifest_cell(key, v) for v in values])
     if not cohorts:
-        return booktabs(["manifest field", "value"], [[tex(label), DASH] for label, _ in MANIFEST_FIELDS], "ll")
-    return booktabs(header, rows, "l" + "l" * len(cohorts))
+        empty = booktabs(["manifest field", "value"], [[tex(label), DASH] for label, _ in MANIFEST_FIELDS], "ll")
+        return empty, booktabs(["manifest field", "value"], [[DASH, DASH]], "ll")
+    first = booktabs(["manifest field", "both compared builds"], shared or [[DASH, DASH]], "ll")
+    second = booktabs(["manifest field"] + [tex(COHORT_LABEL[c]) for c in cohorts],
+                      differing or [[DASH] + [DASH] * len(cohorts)], "l" + "l" * len(cohorts))
+    return first, second
 
 
 def _denominator_panel(rec: Record, frag: Fragment) -> str:
@@ -622,28 +674,36 @@ def _denominator_panel(rec: Record, frag: Fragment) -> str:
         ("invalid records", "invalid_records", "int"),
         ("integer values compared", "compared", "int"),
         ("mismatches", "mismatches", "int"),
+        ("derived float values compared", "float_compared", "int"),
+        ("derived float mismatches", "float_mismatches", "int"),
+        ("largest float difference [ulp]", "float_ulps", "float"),
     )
     values = {}
     for a in arms:
+        ulps = [u for u in a.float_max_ulps.values() if math.isfinite(u)]
         values[a.arm] = {"reference_events": a.reference.events, "other_events": a.other.events,
                          "joined_events": a.joined_events, "event_completeness": a.event_completeness,
                          "reference_frames": a.reference.frames, "other_frames": a.other.frames,
                          "joined_frames": a.joined_frames, "frame_completeness": a.frame_completeness,
                          "missing_frames": a.missing_frames, "invalid_records": a.invalid_records,
-                         "compared": a.compared, "mismatches": a.mismatches}
+                         "compared": a.compared, "mismatches": a.mismatches,
+                         "float_compared": sum(c.compared for c in a.float_comparisons),
+                         "float_mismatches": sum(c.mismatches for c in a.float_comparisons),
+                         "float_ulps": max(ulps) if ulps else math.nan}
     rows = []
     for label, key, kind in quantities:
         cells = [tex(label)]
         for a in arms:
             value = values[a.arm][key]
             if kind == "int":
-                cells.append(f"${fmt_int(value)}$")
+                cells.append(f"${fmt_int(value)}$")     # a count is always defined on a joined arm
                 frag.add(f"{PREFIX}.{key}.{a.arm}", int(value), kind="int",
                          row={"quantity": label, "arm": a.arm}, column=a.label)
             else:
-                cells.append(f"${fmt(value, 3)}$" if math.isfinite(value) else DASH)
+                digits = 1 if key == "float_ulps" else 3
+                cells.append(f"${fmt(value, digits)}$" if math.isfinite(value) else DASH)
                 if math.isfinite(value):
-                    frag.add(f"{PREFIX}.{key}.{a.arm}", float(value), precision=3,
+                    frag.add(f"{PREFIX}.{key}.{a.arm}", float(value), precision=digits,
                              row={"quantity": label, "arm": a.arm}, column=a.label)
         rows.append(cells)
     if not arms:
@@ -652,37 +712,48 @@ def _denominator_panel(rec: Record, frag: Fragment) -> str:
 
 
 def _field_panel(rec: Record, frag: Fragment) -> str:
+    """One row per compared integer member; the derived floats are counted in the denominator panel."""
     arms = rec.arms
-    header = ["member", "group", "ints/frame"]
+    header = ["member", "ints/frame"]
     for a in arms:
-        header += [tex(a.label) + " compared", "mism."]
+        header += [tex(ARM_SHORT.get(a.arm, a.arm)) + " compared", "mism."]
     if not arms:
-        header = ["member", "group", "ints/frame", "compared", "mism."]
-    names = [s.name for s in FIELDS] + list(FLOAT_FIELDS)
-    by_arm = {a.arm: {c.name: c for c in list(a.comparisons) + list(a.float_comparisons)} for a in arms}
-    rows, midrules = [], []
-    for i, name in enumerate(names):
-        if name == FLOAT_FIELDS[0]:
-            midrules.append(i)
-        spec = next((s for s in FIELDS if s.name == name), None)
-        group = spec.group if spec is not None else "derived floats"
+        header += ["compared", "mism."]
+    by_arm = {a.arm: {c.name: c for c in a.comparisons} for a in arms}
+    for a in arms:
+        by_arm[a.arm].update({c.name: c for c in a.float_comparisons})
+    rows, midrules, group = [], [], ""
+    for spec in FIELDS:
+        if spec.group != group:
+            group = spec.group
+            if rows:
+                midrules.append(len(rows))
         width = DASH
-        cells = [r"\texttt{" + tex(name) + "}", tex(group)]
+        cells = []
         for a in arms:
-            c = by_arm[a.arm].get(name)
+            c = by_arm[a.arm].get(spec.name)
             if c is None or not c.present or c.compared == 0:
                 cells += [DASH, DASH]
                 continue
             width = f"${fmt_int(c.width)}$"
             cells += [f"${fmt_int(c.compared)}$", f"${fmt_int(c.mismatches)}$"]
+            frag.add(f"{PREFIX}.compared.{spec.name}.{a.arm}", c.compared, kind="int",
+                     row={"member": spec.name, "arm": a.arm}, column="compared")
+            frag.add(f"{PREFIX}.mismatches.{spec.name}.{a.arm}", c.mismatches, kind="int",
+                     row={"member": spec.name, "arm": a.arm}, column="mismatches")
+        if not arms:
+            cells += [DASH, DASH]
+        rows.append([r"\texttt{" + tex(spec.name) + "}", width] + cells)
+    for name in FLOAT_FIELDS:                       # keyed but not printed here: the denominator panel counts them
+        for a in arms:
+            c = by_arm[a.arm].get(name)
+            if c is None:
+                continue
             frag.add(f"{PREFIX}.compared.{name}.{a.arm}", c.compared, kind="int",
                      row={"member": name, "arm": a.arm}, column="compared")
             frag.add(f"{PREFIX}.mismatches.{name}.{a.arm}", c.mismatches, kind="int",
                      row={"member": name, "arm": a.arm}, column="mismatches")
-        if not arms:
-            cells += [DASH, DASH]
-        rows.append([cells[0], cells[1], width] + cells[2:])
-    align = "ll" + "r" + "rr" * (len(arms) if arms else 1)
+    align = "l" + "r" + "rr" * (len(arms) if arms else 1)
     return booktabs(header, rows, align, midrules=midrules)
 
 
@@ -726,6 +797,17 @@ def _notes(rec: Record, frag: Fragment) -> None:
         frag.notes.append(rf"\texttt{{{tex(name)}}} is not bit-equal across the builds (largest difference "
                           f"{fmt(ulps, 1)} ulp on the joined frames) although every integer it is derived from is: "
                           "it is a log of an exactly equal integer ratio, and is outside the claim")
+    if {REFERENCE, CAMPAIGN} <= set(rec.builds):
+        cohort_only = [label for label, key in MANIFEST_FIELDS
+                       if rec.builds[REFERENCE].manifest.get(key) == rec.builds[CAMPAIGN].manifest.get(key)
+                       and RUN_OF_RECORD in rec.builds
+                       and rec.builds[RUN_OF_RECORD].manifest.get(key) != rec.builds[REFERENCE].manifest.get(key)]
+        if cohort_only:
+            detail = ", ".join(f"{label} ({tex(rec.builds[RUN_OF_RECORD].manifest.get(key, ''))})"
+                               for label, key in MANIFEST_FIELDS if label in cohort_only)
+            frag.notes.append("the first panel's values are the ones both compared builds record; the run-of-record "
+                              "product spans the whole survey rather than the eight compared events and carries more "
+                              f"than one value of {detail}")
     frag.notes.append("the products record no host and no compiler: the build axis they do record is the analyzer "
                       "source digest and the detector binary's SHA-256, and both differ between the two cohorts. "
                       "The hosts and the architectures the binary was built for are named by the campaign's own run "
@@ -735,50 +817,70 @@ def _notes(rec: Record, frag: Fragment) -> None:
                       r"\texttt{frame\_index} and \texttt{frame\_unit\_index} are positional and are not compared")
     if not COMPARE_STORED_SPECTRA:
         frag.notes.append(r"\texttt{psd\_frame\_db\_i16} was not compared on this render")
-    if rec.reexecution:
-        units = sum(r.units for r in rec.reexecution)
-        completed = sum(r.completed for r in rec.reexecution)
-        frag.notes.append(r"the last panel is a second execution of the \emph{same} build on a different host and "
-                          f"session, not a second build: {len(rec.reexecution)} channels, {fmt_int(units)} enumerated "
-                          f"units ({fmt_int(completed)} completed, {fmt_int(units - completed)} quarantined), "
-                          "processed twice, and both counts agree on every channel. Only the canonical copy of each "
-                          "product was retained on this machine, so those duplicates cannot be re-compared field by "
-                          "field here: their byte-identity survives as the campaign ledger's digest record, not as data")
-    elif rec.reexecution_reason:
-        frag.notes.append(f"no independent re-execution row: {rec.reexecution_reason}")
 
 
 # ------------------------------------------------------------------ builder
 def build(run: Run, *, stored_spectra: bool = COMPARE_STORED_SPECTRA) -> Fragment:
-    """The cross-build comparison record: four panels stacked in one box."""
+    """The chapter record: the two build manifests and the joined denominator, three panels in one box."""
     rec = record(run, stored_spectra=stored_spectra)
     frag = Fragment(NAME, LABEL, "")
     frag.inputs = list(run.inputs()) + rec.inputs
-    panels = [
-        (r"\emph{Build manifests: what each product records of the build that made it.}",
-         _manifest_panel(rec, frag)),
+    shared, differing = _manifest_panels(rec, frag)
+    frag.tex = _stack([
+        (r"\emph{Build manifest: what both compared builds record identically.}", shared),
+        (r"\emph{Build manifest: where they differ --- the build axis the claim rests on.}", differing),
         (r"\emph{Joined denominator and completeness, on the reference cohort's frames.}",
          _denominator_panel(rec, frag)),
-        (r"\emph{Mismatches by compared member; the derived floats below the rule are outside the claim.}",
-         _field_panel(rec, frag)),
-        (r"\emph{Independent re-execution of the same build (different host and session), unit counts only.}",
-         _reexecution_panel(rec, frag)),
-    ]
-    frag.tex = _stack(panels)
+    ])
     total_compared = sum(a.compared for a in rec.arms)
     total_mismatches = sum(a.mismatches for a in rec.arms)
     frag.add(f"{PREFIX}.arms", len(rec.arms), kind="int", column="arms")
     frag.add(f"{PREFIX}.integer_values_compared", total_compared, kind="int", column="compared")
     frag.add(f"{PREFIX}.mismatches_total", total_mismatches, kind="int", column="mismatches")
-    frag.add(f"{PREFIX}.reexecution_channels", len(rec.reexecution), kind="int", column="channels")
-    frag.add(f"{PREFIX}.reexecution_units", sum(r.units for r in rec.reexecution), kind="int", column="units")
-    frag.add(f"{PREFIX}.reexecution_mismatches", sum(r.mismatches for r in rec.reexecution), kind="int",
-             column="mismatches")
     if rec.arms:
         frag.notes.append(f"{fmt_int(total_compared)} integer values compared over {len(rec.arms)} joins, "
                           f"{fmt_int(total_mismatches)} mismatches")
+    frag.notes.append(f"the member-by-member breakdown and the independent re-execution are the companion "
+                      f"fragment {LEDGER_NAME} ({LEDGER_LABEL})")
     _notes(rec, frag)
     return frag
 
 
-BUILDERS = (build,)
+def build_fields(run: Run, *, stored_spectra: bool = COMPARE_STORED_SPECTRA) -> Fragment:
+    """The companion: the mismatch count member by member, and the same build's re-execution."""
+    rec = record(run, stored_spectra=stored_spectra)
+    frag = Fragment(LEDGER_NAME, LEDGER_LABEL, "")
+    frag.inputs = list(run.inputs()) + rec.inputs
+    frag.tex = _stack([
+        (r"\emph{Mismatches by compared integer member.}", _field_panel(rec, frag)),
+        (r"\emph{Independent re-execution of the same build (different host and session), unit counts only.}",
+         _reexecution_panel(rec, frag)),
+    ])
+    frag.add(f"{PREFIX}.reexecution_channels", len(rec.reexecution), kind="int", column="channels")
+    frag.add(f"{PREFIX}.reexecution_units", sum(r.units for r in rec.reexecution), kind="int", column="units")
+    frag.add(f"{PREFIX}.reexecution_completed", sum(r.completed for r in rec.reexecution), kind="int",
+             column="completed")
+    frag.add(f"{PREFIX}.reexecution_mismatches", sum(r.mismatches for r in rec.reexecution), kind="int",
+             column="mismatches")
+    for a in rec.arms:
+        if a.absent_fields:
+            frag.notes.append(f"{a.label}: not compared -- " + "; ".join(a.absent_fields))
+    frag.notes.append(r"the derived float members (\texttt{normalized\_coarse\_power\_ratio\_db}, "
+                      r"\texttt{pilot\_excess\_db}) are keyed but not printed here: they are counted in the "
+                      f"denominator panel of {NAME} ({LABEL}), outside the claim")
+    if rec.reexecution:
+        units = sum(r.units for r in rec.reexecution)
+        completed = sum(r.completed for r in rec.reexecution)
+        frag.notes.append(r"the second panel is a second execution of the \emph{same} build on a different host and "
+                          f"session, not a second build: {len(rec.reexecution)} channels, {fmt_int(units)} enumerated "
+                          f"units ({fmt_int(completed)} completed, {fmt_int(units - completed)} quarantined), "
+                          "processed twice, and both counts agree on every channel. Only the canonical copy of each "
+                          "product was retained on this machine, so those duplicates cannot be re-compared field by "
+                          "field here: their byte-identity survives as the campaign ledger's digest record, not as "
+                          "data")
+    elif rec.reexecution_reason:
+        frag.notes.append(f"no independent re-execution row: {rec.reexecution_reason}")
+    return frag
+
+
+BUILDERS = (build, build_fields)

@@ -39,7 +39,7 @@ from rfisher import residual
 from rfisher.channels import channel_edges
 
 from . import (anchors, blocks, chain, eras, flaggers, ledger, masked_spectra, nulls, operating, psd,
-               screening, selection, tolerances)
+               screening, selection, tolerances, worlds)
 from .numbers import git_commit
 from .products import COARSE_BIN_HZ, FINE_BIN_HZ, Product, sha256_of
 
@@ -547,6 +547,31 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     }
 
 
+def _worlds(results: Sequence[dict]) -> list:
+    """Each channel's operating point carried through the four delay-cut worlds.
+
+    Derived, not measured: it reads each channel's chosen point and its
+    forecast bins, so it needs no product and runs in the parent. A channel
+    with no operating point, or no overlapping forecast bin, is still listed
+    with the reason -- the table is an inventory of every channel, not of the
+    ones that happen to have a number.
+    """
+    try:
+        rows = worlds.tolerances()
+        bins_of = tolerances.ledger_channel_bins(tolerances.out_dir() / tolerances.MAPPING_NAME)
+    except Exception as exc:                                  # no banks, or no released mapping
+        print(f"worlds: skipped ({type(exc).__name__}: {exc})", flush=True)
+        return []
+    out = []
+    for r in results:
+        ch = r["record"].channel
+        op = r["operating_row"] or {}
+        out.append(worlds.channel_worlds(ch, bins_of.get(ch, ()),
+                                         float(op.get("operating_r_sys", math.nan)),
+                                         float(op.get("operating_masked_fraction", math.nan)), rows))
+    return out
+
+
 def _write_csv(rows: Sequence[dict], path: Path) -> Path | None:
     import csv
     rows = [r for r in rows if r]
@@ -625,6 +650,14 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
     _write_csv([row for r in results for row in r["flagger_rows"]], tables / "flaggers.csv")
     _write_csv([r["operating_row"] for r in results], tables / "operating_points.csv")
     _write_csv([row for r in results for row in r["held_out_rows"]], tables / "held_out_spectra.csv")
+    world_rows = _worlds(results)
+    if world_rows:
+        worlds.write_world_rows(world_rows, tables / "worlds.csv")
+        by_ch = {w.channel: w for w in world_rows}
+        for r in results:                       # the section rides in the channel's own record
+            w = by_ch.get(r["record"].channel)
+            if w is not None:
+                r["record"].add("worlds", w.as_row())
 
     book = ledger.Ledger(run={
         "generated": generated or dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
