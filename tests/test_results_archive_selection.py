@@ -105,8 +105,12 @@ def test_refusals_are_reported_not_raised(product):
         product, split.calibration, split.evaluation, anchor_bin=128, bulk_mask=_bulk(), r_tol=1e-12,
         floor=FLOOR, era_label="e", minimum_observed_months=1, minimum_span_days=1e-6)
     assert tight.status == "no feasible point" and tight.rho is None
-    # the register's calendar-support gate refuses a short calibration block
+    # the register's calendar-support gate refuses a short calibration block: the point is still
+    # computed and reported, labelled diagnostic, with the refusal beside it
     short = selection.select_operating_point(
         product, split.calibration, split.evaluation, anchor_bin=128, bulk_mask=_bulk(), r_tol=100.0,
         floor=FLOOR, era_label="e")
-    assert short.status == "refused" and "stability" in short.refusal
+    assert short.claim_status == "diagnostic" and "stability" in short.refusal
+    assert short.status in ("feasible", "no feasible point") and short.stability["status"].startswith("refused")
+    if short.status == "feasible":
+        assert short.rho is not None and short.evaluation is not None

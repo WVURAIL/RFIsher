@@ -9,6 +9,7 @@ module carries the definitions it implements in its docstring.
 
 Modules are added in the order the design lists them: ``products`` (lazy
 product access and geometry), ``blocks`` (calibration/evaluation split and
-the acquisition block bootstrap), then ``eras``, ``psd``, ``anchors``,
-``nulls``, ``tolerances``, ``selection``, ``screening``, ``ledger``.
+the acquisition block bootstrap), ``eras``, ``psd``, ``anchors``, ``nulls``,
+``tolerances``, ``chain``, ``selection``, ``screening``, ``ledger``,
+``numbers``, and ``run`` (the driver).
 """

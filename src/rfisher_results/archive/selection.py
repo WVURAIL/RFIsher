@@ -34,6 +34,18 @@ the plateau (members of ``P`` at ``rho*``: count and eta range), the refusal
 or status, and the evaluation-block replay (masked fraction, retained
 residual, ``R = r_sys / r_tol``, and, where the block is a verified off era,
 the empirical false-alarm rate) with acquisition block bootstraps.
+
+Claim status. ``select_prepared_threshold`` refuses a family whose
+within-era drift screen did not pass. As coded in :mod:`rfisher.preparation`,
+that screen refuses the whole family when any selector-evaluable candidate
+(30 or more kept frames pooled) retains fewer than the declared minimum in
+one calendar half, so a sparse small-eta candidate that no selector would
+choose refuses every channel with an uneven split. Whether that is the
+intended rule is a register decision (``stability.*``). When it refuses,
+this module still runs the numerical selector on the prepared pooled
+histograms and reports the point with ``claim_status = 'diagnostic'`` and the
+refusal beside it; a point is ``screening`` or ``operational`` only when the
+screen passed. The stability assessment is recorded on every result.
 """
 from __future__ import annotations
 
@@ -48,7 +60,7 @@ from rfisher.preparation import (
     CalibrationEvidence, PreparationRefused, select_prepared_threshold,
 )
 from rfisher.residual_scores import ResidualScoreRefused, build_residual_score_bundle
-from rfisher.thresholds import ALWAYS_MASKED_Q16, Q16_SCALE
+from rfisher.thresholds import ALWAYS_MASKED_Q16, Q16_SCALE, optimize_threshold
 
 from . import blocks
 from .products import Product, sha256_of
@@ -113,7 +125,7 @@ class SelectionResult:
     frames_without_time: int
     status: str                       # 'feasible' | 'no feasible point' | 'no evaluable point' | 'refused'
     refusal: str
-    claim_status: str                 # 'screening' | 'operational' | ''
+    claim_status: str                 # 'operational' | 'screening' | 'diagnostic' (screen refused) | ''
     rho: int | None
     rank_fraction: float
     eta_q16: int | None
@@ -253,18 +265,21 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
             minimum_observed_months=minimum_observed_months, minimum_span_days=minimum_span_days)
     except (ValueError, TypeError) as exc:
         return SelectionResult(status="refused", refusal=f"preparation: {exc}", **base, **empty)
-    stability = {"status": family.stability.status, "reason": family.stability.reason}
+    st = family.stability
+    stability = {"status": st.status, "reason": st.reason, "points_checked": st.points_checked,
+                 "points_skipped": st.points_skipped, "maximum_cost_ratio": st.maximum_cost_ratio,
+                 "maximum_systematic_residual_ratio": st.maximum_systematic_residual_ratio}
+    refusal = ""
     try:
         selection = select_prepared_threshold(family, float(r_tol), allow_screening=True)
+        claim, opt = selection.claim_status, selection.optimization
     except PreparationRefused as exc:
-        return SelectionResult(status="refused", refusal=str(exc), stability=stability, source_id=bundle.source_id,
-                               policy_sha256=family.policy_sha256, **base, **empty)
-    opt = selection.optimization
+        refusal = str(exc)
+        claim, opt = "diagnostic", optimize_threshold(family.histograms_by_rho, float(r_tol))
     if opt.selected is None:
         status = {"no_feasible_threshold": "no feasible point", "no_evaluable_threshold": "no evaluable point"}.get(opt.status, opt.status)
-        return SelectionResult(status=status, refusal="", stability=stability, source_id=bundle.source_id,
-                               policy_sha256=family.policy_sha256, **base,
-                               **{**empty, "claim_status": selection.claim_status})
+        return SelectionResult(status=status, refusal=refusal, stability=stability, source_id=bundle.source_id,
+                               policy_sha256=family.policy_sha256, **base, **{**empty, "claim_status": claim})
     sel = opt.selected
     replay = None
     if eva.any():
@@ -272,7 +287,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
                                  eta_q16=sel.multiplier_q16, r_tol=float(r_tol), floor=floor, gain=gain, off_era=off_era,
                                  replicates=bootstrap_replicates, seed=bootstrap_seed)
     return SelectionResult(
-        status="feasible", refusal="", claim_status=selection.claim_status, rho=int(sel.rho),
+        status="feasible", refusal=refusal, claim_status=claim, rho=int(sel.rho),
         rank_fraction=float(sel.rank_fraction), eta_q16=int(sel.multiplier_q16), eta=float(sel.eta),
         masked_fraction=float(sel.masked_fraction), systematic_residual=float(sel.systematic_residual),
         tolerance_fraction=float(sel.tolerance_fraction), cost=float(sel.cost),
