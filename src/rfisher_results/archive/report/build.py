@@ -19,7 +19,7 @@ from .core import Fragment, Run, load_run, write_report
 
 TABLE_MODULES: tuple[str, ...] = (
     "calibration_eras", "calibration_anchors", "calibration_nulls", "blocked_evaluation", "held_out_summary",
-    "tolerance_eta", "tolerance_channels", "conclusions_matrix",
+    "tolerance_eta", "tolerance_channels", "conclusions_matrix", "handover",
 )
 FIGURE_MODULES: tuple[str, ...] = ("figures_status", "figures_two_walls")
 
