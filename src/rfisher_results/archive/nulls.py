@@ -27,27 +27,37 @@ Probe convention. The register value ``floor.null_scale_probes`` is
 ``((32.0, 1.0), (5.0, 1.96), (0.3, 2.9677))`` and
 :func:`rfisher.residual.null_scale` applies the percentiles to the *kept*
 frames about ``mu_0``: the kept sample is the lower half of a symmetric null,
-so its 32nd percentile is the null's 16th, one sigma below the centre. That
-is the convention this module follows for the sigma-implied floor
-(:func:`kept_half_null`: frames with ``Q <= 1`` on the block, scale about
-``mu_0``), and it recovers an ideal null's width to 1% (simulated). The bulk
-description of the whole era (:func:`describe_null`, centre = median,
-left-side scale about the median) needs the full-null percentiles the same
-deviates sit at (``15.87 / 2.5 / 0.15``, ``CORE_PROBES``); applying the
-register's percentiles to a full null instead would return 0.84 of the width.
-Both descriptions are reported; the floor uses the kept half, because on a
-channel whose transmitter is present in most frames the bulk's median lies
-above ``mu_0`` and its left-side scale is the detections' lower tail, not the
-receiver's null (channel 33: bulk width factor 25, kept-half width factor
-near the i.i.d. value).
+so its 32nd percentile is the null's 16th, one sigma below the centre
+(:func:`kept_half_null`; simulated recovery of an ideal null's width 0.99 to
+1.00). The bulk description of a block (:func:`describe_null`, centre =
+median, left-side scale about the median) needs the full-null percentiles
+the same deviates sit at (``15.87 / 2.5 / 0.15``, ``CORE_PROBES``); applying
+the register's percentiles to a full null would return 0.84 of the width.
 
-Off population. A recorded off epoch is a null population only when its
-coarse statistic looks like one: centre within ``OFF_CENTRE_TOLERANCE`` of
-``mu_0`` and a robust-core width factor at most ``OFF_WIDTH_LIMIT``
-(:func:`null_like`). A post-sign-off epoch that still carries a carrier
-(channel 20: centre 1.12, width factor 21) fails the check, its floor is then
-``stated`` from the kept half of the block, and the current era is not an
-off era for screening.
+Which stated floor. The kept half is a null half only when the block's bulk
+sits at ``mu_0``: on channel 33's calibration block (2023-12..2025-11) the
+bulk median is 1.0715 (+0.30 dB, 30 i.i.d. widths above ``mu_0``), 97.3% of
+frames are rejected and the 2.7% "kept" are the Gaussian lower tail of the
+carrier-on distribution (the tail predicts 2.70%); their scale (width factor
+8.6) is the carrier's, not the receiver's, and it would print a floor 2.6 dB
+more optimistic than the bulk's own left-side scale. So ``floor_basis`` is
+the kept half about ``mu_0`` (the register's convention) when the bulk
+centre is within ``OFF_CENTRE_TOLERANCE`` of ``mu_0`` and the three probes
+agree (``kept.spread <= KEPT_SPREAD_LIMIT``; channel 14's probes disagree by
+8x because its kept sample mixes a narrow null with the bulk's tail), and
+otherwise the bulk's left-side scale about its median (the chapter 8
+mixture-read convention), labelled ``stated (bulk, not H0)``. Both values
+are always reported.
+
+Off population. The floor of a channel whose current era is a recorded off
+era is the 90th percentile of that era's shelf estimates on the calibration
+block (chapter 8: "the most defensible floor of all"), labelled
+``measured``. :func:`null_like` describes the population beside it (centre
+within ``OFF_CENTRE_TOLERANCE`` of ``mu_0``, robust-core width factor at
+most ``OFF_WIDTH_LIMIT``): channels 20 and 27 fail it (centres 1.11 and
+1.03, width factors 19 and 10: a carrier persists after the recorded
+sign-off), which the row says; the check is reported, it does not change
+the floor's basis.
 
 Exchangeability (ch08 §275-283): on quiet frames a null bin tested against
 the rank ``rho`` of the bulk exceeds it at the combinatorial rate
@@ -93,6 +103,7 @@ MIN_NULL_FRAMES = 30
 # i.i.d. widths) and its robust-core width factor is at most this; provisional policy values, recorded per row
 OFF_CENTRE_TOLERANCE = 0.02
 OFF_WIDTH_LIMIT = 5.0
+KEPT_SPREAD_LIMIT = 3.0      # the kept-half probes must agree to this factor for the kept half to state the floor
 
 
 def iid_width(dof: tuple[int, int]) -> tuple[float, float]:
@@ -260,11 +271,12 @@ class FloorEstimate:
     frames: int
     percentile: float = FLOOR_PERCENTILE
     stated_kept_half_db: float = math.nan   # the sigma-implied value from the kept half about mu_0 (the register's convention)
-    stated_bulk_db: float = math.nan        # the same from the bulk's left-side core width, for comparison
+    stated_bulk_db: float = math.nan        # the same from the bulk's left-side core width about its median
+    basis: str = ""                         # 'off era p90' | 'kept half about mu_0' | 'bulk left side (not H0)' | 'none'
 
     def as_dict(self) -> dict:
         return {"floor_db": self.db, "floor_evidence": self.evidence, "floor_population": self.population,
-                "floor_frames": self.frames, "floor_percentile": self.percentile,
+                "floor_frames": self.frames, "floor_percentile": self.percentile, "floor_basis": self.basis,
                 "floor_stated_kept_half_db": self.stated_kept_half_db, "floor_stated_bulk_db": self.stated_bulk_db}
 
 
@@ -276,14 +288,28 @@ def floor_estimate(product: Product, off_era: np.ndarray | None, coarse: NullWid
                    kept: KeptHalfNull | None = None) -> FloorEstimate:
     """Off-era 90th-percentile shelf where a verified off era exists, else the sigma-implied substitute.
 
-    The substitute is ``10 log10(sigma) + offset`` with ``sigma`` the kept-half
-    scale about ``mu_0`` (the register's convention); the bulk's core width
-    gives the comparison value ``stated_bulk_db``.
+    The substitute is ``10 log10(sigma) + offset``: ``sigma`` from the kept
+    half about ``mu_0`` when the bulk centre lies within ``OFF_CENTRE_TOLERANCE``
+    of ``mu_0`` and the probes agree (``spread <= KEPT_SPREAD_LIMIT``), else
+    from the bulk's left-side core width about its median (the mixture read).
     """
     offset = float(product.view.shelf_offset_db)
     kept_db = _sigma_implied_db(kept.core_sigma, offset) if kept is not None else math.nan
     bulk_db = _sigma_implied_db(coarse.core_sigma, offset)
-    stated, basis = (kept_db, f"kept half about mu_0, {kept.frames} frames") if math.isfinite(kept_db) else (bulk_db, "bulk core width")
+    bulk_at_mu0 = math.isfinite(coarse.centre) and abs(coarse.centre - 1.0) <= OFF_CENTRE_TOLERANCE
+    probes_agree = kept is not None and math.isfinite(kept.spread) and kept.spread <= KEPT_SPREAD_LIMIT
+    if math.isfinite(kept_db) and bulk_at_mu0 and probes_agree:
+        stated, basis, population = kept_db, "kept half about mu_0", f"kept half about mu_0, {kept.frames} frames"
+    elif math.isfinite(bulk_db):
+        why = []
+        if not bulk_at_mu0:
+            why.append(f"bulk centre {coarse.centre:.4f} is not at mu_0")
+        if kept is not None and not probes_agree:
+            why.append(f"kept-half probes disagree (spread {kept.spread:.1f})" if math.isfinite(kept.spread) else "too few kept frames")
+        stated, basis = bulk_db, "bulk left side (not H0)"
+        population = "bulk left-side scale about its median (" + "; ".join(why) + ")"
+    else:
+        stated, basis, population = math.nan, "none", "no measurable null width"
     if off_era is not None and np.asarray(off_era, dtype=bool).any():
         mask = np.asarray(off_era, dtype=bool) & product.selected
         shelf = product.shelf_db[mask]
@@ -291,14 +317,14 @@ def floor_estimate(product: Product, off_era: np.ndarray | None, coarse: NullWid
         if shelf.size >= FLOOR_MIN_FRAMES:
             return FloorEstimate(float(np.percentile(shelf, FLOOR_PERCENTILE)), "measured",
                                  f"verified off era: {shelf.size} frames with a shelf estimate of {int(mask.sum())}",
-                                 int(shelf.size), stated_kept_half_db=kept_db, stated_bulk_db=bulk_db)
-        return FloorEstimate(stated, "stated", f"off era has only {shelf.size} frames with a shelf estimate; sigma-implied substitute ({basis})",
-                             int(shelf.size), stated_kept_half_db=kept_db, stated_bulk_db=bulk_db)
+                                 int(shelf.size), stated_kept_half_db=kept_db, stated_bulk_db=bulk_db, basis="off era p90")
+        return FloorEstimate(stated, "stated", f"off era has only {shelf.size} frames with a shelf estimate; substitute: {population}",
+                             int(shelf.size), stated_kept_half_db=kept_db, stated_bulk_db=bulk_db, basis=basis)
     if math.isfinite(stated):
-        return FloorEstimate(stated, "stated", f"no verified off era; sigma-implied substitute ({basis})",
-                             kept.frames if (kept is not None and math.isfinite(kept_db)) else 0,
-                             stated_kept_half_db=kept_db, stated_bulk_db=bulk_db)
-    return FloorEstimate(math.nan, "refused", "no off era and no measurable null width", 0)
+        return FloorEstimate(stated, "stated", f"no verified off era; sigma-implied substitute: {population}",
+                             kept.frames if (kept is not None and basis.startswith("kept")) else int(coarse.frames),
+                             stated_kept_half_db=kept_db, stated_bulk_db=bulk_db, basis=basis)
+    return FloorEstimate(math.nan, "refused", "no off era and no measurable null width", 0, basis="none")
 
 
 @dataclass(frozen=True)
@@ -321,6 +347,7 @@ class NullCalibration:
     off_null_like: bool | None = None    # None: no recorded off population
     off_check: str = ""
     off_coarse: NullWidths | None = None # the off population's own description (when one exists)
+    fine_bulk_size: int = 0              # bulk bins the fine null was read on (the nominal window may be excluded)
     notes: tuple[str, ...] = field(default_factory=tuple)
 
     def as_row(self) -> dict:
@@ -332,7 +359,8 @@ class NullCalibration:
                "off_centre": self.off_coarse.centre if self.off_coarse is not None else math.nan,
                "off_core_width_factor": self.off_coarse.core_width_factor if self.off_coarse is not None else math.nan,
                "off_frames": self.off_coarse.frames if self.off_coarse is not None else 0,
-               "off_centre_tolerance": OFF_CENTRE_TOLERANCE, "off_width_limit": OFF_WIDTH_LIMIT}
+               "off_centre_tolerance": OFF_CENTRE_TOLERANCE, "off_width_limit": OFF_WIDTH_LIMIT,
+               "kept_spread_limit": KEPT_SPREAD_LIMIT, "fine_bulk_size": self.fine_bulk_size}
         row.update((self.kept or KeptHalfNull(0, math.nan, math.nan, math.nan)).as_dict("kept"))
         row.update(self.coarse.as_dict("coarse"))
         row.update(self.fine.as_dict("fine"))
@@ -345,7 +373,7 @@ class NullCalibration:
 
 def calibrate_null(product: Product, era: np.ndarray, *, anchor_bin: int, bulk_mask: np.ndarray, era_label: str,
                    off_era: np.ndarray | None = None, rho: int | None = None, quiet_block: np.ndarray | None = None,
-                   fine_t: np.ndarray | None = None) -> NullCalibration:
+                   fine_t: np.ndarray | None = None, exclude_fine_bins: Sequence[int] | None = None) -> NullCalibration:
     """Null calibration on the era's frames.
 
     ``off_era`` marks frames of a verified transmitter-off era (the coarse null
@@ -361,22 +389,28 @@ def calibrate_null(product: Product, era: np.ndarray, *, anchor_bin: int, bulk_m
     kept = kept_half_null(q[era])
     off_ok, off_widths, off_reason = off_population_check(product, off_era)
     off_null = None if off_widths is None else off_ok
-    if off_ok:
+    if off_widths is not None:
+        # the recorded off population is the null (chapter 8); its likeness to a null is reported beside it
         null_frames = np.asarray(off_era, dtype=bool) & product.selected
         source, mixture = "verified transmitter-off era", False
+        if not off_ok:
+            source = "verified transmitter-off era (not null-like)"
+            notes.append(f"recorded off population is not null-like ({off_reason}): a carrier persists after the record")
     else:
         null_frames = era
         source, mixture = "bulk of the mixture (declared)", True
-        if off_widths is not None:
-            source = "recorded off epoch, not null-like; bulk of the mixture (declared)"
-            notes.append(f"recorded off population is not null-like ({off_reason}); floor stated, not measured")
-            off_era = None
-        notes.append("coarse null read from the bulk of the era's mixture: centre = median, scale = left side")
+        notes.append("coarse null read from the bulk of the block's mixture: centre = median, scale = left side")
     coarse = describe_null(q[null_frames], COARSE_DOF)
     if fine_t is None:
         fine_t = fine_power_ratio(product.fine_terms_all())
     bulk = np.asarray(bulk_mask, dtype=bool)
-    fine = describe_null(fine_t[era][:, bulk], FINE_DOF)
+    fine_bulk = bulk.copy()
+    if exclude_fine_bins is not None:
+        excluded = [int(b) % fine_t.shape[1] for b in exclude_fine_bins]
+        fine_bulk[excluded] = False
+        notes.append(f"fine null read on {int(fine_bulk.sum())} of {int(bulk.sum())} bulk bins: the nominal window is excluded "
+                     f"because the anchor is suspect (the bulk may carry the pilot)")
+    fine = describe_null(fine_t[era][:, fine_bulk], FINE_DOF)
     designated = [(int(anchor_bin) + k) % fine_t.shape[1] for k in range(-2, 3)]
     fine_designated_median = float(np.median(fine_t[era][:, designated])) if era.any() else math.nan
     floor = floor_estimate(product, off_era, coarse, kept)
@@ -392,7 +426,7 @@ def calibrate_null(product: Product, era: np.ndarray, *, anchor_bin: int, bulk_m
         fine_designated_median=fine_designated_median, floor=floor, exchangeability=exch, bulk_size=int(bulk.sum()),
         quiet_frames=int((era & ~product.rejected).sum()), detected_frames=int((era & product.rejected).sum()),
         kept=kept, off_null_like=off_null, off_check=off_reason if off_widths is not None else "", off_coarse=off_widths,
-        notes=tuple(notes))
+        fine_bulk_size=int(fine_bulk.sum()), notes=tuple(notes))
 
 
 def write_null_rows(results: Sequence[NullCalibration], path) -> None:

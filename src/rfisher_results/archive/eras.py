@@ -91,7 +91,7 @@ section 6 records the instrument choice):
 - **Stale-latest** compares the current era's last populated month with
   ``campaign_last_month`` (the last populated month over the whole campaign,
   from :func:`campaign_last_populated_month`): the era is stale when it ends
-  more than ``stale_grace_months`` (policy 0: any earlier month) before it,
+  more than ``stale_grace_months`` (policy 1: the snapshot month is partial) before it,
   and the lag is reported (``stale_lag_months``). When the caller cannot
   supply the campaign month the channel's own last month is used and
   ``stale_reference`` says so.
@@ -161,7 +161,8 @@ ERA_COLUMNS = (
     "channel", "freq_id", "era", "n_eras", "first_month", "last_month", "state", "evidence",
     "record_agreement", "boundary_uncertainty_months", "boundary_gap_months", "boundary_ambiguous_months",
     "units", "frames", "frames_without_time", "populated_months", "months_spanned", "coverage",
-    "level_median_db", "peak_offset_bins", "is_current", "stale_latest", "fallback",
+    "level_median_db", "peak_offset_bins", "peak_drift_bins_per_month", "peak_range_bins", "peak_months",
+    "is_current", "stale_latest", "fallback",
     "config_version", "config_digest",
 )
 CHANNEL_COLUMNS = (
@@ -171,7 +172,8 @@ CHANNEL_COLUMNS = (
     "indeterminate",
     "populated_months", "ambiguous_months", "ambiguous_fraction", "transition_zone_months",
     "state_excursions", "station_excursions", "unmatched_station_records", "instrument_change_months",
-    "instrument_excursions", "software_tags", "software_tag_changes", "frames_selected", "frames_without_time",
+    "instrument_excursions", "unconfirmed_instrument_change_last_month",
+    "current_peak_drift_bins_per_month", "current_peak_range_bins", "software_tags", "software_tag_changes", "frames_selected", "frames_without_time",
     "peak_cohort_fallback_months", "sensitivity_units", "sensitivity_units_moves",
     "sensitivity_thresholds", "sensitivity_thresholds_moves", "config_version", "config_digest",
 )
@@ -395,6 +397,9 @@ class Era:
     frames: int = 0
     frames_without_time: int = 0
     level_median_db: float = float("nan")
+    peak_drift_bins_per_month: float = float("nan")   # least-squares slope of the tested months' peak location
+    peak_range_bins: float = float("nan")             # max - min of the tested months' peak location
+    peak_months: int = 0                              # tested (definite proxy-high, located) months in the era
 
     @property
     def populated_months(self) -> int:
@@ -660,11 +665,18 @@ def segment(records: Sequence[MonthRecord], config: EraConfig = DEFAULT_CONFIG,
         evidence = "+".join(kinds) if kinds else EVIDENCE_START
         uncertainty = 0 if prev_last is None else first - prev_last - 1
         ambiguous_between = 0 if prev_last is None else sum(1 for m in zone_months if prev_last < m < first)
-        peaks = [pop[position[m]].peak_offset_bins for m in months
-                 if raw[position[m]] == PROXY_HIGH and math.isfinite(pop[position[m]].peak_offset_bins)]
+        located = [(m, pop[position[m]].peak_offset_bins) for m in months
+                   if raw[position[m]] == PROXY_HIGH and math.isfinite(pop[position[m]].peak_offset_bins)]
+        peaks = [v for _, v in located]
+        drift = float("nan")
+        if len(located) >= 3:
+            xs = np.array([m for m, _ in located], dtype=float)
+            ys = np.array(peaks, dtype=float)
+            drift = float(np.polyfit(xs - xs.mean(), ys, 1)[0])
         eras.append(Era(index, first, last, state, evidence, uncertainty, uncertainty - ambiguous_between,
                         ambiguous_between, tuple(months), float(np.median(peaks)) if peaks else float("nan"),
-                        agreement))
+                        agreement, peak_drift_bins_per_month=drift,
+                        peak_range_bins=float(max(peaks) - min(peaks)) if peaks else float("nan"), peak_months=len(peaks)))
     fallback = []
     if PROXY_LOW not in raw:
         fallback.append("no_off_state")
@@ -860,7 +872,9 @@ def era_rows(table: EraTable) -> list[dict]:
             "units": era.units, "frames": era.frames, "frames_without_time": era.frames_without_time,
             "populated_months": era.populated_months, "months_spanned": era.months_spanned,
             "coverage": float(era.coverage), "level_median_db": float(era.level_median_db),
-            "peak_offset_bins": float(era.peak_offset_bins), "is_current": era.index == table.current_index,
+            "peak_offset_bins": float(era.peak_offset_bins), "peak_drift_bins_per_month": float(era.peak_drift_bins_per_month),
+            "peak_range_bins": float(era.peak_range_bins), "peak_months": era.peak_months,
+            "is_current": era.index == table.current_index,
             "stale_latest": table.stale_latest, "fallback": table.fallback,
             "config_version": table.config.version, "config_digest": table.config.digest,
         })
@@ -894,6 +908,10 @@ def channel_row(table: EraTable) -> dict:
         "unmatched_station_records": ";".join(table.unmatched_station_records),
         "instrument_change_months": _labels(table.instrument_change_months),
         "instrument_excursions": ";".join(e.label for e in table.excursions if e.kind == "instrument"),
+        "unconfirmed_instrument_change_last_month": bool(table.months) and any(
+            e.kind == "instrument" and e.month == table.months[-1].month for e in table.excursions),
+        "current_peak_drift_bins_per_month": float(current.peak_drift_bins_per_month) if current else float("nan"),
+        "current_peak_range_bins": float(current.peak_range_bins) if current else float("nan"),
         "software_tags": table.software_tags, "software_tag_changes": table.software_tag_changes,
         "frames_selected": table.frames_selected, "frames_without_time": table.frames_without_time,
         "peak_cohort_fallback_months": _labels(table.peak_cohort_fallback_months),

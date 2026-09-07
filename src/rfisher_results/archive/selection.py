@@ -139,6 +139,8 @@ class SelectionResult:
     evaluation: Replay | None
     unmasked_residual: float = math.nan   # calibration block, keep-everything residual
     points: tuple = ()                    # every evaluated (rho, eta) pair of the calibration surface, as dicts
+    diagnostic: dict = field(default_factory=dict)   # the point replayed on the evaluation block and its basis
+    anchor_sentinel: str = ""             # the containment sentinel's reasons when the anchor is suspect
     stability: dict = field(default_factory=dict)
     provisional: dict = field(default_factory=dict)
     source_id: str = ""
@@ -162,6 +164,16 @@ class SelectionResult:
         ev = self.evaluation
         mf = (ev.masked_fraction_bootstrap or {}) if ev else {}
         rr = (ev.retained_residual_bootstrap or {}) if ev else {}
+        d = self.diagnostic
+        row.update({
+            "diagnostic_basis": d.get("basis", ""), "diagnostic_rho": d.get("rho"), "diagnostic_eta_q16": d.get("eta_q16"),
+            "diagnostic_eta": d.get("eta", math.nan), "diagnostic_masked_fraction": d.get("masked_fraction", math.nan),
+            "diagnostic_r_sys": d.get("r_sys", math.nan), "diagnostic_R": d.get("R", math.nan), "diagnostic_cost": d.get("cost", math.nan),
+            "anchor_sentinel": self.anchor_sentinel,
+            "stability_status": self.stability.get("status", ""), "stability_reason": self.stability.get("reason", ""),
+            "stability_points_checked": self.stability.get("points_checked"), "stability_points_skipped": self.stability.get("points_skipped"),
+            "chain_gain": self.provisional.get("chain_gain", math.nan), "residual_convention": self.provisional.get("residual_convention", ""),
+        })
         row.update({
             "r_sys_unmasked_calibration": self.unmasked_residual,
             "masked_fraction_evaluation": ev.masked_fraction if ev else math.nan,
@@ -180,15 +192,20 @@ class SelectionResult:
 
 
 def systematic_residuals(product: Product, rows: np.ndarray, floor: Floor, gain: float = 1.0) -> np.ndarray:
-    """Shelf-or-floor linear residual per frame row, times the chain gain.
+    """Floor-bounded shelf residual per frame row, times the chain gain.
 
-    ``gain`` is ``G = sum_k phi_k n_coh,k`` from :mod:`.chain` (1.0 gives the
-    frame-stage residual); with it the kept-frame mean is ``r_proxy``.
+    A frame with a shelf estimate carries ``max(10^(shelf/10), floor)``; a
+    frame without one carries the floor. The floor is the level the mask can
+    be held to, so no frame's residual falls below it (a flagged frame whose
+    excess is not resolved above the floor is booked at the floor, not below
+    an unflagged one). ``gain`` is ``G = sum_k phi_k n_coh,k`` from
+    :mod:`.chain` (1.0 gives the frame-stage residual); with it the
+    kept-frame mean is ``r_proxy``.
     """
     shelf = product.shelf_db[rows]
     finite = np.isfinite(shelf)
     out = np.full(rows.shape, floor.linear, dtype=float)
-    out[finite] = 10.0 ** (shelf[finite] / 10.0)
+    out[finite] = np.maximum(10.0 ** (shelf[finite] / 10.0), floor.linear)
     if not np.isfinite(out).all():
         raise ValueError("systematic residuals need a finite floor for frames without a shelf estimate")
     if not (math.isfinite(gain) and gain > 0.0):
@@ -244,7 +261,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
     provisional = {"stability.minimum_half_retained_frames": min_half_retained,
                    "stability.maximum_cost_ratio": max_cost_ratio,
                    "stability.maximum_systematic_residual_ratio": max_systematic_ratio,
-                   "residual_convention": "shelf-or-floor linear x chain gain, variance 0", "chain_gain": float(gain)}
+                   "residual_convention": "floor-bounded shelf linear x chain gain, variance 0", "chain_gain": float(gain)}
     base = dict(channel=product.geometry.physical_channel, freq_id=product.geometry.freq_id, era_label=era_label,
                 anchor_bin=int(anchor_bin), bulk_size=int(np.asarray(bulk_mask, dtype=bool).sum()), r_tol=float(r_tol),
                 floor=floor, calibration_frames=int(cal.sum()), evaluation_frames=int(eva.sum()),
@@ -289,23 +306,39 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
         refusal = str(exc)
         claim, opt = "diagnostic", optimize_threshold(family.histograms_by_rho, float(r_tol))
     points = tuple(_point_row(pt) for pt in opt.points)
+    provisional = dict(base.get("provisional", {}))
     if opt.selected is None:
+        # no feasible point: the least-residual point of the surface is replayed on the evaluation block as a
+        # declared diagnostic (an off era's false-alarm rate needs a point), never as a selection
         status = {"no_feasible_threshold": "no feasible point", "no_evaluable_threshold": "no evaluable point"}.get(opt.status, opt.status)
+        evaluable = [pt for pt in opt.points if math.isfinite(pt.systematic_residual)]
+        diag_point = min(evaluable, key=lambda pt: pt.systematic_residual) if evaluable else None
+        diagnostic, replay = {}, None
+        if diag_point is not None:
+            diagnostic = {"basis": "least residual on the calibration surface (no feasible point)", **_point_row(diag_point)}
+            diagnostic["R"] = diagnostic.pop("tolerance_fraction")
+            if eva.any():
+                replay = replay_on_block(product, eva, anchor_bin=int(anchor_bin), bulk_mask=bulk_mask, rho=diag_point.rho,
+                                         eta_q16=diag_point.multiplier_q16, r_tol=float(r_tol), floor=floor, gain=gain,
+                                         off_era=off_era, replicates=bootstrap_replicates, seed=bootstrap_seed)
         return SelectionResult(status=status, refusal=refusal, stability=stability, source_id=bundle.source_id,
-                               policy_sha256=family.policy_sha256, points=points, **base, **{**empty, "claim_status": claim})
+                               policy_sha256=family.policy_sha256, points=points, diagnostic=diagnostic,
+                               **{**base, "provisional": provisional}, **{**empty, "claim_status": claim, "evaluation": replay})
     sel = opt.selected
     replay = None
     if eva.any():
         replay = replay_on_block(product, eva, anchor_bin=int(anchor_bin), bulk_mask=bulk_mask, rho=sel.rho,
                                  eta_q16=sel.multiplier_q16, r_tol=float(r_tol), floor=floor, gain=gain, off_era=off_era,
                                  replicates=bootstrap_replicates, seed=bootstrap_seed)
+    diagnostic = {"basis": "selected point", **_point_row(sel)}
+    diagnostic["R"] = diagnostic.pop("tolerance_fraction")
     return SelectionResult(
         status="feasible", refusal=refusal, claim_status=claim, rho=int(sel.rho),
         rank_fraction=float(sel.rank_fraction), eta_q16=int(sel.multiplier_q16), eta=float(sel.eta),
         masked_fraction=float(sel.masked_fraction), systematic_residual=float(sel.systematic_residual),
         tolerance_fraction=float(sel.tolerance_fraction), cost=float(sel.cost),
-        plateau=_plateau(opt.points, sel), evaluation=replay, stability=stability, points=points,
-        source_id=bundle.source_id, policy_sha256=family.policy_sha256, **base)
+        plateau=_plateau(opt.points, sel), evaluation=replay, stability=stability, points=points, diagnostic=diagnostic,
+        source_id=bundle.source_id, policy_sha256=family.policy_sha256, **{**base, "provisional": provisional})
 
 
 POINT_COLUMNS = ("rho", "rank_fraction", "eta_q16", "eta", "frames", "kept", "masked_fraction", "r_sys",

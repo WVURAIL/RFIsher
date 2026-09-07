@@ -26,21 +26,30 @@ point is then ``G`` times the kept-frame mean of the shelf-or-floor linear
 level, which is ``r_proxy`` at that point.
 
 Population. ``rfisher.residual`` selects the transmitter-on population by
-calendar month strings (``off_through`` / ``off_from``), not by an arbitrary
-frame mask, so the shelf statistics and the correlation time are computed
-on the archive's on population outside the channel's declared off epoch,
-as the superseded chapter 9 numbers were. Callers pass the off-epoch months
-the era table established (or :data:`rfisher.residual.SIGN_OFF_FROM` /
-``SIGN_ON_OFF_THROUGH``); the population used is recorded on the result.
-An era-restricted chain is a follow-up the design names.
+calendar month strings (``off_through`` / ``off_from``) from the product's
+``valid`` frames. Chapter 9 evaluates the chain "on its current era", so
+:func:`residual_chain_on_frames` restricts the population to a frame mask
+(the current era; the previous on era for a channel whose current era is
+off) by writing a temporary copy of the product whose ``valid`` flag is
+cleared outside the mask and running the unchanged ``rfisher.residual``
+functions on it; the population is recorded on the result. The archive-wide
+form :func:`residual_chain` remains for comparison. The chain's own floor
+term (the off-epoch percentile inside the restricted population, usually
+absent) is not the selector's floor; that is the null section's.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+import os
+import tempfile
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+import numpy as np
+
 from rfisher import residual
+
+from .products import Product
 
 FRAME_SECONDS = residual.CHIME_FRAME_SECONDS
 
@@ -124,3 +133,33 @@ def residual_chain(product_path: Path | str, *, off_through: str | None = None, 
         components=components, gain=gain, delay_key=delay_key,
         delay_suppression_db=float(residual.DELAY_SUPPRESSION_DB[delay_key]),
     )
+
+
+LARGE_UNUSED_KEYS = ("psd_frame_db_i16",)
+
+
+def residual_chain_on_frames(product: Product, frames, *, population: str, off_through: str | None = None,
+                             off_from: str | None = None, delay_key: str = residual.DEFAULT_DELAY_KEY) -> ChainResult:
+    """The chain on a frame mask: ``valid`` is cleared outside ``frames`` in a temporary copy of the product."""
+    frames = np.asarray(frames, dtype=bool)
+    if frames.shape != (product.n_frames,):
+        raise ValueError(f"frames must have shape ({product.n_frames},); got {frames.shape}")
+    arrays = {}
+    with np.load(product.path, allow_pickle=False) as z:
+        for key in z.files:
+            if key in LARGE_UNUSED_KEYS:
+                continue
+            arrays[key] = z[key]
+    valid = np.asarray(arrays["valid"]).astype(bool) & frames
+    arrays["valid"] = valid.astype(arrays["valid"].dtype)
+    fd, tmp = tempfile.mkstemp(prefix=f"chain_{product.path.stem}_", suffix=".npz")
+    os.close(fd)
+    try:
+        np.savez(tmp, **arrays)
+        result = residual_chain(tmp, off_through=off_through, off_from=off_from, delay_key=delay_key)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    return replace(result, population=f"{population}: {int(valid.sum())} valid frames")

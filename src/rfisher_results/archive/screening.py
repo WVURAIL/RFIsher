@@ -30,6 +30,7 @@ survey-flag (occupancy) rate at or above 0.90, marks the occupancy wall.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 OCCUPANCY_WALL_MASKED_FRACTION = 0.95
@@ -54,6 +55,10 @@ class ScreeningInputs:
     correlation_quality: str          # 'measured' | 'bounded_above' | 'refused' | 'unmeasured'
     refusal: str = ""
     claim_status: str = "screening"   # 'operational' | 'screening' | 'diagnostic' (drift screen refused)
+    era_state: str = ""               # the current era's state (proxy-high / proxy-low / ambiguous-only)
+    era_level_db: float = float("nan")  # its median level 10 log10(F/mu_0)
+    anchor_sentinel: str = ""         # containment sentinel reasons when the fine anchor is suspect
+    stability_status: str = ""        # the within-era drift screen's status
 
 
 @dataclass(frozen=True)
@@ -76,24 +81,36 @@ def screen(inputs: ScreeningInputs, *, wall_masked_fraction: float = OCCUPANCY_W
     floor_ok = inputs.floor_evidence == "measured"
     tau_ok = inputs.correlation_quality in ("measured", "bounded_above")
 
+    def selection_clauses() -> list[str]:
+        out = [f"selection: {inputs.selection_status}" + (" on the calibration surface" if inputs.selection_status != "feasible" else "")]
+        if inputs.stability_status or inputs.refusal:
+            out.append(f"drift screen: {inputs.stability_status or 'refused'}" + (f" ({inputs.refusal})" if inputs.refusal else ""))
+        if inputs.claim_status:
+            out.append(f"claim status {inputs.claim_status}")
+        if inputs.anchor_sentinel:
+            out.append(f"anchor sentinel: {inputs.anchor_sentinel}")
+        return out
+
     if inputs.off_era:
         reasons.append("current era is a transmitter-off era; values are floors, not verdicts")
+        reasons.extend(selection_clauses())
         return Screening(OFF_ERA, "era transition: the next sign-on", tuple(reasons), thresholds)
 
     at_wall = (inputs.survey_flag_rate >= wall_flag_rate) or (feasible and inputs.masked_fraction >= wall_masked_fraction)
     if at_wall and not (feasible and inputs.masked_fraction < wall_masked_fraction):
         if inputs.survey_flag_rate >= wall_flag_rate:
             reasons.append(f"survey flag rate {inputs.survey_flag_rate:.3f} >= {wall_flag_rate}: transmitter present in nearly every frame")
+            if inputs.era_state and inputs.era_state != "proxy-high":
+                level = f" (median level {inputs.era_level_db:.2f} dB)" if math.isfinite(inputs.era_level_db) else ""
+                reasons.append(f"era state {inputs.era_state}{level}: a weak carrier present in nearly every frame")
         if feasible and inputs.masked_fraction >= wall_masked_fraction:
             reasons.append(f"selected point masks {inputs.masked_fraction:.3f} of frames: formally feasible, vacuous")
-        if not feasible:
-            reasons.append(f"selection: {inputs.selection_status}" + (f" ({inputs.refusal})" if inputs.refusal else ""))
+        reasons.extend(selection_clauses())
         return Screening(WALL, "none: excision, with the pilot bin kept as a monitoring tap", tuple(reasons), thresholds)
 
     if feasible:
         reasons.append(f"selected point inside tolerance on the dilation tier (R = {inputs.tolerance_fraction:.3g})")
-        if inputs.claim_status == "diagnostic":
-            reasons.append(f"point is diagnostic: the within-era drift screen refused ({inputs.refusal})")
+        reasons.extend(selection_clauses()[1:])
         if floor_ok and tau_ok:
             reasons.append(f"floor measured; correlation time {inputs.correlation_quality}")
             return Screening(RECOVERY, "transfer gate: the online exact-replay agreement", tuple(reasons), thresholds)
@@ -103,7 +120,7 @@ def screen(inputs: ScreeningInputs, *, wall_masked_fraction: float = OCCUPANCY_W
         reasons.append(f"correlation time {inputs.correlation_quality}: chain booked at the sidereal-day cap")
         return Screening(BOUND_TAU, "measured correlation time", tuple(reasons), thresholds)
 
-    reasons.append(f"selection: {inputs.selection_status}" + (f" ({inputs.refusal})" if inputs.refusal else ""))
+    reasons.extend(selection_clauses())
     if not floor_ok:
         reasons.append(f"floor is {inputs.floor_evidence}")
         return Screening(BOUND_FLOOR, "measured floor from a verified off state", tuple(reasons), thresholds)
