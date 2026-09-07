@@ -15,17 +15,17 @@ Four tiers, each the weakest instrument that reaches it:
 ``dilation``    some world puts both dilation ratios at or under 1 while the
                 growth rate stays out. The channel is usable for the
                 distance scale and not for the growth rate.
-``cadence``     nothing reaches 1 as booked, but the channel's residual is
-                booked at the sidereal-day cap because its correlation time
-                was refused, and the cap is the reason. The what-if that
-                assumes the reference timescale reaches a tier. This is a
-                *what-if*, in the sense :func:`rfisher.residual.surviving_components`
-                fixes: a sub-cap timescale assumed on a refused channel books
-                all shelf power at that timescale and restores no
-                ground-filter credit. It says a contiguous-cadence campaign
-                is worth running on the channel, not that the channel passes.
-``none``        a measured or bounded correlation time, and no world and no
-                cadence brings any parameter under 1.
+``cadence``     nothing reaches 1 as booked, but the residual is booked at
+                the sidereal-day cap because the correlation time was
+                refused, and a timescale the band actually exhibits would
+                bring it inside. This is a *what-if*, in the sense
+                :func:`rfisher.residual.surviving_components` fixes: a sub-cap
+                timescale assumed on a refused channel books all shelf power
+                at that timescale and restores no ground-filter credit. It
+                says a contiguous-cadence campaign is worth running on the
+                channel, not that the channel passes.
+``none``        no world, and no attainable timescale, brings any parameter
+                under 1.
 
 A channel with no operating point, or none whose bins the stability gate
 accepted, is ``no verdict`` and is counted separately: it is an absent
@@ -38,10 +38,14 @@ marginal, and a channel outside it by orders of magnitude is not close to
 anything. The tiers say what would have to change for a channel to come
 inside, not how near it already is.
 
-The reference timescale is the band's own worst evidence -- the largest
-correlation time any channel in the run actually measures, or its largest
-upper bound where none is measured -- so the what-if assumes only that a
-refused channel is no worse than the worst one the band exhibits.
+The cadence test is a number, not a guess. Every capped channel is quoted the
+correlation time that *would* bring its best world to ``R = 1``: the cap
+divided by that ratio, since a refusal books all power at one timescale and
+the residual scales with it alone. The channel takes the ``cadence`` tier only
+where that required time is at least the shortest timescale the band itself
+exhibits -- the most favourable assumption its own evidence supports. A
+required time below that is reported all the same, and it is the honest way to
+say the cap is not what is wrong with the channel.
 
 Whether the era represents the future. Every verdict is read on the
 channel's current era, which is the right basis only where that era describes
@@ -80,8 +84,9 @@ FALLBACK_TAU_MINUTES = 5.0        # only when the run measures and bounds nothin
 TIERS = ("growth", "dilation", "cadence", "none", "no verdict")
 TIER_LABEL = {"growth": "growth rate", "dilation": "dilation only", "cadence": "cadence-conditional",
               "none": "not recoverable", "no verdict": "no verdict"}
-HEADER = ("ch", "tier", "reached by", r"$R_{f\sigma_8}$", r"$R_{\rm dil}$", r"$\tau_c$", "era", "note")
-ALIGN = "llllrll" + "l"
+HEADER = ("ch", "tier", "reached by", r"$R_{f\sigma_8}$", r"$R_{\rm dil}$", r"$\tau_c$",
+          r"$\tau_c$ needed (s)", "era")
+ALIGN = "lll" + "r" * 4 + "l"
 
 
 def _finite(value) -> bool:
@@ -96,23 +101,28 @@ def _num(value):
 
 
 def reference_tau_seconds(run: Run) -> tuple[float, str]:
-    """``(seconds, basis)``: the band's own worst correlation-time evidence.
+    """``(seconds, basis)``: the shortest correlation time the band exhibits.
 
-    The largest measured tau_c, else the largest upper bound, else a stated
-    fallback. Taking the largest is the conservative direction: it assumes a
-    refused channel is no better than the slowest thing the band exhibits.
+    The tier asks whether a channel *could* be recovered, so the reference is
+    the most favourable timescale the run's own evidence supports: the
+    smallest measured tau_c or upper bound anywhere in the band. A required
+    time shorter than this is shorter than anything the band has shown, and
+    the channel does not take the cadence tier on it.
     """
-    measured = [_num(c.chain.get("tau_c_minutes")) for c in run.channels
-                if str(c.chain.get("tau_quality") or "") == "measured"]
-    measured = [v for v in measured if v is not None]
-    if measured:
-        return max(measured) * 60.0, "the largest measured correlation time in the band"
-    bounds = [_num(c.chain.get("tau_c_high_minutes")) for c in run.channels
-              if str(c.chain.get("tau_quality") or "") == "bounded_above"]
-    bounds = [v for v in bounds if v is not None]
-    if bounds:
-        return max(bounds) * 60.0, "the largest upper bound in the band (nothing is measured)"
-    return FALLBACK_TAU_MINUTES * 60.0, f"a stated {FALLBACK_TAU_MINUTES:g} min (the run measures and bounds nothing)"
+    evidence = []
+    for c in run.channels:
+        quality = str(c.chain.get("tau_quality") or "")
+        if quality == "measured":
+            evidence.append((_num(c.chain.get("tau_c_minutes")), "measured"))
+        elif quality == "bounded_above":
+            evidence.append((_num(c.chain.get("tau_c_high_minutes")), "bounded"))
+    evidence = [(v, k) for v, k in evidence if v is not None]
+    if not evidence:
+        return (FALLBACK_TAU_MINUTES * 60.0,
+                f"a stated {FALLBACK_TAU_MINUTES:g} min (the run measures and bounds nothing)")
+    value, kind = min(evidence)
+    word = "measured correlation time" if kind == "measured" else "correlation-time bound"
+    return value * 60.0, f"the shortest {word} in the band"
 
 
 def cadence_headroom(tau_seconds: float) -> float:
@@ -124,6 +134,16 @@ def cadence_headroom(tau_seconds: float) -> float:
     counts and nothing else moves.
     """
     return residual.n_coh_from_correlation_time(tau_seconds) / residual.n_coh_from_correlation_time(CAP_SECONDS)
+
+
+def required_tau_seconds(ratio: float) -> float:
+    """The correlation time that would bring a capped channel's ``ratio`` to 1.
+
+    A refusal books every surviving component at one timescale, so the
+    residual is proportional to it and the cap divided by the ratio is the
+    time that lands exactly on the line.
+    """
+    return CAP_SECONDS / ratio if math.isfinite(ratio) and ratio > 0 else math.nan
 
 
 @dataclass(frozen=True)
@@ -139,6 +159,7 @@ class Saveable:
     headroom: float                 # what the cadence what-if would multiply the ratios by (1.0 where none applies)
     off_era: bool
     unsettled: bool
+    required_tau: float = math.nan  # the correlation time that would land the best world on R = 1
     note: str = ""
 
 
@@ -161,6 +182,8 @@ def classify(c: Channel, *, headroom: float) -> Saveable:
     best_dil = min((v for v in dil.values() if math.isfinite(v)), default=math.nan)
     common = dict(channel=c.channel, growth_ratio=best_growth, dilation_ratio=best_dil,
                   tau_quality=tau_quality, off_era=off_era, unsettled=unsettled)
+    if tau_quality == "refused":
+        common["required_tau"] = required_tau_seconds(min(best_growth, best_dil))
     if not math.isfinite(best_growth) and not math.isfinite(best_dil):
         why = str(s.get("status") or "no worlds section")
         return Saveable(tier="no verdict", reached_by="", headroom=1.0, note=why, **common)
@@ -186,8 +209,11 @@ def classify(c: Channel, *, headroom: float) -> Saveable:
             tier_of = "growth" if reaching(what_if_growth) else "dilation"
             return Saveable(tier="cadence", reached_by=world, headroom=headroom,
                             note=f"the what-if reaches the {tier_of} tier", **common)
-        return Saveable(tier="none", reached_by="", headroom=headroom,
-                        note="the cap is not the reason: the what-if reaches no tier either", **common)
+        req = common["required_tau"]
+        why = ("the cap is not what is wrong: reaching the line would take tau_c "
+               + (f"{sci(req).replace(chr(92) + 'times', 'x')} s" if math.isfinite(req) else "of no finite length")
+               + ", shorter than anything the band exhibits")
+        return Saveable(tier="none", reached_by="", headroom=headroom, note=why, **common)
     return Saveable(tier="none", reached_by="", headroom=1.0, **common)
 
 
@@ -225,10 +251,11 @@ def build(run: Run) -> Fragment:
         growth = sci(v.growth_ratio) if math.isfinite(v.growth_ratio) else DASH
         dil = sci(v.dilation_ratio) if math.isfinite(v.dilation_ratio) else DASH
         reached = WORLD_LABEL[v.reached_by] if v.reached_by else DASH
+        need = sci(v.required_tau) if math.isfinite(v.required_tau) else DASH
         rows.append([str(v.channel), TIER_LABEL[v.tier], reached,
                      f"${growth}$" if growth != DASH else DASH,
                      f"${dil}$" if dil != DASH else DASH,
-                     _tau_cell(v.tau_quality), _era_cell(v), v.note or ""])
+                     _tau_cell(v.tau_quality), f"${need}$" if need != DASH else DASH, _era_cell(v)])
         add("tier", v.tier, kind="text", renderings=(TIER_LABEL[v.tier],))
         add("reached_by", v.reached_by or None, kind="text",
             renderings=(reached.replace("$", "").replace("~", " "),))
@@ -239,6 +266,11 @@ def build(run: Run) -> Fragment:
             else:
                 add(column, None, kind="text", status="pending", renderings=(DASH,))
         add("tau_quality", v.tau_quality or None, kind="text", renderings=(_tau_cell(v.tau_quality),))
+        if math.isfinite(v.required_tau):
+            add("required_tau_seconds", v.required_tau, status="derived",
+                renderings=(sci(v.required_tau).replace("\\times", "x"),))
+        else:
+            add("required_tau_seconds", None, kind="text", status="pending", renderings=(DASH,))
         add("era_basis", _era_cell(v), kind="text", renderings=(_era_cell(v),))
 
     frag.tex = core.booktabs(HEADER, rows, ALIGN, midrules=_half_band_breaks(channels))
@@ -270,7 +302,20 @@ def build(run: Run) -> Fragment:
     frag.notes.append("counts: " + ", ".join(f"{TIER_LABEL[t]} {len(counts[t])}"
                                              + (f" ({_channel_list(counts[t])})" if counts[t] else "")
                                              for t in TIERS))
-    frag.notes.append(f"the cadence what-if assumes tau_c = {core.fmt(tau_seconds / 60.0, 1)} min, {tau_basis}; on a "
+    capped = [v for v in verdicts if v.tau_quality == "refused" and math.isfinite(v.required_tau)]
+    if capped:
+        best = max(capped, key=lambda v: v.required_tau)
+        frag.notes.append("tau_c needed (s) is the correlation time that would put a capped channel's best world "
+                          f"exactly on R = 1; the longest any capped channel could accept is ch{best.channel:02d}'s "
+                          f"{core.fmt(best.required_tau, 3, sig=True)} s, against the "
+                          f"{core.fmt(tau_seconds, 3, sig=True)} s reference, so the column says how far short of "
+                          "the band's own evidence the cap channels fall")
+        if "bound" in tau_basis:
+            frag.notes.append("the reference is an upper bound, not a measurement, so a required time below it is "
+                              "unsupported rather than excluded: the band has never shown a correlation time that "
+                              "short, and it has not shown that none exists; the contiguous-cadence campaign is what "
+                              "would decide it")
+    frag.notes.append(f"the cadence what-if assumes tau_c = {core.fmt(tau_seconds / 60.0, 2)} min, {tau_basis}; on a "
                       "refused channel that books all surviving shelf power at the assumed timescale and restores no "
                       "ground-filter credit (rfisher.residual.surviving_components), so it multiplies the ratios by "
                       f"{core.fmt(headroom, 3, sig=True)} and nothing else moves; it says a contiguous-cadence "
