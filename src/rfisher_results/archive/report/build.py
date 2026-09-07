@@ -40,8 +40,14 @@ def table_builders(modules: Sequence[str] = TABLE_MODULES) -> list[Callable[[Run
 
 def build_report(results_dir: Path | str, out_dir: Path | str | None = None, *, commit: str | None = None,
                  generated: str | None = None, figures: bool = True, modules: Sequence[str] = TABLE_MODULES,
-                 figure_modules: Sequence[str] = FIGURE_MODULES) -> dict:
-    """Render tables, numbers and figures for one run; return the manifest."""
+                 figure_modules: Sequence[str] = FIGURE_MODULES, require_tex: bool = True) -> dict:
+    """Render tables, numbers and figures for one run; return the manifest.
+
+    ``require_tex`` is the document's typography contract: the figures are set
+    in Latin Modern through LaTeX, which the dissertation's figure audit
+    enforces. Pass ``False`` only for a preview on a machine without a TeX
+    installation, and never for a report that will be vendored.
+    """
     import datetime as dt
 
     run = load_run(results_dir)
@@ -51,6 +57,11 @@ def build_report(results_dir: Path | str, out_dir: Path | str | None = None, *, 
     builders = table_builders(modules)
     extra: list[Path] = []
     if figures:
+        # the document's own style, Latin Modern through LaTeX: the figure audit refuses a
+        # substituted font, so a report rendered without it cannot be vendored
+        from ... import style
+
+        style.configure(require_tex=require_tex)
         fig_dir = out / "figures"
         fig_dir.mkdir(parents=True, exist_ok=True)
         for name in figure_modules:
