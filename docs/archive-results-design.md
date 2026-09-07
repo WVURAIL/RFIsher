@@ -108,8 +108,12 @@ standard deviation 2.71%; coarse `F ~ F(524288, 1048576)`, mean 1.000002,
 standard deviation 0.239%. Width factor = measured width over the i.i.d.
 width, raw (standard deviation) and robust core (left-side scale about the
 median with the `NULL_SCALE_PROBES` convention). Tail fraction beyond three
-core widths. Exchangeability: on quiet frames a bulk bin tested against the
-rank of the remaining bulk exceeds it at rate `(|B| + 1 - rho) / (|B| + 1)`.
+core widths. Exchangeability: on quiet frames a null bin outside the bulk,
+tested against the rank `rho` of the bulk, exceeds it at rate
+`(|B| + 1 - rho) / (|B| + 1)`; the bins tested are the designated window
+(within one frame, exactly `|B| - rho` of the bulk's own bins exceed the
+rank of the others whatever their distribution, so a bulk bin tested against
+the remaining bulk is a tautology).
 
 Null sources in order of strength (ch08 §253-263): verified transmitter-off
 era; independently identified quiet subset; control or reference-bin
@@ -265,6 +269,16 @@ its status; changing one is a new run.
 - The floor on channels without a verified off era is the sigma-implied
   substitute and is labelled `stated`; no reference-surrogate floor is
   introduced without a registered method.
+- Null-scale probes. The register's `floor.null_scale_probes` pairs
+  two-sided tail fractions (32%, 5%, 0.3%) with their Gaussian deviates, and
+  `rfisher.residual.null_scale` (and ppcal) apply the fractions as one-sided
+  percentiles. On an ideal null that returns 0.84 of the coarse width, 0.82
+  of the fine width, and a probe spread near 2 where a Gaussian tail gives 1
+  (simulated, 200k draws). `archive.nulls` uses the one-sided percentiles
+  the deviates belong to (15.87 / 2.5 / 0.15) and reports the as-coded value
+  beside it. The sigma-implied floor rises by about 0.8 dB under the
+  corrected probes. The register entry is the author's to correct; the v3
+  numbers built on it were biased in the optimistic direction.
 
 ## 7. Decisions that stay with the author
 
