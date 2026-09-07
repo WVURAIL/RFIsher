@@ -314,7 +314,11 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         record.add("null_evaluation", null_eval.as_row())
     else:
         record.add("null_evaluation", None)
-    record.add("selection", sel.as_row() if sel is not None else None)
+    if sel is not None:
+        selection.write_operating_points(sel, ch_dir / "operating_points.csv")
+        record.add("selection", {**sel.as_row(), **selection.surface_summary(sel)})
+    else:
+        record.add("selection", None)
 
     # 9. screening
     flag_rate = float(p.rejected[era_mask].mean()) if era_mask.any() else math.nan
