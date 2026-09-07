@@ -205,7 +205,7 @@ def systematic_residuals(product: Product, rows: np.ndarray, floor: Floor, gain:
     shelf = product.shelf_db[rows]
     finite = np.isfinite(shelf)
     out = np.full(rows.shape, floor.linear, dtype=float)
-    out[finite] = np.maximum(10.0 ** (shelf[finite] / 10.0), floor.linear)
+    out[finite] = np.fmax(10.0 ** (shelf[finite] / 10.0), floor.linear)     # fmax: an undefined floor does not bound
     if not np.isfinite(out).all():
         raise ValueError("systematic residuals need a finite floor for frames without a shelf estimate")
     if not (math.isfinite(gain) and gain > 0.0):
