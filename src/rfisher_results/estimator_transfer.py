@@ -149,9 +149,7 @@ def _y_upper(x_max: float, plotted: Sequence[float]) -> float:
     return max(baseline, max(finite, default=-math.inf) + 1.0)
 
 
-def figure_estimator_transfer(release: Release, *, out: Path, title: str | None = None,
-                              y_min_db: float | None = None) -> Path:
-    """Render the transfer figure for a release; returns the PDF path."""
+def _render(release: Release, *, out: Path, title: str | None, y_min_db: float | None) -> Path:
     x = release.column(release.x_column)
     if not np.isfinite(x).any():
         raise ValueError("no finite input SNR values in plot_points.csv")
@@ -210,3 +208,16 @@ def figure_estimator_transfer(release: Release, *, out: Path, title: str | None 
     fig.tight_layout()
     with style.stable_pdf_subset_tags():
         return style.save(fig, Path(out), title=title or (OTA_TITLE if ota else DIGITAL_TITLE))
+
+
+# amssymb's amsfonts replaces \widehat with an msbm glyph, which the
+# dissertation's font contract rejects. Nothing here needs AMS symbols, so the
+# figure renders with Latin Modern's own extension font for the wide hat.
+_PREAMBLE = r"\usepackage[T1]{fontenc}\usepackage{lmodern}\usepackage{amsmath}"
+
+
+def figure_estimator_transfer(release: Release, *, out: Path, title: str | None = None,
+                              y_min_db: float | None = None) -> Path:
+    """Render the transfer figure for a release; returns the PDF path."""
+    with matplotlib.rc_context({"text.latex.preamble": _PREAMBLE}):
+        return _render(release, out=out, title=title, y_min_db=y_min_db)
