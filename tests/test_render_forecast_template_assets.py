@@ -43,11 +43,11 @@ requires_results_tree = pytest.mark.skipif(
 # the results tree at the paths the manifest recorded when out/ was tracked.
 KEPT_MANIFESTS = {
     "first": (
-        results_tree.RELEASE_MANIFESTS
+        ROOT / "docs" / "releases"
         / "forecast_completion_first_release.manifest.json",
         OUT / "forecast_completion_release_manifest.json"),
     "reconciliation": (
-        results_tree.RELEASE_MANIFESTS
+        ROOT / "docs" / "releases"
         / "forecast_completion_20260824_reconciliation.manifest.json",
         DATED_RELEASE / "forecast_completion_release_manifest.json"),
 }

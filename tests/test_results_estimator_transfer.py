@@ -79,5 +79,5 @@ def test_render_is_byte_stable(tmp_path, ota):
 
 def test_the_style_module_is_the_single_source():
     here = Path(style.__file__)
-    scripts_copy = here.parents[2] / "scripts" / "dissertation" / "style.py"
+    scripts_copy = Path(__file__).resolve().parents[1] / "scripts" / "dissertation" / "style.py"
     assert scripts_copy.read_bytes() == here.read_bytes(), "scripts/dissertation/style.py drifted from rfisher_results.style"
