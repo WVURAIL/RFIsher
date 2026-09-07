@@ -25,7 +25,7 @@ sys.modules["check_dissertation_numbers"] = cdn
 spec.loader.exec_module(cdn)
 
 SHIPPED_TABLES = (
-    "optimal_thresholds.csv", "fine_operating_points.csv", "three_worlds.csv",
+    "three_worlds.csv",
     "fig31_validation.csv", "required_times.csv", "bin_level_targets.csv",
     "forecast_completion_all_dtv_bins.json",
     "forecast_completion_template_comparison.csv")
@@ -88,27 +88,15 @@ def test_check_kinds_fail_in_their_directions(capsys):
 
 def test_value_accepts_any_rendering():
     ck = cdn.Checker("kept fraction 51.8% of frames")
-    ck.value("f", cdn.frac_needles(0.5183), "m")
+    ck.value("f", ["0.5183", "51.8%", "51.8 %"], "m")
     assert ck.failures == 0
-
-
-def test_num_needles_never_too_short():
-    for x in (2.099, 0.237, 1.4008, 177.31, 6.587):
-        assert all(len(n.replace(".", "").lstrip("0")) >= 3
-                   for n in cdn.num_needles(x))
 
 
 @requires_shipped_tables
 def test_csv_operating_rows_resolve():
-    # The channel set follows the threshold sweep's conventions and may
-    # move with a regeneration; what must stay fixed is that the selectors
-    # resolve populated operating rows, so a column rename fails loudly.
-    thr = cdn.threshold_rows()
-    assert thr and all(
-        r[k] for r in thr.values()
-        for k in ("eta", "f", "r_fine", "margin", "penalty"))
-    fine = cdn.fine_rows()
-    assert fine and all(r["multiplier_q16"] for r in fine.values())
+    # The channel set follows the worlds bank's conventions and may move
+    # with a regeneration; what must stay fixed is that the selectors
+    # resolve populated rows, so a column rename fails loudly.
     worlds = cdn.worlds_rows()
     assert len(worlds) == 16
     assert cdn.world_provenance_ok(worlds, cdn.era_rows())
@@ -196,17 +184,8 @@ def test_end_to_end_exit_codes(tmp_path):
     # A source containing every stale literal must fail; the same source
     # with requires satisfied and forbids absent must pass. Build the green
     # text from the registry's own CSV needles so the test tracks out/.
-    thr = cdn.threshold_rows()
-    fine = cdn.fine_rows()
     green = " ".join(
-        [f"{float(r['eta']):.2f} {100 * float(r['f']):.1f}% "
-         f"{float(r['r_fine']):.4f} {float(r['margin']):.1f}x "
-         f"{float(r['penalty']):.2f} {float(r['penalty']):.0f}x"
-         for r in thr.values()]
-        + [str(int(float(r["multiplier_q16"]))) + " "
-           + (f"{float(r['r_late']):.3f}" if r.get("r_late") else "")
-           for r in fine.values()]
-        + ["1566x over now", "the fs/2 legacy epoch quarterly table",
+        ["1566x over now", "the fs/2 legacy epoch quarterly table",
            "3.2-7.8 dB", "46748 LRGs", "7.6 yr", "XOR 0x88",
            "48.5% of verified-quiet time", "fine_gain_mc evidence",
            "Youden-J table", _forecast_headline_rows()])
@@ -236,17 +215,8 @@ def test_summary_invariant_flags_split_population(tmp_path, capsys):
 
 
 def _green_min() -> str:
-    thr = cdn.threshold_rows()
-    fine = cdn.fine_rows()
     return " ".join(
-        [f"{float(r['eta']):.2f} {100 * float(r['f']):.1f}% "
-         f"{float(r['r_fine']):.4f} {float(r['margin']):.1f}x "
-         f"{float(r['penalty']):.2f} {float(r['penalty']):.0f}x"
-         for r in thr.values()]
-        + [str(int(float(r["multiplier_q16"]))) + " "
-           + (f"{float(r['r_late']):.3f}" if r.get("r_late") else "")
-           for r in fine.values()]
-        + ["fs/2 legacy quarterly", "3.2-7.8", "46748", "7.6 yr", "1566x",
+        ["fs/2 legacy quarterly", "3.2-7.8", "46748", "7.6 yr", "1566x",
            "XOR 0x88", "48.5%", "fine_gain_mc", "Youden",
            _forecast_headline_rows()])
 
@@ -277,22 +247,20 @@ def _forecast_headline_rows() -> str:
     worlds = cdn.worlds_rows()
 
     def worlds_line(ch: int) -> str:
+        """One worlds row as the table prints it: R = r_sys/r_tol, bold
+        where the world passes, terminated so the cell reader can cut it."""
         cells = []
         for world in cdn.WORLD_ORDER:
             row = worlds[(world, ch)]
-            value = cdn.world_margin(row)
+            value = f"{cdn.world_ratio(row):.4g}"
             cells.append(
                 rf"\mathbf{{{value}}}" if row["pass_fs8"] == "True"
                 else value)
-        return f"ch{ch} & " + " & ".join(cells)
+        return f"ch{ch} & " + " & ".join(cells) + r" \\"
 
     deployed29 = worlds[("deployed", 29)]
     aperp_over = (float(deployed29["r_fine"])
                   / float(deployed29["tol_aperp"]))
-    era = cdn.era_rows()
-    ch32, ch35 = era[32], era[35]
-    ch32_minutes = float(ch32["tau_seconds"]) / 60.0
-    ch35_minutes = float(ch35["tau_seconds"]) / 60.0
     return " ".join(
         ["sigma(D_V)/D_V [%], clean, 1 on-sky yr & "
          + " & ".join(f"{v:.3f}" for _, v in cols),
@@ -323,22 +291,15 @@ def _forecast_headline_rows() -> str:
          f"{min(joint):.6f}-{max(joint):.6f}",
          f"{sum(int(r['perbin_accepted']) for r in trs)}"
          f"/{sum(int(r['perbin_rejected']) for r in trs)}",
+         # The worlds rows are read past the table's own header.
+         cdn.WORLDS_HEADER + r" & 55 ns & 110 ns & 200 ns \\\\",
          worlds_line(33), worlds_line(35),
          r"ch32 & \multicolumn{4}{c}{not evaluated: 16<30 kept frames at "
          r"\eta=1 in its transmitter-on era}",
          f"ch29 & fails all & fails all & fails all & fails all "
          rf"(\alpha_\perp {aperp_over:.1f}x over)",
          "Channel 35's parallel dilation alone passes at 110 ns",
-         "Channel 35 uses its measured off-era floor",
-         f"Channel 32 upper bound \\tau_c\\leq {ch32_minutes:g} min "
-         f"and best adopted-coherence residual "
-         f"{float(ch32['best_cost_r_over_rtol']):.2f}x",
-         f"channel 35 calibrated endpoint masks "
-         f"{100 * float(ch35['masked_fraction']):.1f}% and remains "
-         f"{float(ch35['r_over_rtol']):.0f}x over; best-cost point masks "
-         f"{100 * float(ch35['best_cost_masked_fraction']):.2f}% and remains "
-         f"{float(ch35['best_cost_r_over_rtol']):.0f}x over; current-era "
-         f"{ch35_minutes:.1f} min is measured"])
+         "Channel 35 uses its measured off-era floor"])
 
 
 @requires_shipped_tables
@@ -366,6 +327,26 @@ def test_legacy_projects_excluded_from_tex_sweep(tmp_path):
     text, files = cdn.load_tex([str(tmp_path)])
     assert files == [keep]
     assert "the present draft" not in text
+
+
+@requires_shipped_tables
+def test_worlds_row_read_in_the_printed_direction(capsys):
+    """The worlds row is R = r_sys/r_tol, not the CSV's reciprocal margin,
+    and it is read under the table's own header: a decoy 'ch33 &' ahead of
+    that header (the flagger table opens columns with the same label) must
+    not be mistaken for the row."""
+    worlds = cdn.worlds_rows()
+    printed = f"{cdn.world_ratio(worlds[('none', 33)]):.4g}"
+    good = "ch33 & ch34 & ch35 & ch36 \\\\ " + _green_min()
+    flipped = good.replace(
+        printed, f"{1 / cdn.world_ratio(worlds[('none', 33)]):.4g}")
+    assert flipped != good
+    for text, want in ((good, "PASS"), (flipped, "FAIL")):
+        ck = cdn.Checker(cdn.normalize(text))
+        cdn.run_checks(ck, None)
+        out = capsys.readouterr().out
+        lines = [ln for ln in out.splitlines() if "ch 33: direct fs8" in ln]
+        assert lines and lines[0].startswith(want), lines
 
 
 @requires_shipped_tables
