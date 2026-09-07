@@ -48,8 +48,11 @@ def test_systematic_residuals_use_shelf_where_finite_and_the_floor_elsewhere(pro
     finite = np.isfinite(product.shelf_db)
     assert np.allclose(res[finite], 10 ** (product.shelf_db[finite] / 10))
     assert np.allclose(res[~finite], FLOOR.linear)
+    assert np.allclose(selection.systematic_residuals(product, rows, FLOOR, gain=566.0), 566.0 * res)
     with pytest.raises(ValueError, match="finite floor"):
         selection.systematic_residuals(product, rows, selection.Floor(math.nan, "refused", "none"))
+    with pytest.raises(ValueError, match="chain gain"):
+        selection.systematic_residuals(product, rows, FLOOR, gain=0.0)
 
 
 def test_selection_then_replay_on_the_fixture(product):

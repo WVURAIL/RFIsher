@@ -156,15 +156,21 @@ class SelectionResult:
         return row
 
 
-def systematic_residuals(product: Product, rows: np.ndarray, floor: Floor) -> np.ndarray:
-    """Shelf-or-floor linear residual per frame row."""
+def systematic_residuals(product: Product, rows: np.ndarray, floor: Floor, gain: float = 1.0) -> np.ndarray:
+    """Shelf-or-floor linear residual per frame row, times the chain gain.
+
+    ``gain`` is ``G = sum_k phi_k n_coh,k`` from :mod:`.chain` (1.0 gives the
+    frame-stage residual); with it the kept-frame mean is ``r_proxy``.
+    """
     shelf = product.shelf_db[rows]
     finite = np.isfinite(shelf)
     out = np.full(rows.shape, floor.linear, dtype=float)
     out[finite] = 10.0 ** (shelf[finite] / 10.0)
     if not np.isfinite(out).all():
         raise ValueError("systematic residuals need a finite floor for frames without a shelf estimate")
-    return out
+    if not (math.isfinite(gain) and gain > 0.0):
+        raise ValueError("the chain gain must be a positive finite number")
+    return out * float(gain)
 
 
 def _evidence(state: str, method: str, source: str, artifact_sha256: str | None = None, detail: str = "") -> CalibrationEvidence:
@@ -195,7 +201,7 @@ def _plateau(points, selected) -> Plateau | None:
 
 def select_operating_point(product: Product, calibration: np.ndarray, evaluation: np.ndarray, *,
                            anchor_bin: int, bulk_mask: np.ndarray, r_tol: float, floor: Floor, era_label: str,
-                           latest_era: bool = True, off_era: bool = False,
+                           gain: float = 1.0, latest_era: bool = True, off_era: bool = False,
                            correlation: CalibrationEvidence | None = None,
                            transfer: CalibrationEvidence | None = None,
                            min_half_retained: int = PROVISIONAL_MIN_HALF_RETAINED,
@@ -215,7 +221,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
     provisional = {"stability.minimum_half_retained_frames": min_half_retained,
                    "stability.maximum_cost_ratio": max_cost_ratio,
                    "stability.maximum_systematic_residual_ratio": max_systematic_ratio,
-                   "residual_convention": "shelf-or-floor linear, variance 0"}
+                   "residual_convention": "shelf-or-floor linear x chain gain, variance 0", "chain_gain": float(gain)}
     base = dict(channel=product.geometry.physical_channel, freq_id=product.geometry.freq_id, era_label=era_label,
                 anchor_bin=int(anchor_bin), bulk_size=int(np.asarray(bulk_mask, dtype=bool).sum()), r_tol=float(r_tol),
                 floor=floor, calibration_frames=int(cal.sum()), evaluation_frames=int(eva.sum()),
@@ -233,7 +239,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
     except ResidualScoreRefused as exc:
         return SelectionResult(status="refused", refusal=f"bundle: {exc}", **base, **empty)
     rows = bundle.source_row_index
-    residuals = systematic_residuals(product, rows, floor)
+    residuals = systematic_residuals(product, rows, floor, gain)
     score = _evidence("measured", "exact fine-power terms", product.path.name, product_sha,
                       "Q16 requirements from fine_power_u64")
     correlation = correlation or _evidence("conditional", "correlation time pending", "chapter 8 tau_c estimator not yet run on v5")
@@ -263,7 +269,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
     replay = None
     if eva.any():
         replay = replay_on_block(product, eva, anchor_bin=int(anchor_bin), bulk_mask=bulk_mask, rho=sel.rho,
-                                 eta_q16=sel.multiplier_q16, r_tol=float(r_tol), floor=floor, off_era=off_era,
+                                 eta_q16=sel.multiplier_q16, r_tol=float(r_tol), floor=floor, gain=gain, off_era=off_era,
                                  replicates=bootstrap_replicates, seed=bootstrap_seed)
     return SelectionResult(
         status="feasible", refusal="", claim_status=selection.claim_status, rho=int(sel.rho),
@@ -275,7 +281,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
 
 
 def replay_on_block(product: Product, block: np.ndarray, *, anchor_bin: int, bulk_mask, rho: int, eta_q16: int,
-                    r_tol: float, floor: Floor, off_era: bool, replicates: int, seed: int) -> Replay:
+                    r_tol: float, floor: Floor, off_era: bool, replicates: int, seed: int, gain: float = 1.0) -> Replay:
     """Apply a selected ``(rho, eta_q16)`` to another block of the same channel."""
     bundle = build_residual_score_bundle(product.path, np.asarray(block, dtype=bool), anchor_bin=int(anchor_bin),
                                          designated_half_width=DESIGNATED_HALF_WIDTH, bulk_mask=np.asarray(bulk_mask, dtype=bool))
@@ -284,7 +290,7 @@ def replay_on_block(product: Product, block: np.ndarray, *, anchor_bin: int, bul
         raise ValueError(f"rank {rho} is not supported on the evaluation block (bulk {bundle.supported_rho_count})")
     required = np.asarray(bundle.requirements_by_rho()[int(rho)], dtype=object)
     kept = kept_at(required, int(eta_q16))
-    residual = systematic_residuals(product, rows, floor)
+    residual = systematic_residuals(product, rows, floor, gain)
     n = rows.size
     f = 1.0 - kept.sum() / n
     r_sys = float(residual[kept].mean()) if kept.any() else math.nan
