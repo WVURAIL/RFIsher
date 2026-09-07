@@ -11,6 +11,7 @@ is no reason to re-stamp them.
         [--conditioning conditioning.json] [--bootstrap-samples N]
     python -m rfisher_results.cli archive --products DIR --out DIR
         [--workers 6] [--replicates 1000] [--seed 20260907] [--channels 35,29]
+    python -m rfisher_results.cli archive-report --results DIR [--out DIR] [--no-figures]
 """
 from __future__ import annotations
 
@@ -54,6 +55,10 @@ def main(argv: list[str] | None = None) -> int:
     tp.add_argument("--out", type=Path, required=True, help="CSV to write")
     tp.add_argument("--conditioning", type=Path, default=None, help="conditioning.json with the waveform coefficients")
     tp.add_argument("--bootstrap-samples", type=int, default=10_000, dest="bootstrap_samples")
+    rp = sub.add_parser("archive-report", help="the dissertation tables, numbers and figures of one archive run")
+    rp.add_argument("--results", required=True, help="an archive run directory (ledger/, tables/, channels/)")
+    rp.add_argument("--out", default=None, help="output directory (default <results>/dissertation)")
+    rp.add_argument("--no-figures", action="store_true", help="tables and numbers only")
     ar = sub.add_parser("archive", help="the archive pipeline over the campaign products: eras, anchors, containment, nulls, selection, ledger")
     ar.add_argument("--products", type=Path, required=True, help="directory of the 23 v5 per-pilot products")
     ar.add_argument("--out", type=Path, required=True, help="results tree to write (a new dated directory)")
@@ -63,6 +68,11 @@ def main(argv: list[str] | None = None) -> int:
     ar.add_argument("--channels", default=None, help="comma-separated physical channels to run (default all)")
     args = ap.parse_args(argv)
 
+    if args.command == "archive-report":
+        from .archive.report.build import build_report
+        manifest = build_report(args.results, args.out, figures=not args.no_figures)
+        print(json.dumps({"artifacts": [a["name"] for a in manifest["artifacts"]], "out": str(Path(args.out or Path(args.results) / "dissertation"))}))
+        return 0
     if args.command == "archive":
         from .archive.run import run_archive
         chans = [int(c) for c in args.channels.split(",")] if args.channels else None
