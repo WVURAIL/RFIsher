@@ -1097,7 +1097,8 @@ def panel_operating(ax, plate: Plate) -> None:
     if drawn:
         # the surface's own range decides the axis, and the legend gets the room above it: on a channel whose
         # residual barely moves, a legend placed by 'best' sits on the only curve there is
-        reserve_headroom(ax, max(drawn), len(labels), floor=min(drawn) / 1.6)
+        # a legend line is taller than a note line: its handles and labelspacing add about one line's worth
+        reserve_headroom(ax, max(drawn), len(labels) + 1, floor=min(drawn) / 1.6)
     ax.legend(handles, labels, loc="upper left", fontsize=NOTE_PT, handlelength=1.6, labelspacing=0.28,
               borderaxespad=0.25, frameon=False, ncol=1)
 
