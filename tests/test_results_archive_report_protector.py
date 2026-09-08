@@ -81,7 +81,7 @@ def test_a_channel_already_inside_is_quoted_as_margin_not_as_a_requirement(tmp_p
     frag = protector.build(_run(tmp_path, {29: (1e-3, False)}))
     got = _cells(frag, 29)
     assert got["peak2_dilation_db"] < 0.0
-    assert _cells(frag, 29)["basis"] == "measured"
+    assert _cells(frag, 29)["basis"] == "model"
 
 
 # ------------------------------------------------- the table
@@ -121,18 +121,19 @@ def test_a_floor_bound_channel_is_marked_and_left_out_of_the_specification(tmp_p
     """An upper limit is not a specification: the requirement may be zero and the table cannot tell."""
     frag = protector.build(_run(tmp_path, {21: (0.1, True), 29: (1.0, False)}))
     got = {n.key.rsplit(".", 1)[-1]: n.value for n in frag.numbers}
-    assert _cells(frag, 21)["basis"] == "floor"
-    assert (got["n_floor_bound"], got["n_measured"], got["channels"]) == (1, 1, 2)
+    assert _cells(frag, 21)["basis"] == "model/floor"
+    assert (got["n_floor_bound"], got["n_measured"], got["channels"]) == (1, 0, 2)
+    assert got["n_conditional"] == 2
     # ch21 is the cheaper of the two and is still not what the specification is quoted from
     assert got["cheapest_dilation_channel"] == 29
     assert got["n_dilation_at_20db"] == 1
-    assert any("upper limit" in note for note in frag.notes)
+    assert any("neither unavoidable contamination nor a calibrated confidence bound" in note for note in frag.notes)
 
 
 def test_a_floor_bound_requirement_is_recorded_as_bounded_rather_than_measured(tmp_path):
     frag = protector.build(_run(tmp_path, {21: (0.1, True)}))
     status = {n.key.rsplit(".", 2)[-2]: n.status for n in frag.numbers if n.key.endswith(".ch21")}
-    assert status["none_dilation_db"] == "bounded"
+    assert status["none_dilation_db"] == "derived"
 
 
 def test_the_fragment_is_registered_in_the_report(tmp_path):
@@ -144,7 +145,7 @@ def test_the_fragment_is_registered_in_the_report(tmp_path):
 def test_the_run_of_record_states_a_finite_requirement_for_every_priced_channel():
     """Every failing channel fails by a finite amount; that amount is what the chapter claims."""
     frag = protector.build(core.load_run(REAL_RUN))
-    values = [n.value for n in frag.numbers if n.key.endswith("_db") and ".ch" in n.key and n.value is not None]
+    values = [n.value for n in frag.numbers if "_db.ch" in n.key and n.value is not None]
     assert values, "the run of record prices no channel"
     assert all(math.isfinite(v) for v in values)
     got = {n.key.rsplit(".", 1)[-1]: n.value for n in frag.numbers}

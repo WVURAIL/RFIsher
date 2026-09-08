@@ -192,7 +192,7 @@ def test_table_prints_the_measured_rows_the_absent_ones_and_the_components(tmp_p
     assert frag.inputs and all(p.name == "dtv_snr_eval.csv" for p in frag.inputs)
     # the notes must name every measurement the products do not carry
     notes = " ".join(frag.notes)
-    for phrase in ("packed minus full-precision", "no M-sweep", "coarse statistic", "frequency_offset_hz",
+    for phrase in ("packed minus full-precision", "no M-sweep", "fine statistic", "frequency_offset_hz",
                    "quantized-weight float rung", "duty cycle", "selects nothing"):
         assert phrase in notes, phrase
 

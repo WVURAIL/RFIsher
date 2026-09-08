@@ -24,7 +24,7 @@ def forecast_main(argv=None) -> int:
         help="explicit bank path (must be strict schema v2)")
     bank_group.add_argument(
         "--cosmology", choices=tuple(resources.BANK_NAMES),
-        help="packaged CHIME bank (default: planck2018)")
+        help="packaged CHIME bank (default: cmbspa2026)")
     parser.add_argument("--uniform", type=float, required=True,
                         help="uniform masked fraction in [0,1]")
     parser.add_argument("--band", choices=("dtv", "chime"), default="dtv")
@@ -38,7 +38,7 @@ def forecast_main(argv=None) -> int:
              "years")
     args = parser.parse_args(argv)
     bank = (args.bank if args.bank is not None
-            else resources.bank_file(args.cosmology or "planck2018"))
+            else resources.bank_file(args.cosmology or resources.DEFAULT_COSMOLOGY))
     forecast = api.load(bank)
     band = {"dtv": scenarios.DTV_BAND, "chime": scenarios.CHIME_BAND}[
         args.band]
@@ -62,10 +62,10 @@ def build_bank_main(argv=None) -> int:
     parser.add_argument("--config", choices=("bull2015", "chime2022"),
                         default="chime2022")
     parser.add_argument(
-        "--cosmology", choices=("planck2013", "planck2018", "pact2025"),
+        "--cosmology", choices=("planck2013", "planck2018", "pact2025", "cmbspa2026"),
         default=None,
         help="named fiducial (default: planck2013 for bull2015, "
-             "planck2018 for chime2022)")
+             "cmbspa2026 for chime2022)")
     parser.add_argument("--tmin", type=float, default=1.0)
     parser.add_argument("--tmax", type=float, default=1e6)
     parser.add_argument("--nt", type=int, default=19)
@@ -84,7 +84,7 @@ def build_bank_main(argv=None) -> int:
         parser.error("--nt must be at least 2")
     valid_cosmologies = {
         "bull2015": {None, "planck2013"},
-        "chime2022": {None, "planck2018", "pact2025"},
+        "chime2022": {None, "planck2018", "pact2025", "cmbspa2026"},
     }
     if args.cosmology not in valid_cosmologies[args.config]:
         parser.error(

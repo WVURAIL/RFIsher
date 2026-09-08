@@ -8,7 +8,7 @@ import numpy as np
 from rfisher.fisherbank import build_bank
 from rfisher.residual_templates import (FAMILIES, make_template,
                                          parse_parameter_assignments)
-from rfisher.resources import BANK_NAMES
+from rfisher.resources import BANK_NAMES, DEFAULT_COSMOLOGY
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -21,8 +21,8 @@ if __name__ == "__main__":
     ap.add_argument("--config", default="chime2022",
                     choices=["bull2015", "chime2022"])
     ap.add_argument("--cosmology", default=None,
-                    help="planck2013 for bull2015; planck2018 (default) or "
-                         "pact2025 for chime2022")
+                    help="planck2013 for bull2015; cmbspa2026 (default), "
+                         "planck2018 or pact2025 for chime2022")
     ap.add_argument("--dense-knee", action="store_true",
                     help="add half-step t points through the CV knee")
     ap.add_argument("--knee-range", nargs=2, type=float, default=(3.5, 5.83),
@@ -58,6 +58,8 @@ if __name__ == "__main__":
         "--template-param", action="append", default=[], metavar="NAME=VALUE",
         help="override one named analytic-template parameter; repeat as needed")
     args = ap.parse_args()
+    args.cosmology = args.cosmology or (
+        DEFAULT_COSMOLOGY if args.config == "chime2022" else "planck2013")
 
     ctag = (f"_{args.cosmology}" if args.cosmology
             and args.cosmology != "planck2018" else "")

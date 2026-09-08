@@ -1,0 +1,19 @@
+[run]
+branch = True
+concurrency = multiprocessing
+parallel = True
+source =
+    rfisher
+    rfisher_results
+relative_files = True
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = True
+
+[json]
+output = coverage.json
+
+[html]
+directory = htmlcov

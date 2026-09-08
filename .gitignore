@@ -16,6 +16,7 @@ __pycache__/
 # Canonical release and matched research-comparison banks are intentional data.
 !src/rfisher/data/fisher_bank_chime2022.npz
 !src/rfisher/data/fisher_bank_chime2022_pact2025.npz
+!src/rfisher/data/fisher_bank_chime2022_cmbspa2026.npz
 !data/fisher_bank_bull2015_planck2013_epsfg1e-6.npz
 !data/fisher_bank_bull2015_planck2013_epsfg1e-5.npz
 
@@ -43,3 +44,10 @@ paper/*.out
 # harness worktrees for parallel agents
 .claude/
 *.log
+
+# Test coverage reports
+.coverage
+.coverage.*
+coverage.json
+coverage.xml
+htmlcov/

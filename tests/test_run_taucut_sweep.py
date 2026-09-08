@@ -18,6 +18,23 @@ taucut = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(taucut)
 
 
+@pytest.mark.parametrize("cosmology", [None, "planck2018", "pact2025"])
+def test_cli_routes_current_default_and_explicit_reproduction_models(
+        tmp_path, monkeypatch, cosmology):
+    seen = []
+    monkeypatch.setattr(taucut, "_CTX", {"configs": {}, "cosmo": {"sigma_nl": 7.0}})
+    def initialize(rf_dir, name, hours):
+        seen.append(name)
+        return object(), tmp_path
+    monkeypatch.setattr(taucut, "_init_context", initialize)
+    monkeypatch.setattr(taucut, "figures_only", lambda *args, **kwargs: 0)
+    args = ["--out", str(tmp_path), "--figures-only", "--no-figure"]
+    if cosmology:
+        args += ["--cosmology", cosmology]
+    assert taucut.main(args) == 0
+    assert seen == [cosmology or "cmbspa2026"]
+
+
 def _copy_shipped_taucut_tables(tmp_path, *also_needed):
     """The sweep tables the figures-only path redraws from; skipped when the
     results tree holding the shipped run is not configured."""
@@ -221,7 +238,8 @@ def test_figures_only_rebuilds_figures_and_caption_from_the_csvs(tmp_path):
         pytest.skip("figures-only needs the backend for the delay mapping")
     out = _copy_shipped_taucut_tables(tmp_path, "fig_taucut_bao_caption.txt")
 
-    assert taucut.main(["--out", str(tmp_path), "--figures-only"]) == 0
+    assert taucut.main(["--out", str(tmp_path), "--figures-only",
+                        "--cosmology", "planck2018"]) == 0
 
     for name in ("fig_taucut_bao.png", "fig_taucut_bao.pdf",
                  "fig_taucut_bao_fig10.png", "fig_taucut_bao_fig10.pdf"):
@@ -243,7 +261,7 @@ def test_proposal_style_draws_at_textwidth_with_a_suffix(tmp_path):
     _copy_shipped_taucut_tables(tmp_path)
 
     assert taucut.main(["--out", str(tmp_path), "--figures-only",
-                        "--style", "proposal"]) == 0
+                        "--style", "proposal", "--cosmology", "planck2018"]) == 0
 
     for name in ("fig_taucut_bao_proposal.pdf",
                  "fig_taucut_bao_fig10_proposal.pdf"):

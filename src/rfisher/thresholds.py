@@ -124,6 +124,7 @@ class ResidualScoreHistogram:
     counts: tuple[int, ...]
     systematic_residual_sums: tuple[float, ...]
     variance_residual_sums: tuple[float, ...] | None = None
+    candidate_eligible: tuple[bool, ...] | None = None
     candidate_eta: tuple[float, ...] = field(init=False)
 
     def __post_init__(self):
@@ -138,6 +139,11 @@ class ResidualScoreHistogram:
                                  "variance_residual_sums"))
         if not q16:
             raise ValueError("candidate_multiplier_q16 must not be empty")
+        if self.candidate_eligible is not None:
+            eligible = tuple(self.candidate_eligible)
+            if len(eligible) != len(q16) or any(type(v) is not bool for v in eligible):
+                raise ValueError("candidate_eligible must contain one boolean per candidate")
+            object.__setattr__(self, "candidate_eligible", eligible)
         if len(counts) != len(q16) + 1:
             raise ValueError("counts must include one overflow bin")
         if len(systematic) != len(counts):
@@ -363,6 +369,8 @@ def optimize_threshold(
             if has_variance:
                 variance_sum += histogram.variance_residual_sums[index]
             if kept < MIN_RETAINED_FRAMES:
+                continue
+            if histogram.candidate_eligible is not None and not histogram.candidate_eligible[index]:
                 continue
             masked = frame_count - kept
             masked_fraction = masked / frame_count

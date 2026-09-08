@@ -153,6 +153,8 @@ the full inputs, results, and caveats.
   configuration, headline results, inputs, and application-specific caveats.
 - [Reproducibility](docs/reproducibility.md) — installation, verification,
   bank builds, dissertation checks, and evidence regeneration.
+- [Verification benches](docs/testing.md) — component coverage, numerical
+  oracles, CI coverage gates, and optional integration checks.
 - [Release index](docs/releases.md) — immutable existing releases and the
   layout for future releases.
 - [Forecast-completion contract](docs/forecast-completion.md) — complete
@@ -176,9 +178,13 @@ without it the tests skip and the gate reports the tables missing. See
 
 The command-line entry points are:
 
+New forecasts default to the August 2026 combined cosmology. Bull's Planck
+2013 and Foreman's Planck 2018 inputs remain explicit reproduction options;
+see [cosmologies](docs/cosmologies.md) for the three primary roles.
+
 ```bash
 rfisher-forecast --uniform 0.25
-rfisher-forecast --cosmology pact2025 --uniform 0.25
+rfisher-forecast --cosmology cmbspa2026 --uniform 0.25
 rfisher-build-bank --help
 rfisher-check-archive --help
 ```

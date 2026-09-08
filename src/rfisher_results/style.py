@@ -175,7 +175,7 @@ def stable_pdf_subset_tags():
 
 
 def _fit_fontsize(ax, text: str, size: float, box_w: float,
-                  ratio: float, floor: float = 5.6) -> float:
+                  ratio: float, floor: float = 5.6) -> tuple[str, float]:
     """Shrink size until the widest line fits box_w (axes fraction).
 
     Never grows the size, so a box whose text already fits is untouched. The
@@ -185,7 +185,7 @@ def _fit_fontsize(ax, text: str, size: float, box_w: float,
     """
     lines = [ln for ln in text.replace(r"\\", "\n").split("\n") if ln]
     if not lines:
-        return size
+        return text, size
     avail = box_w * ax.get_window_extent().width * 0.86
     probe = ax.text(0, 0, text, transform=ax.transAxes, fontsize=size,
                     linespacing=1.13, alpha=0)

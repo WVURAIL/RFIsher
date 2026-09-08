@@ -40,9 +40,12 @@ def _without_archive_products(monkeypatch):
     """Keep the product-recomputed table checks inert here. These tests drive
     the gate over synthetic corpora carrying only the registry-derived
     needles, so the flagger and eta-sweep sections have no table to find;
-    without this the module's result would depend on whether the developer
-    happens to have RFISHER_PRODUCT_DIRS exported."""
+    without this the module's result would depend on the developer's product
+    directories, local configuration, or cached discovery state."""
+    from rfisher import products
+
     monkeypatch.delenv("RFISHER_PRODUCT_DIRS", raising=False)
+    monkeypatch.setattr(products, "paths", lambda *args, **kwargs: {})
 
 
 def test_normalize_folds_unicode_and_commas():

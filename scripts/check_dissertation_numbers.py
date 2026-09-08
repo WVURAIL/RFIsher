@@ -655,11 +655,11 @@ def table91_historical_rows() -> dict | None:
         from rfisher import forecast, scenarios, survey
         from rfisher.backend import import_radiofisher
         from rfisher.fisherbank import FisherBank
-        from rfisher.resources import DEFAULT_BANK
+        from rfisher.resources import PLANCK2018_BANK
     except Exception:
         return None
     try:
-        bank = FisherBank(DEFAULT_BANK)
+        bank = FisherBank(PLANCK2018_BANK)
         style = ("perbin_A" if bank.meta["config"] == "chime2022"
                  else "shared_A")
         rf, rf_dir = ((None, None) if style == "perbin_A"

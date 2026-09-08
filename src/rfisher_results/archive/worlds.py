@@ -1,33 +1,22 @@
-"""The delay filter booked on both sides: what each cut world does to each channel.
+"""Conditional delay-filter scenarios with target-time Fisher tolerances.
 
-Chapter 9's world table asks what happens when a delay cut is carried
-self-consistently rather than claimed on one side. Each world is one published
-cut: the Fisher bank loses the modes below it, so the parameter tolerances are
-re-derived from that world's own bank; and the residual chain gains the
-matching shelf suppression from the same tau-to-k_parallel mapping. Nothing is
-invented -- the cuts are the deployed 200 ns and the two BAO-preserving design
-points, and the suppressions are the chain's own ``DELAY_SUPPRESSION_DB``.
+The filter banks price the loss of cosmological modes. The separate scalar
+suppression constants are historical hypothetical assumptions, not a transfer
+measurement and not a consequence of the delay-to-wavenumber coordinate map.
+Every physical interpretation also requires signal/noise/RFI propagation
+through the actual mask-dependent visibility operator. Floor assignment is
+a screening allowance, not a physical lower bound or a confidence interval.
 
-The tolerances. For each world's bank, each redshift bin and each parameter,
-the tolerance is the smallest per-unit-residual bias over the integration
-times that pass the registered response-stability gate. Computing them reads
-four banks and takes minutes, so they are cached beside the banks and rebuilt
-only when a bank is newer than the cache.
-
-The residuals. Each channel's residual at its operating point
-(:mod:`.operating`) is this analysis's own, on the current era, with no delay
-credit: that is the convention every other number in chapter 9 uses. A world
-divides it by its suppression. The ratio ``R = r / r_tol`` is reported per
-parameter, and ``R <= 1`` passes, the one direction used throughout.
-
-What this is not. A world is a bookkeeping exercise in what a cut would buy,
-not a claim that the filter has been applied: it models the mode-cut geometry
-only, never the filter's foreground-removal performance.
+All parameters are evaluated at TARGET_YEARS. Refused target-time cells stay
+unpriced; another year cannot supply the answer. Cached tables require their
+content identity, current policy/source identity, and authenticated banks.
 """
 from __future__ import annotations
 
 import csv
 import importlib.util
+import hashlib
+import json
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -55,7 +44,7 @@ def _cell(value):
 
 
 def suppression_db(world: str) -> float:
-    """The shelf suppression this world's cut removes, from the chain's own table."""
+    """Hypothetical suppression assigned to this scenario, not measured transfer."""
     key = dict((w, k) for w, _, _, k in WORLDS)[world]
     return 0.0 if key == "none" else float(residual.DELAY_SUPPRESSION_DB[key])
 
@@ -107,19 +96,9 @@ def compute_tolerances(bank_dir: Path | str = BANK_DIR) -> list[dict]:
                     else:
                         refused[p] += 1
             for p in PARAMETERS:
-                # Chapter 9 fixes the target integration at T* and quotes r_tol there. Where
-                # the response-stability gate accepts T*, that is the value: it is the one the
-                # text declares and it removes the grid from the answer. Where the gate refuses
-                # T* -- which happens for the dilations in four of the seven DTV bins and never
-                # for the growth rate -- there is no tolerance at the declared time, and the
-                # smallest accepted elsewhere stands in. The substitution is recorded per cell
-                # rather than absorbed, because a reader comparing two tables built on two
-                # grids would otherwise see a factor of three and no reason for it.
+                # Only the declared target time may supply an operational tolerance.
                 if math.isfinite(at_target[p]):
                     value, used, on_target = at_target[p], TARGET_YEARS, True
-                elif accepted[p]:
-                    used, value = min(accepted[p], key=lambda yv: yv[1])
-                    on_target = False
                 else:
                     value, used, on_target = math.nan, math.nan, False
                 rows.append({"world": world, "bin_index": ib, "z_lo": round(float(zs[ib]), 4),
@@ -131,19 +110,34 @@ def compute_tolerances(bank_dir: Path | str = BANK_DIR) -> list[dict]:
 
 
 def _cache_is_current(cache: Path, bank_dir: Path) -> bool:
-    """The cache stands unless a bank is newer than it.
-
-    On a machine with no banks -- CI, or a reader of the shipped tree --
-    nothing can invalidate the cache, so it stands and no bank is opened.
-    """
-    if not cache.is_file():
+    """Require a content identity and authenticated banks, not modification times."""
+    sidecar = cache.with_suffix(".provenance.json")
+    if not cache.is_file() or not sidecar.is_file():
         return False
-    mtimes = [(bank_dir / f).stat().st_mtime for _, f, _, _ in WORLDS if (bank_dir / f).is_file()]
-    return not mtimes or cache.stat().st_mtime >= max(mtimes)
+    try:
+        return json.loads(sidecar.read_text()) == _cache_identity(cache, bank_dir)
+    except (OSError, ValueError, KeyError):
+        return False
+
+
+def _cache_identity(cache: Path, bank_dir: Path) -> dict:
+    bt = _bias_tolerance()
+    identity = {"schema": 2, "target_years": TARGET_YEARS,
+                "policy": selection_policy.sha256(), "sources": {}, "banks": {},
+                "csv_sha256": hashlib.sha256(cache.read_bytes()).hexdigest()}
+    for path in (Path(__file__), ROOT / "scripts/bias_tolerance.py", ROOT / "src/rfisher/fisherbank.py"):
+        identity["sources"][path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    for _, filename, kfg, _ in WORLDS:
+        path = bank_dir / filename
+        # Also authenticates the configured backend's current scientific identity.
+        bank = bt.load_bias_bank(path, expected_kfg_fac=kfg, expected_epsilon_fg=0.0)
+        identity["banks"][filename] = {"sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                                       "evaluation": bank.evaluation_identity}
+    return identity
 
 
 def tolerances(bank_dir: Path | str = BANK_DIR, cache: Path | str = CACHE, *, rebuild: bool = False) -> list[dict]:
-    """The cached tolerances, rebuilt when a bank is newer than the cache."""
+    """Tolerances authenticated against their CSV, policy, sources and banks."""
     cache, bank_dir = Path(cache), Path(bank_dir)
     if not rebuild and _cache_is_current(cache, bank_dir):
         with cache.open(newline="", encoding="utf-8") as fh:
@@ -160,16 +154,22 @@ def tolerances(bank_dir: Path | str = BANK_DIR, cache: Path | str = CACHE, *, re
         writer.writeheader()
         for r in rows:
             writer.writerow({k: _cell(v) for k, v in r.items()})
+    cache.with_suffix(".provenance.json").write_text(json.dumps(_cache_identity(cache, bank_dir), sort_keys=True))
     return rows
 
 
 def tolerance_of(rows: Sequence[dict], world: str, bins: Sequence[int], parameter: str) -> float:
-    """The binding tolerance over a channel's bins: the smallest one the stability
-    gate accepted, matching the ledger's own footing (:mod:`.tolerances`). NaN
-    when the gate accepted nothing anywhere the channel overlaps."""
-    values = [float(r["tolerance"]) for r in rows
-              if r["world"] == world and r["parameter"] == parameter and int(r["bin_index"]) in set(bins)
-              and math.isfinite(float(r["tolerance"]))]
+    """Minimum over every requested bin; any missing or refused target cell refuses."""
+    by_bin = {int(r["bin_index"]): r for r in rows if r["world"] == world and r["parameter"] == parameter}
+    values = []
+    for b in bins:
+        row = by_bin.get(int(b))
+        if row is None or not row.get("at_target", False):
+            return math.nan
+        value = float(row["tolerance"])
+        if not math.isfinite(value) or value <= 0:
+            return math.nan
+        values.append(value)
     return min(values) if values else math.nan
 
 
@@ -181,18 +181,12 @@ def bin_span(rows: Sequence[dict], bins: Sequence[int]) -> tuple[float, float]:
 
 @dataclass(frozen=True)
 class ChannelWorlds:
-    """One channel through the four worlds, at its operating point and at its frontier floor.
+    """Conditional scalar scenarios at an operating point and assigned floor.
 
-    Two bases, and the difference between them is what makes the second one
-    worth carrying. The operating point is a *choice* -- the knee its
-    calibration block selected -- so a ratio quoted there answers "does this
-    policy fail". The frontier floor is the least residual any threshold on
-    the same statistic can leave behind, at any masked fraction, anywhere on
-    the surface, because the residual is a functional of that statistic alone
-    and the coarse rule's frontier is the plane's lower envelope by
-    construction. A ratio quoted at the floor therefore answers the stronger
-    question, "does every policy of this kind fail", and it is the only one of
-    the two that bounds a class rather than an instance.
+    Point and evaluation policies may differ and have separate identities and
+    masking fractions. The frontier minimum concerns the booked allowance,
+    not a lower bound on true surviving contamination. Neither basis alone
+    certifies recovery of complex visibilities.
     """
 
     channel: int
@@ -204,15 +198,19 @@ class ChannelWorlds:
     ratios: dict = field(default_factory=dict)          # (world, parameter) -> R at the operating point
     residuals: dict = field(default_factory=dict)       # world -> r after that world's suppression
     tolerances: dict = field(default_factory=dict)      # (world, parameter) -> r_tol
-    r_floor: float = math.nan                           # the frontier's least residual, the class bound
+    r_floor: float = math.nan                           # minimum booked frontier allowance
     floor_ratios: dict = field(default_factory=dict)    # (world, parameter) -> R at the floor
     floor_residuals: dict = field(default_factory=dict)
     r_evaluation: float = math.nan                      # the residual the point leaves on the held-out block
     evaluation_ratios: dict = field(default_factory=dict)
     evaluation_residuals: dict = field(default_factory=dict)
     floor_bound: bool = False                           # every kept frame is at the sensitivity floor
-    status: str = "measured"
+    status: str = "conditional"
     notes: tuple[str, ...] = ()
+    point_policy: str = "unspecified"
+    evaluation_policy: str = "unspecified"
+    evaluation_masked_fraction: float = math.nan
+    evaluation_kept: int = 0
 
     def _table(self, basis: str) -> dict:
         return {"point": self.ratios, "floor": self.floor_ratios,
@@ -230,7 +228,7 @@ class ChannelWorlds:
         for world, _, _, _ in WORLDS:
             inside = [(table.get((world, p), math.nan), p) for p in parameters]
             inside = [(v, p) for v, p in inside if math.isfinite(v)]
-            if not inside:
+            if len(inside) != len(parameters):
                 continue
             value, param = max(inside)
             if value < best[1]:
@@ -242,6 +240,12 @@ class ChannelWorlds:
                "z_lo": self.z_lo, "z_hi": self.z_hi, "r_point": self.r_point, "r_floor": self.r_floor,
                "r_evaluation": self.r_evaluation, "floor_bound": self.floor_bound,
                "masked_fraction": self.masked_fraction, "status": self.status, "notes": "; ".join(self.notes)}
+        row.update({"residual_evidence": "conditional scalar screening allowance",
+                    "delay_suppression_evidence": "hypothetical; not measured on these visibilities",
+                    "physical_recovery_certified": False,
+                    "point_policy": self.point_policy, "evaluation_policy": self.evaluation_policy,
+                    "evaluation_masked_fraction": self.evaluation_masked_fraction,
+                    "evaluation_kept": self.evaluation_kept})
         for world, _, _, _ in WORLDS:
             row[f"{world}_r"] = self.residuals.get(world, math.nan)
             row[f"{world}_floor_r"] = self.floor_residuals.get(world, math.nan)
@@ -257,26 +261,25 @@ class ChannelWorlds:
 
 def channel_worlds(channel: int, bins: Sequence[int], r_point: float, masked_fraction: float,
                    rows: Sequence[dict], *, r_floor: float = math.nan,
-                   r_evaluation: float = math.nan, floor_bound: bool = False) -> ChannelWorlds:
-    """One channel's four worlds on three bases, each priced through the same cuts.
+                   r_evaluation: float = math.nan, floor_bound: bool = False,
+                   point_policy: str = "unspecified", evaluation_policy: str = "unspecified",
+                   evaluation_masked_fraction: float = math.nan, evaluation_kept: int = 0) -> ChannelWorlds:
+    """Price three explicitly conditional scalar bases through the same cuts.
 
-    ``r_point`` is the operating point's residual on the calibration block --- a
-    policy verdict. ``r_floor`` is the frontier's least, which bounds the whole
-    class of thresholds on the statistic. ``r_evaluation`` is what the same
-    point leaves on the held-out block the calibration never saw, and it is the
-    only one of the three that is not graded on its own homework.
-
-    ``floor_bound`` marks a channel whose kept frames all sit at the sensitivity
-    floor, so the residual reported is the floor itself rather than a
-    measurement of what survived. Its ratios are upper limits: the true residual
-    is somewhere below and the instrument cannot say where.
+    ``r_point`` and ``r_evaluation`` must retain their respective policy
+    identities; a diagnostic replay can differ from the displayed knee.
+    ``r_floor`` is the minimum booked allowance, not a physical class bound.
+    ``floor_bound`` is a legacy field name for a floor-only assignment; it
+    does not establish a confidence limit on the actual residual.
     """
     bins = tuple(int(b) for b in bins)
     z_lo, z_hi = bin_span(rows, bins)
     ratios, residuals, tols = {}, {}, {}
     floor_ratios, floor_residuals, ev_ratios, ev_residuals = {}, {}, {}, {}
     notes = []
-    common = dict(r_floor=r_floor, r_evaluation=r_evaluation, floor_bound=floor_bound)
+    common = dict(r_floor=r_floor, r_evaluation=r_evaluation, floor_bound=floor_bound,
+                  point_policy=point_policy, evaluation_policy=evaluation_policy,
+                  evaluation_masked_fraction=evaluation_masked_fraction, evaluation_kept=evaluation_kept)
     if not bins:
         return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, status="no overlapping bin",
                              notes=("the channel overlaps no forecast bin, so no world applies",), **common)
@@ -299,18 +302,18 @@ def channel_worlds(channel: int, bins: Sequence[int], r_point: float, masked_fra
                                      if usable and math.isfinite(source[world]) else math.nan)
     missing = [f"{w}/{p}" for (w, p), t in tols.items() if not math.isfinite(t)]
     if missing:
-        notes.append(f"the stability gate accepted no integration time for {', '.join(sorted(missing))}")
+        notes.append(f"no accepted target-time tolerance for {', '.join(sorted(missing))}")
     if not math.isfinite(r_floor):
-        notes.append("the channel carries no frontier floor, so no class bound is quoted beside its point")
+        notes.append("the channel carries no minimum frontier allowance")
     if not math.isfinite(r_evaluation):
         notes.append("the point was not replayed on the held-out block, so only the calibration bases are priced")
     if floor_bound:
         notes.append("every kept frame sits at the sensitivity floor, so the residual is the floor itself and "
-                     "every ratio here is an upper limit rather than a measurement")
+                     "every ratio here is a conditional allowance, not a measurement or confidence limit")
     return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, ratios, residuals, tols,
                          floor_ratios=floor_ratios, floor_residuals=floor_residuals,
                          evaluation_ratios=ev_ratios, evaluation_residuals=ev_residuals,
-                         status="measured", notes=tuple(notes), **common)
+                         status="conditional", notes=tuple(notes), **common)
 
 
 def write_world_rows(results: Sequence[ChannelWorlds], path: Path | str) -> Path:

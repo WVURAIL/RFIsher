@@ -33,6 +33,7 @@ def test_default_banked_api_does_not_import_radiofisher(monkeypatch):
 
     assert fc.style == "perbin_A"
     assert fc.rf is None
+    assert fc.bank.meta['cosmology'] == 'cmbspa2026'
     assert np.isfinite(fc.sigma_A(scenarios.clean(), 8_766.0))
 
 
@@ -50,7 +51,7 @@ def test_explicit_radiofisher_path_is_still_honored(monkeypatch):
     assert fc.rf_dir == requested
 
 
-@pytest.mark.parametrize("cosmology", ["planck2018", "pact2025"])
+@pytest.mark.parametrize("cosmology", ["planck2018", "pact2025", "cmbspa2026"])
 def test_named_cosmology_routes_through_packaged_bank_registry(
         monkeypatch, cosmology):
     resource = object()

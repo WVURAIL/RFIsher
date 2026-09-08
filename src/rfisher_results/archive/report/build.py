@@ -59,7 +59,8 @@ def build_report(results_dir: Path | str, out_dir: Path | str | None = None, *, 
     figure_modules = FIGURE_MODULES if figure_modules is None else figure_modules
     run = load_run(results_dir)
     out = Path(out_dir) if out_dir is not None else run.results_dir / "dissertation"
-    commit = commit or run.commit
+    from ..numbers import git_commit
+    commit = commit or git_commit(Path(__file__).resolve().parents[4])
     generated = generated or dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
     builders = table_builders(modules)
     extra: list[Path] = []

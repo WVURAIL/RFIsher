@@ -74,6 +74,8 @@ class BandMask:
 
     @property
     def cost(self) -> float:
+        if math.isnan(self.masked_fraction):
+            return math.nan
         return 1.0 / (1.0 - self.masked_fraction) if self.masked_fraction < 1.0 else math.inf
 
 

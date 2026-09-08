@@ -34,7 +34,7 @@ from typing import Sequence
 
 import numpy as np
 
-from rfisher import residual
+from rfisher import residual, selection_policy
 
 from rfisher.channels import channel_edges
 
@@ -47,7 +47,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def station_records(channel: int) -> dict[str, str]:
-    """``{YYYY-MM: 'sign-off'|'sign-on'}`` from the recorded transmitter events."""
+    """Archive-inferred change dates; these are not independent station records."""
     out: dict[str, str] = {}
     off_from = residual.SIGN_OFF_FROM.get(channel)
     if off_from:
@@ -62,7 +62,7 @@ def station_records(channel: int) -> dict[str, str]:
 
 @dataclasses.dataclass(frozen=True)
 class OffEpoch:
-    """The channel's verified transmitter-off population.
+    """An archive-inferred candidate low-power epoch, not a verified null.
 
     ``record`` is the frame mask of the recorded off epoch (``residual.SIGN_OFF_FROM`` /
     ``SIGN_ON_OFF_THROUGH``); ``mask`` restricts it to the frames of the era table's
@@ -78,6 +78,7 @@ class OffEpoch:
     record_frames: int
     off_frames: int
     note: str
+    independently_verified: bool = False
 
 
 def verified_off(product: Product, months: np.ndarray, table: eras.EraTable | None = None) -> OffEpoch:
@@ -115,17 +116,27 @@ def _producer() -> dict:
     """The producing code: commit, dirty flag and a digest of this package's sources, read before the run starts."""
     import hashlib
     import subprocess
-    here = Path(__file__).resolve().parent
+    import importlib.util
+    here = ROOT / "src"
     h = hashlib.sha256()
-    for f in sorted(here.glob("*.py")):
-        h.update(f.name.encode()); h.update(f.read_bytes())
+    roots = {"RFIsher/src": here, "RFIsher/scripts": ROOT / "scripts"}
+    for name in ("pilot_proxy", "radiofisher"):
+        spec = importlib.util.find_spec(name)
+        if spec is not None and spec.origin:
+            roots[name] = Path(spec.origin).parent
+    for name, source_root in sorted(roots.items()):
+        for f in sorted(source_root.rglob("*.py")):
+            h.update((name + "/" + str(f.relative_to(source_root))).encode())
+            h.update(f.read_bytes())
+    h.update(selection_policy.canonical_json().encode())
     try:
-        status = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", "src/rfisher_results/archive"], cwd=ROOT, capture_output=True,
+        status = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, capture_output=True,
                                 text=True, timeout=30).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         status = "unknown"
     return {"repository": "WVURAIL/RFIsher", "commit": git_commit(ROOT), "dirty": bool(status), "dirty_files": status,
-            "module": "rfisher_results.archive.run", "source_digest": h.hexdigest()}
+            "module": "rfisher_results.archive.run", "source_digest": h.hexdigest(),
+            "source_roots": {k: str(v) for k, v in roots.items()}, "policy_sha256": selection_policy.sha256()}
 
 
 def _quiet_cohort_is_null(product: Product, mask) -> bool:
@@ -189,7 +200,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     """The whole pipeline for one product; returns small rows, writes large files."""
     t0 = time.time()
     out = Path(out_dir)
-    p = Product(path)
+    p = Product(path, require_health=True)
     g = p.geometry
     ch = g.physical_channel
     ch_dir = out / "channels" / f"ch{ch:02d}"
@@ -225,7 +236,10 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     })
 
     # 1. eras
-    table = eras.era_table(p, config=config, campaign_last_month=campaign_last_month, station_record=station_records(ch))
+    # Dates inferred from this archive are diagnostics, not an independent
+    # vote supporting a detected transition.
+    table = eras.era_table(p, config=config, campaign_last_month=campaign_last_month, station_record={})
+    record.add("archive_inferred_events", {"events": station_records(ch), "independently_verified": False})
     eras.write_era_json(table, ch_dir / "eras.json")
     era = table.current_era
     timed = np.isfinite(p.frame_time)
@@ -235,6 +249,12 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     months = eras.frame_months(p)
     off = verified_off(p, months, table)
     off_mask, off_through, off_from = off.mask, off.off_through, off.off_from
+    # Inferred changes may describe real occupancy changes, but cannot also
+    # serve as independent proof that every frame is a transmitter-off null.
+    if not off.independently_verified:
+        if off_mask is not None:
+            notes.append("archive-inferred low epoch is not independently verified; excluded from null calibration and false-alarm claims")
+        off_mask = None
     if off.note:
         notes.append(off.note)
     # the current era is an off era when the recorded off epoch covers most of it (chapter 8: the off state is
@@ -260,6 +280,16 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     # 2. blocks (month support on the era procedure's own gate)
     split = blocks.split_blocks(p.frame_unit_index, p.unit_time, era_mask, frame_time=p.frame_time, minimum_months=1,
                                 month_kwargs=dict(min_frames=config.min_frames, min_units=config.min_units, min_days=config.min_days))
+    # Eras remain retrospective. Within the selected era, every fitted PSD
+    # fallback and chain term is restricted to pre-evaluation samples.
+    reference_mask = reference_mask & ~split.evaluation
+    reference_label = reference_label + " / calibration-only"
+    record.add("evaluation_contract", {
+        "status": "retrospective era-conditioned replay",
+        "era_discovery": "full archive; not an untouched prospective holdout",
+        "fitted_anchor_psd_chain": "evaluation frames excluded",
+        "station_event_basis": "archive-inferred, not independently verified",
+    })
     off_for_null = (off_mask & ~split.evaluation) if off_mask is not None else None      # the evaluation block never enters the null
     off_for_eval = (off_mask & split.evaluation) if off_mask is not None else None
     record.add("blocks", {
@@ -298,7 +328,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     else:
         table_anchor = anc["current_era"]
     # the selector's anchor: the calibration block's (held out from the evaluation block)
-    selector_anchor = anc["calibration"] if anc["calibration"].status == "ok" else table_anchor
+    selector_anchor = anc["calibration"]
     record.add("anchor", {**anchors.anchor_record(table_anchor), "source": table_anchor.label,
                           "quiet_cohort_is_null": quiet_ok.get(table_anchor.label)})
     record.add("anchor_calibration", {**anchors.anchor_record(selector_anchor), "source": selector_anchor.label,
@@ -322,7 +352,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         spectrum = psd.accumulate_spectra(p, reference_mask)
         first = psd.analyse(spectrum, g)
         lobe_hz = first.row.in_span_refined_offset_hz if first.row.in_span_recovered else math.nan
-        anchor_hz = float(table_anchor.anchor_rf_offset_hz) if table_anchor.status == "ok" else math.nan
+        anchor_hz = float(selector_anchor.anchor_rf_offset_hz) if selector_anchor.status == "ok" else math.nan
         offset_bins = psd.anchor_lobe_offset_bins(anchor_hz, lobe_hz)
         disagree = math.isfinite(offset_bins) and abs(offset_bins) > anchors.DESIGNATED_HALF_WIDTH + 0.5
         folds = False
@@ -332,7 +362,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         reasons = []
         if folds:
             reasons.append(f"fine anchor aliases the out-of-span feature at {first.row.out_of_span_offset_hz:.0f} Hz by one coarse bin")
-        elif table_anchor.status == "ok" and table_anchor.aliased_out_of_window:
+        elif selector_anchor.status == "ok" and selector_anchor.aliased_out_of_window:
             notes.append("fine anchor lies beyond the +-30-bin acquisition window (no fold onto an out-of-span feature)")
         if disagree:
             reasons.append(f"fine anchor {offset_bins:+.1f} bins from the PSD in-span lobe")
@@ -340,7 +370,7 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
         cont = psd.analyse(spectrum, g, anchor_aliases=bool(folds or disagree), anchor_note=anchor_note)
         psd.write_spectra_json([cont], ch_dir / "spectra_window.json", provenance=reference_label)
         containment_row = cont.row
-        mode_mass = float(table_anchor.boot_mode_mass) if table_anchor.status == "ok" else math.nan
+        mode_mass = float(selector_anchor.boot_mode_mass) if selector_anchor.status == "ok" else math.nan
         anchor_suspect = bool(disagree or folds or (math.isfinite(mode_mass) and mode_mass < 0.5))
         if first.row.in_span_recovered:
             lobe_bin = _fine_bin_of_rf(lobe_hz, g)
@@ -368,9 +398,8 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     try:
         ch_all = chain.residual_chain(p.path, off_through=off_through, off_from=off_from)
         record.add("chain_archive", ch_all.as_row())
-        if not math.isfinite(gain):
-            gain, tau_quality, gain_basis = ch_all.gain, ch_all.tau_quality, "archive-wide chain (era chain refused)"
-            notes.append("chain gain taken from the archive-wide chain: the era chain refused")
+        # Archive-wide values are descriptive only. Falling back to them
+        # would fit the evaluation data after calibration had refused.
     except Exception as exc:
         record.add("chain_archive", None)
         notes.append(f"archive-wide chain: {type(exc).__name__}: {exc}")
@@ -558,7 +587,7 @@ def _worlds(results: Sequence[dict]) -> list:
     """
     try:
         rows = worlds.tolerances()
-        bins_of = tolerances.ledger_channel_bins(tolerances.out_dir() / tolerances.MAPPING_NAME)
+        bins_of = {t.channel: t.bins for t in tolerances.channel_tolerances(derived_rows=rows)}
     except Exception as exc:                                  # no banks, or no released mapping
         print(f"worlds: skipped ({type(exc).__name__}: {exc})", flush=True)
         return []
@@ -590,7 +619,12 @@ def _worlds(results: Sequence[dict]) -> list:
                                          _num(op.get("operating_r_sys")),
                                          _num(op.get("operating_masked_fraction")), rows,
                                          r_floor=_num(op.get("r_floor")),
-                                         r_evaluation=r_eval, floor_bound=floor_bound))
+                                         r_evaluation=r_eval, floor_bound=floor_bound,
+                                         point_policy=f"operating: rho={op.get('operating_rho')}, eta_q16={op.get('operating_eta_q16')}",
+                                         evaluation_policy=(f"selected: rho={sel.get('rho')}, eta_q16={sel.get('eta_q16')}" if sel.get("status") == "feasible" else
+                                                            f"diagnostic: rho={sel.get('diagnostic_rho')}, eta_q16={sel.get('diagnostic_eta_q16')}"),
+                                         evaluation_masked_fraction=_num(sel.get("masked_fraction_evaluation")),
+                                         evaluation_kept=int(sel.get("kept_evaluation") or 0)))
     return out
 
 
@@ -629,7 +663,7 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
     out.mkdir(parents=True, exist_ok=True)
     producer = _producer()                     # read once, before any work: the code that runs is the code named
     paths = sorted(products_dir.glob("*.npz"))
-    opened = [Product(p) for p in paths]
+    opened = [Product(p, require_health=True) for p in paths]
     all_channels = {p.geometry.physical_channel: p for p in opened}
     config = era_config or eras.DEFAULT_CONFIG
     # the campaign snapshot is the last populated month over every product present, whatever subset runs

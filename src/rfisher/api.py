@@ -26,7 +26,7 @@ from . import survey as _survey
 from ._validation import (nonnegative_scalar as _nonnegative_scalar,
                           positive_scalar as _positive_scalar)
 from .fisherbank import ARTIFACT_FORECAST, FisherBank
-from .resources import bank_file
+from .resources import DEFAULT_COSMOLOGY, bank_file
 
 
 def load(bank: str | Path | None = None, *, cosmology: str | None = None,
@@ -39,7 +39,7 @@ def load(bank: str | Path | None = None, *, cosmology: str | None = None,
     retains that backend for subsequent direct evaluations."""
     if bank is not None and cosmology is not None:
         raise ValueError("provide either bank= or cosmology=, not both")
-    source = bank if bank is not None else bank_file(cosmology or "planck2018")
+    source = bank if bank is not None else bank_file(cosmology or DEFAULT_COSMOLOGY)
     b = FisherBank(source, expected_artifact_kind=ARTIFACT_FORECAST)
     style = "perbin_A" if b.meta["config"] == "chime2022" else "shared_A"
     rf = None

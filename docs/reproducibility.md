@@ -13,13 +13,14 @@ cd RFIsher
 python -m pip install -e ".[test]"
 ```
 
-The two installed CHIME banks and packaged masking table work without a
+The three installed CHIME banks and packaged masking table work without a
 RadioFisher checkout:
 
 ```bash
 python examples/minimal_example.py
 rfisher-forecast --uniform 0.25
 rfisher-forecast --cosmology pact2025 --uniform 0.25
+rfisher-forecast --cosmology planck2018 --uniform 0.25
 ```
 
 Matter-power caches are also packaged. Install the optional CAMB dependency
@@ -29,6 +30,10 @@ only when generating or refreshing a cache:
 python -m pip install -e ".[pk]"
 ```
 
+The default is `cmbspa2026`; `planck2018` reproduces Foreman's reference.
+Bull's `planck2013` banks use their separate `bull2015` configuration.
+See [cosmologies](cosmologies.md) for the parameter source and model conventions.
+
 ## RadioFisher checkout
 
 RadioFisher is required for bank construction and direct backend validation.
@@ -36,7 +41,7 @@ Use the reviewed commit recorded by the released banks:
 
 ```bash
 git clone https://github.com/WVURAIL/RadioFisher ../RadioFisher
-git -C ../RadioFisher checkout f6bc9ea0972028ce30472dd21b25d4b21b7068c0
+git -C ../RadioFisher checkout 12a1616637dd46638055f2d6d77788c7214914b2
 export RADIOFISHER_DIR=../RadioFisher
 ```
 

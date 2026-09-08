@@ -44,6 +44,7 @@ Bias-response banks are intentionally not distributed. Build one and run:
 from __future__ import annotations
 
 import argparse
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -227,6 +228,10 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
             key: resolved_cosmo[key] for key in
             ("Tb_model", "bias_HI_model", "omega_HI_model")},
     }
+    if ("reference" in build["cosmology"]
+            or resolved_cosmo.get("fiducial_source") is not None):
+        evaluation_cosmology["reference"] = copy.deepcopy(
+            resolved_cosmo.get("fiducial_source", {}))
     if not pkcache.cache_matches(cachefile, resolved_cosmo):
         raise ValueError(
             "evaluation P(k) cache does not match the bank's resolved "
@@ -336,8 +341,9 @@ def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
     if bank.artifact_kind != ARTIFACT_BIAS_RESPONSE or PRES not in bank.paramnames:
         problems.append("artifact_kind must be 'bias_response' with a '_Pres' row")
     if bank.meta.get("config") != "chime2022" \
-            or bank.meta.get("cosmology") != "planck2018":
-        problems.append("configuration must be chime2022/planck2018")
+            or bank.meta.get("cosmology") not in (
+                "planck2018", "pact2025", cosmologies.DEFAULT_COSMOLOGY):
+        problems.append("configuration must be chime2022 with a supported named cosmology")
     if bank.meta.get("astrophysical_model_profile") != "chime_overview_2022":
         problems.append("the canonical chime_overview_2022 profile is required")
     if not isinstance(overrides, dict) or not _is_unit_response(

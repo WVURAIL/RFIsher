@@ -1,39 +1,10 @@
-"""Per-channel science tolerances ``r_tol`` for the selector and the tables.
+"""Target-time, bank-derived per-channel tolerances.
 
-The selector needs, per channel, the largest systematic residual the science
-tolerates on the operable no-delay-filter tier, the acoustic dilation
-(``R_dil = r_sys / min(r_perp, r_par) <= 1``, chapter 9 eq:tolerance:rtol at
-``zeta = 1``), with the growth-rate tolerance ``f sigma_8`` beside it as the
-binding secondary.
-
-One home supplies the constants: :mod:`rfisher.tolerances`, the stable
-``zeta = 1`` minima of the dense bias-response bank over the accepted
-multi-year grid, the same convention for every channel. Both ``TOL_APERP`` and
-``TOL_FS8`` now cover all 23 channels. Thirteen carried no growth-rate
-constant until the bank was re-read for them, and they were missing by
-omission rather than by refusal: the response-stability gate accepts the
-growth rate at every integration time in every forecast bin, so there was
-never a bin the tier could not be priced on. They are not priced on a
-different footing: the completed-forecast ledger's single one-year point,
-the footing ``scripts/channel_tolerances.py`` used, priced the lower band up
-to 1.8x looser and was retired for that reason.
-
-The ledger is still read for one check the constants cannot make on their
-own: the text's dilation tier is ``min(r_perp, r_par)`` and the published
-constants cover ``alpha_perp`` only. On the frozen ledger
-(``forecast_completion_all_dtv_bins.json``, estimator
-``perbin_noise_normalized``; ``forecast_completion_channel_mapping.csv``,
-family ``noise_shaped``) the accepted ``alpha_par`` tolerance is 2 to 3.6
-times looser than ``alpha_perp`` in every bin from z = 1.30 to 1.90, so
-``alpha_perp`` binds there and ``r_tol_dilation = TOL_APERP``. In the
-z = 1.90-2.04 bin (channels 14-16) the ledger's own accepted ``alpha_perp``
-entry is 3.22, an artefact 160x the published constant, so the check is
-inconclusive there and the row says ``review``; the ratio is recorded per
-channel so the claim is checked where it can be, not assumed.
-
-Output columns (``tables/channel_tolerances.csv``): ``channel, z_low, z_high,
-bins, r_tol_dilation, r_tol_aperp, r_tol_fs8, fs8_status,
-apar_over_aperp_ledger, dilation_binding``.
+The operational path uses the authenticated no-filter world table, requires
+both acoustic dilations, and takes the minimum over every nonzero-overlap
+redshift bin. Missing, unauthenticated, or target-time-refused cells remain
+unpriced. Legacy published constants are not substituted. The historical
+ledger readers remain available for auditing earlier releases.
 """
 from __future__ import annotations
 
@@ -43,10 +14,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from rfisher import tolerances as published
 from rfisher.channels import channel_z_range
-
-from ..results_tree import out_dir
 
 LEDGER_NAME = "forecast_completion_all_dtv_bins.json"
 MAPPING_NAME = "forecast_completion_channel_mapping.csv"
@@ -55,7 +23,7 @@ FAMILY = "noise_shaped"
 TARGETS = ("aperp", "apar", "fs8")
 CHANNELS = tuple(range(14, 37))
 COLUMNS = ("channel", "z_low", "z_high", "bins", "r_tol_dilation", "r_tol_aperp", "r_tol_fs8",
-           "fs8_status", "apar_over_aperp_ledger", "dilation_binding")
+           "fs8_status", "apar_over_aperp_ledger", "dilation_binding", "r_tol_apar", "tolerance_basis", "refusal")
 FS8_UNPRICED = "unpriced: no published constant; rebuild the dense bias bank to price"
 
 
@@ -64,29 +32,34 @@ class ChannelTolerance:
     channel: int
     z_low: float
     z_high: float
-    bins: tuple[int, ...]                 # ledger bins the channel overlaps (empty without a ledger)
-    r_tol_aperp: float                    # published stable zeta = 1 minimum
-    r_tol_fs8: float                      # published, or NaN for 14-26
-    apar_over_aperp_ledger: float         # ledger check that alpha_par never binds (NaN without a ledger)
+    bins: tuple[int, ...]                 # all overlapping forecast bins
+    r_tol_aperp: float                    # target-time minimum, or NaN on refusal
+    r_tol_fs8: float                      # target-time minimum, or NaN on refusal
+    apar_over_aperp_ledger: float         # compatibility name for derived apar/aperp
+    r_tol_apar: float = math.nan
+    tolerance_basis: str = "unverified historical constants"
+    refusal: str = ""
 
     @property
     def r_tol_dilation(self) -> float:
-        """The operable tier. alpha_perp binds wherever the ledger ratio is >= 1."""
-        return self.r_tol_aperp
+        """Both dilation parameters must have an accepted target-time tolerance."""
+        values = (self.r_tol_aperp, self.r_tol_apar)
+        return min(values) if all(math.isfinite(v) and v > 0 for v in values) else math.nan
 
     @property
     def dilation_binding(self) -> str:
-        if math.isnan(self.apar_over_aperp_ledger):
-            return "aperp (alpha_par unchecked: no ledger)"
-        return "aperp" if self.apar_over_aperp_ledger >= 1.0 else "alpha_par tighter on the ledger: review"
+        if not math.isfinite(self.r_tol_dilation):
+            return "refused: both dilation tolerances required at the target time"
+        return "aperp" if self.r_tol_aperp <= self.r_tol_apar else "apar"
 
     @property
     def fs8_status(self) -> str:
-        return "published" if math.isfinite(self.r_tol_fs8) else FS8_UNPRICED
+        return "derived at target time" if math.isfinite(self.r_tol_fs8) else "refused at target time"
 
     def as_row(self) -> dict:
         return {
             "channel": self.channel, "z_low": self.z_low, "z_high": self.z_high,
+            "r_tol_apar": self.r_tol_apar, "tolerance_basis": self.tolerance_basis, "refusal": self.refusal,
             "bins": ";".join(str(b) for b in self.bins),
             "r_tol_dilation": self.r_tol_dilation, "r_tol_aperp": self.r_tol_aperp,
             "r_tol_fs8": self.r_tol_fs8, "fs8_status": self.fs8_status,
@@ -125,30 +98,51 @@ def ledger_channel_bins(mapping_path: Path | str, *, family: str = FAMILY) -> di
     return out
 
 
-def channel_tolerances(results: Path | str | None = None, *, channels=CHANNELS) -> list[ChannelTolerance]:
-    """The published constants per channel, with the ledger's alpha_par check
-    when the results tree (default ``out_dir()``) carries the ledger."""
-    root = Path(results) if results is not None else out_dir()
-    ledger = root / LEDGER_NAME
-    mapping = root / MAPPING_NAME
-    have_ledger = ledger.is_file() and mapping.is_file()
-    by_bin = ledger_bin_tolerances(ledger) if have_ledger else {}
-    bins_of = ledger_channel_bins(mapping) if have_ledger else {}
+def channel_tolerances(results: Path | str | None = None, *, channels=CHANNELS,
+                       derived_rows=None) -> list[ChannelTolerance]:
+    """Price both dilations and growth at the declared target time.
+
+    All nonzero-overlap bins must be priced. Historical constants and
+    alternative integration times are never fallback tolerances. ``results``
+    remains accepted for callers reading legacy ledgers separately.
+    """
+    from . import worlds
+    refusal = ""
+    supplied_rows = derived_rows is not None
+    if derived_rows is None:
+        try:
+            derived_rows = worlds.tolerances()
+        except (OSError, ValueError, RuntimeError) as exc:
+            derived_rows = []
+            refusal = f"authenticated target-time tolerances unavailable: {exc}"
+    no_filter = [r for r in derived_rows if r["world"] == "none"]
     rows = []
     for channel in channels:
         z_low, z_high = channel_z_range(channel)
-        bins = bins_of.get(channel, ())
-        ratio = math.nan
-        if bins:
-            aperp = [by_bin[b]["aperp"] for b in bins if b in by_bin and math.isfinite(by_bin[b]["aperp"])]
-            apar = [by_bin[b]["apar"] for b in bins if b in by_bin and math.isfinite(by_bin[b]["apar"])]
-            if aperp and apar:
-                ratio = min(apar) / min(aperp)
+        bins = tuple(sorted({int(r["bin_index"]) for r in no_filter
+                             if float(r["z_lo"]) < z_high and float(r["z_hi"]) > z_low}))
+        # A missing bin in every parameter must not disappear from the request.
+        # Require the union of the supplied intervals to cover the whole channel.
+        covered_to = z_low
+        for lo, hi in sorted({(float(r["z_lo"]), float(r["z_hi"])) for r in no_filter
+                              if int(r["bin_index"]) in bins}):
+            if lo > covered_to + 1e-10:
+                break
+            covered_to = max(covered_to, hi)
+        coverage_ok = covered_to >= z_high - 1e-10
+        values = {p: worlds.tolerance_of(no_filter, "none", bins, p) if coverage_ok else math.nan for p in TARGETS}
+        channel_refusal = refusal or ("forecast bins do not cover the full channel" if not coverage_ok else
+                                      "one or more target-time parameter tolerances refused" if any(not math.isfinite(v) for v in values.values()) else "")
+        source = "caller-supplied no-filter rows" if supplied_rows else "authenticated no-filter bank"
+        if refusal:
+            source = "unavailable authenticated no-filter bank"
+        ratio = values["apar"] / values["aperp"] if math.isfinite(values["aperp"]) else math.nan
         rows.append(ChannelTolerance(
             channel=channel, z_low=z_low, z_high=z_high, bins=tuple(bins),
-            r_tol_aperp=float(published.TOL_APERP[channel]),
-            r_tol_fs8=float(published.TOL_FS8.get(channel, math.nan)),
+            r_tol_aperp=values["aperp"], r_tol_apar=values["apar"], r_tol_fs8=values["fs8"],
             apar_over_aperp_ledger=ratio,
+            tolerance_basis=f"{source}; {worlds.TARGET_YEARS:g} on-sky year; minimum over every overlapping bin",
+            refusal=channel_refusal,
         ))
     return rows
 

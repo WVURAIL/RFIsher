@@ -1,9 +1,13 @@
 """Named fiducial cosmologies for the forecast banks.
 
+'cmbspa2026' (default): SPT-3G + ACT + Planck CMB/lensing + DESI DR2
+                 BAO, Omori et al. (2026), arXiv:2608.31136v1, Table 8.
+                 Posterior means for flat LCDM, sum mnu=0.06 eV.
+
 'planck2018': the CHIME Overview forecast fiducial (Planck 2018 CMB-only
                  best fit; Amiri et al. 2022 Eq. A8, as implemented in
                  S. Foreman's chime2021/experiments_CHIME.py). This is the
-                 fiducial of record: it is what makes the Fig. 31
+                 historical reference: it is what makes the Fig. 31
                  validation exact.
 'pact2025': ACT DR6 + Planck + CMB lensing + DESI BAO (P-ACT-LB;
                  ACT Collaboration 2025, arXiv:2503.14452): h=0.6822,
@@ -20,6 +24,8 @@ from ._validation import nonnegative_scalar, positive_scalar
 
 _PACT = dict(h=0.6822, obh2=0.0226, och2=0.118, ns=0.974, sigma8=0.813,
              mnu=0.06)
+
+DEFAULT_COSMOLOGY = "cmbspa2026"
 
 NEUTRINO_MASS_DENSITY_EV = 93.04
 
@@ -102,8 +108,19 @@ def get(name: str, rf, rf_dir) -> dict:
 
     base = with_explicit_physical_densities(with_astrophysical_profile(
         survey.chime2022_cosmo(rf, rf_dir), "chime_overview_2022", rf=rf))
-    if name in (None, "planck2018"):
+    if name == "planck2018":
         return base
+    if name in (None, DEFAULT_COSMOLOGY):
+        helper = getattr(rf, "get_cosmology", None)
+        if not callable(helper):
+            raise RuntimeError("cmbspa2026 requires the current RadioFisher get_cosmology factory")
+        modern = helper(DEFAULT_COSMOLOGY)
+        c = copy.deepcopy(base)
+        for key in ("h", "ombh2", "omch2", "omnuh2", "omega_b_0", "omega_M_0",
+                    "omega_lambda_0", "omega_cdm_0", "omega_nu_0", "ns", "sigma_8",
+                    "mnu", "N_eff", "w0", "wa", "fiducial_cosmology", "fiducial_source"):
+            c[key] = copy.deepcopy(modern[key])
+        return with_explicit_physical_densities(c)
     if name == "pact2025":
         c = copy.deepcopy(base)
         h = _PACT["h"]

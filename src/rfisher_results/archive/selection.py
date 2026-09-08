@@ -194,7 +194,8 @@ class SelectionResult:
 def systematic_residuals(product: Product, rows: np.ndarray, floor: Floor, gain: float = 1.0) -> np.ndarray:
     """Floor-bounded shelf residual per frame row, times the chain gain.
 
-    A frame with a shelf estimate carries ``max(10^(shelf/10), floor)``; a
+    This is a conditional screening allowance, not a physical lower bound
+    or a calibrated confidence limit. A frame with a shelf estimate carries ``max(10^(shelf/10), floor)``; a
     frame without one carries the floor. The floor is the level the mask can
     be held to, so no frame's residual falls below it (a flagged frame whose
     excess is not resolved above the floor is booked at the floor, not below
@@ -262,6 +263,12 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
                    "stability.maximum_cost_ratio": max_cost_ratio,
                    "stability.maximum_systematic_residual_ratio": max_systematic_ratio,
                    "residual_convention": "floor-bounded shelf linear x chain gain, variance 0", "chain_gain": float(gain)}
+    provisional.update({
+        "residual_evidence": "conditional screening allowance; not measured contamination",
+        "floor_is_physical_lower_bound": False,
+        "floor_only_r_sys": floor.linear * gain,
+        "floor_prevents_certification": bool(math.isfinite(floor.linear) and floor.linear * gain > r_tol),
+    })
     base = dict(channel=product.geometry.physical_channel, freq_id=product.geometry.freq_id, era_label=era_label,
                 anchor_bin=int(anchor_bin), bulk_size=int(np.asarray(bulk_mask, dtype=bool).sum()), r_tol=float(r_tol),
                 floor=floor, calibration_frames=int(cal.sum()), evaluation_frames=int(eva.sum()),
