@@ -18,7 +18,9 @@ def _rows():
             for i, p in enumerate(worlds.PARAMETERS):
                 tol = math.nan if (world == "deployed" and p == "fs8" and ib == 8) else scale * (1e-2 / (i + 1)) * (1 + ib)
                 out.append({"world": world, "bin_index": ib, "z_lo": lo, "z_hi": hi, "parameter": p,
-                            "tolerance": tol, "years_accepted": 0 if math.isnan(tol) else 3, "years_refused": 2})
+                            "tolerance": tol, "at_target": not math.isnan(tol),
+                            "years_used": worlds.TARGET_YEARS if not math.isnan(tol) else math.nan,
+                            "years_accepted": 0 if math.isnan(tol) else 3, "years_refused": 2})
     return out
 
 
@@ -116,6 +118,7 @@ def test_the_cache_is_read_back_with_the_types_the_analysis_needs(tmp_path):
     back = worlds.tolerances(bank_dir=tmp_path, cache=path)           # no bank present: the cache stands
     assert len(back) == len(_rows())
     assert isinstance(back[0]["bin_index"], int) and isinstance(back[0]["z_lo"], float)
+    assert isinstance(back[0]["at_target"], bool) and isinstance(back[0]["years_used"], float)
     assert math.isnan([r for r in back if r["world"] == "deployed" and r["parameter"] == "fs8"
                        and r["bin_index"] == 8][0]["tolerance"])
 
@@ -129,3 +132,33 @@ def test_the_shipped_cache_covers_every_world_and_parameter():
     per_world = {w[0]: [r for r in rows if r["world"] == w[0]] for w in worlds.WORLDS}
     assert len(set(len(v) for v in per_world.values())) == 1          # every world covers the same bins
     assert all(math.isfinite(r["tolerance"]) for r in rows if r["years_accepted"])
+
+
+def test_the_tolerance_is_quoted_at_the_declared_target_where_the_gate_allows():
+    """T* is the time chapter 9 declares, so a cell that can be read there is read there."""
+    if not worlds.CACHE.is_file():
+        pytest.skip("the tolerance cache has not been built on this machine")
+    rows = worlds.tolerances()
+    dtv = [r for r in rows if 5 <= r["bin_index"] <= 11]
+    assert dtv, "the cache carries no DTV bin"
+    # every cell read at the target says so, and says which time it used
+    for r in dtv:
+        if r["at_target"]:
+            assert r["years_used"] == pytest.approx(worlds.TARGET_YEARS)
+        elif math.isfinite(r["tolerance"]):
+            assert r["years_used"] != worlds.TARGET_YEARS      # a substitute names its own time
+    # the growth rate is the parameter every verdict turns on: it must be at the target
+    fs8 = [r for r in dtv if r["parameter"] == "fs8" and math.isfinite(r["tolerance"])]
+    assert fs8 and all(r["at_target"] for r in fs8), \
+        "a growth-rate tolerance read off the declared target time would need disclosing"
+
+
+def test_a_substituted_cell_is_distinguishable_from_a_target_cell():
+    if not worlds.CACHE.is_file():
+        pytest.skip("the tolerance cache has not been built on this machine")
+    rows = worlds.tolerances()
+    subs = [r for r in rows if not r["at_target"] and math.isfinite(r["tolerance"])]
+    # the substitution is a real state of this run, not a hypothetical: the dilations are
+    # refused at T* in several worlds, and the chapter has to be able to say which
+    assert subs, "no substituted cell: the flag would be untestable against this cache"
+    assert all(r["parameter"] != "fs8" for r in subs)

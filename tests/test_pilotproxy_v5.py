@@ -502,3 +502,56 @@ def test_archive_gate_requires_complete_nonlocal_receiver_identity(tmp_path):
     )
     with pytest.raises(ArchiveAcceptanceError, match="receiver provenance"):
         validate_archive_products(paths)
+
+
+def test_archive_gate_reports_units_without_a_recorded_sample_interval(tmp_path):
+    """An untimed acquisition is a v5 state, not a corruption.
+
+    The producing contract writes NaN into ``unit_delta_time`` for a unit whose
+    acquisition metadata never carried a sample interval, and 470 of the 167,728
+    units in the September 2026 rebuild are in that state. The gate has to
+    accept them --- refusing would refuse the archive the run of record used ---
+    while carrying their count, because those frames have no frame time.
+    """
+    paths = _cohort(tmp_path)
+    with np.load(paths[-1], allow_pickle=False) as product:
+        delta = np.array(product["unit_delta_time"], copy=True)
+        frame_unit = np.array(product["frame_unit_index"], copy=True)
+    delta[0] = np.nan
+    _replace(paths[-1], unit_delta_time=delta)
+
+    report = validate_archive_products(paths)
+    untimed = [item for item in report.products if item.untimed_units]
+    assert len(untimed) == 1
+    assert untimed[0].untimed_units == 1
+    assert untimed[0].untimed_frames == int(np.count_nonzero(frame_unit == 0))
+    assert report.untimed_units == 1
+    assert report.untimed_frames == untimed[0].untimed_frames
+    assert "untimed units: 1" in report.summary()
+
+
+def test_archive_gate_refuses_untimed_products_and_wrong_intervals(tmp_path):
+    """Silence about timing is admissible per unit, never per product.
+
+    A product with no recorded interval anywhere has no exposure and no time
+    axis for an era split, and a recorded interval that disagrees with
+    ``sample_rate_hz`` contradicts the frame-time definition downstream, so both
+    still refuse.
+    """
+    paths = _cohort(tmp_path / "untimed")
+    with np.load(paths[-1], allow_pickle=False) as product:
+        delta = np.array(product["unit_delta_time"], copy=True)
+    _replace(paths[-1], unit_delta_time=np.full_like(delta, np.nan))
+    with pytest.raises(ArchiveAcceptanceError,
+                       match="no unit records a sampling interval"):
+        validate_archive_products(paths)
+
+    paths = _cohort(tmp_path / "disagree")
+    with np.load(paths[-1], allow_pickle=False) as product:
+        delta = np.array(product["unit_delta_time"], copy=True)
+    delta[0] = np.nan
+    delta[1] = float(delta[1]) * 2.0
+    _replace(paths[-1], unit_delta_time=delta)
+    with pytest.raises(ArchiveAcceptanceError,
+                       match="unit sampling intervals are inconsistent"):
+        validate_archive_products(paths)

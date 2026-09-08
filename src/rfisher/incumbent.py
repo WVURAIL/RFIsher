@@ -34,6 +34,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .pilotproxy import residual_product_view
+
 from .constants import CHIME_FRAME_SECONDS
 from .npzio import load_npz
 
@@ -55,9 +57,16 @@ def shelf_per_frame(d) -> tuple[np.ndarray, float]:
     behind by *every* flagger equally, including the pilot proxy's own, so it
     can only understate the detector's advantage.
     """
-    shelf_db = d["snr_shelf_db"][:, 0]
-    valid = d["valid"][:, 0].astype(bool)
-    rejected = d["reject_mask"][:, 0].astype(bool)
+    # Read through the residual view rather than the raw keys: legacy products
+    # call the shelf ``snr_shelf_db`` and v5 products
+    # ``estimated_data_shelf_snr_db``, and the view is the one place that
+    # difference is resolved. Reading the key directly meant this function
+    # worked only on the legacy schema, and failed with a KeyError the moment a
+    # v5 product was registered.
+    view = residual_product_view(d)
+    shelf_db = np.asarray(view.shelf_db, dtype=float).reshape(-1)
+    valid = np.asarray(view.valid, dtype=bool).reshape(-1)
+    rejected = np.asarray(view.rejected, dtype=bool).reshape(-1)
     seen = valid & rejected & np.isfinite(shelf_db)
     clean = valid & ~rejected & np.isfinite(shelf_db)
     if clean.sum():

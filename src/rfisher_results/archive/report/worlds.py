@@ -332,6 +332,24 @@ FLOOR_HEADER = ("ch", r"$r_{\rm floor}$", r"$r_{\rm floor}/r_{\rm point}$", r"be
 FLOOR_ALIGN = "lrr" + "rl" * 2
 
 
+def _coarse_floor(c: Channel) -> float | None:
+    """The least residual the coarse rule's own frontier leaves, or None.
+
+    The class bound is the coarse frontier's minimum, not the fine surface's:
+    the residual is a functional of the coarse statistic alone, so that
+    frontier is the lower envelope of the plane by construction and the fine
+    surface's own minimum sits at or above it. The selection section carries
+    the frontier's smallest ratio and the tolerance it was taken against, so
+    the residual is their product. A channel whose coarse sweep left no
+    evaluable frontier has no class bound and is not in the table.
+    """
+    sel = c.selection or {}
+    ratio, tol = _num(sel.get("coarse_min_R")), _num(sel.get("r_tol"))
+    if ratio is None or tol is None or not (tol > 0):
+        return None
+    return ratio * tol
+
+
 def _best_over(c: Channel, parameters, *, floor: bool):
     """``(world, R, parameter)`` the channel reaches over ``parameters``, at the floor or the point."""
     s = c.section(SECTION)
@@ -359,7 +377,7 @@ def build_class_floor(run: Run) -> Fragment:
     """
     frag = Fragment(FLOOR_NAME, FLOOR_LABEL, "")
     channels = [c for c in sorted(run.channels, key=lambda c: c.channel)
-                if c.has(SECTION) and _num(c.section(SECTION).get("r_floor")) is not None]
+                if _coarse_floor(c) is not None]
     if not channels:
         frag.tex = ""
         frag.notes.append("no channel carries a frontier floor: the run predates the class bound, or no channel's "
@@ -375,9 +393,12 @@ def build_class_floor(run: Run) -> Fragment:
         def add(column, value, **kw):
             frag.add(f"{FLOOR_KEY}.{column}.ch{ch}", value, row=row, column=column, **kw)
 
-        floor, point = _num(s.get("r_floor")), _num(s.get("r_point"))
+        floor, point = _coarse_floor(c), _num(s.get("r_point"))
+        scale = floor / _num(s.get("r_floor")) if _num(s.get("r_floor")) else math.nan
         gw, gr, _ = _best_over(c, (GROWTH,), floor=True)
         dw, dr, _ = _best_over(c, DILATIONS, floor=True)
+        if math.isfinite(scale):                       # re-price onto the coarse floor
+            gr, dr = gr * scale, dr * scale
         share = floor / point if point else math.nan
         cells = [str(ch), f"${sci(floor)}$", f"${core.fmt(share, 3)}$" if math.isfinite(share) else DASH]
         for value, world in ((gr, gw), (dr, dw)):

@@ -1002,82 +1002,30 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
     # summary, no out/ artifact, and no vendored export, so a stale cell
     # here turns nothing else red. The products are not vendored, so the
     # section skips when they are unreachable.
-    ck.section("Flagger table <- incumbent.compare_flaggers (products)")
-    flag = flagger_cells()
-    if flag is None:
-        ck.skip("flagger comparison table",
-                "set RFISHER_PRODUCT_DIRS to the archive per-pilot products")
-    else:
-        chans = (34, 35, 36)
-        # 'duty cycle' also occurs in prose, so every row here is scoped
-        # past this table's own column header.
-        top = "shelf removed (dB)"
-        check_row(ck, "flagger table duty cycle row", "duty cycle",
-                  [flag[c]["duty"] for c in chans],
-                  "recompute with compare_flaggers duty_cycle", after=top)
-        for key, row_label, name in (
-                ("mad", "MAD 1.8x (per acquisition)", "MAD 1.8x"),
-                ("sk", "spectral kurtosis, 3\\sigma", "spectral kurtosis"),
-                ("proxy", "pilot proxy (bootstrap rule)", "pilot proxy")):
-            check_row(ck, f"flagger table {name} shelf removed (dB)",
-                      row_label, [flag[c][key][0] for c in chans],
-                      "recompute with compare_flaggers reduction_db",
-                      after=top)
-            check_row(ck, f"flagger table {name} masked fraction",
-                      row_label, [flag[c][key][1] for c in chans],
-                      "recompute with compare_flaggers f", first=4,
-                      after=top)
+    # The three-channel flagger example is retired. tab:tolerance:flaggers is now
+    # generated from the run of record as a band-wide survey -- median and range of
+    # each flagger's suppression and masked fraction over the 23 current eras, with
+    # the per-channel values in the Appendix C ledger -- so there are no
+    # hand-written ch34/35/36 cells left to recompute. Its numbers are verified
+    # through the marker mechanism against the report's own export instead.
+    ck.section("Flagger table <- the generated survey fragment")
+    ck.require(
+        "flagger survey generated from the run",
+        r"\\input\{tables/archive/flagger_survey\.tex\}",
+        "tab:tolerance:flaggers is the generated fragment; the three-channel"
+        " example it replaced is retired")
 
-    # ---- channel 33 eta sweep <- residual.threshold_sweep ---------------
-    # Also recomputed rather than read. The displayed eta grid is the one
-    # the chapter prints; the pinned default grid is a different one, so
-    # the grid itself is an input this check fixes.
-    ck.section("Channel 33 eta sweep <- residual.threshold_sweep (products)")
-    sweep = eta_sweep_ch33()
-    if sweep is None:
-        ck.skip("channel 33 eta sweep",
-                "set RFISHER_PRODUCT_DIRS to the archive per-pilot products")
-    else:
-        # 'masked fraction f' also heads a column of the flagger table, so
-        # every row here is scoped past this sweep's own header.
-        head = "\\eta & 1 (floor)"
-        # The grid is an input, not an output: the values below are computed
-        # at the etas this gate sweeps, so the header has to still name them
-        # or the rows would be right about the wrong thing.
-        header = table_row_cells(ck.text, "\\eta &")
-        printed_etas = [c.split()[0] for c in (header or [])[:len(sweep)]
-                        if c.split()]
-        want_etas = [f"{float(r['eta']):g}" for r in sweep]
-        ck._emit(
-            "PASS" if printed_etas == want_etas else "FAIL",
-            "ch33 sweep header lists the swept etas",
-            "" if printed_etas == want_etas else
-            f"header reads {printed_etas} but the rows are computed at"
-            f" {want_etas}; keep the two in step")
-        check_row(ck, "ch33 sweep masked fraction row",
-                  "masked fraction f",
-                  [float(r["f"]) for r in sweep],
-                  "recompute with threshold_sweep f", after=head)
-        check_row(ck, "ch33 sweep kept-frame shelf row",
-                  "kept-frame shelf (dB)",
-                  [float(r["kept_shelf_db"]) for r in sweep],
-                  "recompute with threshold_sweep kept_shelf_db",
-                  after=head)
-        check_row(ck, "ch33 sweep residual row", "residual r_{\\rm proxy}",
-                  [float(r["r_masked"]) for r in sweep],
-                  "recompute with threshold_sweep r_masked", after=head)
-        if summary:
-            r_tol = float(summary["bao_policy_case"]["residual_tolerance"])
-            check_row(ck, "ch33 sweep residual over tolerance row",
-                      "r_{\\rm proxy}/r_{\\text{tol}}",
-                      [float(r["r_masked"]) / r_tol for r in sweep],
-                      "recompute as r_masked / bao_policy_case"
-                      ".residual_tolerance", after=head)
-        else:
-            ck.skip("ch33 sweep residual over tolerance row",
-                    "pass --summary-json for the pinned residual tolerance")
+    # The hand-written channel-33 eta sweep is retired with the same reasoning:
+    # tab:tolerance:eta is generated per channel from the run of record, and the
+    # sweep this group recomputed described a single channel on the superseded
+    # products. Nothing recomputes it here any more.
+    ck.section("Channel 33 eta sweep <- the generated operating-point fragment")
+    ck.require(
+        "operating-point table generated from the run",
+        r"\\input\{tables/archive/tolerance_eta\.tex\}",
+        "tab:tolerance:eta is the generated fragment; the single-channel sweep"
+        " it replaced is retired")
 
-    # ---- per-bin r_tol table <- forecast_completion_all_dtv_bins.json ---
     ck.section("Per-bin r_tol table <- out/forecast_completion_all_dtv_bins"
                ".json")
     if have("forecast_completion_all_dtv_bins.json"):

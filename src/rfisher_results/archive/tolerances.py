@@ -8,13 +8,15 @@ binding secondary.
 
 One home supplies the constants: :mod:`rfisher.tolerances`, the stable
 ``zeta = 1`` minima of the dense bias-response bank over the accepted
-multi-year grid, the same convention for every channel. ``TOL_APERP`` covers
-all 23 channels; ``TOL_FS8`` the ten channels 27-36 whose constants were
-published. Channels 14-26 carry no published ``f sigma_8`` constant and are
-reported unpriced on that tier rather than priced on a different footing:
-the completed-forecast ledger's single one-year point, the footing
-``scripts/channel_tolerances.py`` used, priced the lower band up to 1.8x
-looser and was retired for that reason.
+multi-year grid, the same convention for every channel. Both ``TOL_APERP`` and
+``TOL_FS8`` now cover all 23 channels. Thirteen carried no growth-rate
+constant until the bank was re-read for them, and they were missing by
+omission rather than by refusal: the response-stability gate accepts the
+growth rate at every integration time in every forecast bin, so there was
+never a bin the tier could not be priced on. They are not priced on a
+different footing: the completed-forecast ledger's single one-year point,
+the footing ``scripts/channel_tolerances.py`` used, priced the lower band up
+to 1.8x looser and was retired for that reason.
 
 The ledger is still read for one check the constants cannot make on their
 own: the text's dilation tier is ``min(r_perp, r_par)`` and the published
