@@ -190,6 +190,9 @@ def test_end_to_end_exit_codes(tmp_path):
            "48.5% of verified-quiet time", "fine_gain_mc evidence",
            "Youden-J table", r"\input{tables/archive/worlds.tex}",
            r"\input{tables/archive/saveability.tex}",
+           r"\input{tables/archive/protector.tex}",
+           r"\input{tables/archive/zeta_sensitivity.tex}",
+           r"\input{tables/archive/drift_screen.tex}",
            r"\input{tables/archive/flagger_survey.tex}",
            r"\input{tables/archive/tolerance_eta.tex}",
            _forecast_headline_rows()])
@@ -224,6 +227,9 @@ def _green_min() -> str:
            "XOR 0x88", "48.5%", "fine_gain_mc", "Youden",
            r"\input{tables/archive/worlds.tex}",
            r"\input{tables/archive/saveability.tex}",
+           r"\input{tables/archive/protector.tex}",
+           r"\input{tables/archive/zeta_sensitivity.tex}",
+           r"\input{tables/archive/drift_screen.tex}",
            r"\input{tables/archive/flagger_survey.tex}",
            r"\input{tables/archive/tolerance_eta.tex}",
            _forecast_headline_rows()])
