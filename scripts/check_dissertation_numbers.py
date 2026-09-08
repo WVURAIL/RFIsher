@@ -852,6 +852,22 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
             r"\\input\{tables/archive/saveability\.tex\}",
             "tab:tolerance:saveability sorts the band by what each channel"
             " would take; it is generated beside the worlds table")
+        ck.require(
+            "protector table generated from the run",
+            r"\\input\{tables/archive/protector\.tex\}",
+            "tab:tolerance:protector states each channel's shortfall as a"
+            " suppression requirement; the chapter argues from its figures")
+        ck.require(
+            "zeta sensitivity table generated from the run",
+            r"\\input\{tables/archive/zeta_sensitivity\.tex\}",
+            "tab:tolerance:zeta re-scores the verdict at four systematic"
+            " budgets; the chapter's claim that only zeta = 1 admits a"
+            " channel is read off it")
+        ck.require(
+            "drift screen table generated from the run",
+            r"\\input\{tables/archive/drift_screen\.tex\}",
+            "tab:archive:drift is the per-channel evidence behind"
+            " Appendix C's screen-refusal paragraph, which was prose alone")
 
         era_ok = era_provenance_ok(era)
         ck._emit("PASS" if era_ok else "FAIL",
