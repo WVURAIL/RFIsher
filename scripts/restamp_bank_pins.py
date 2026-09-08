@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Re-pin the shipped Fisher banks' SHA-256 hashes after a rebuild.
 
-The four shipped banks are pinned in tests/test_resources.py (the two
+The five shipped banks are pinned in tests/test_resources.py (the three
 packaged CHIME banks under EXPECTED_SHA256, the two repo-data Bull-2015
 banks under BULL_BANK_SHA256). After scripts/rebuild_shipped_banks.sh
 replaces the bank files, this rewrites each pin in place, keyed by the
@@ -32,7 +32,9 @@ TESTS = ROOT / "tests" / "test_resources.py"
 
 # pin anchor in tests/test_resources.py -> bank file in the checkout
 BANKS = {
-    "resources.DEFAULT_BANK_NAME:":
+    "resources.CMBSPA2026_BANK_NAME:":
+        "src/rfisher/data/fisher_bank_chime2022_cmbspa2026.npz",
+    "resources.PLANCK2018_BANK_NAME:":
         "src/rfisher/data/fisher_bank_chime2022.npz",
     "resources.PACT2025_BANK_NAME:":
         "src/rfisher/data/fisher_bank_chime2022_pact2025.npz",

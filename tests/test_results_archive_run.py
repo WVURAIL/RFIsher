@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import csv
+from functools import partial
 import importlib.util
 import json
+import multiprocessing
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from rfisher_results.archive import run as archive_run
 
@@ -33,10 +36,16 @@ def test_station_records_follow_the_recorded_months():
     assert archive_run.station_records(29) == {}
 
 
-def test_driver_runs_every_stage_and_writes_the_tree(tmp_path):
+@pytest.mark.parametrize("workers", [1, 2])
+def test_driver_runs_every_stage_and_writes_the_tree(tmp_path, monkeypatch, synthetic_archive_health, workers):
+    def unavailable():
+        raise ValueError("test: no authenticated bank")
+    monkeypatch.setattr(archive_run.worlds, "tolerances", unavailable)
+    monkeypatch.setattr(archive_run, "ProcessPoolExecutor", partial(
+        archive_run.ProcessPoolExecutor, mp_context=multiprocessing.get_context("spawn")))
     products = _products(tmp_path)
     out = tmp_path / "out"
-    summary = archive_run.run_archive(products, out, workers=1, replicates=5, seed=3, generated="2026-09-07T00:00:00+00:00")
+    summary = archive_run.run_archive(products, out, workers=workers, replicates=5, seed=3, generated="2026-09-07T00:00:00+00:00")
     assert summary["errors"] == [], summary["errors"]
     assert summary["channels"] == [33, 35]
     run = json.loads((out / "ledger" / "run.json").read_text())
@@ -59,5 +68,7 @@ def test_driver_runs_every_stage_and_writes_the_tree(tmp_path):
     assert all(r["era_n_eras"] == "0" for r in rows) and not (out / "tables" / "eras.csv").exists()
     assert (out / "channels" / "ch35" / "eras.json").is_file() and (out / "channels" / "ch35" / "anchor_contrast.csv").is_file()
     ch35 = json.loads((out / "ledger" / "channels" / "ch35_fid521.json").read_text())
-    assert ch35["sections"]["tolerance"]["r_tol_dilation"] == 0.0352
+    assert ch35["sections"]["tolerance"]["r_tol_dilation"] is None
+    assert "no authenticated bank" in ch35["sections"]["tolerance"]["refusal"]
+    assert ch35["sections"]["evaluation_contract"]["station_event_basis"] == "archive-inferred, not independently verified"
     assert ch35["sections"]["screening"]["off_through"] == "2021-10"

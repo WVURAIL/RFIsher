@@ -77,8 +77,13 @@ def build(run: Run) -> Fragment:
             frag.add(f"ch09.flaggers.{tag}.{name}.channels", n, kind="int", row={"flagger": label}, column="channels")
     frag.tex = booktabs(header, rows, "lrll")
     frag.add("ch09.flaggers.channels", len(present), kind="int", column="channels")
-    scored = sum(int(_num(c.section("flaggers").get("scored_frames")) or 0) for c in present)
+    scored_counts = [_num(c.section("flaggers").get("scored_frames")) for c in present]
+    scored = sum(int(value) for value in scored_counts if math.isfinite(value))
     frag.add("ch09.flaggers.scored_frames", scored, kind="int", column="frames")
+    missing_counts = sum(not math.isfinite(value) for value in scored_counts)
+    if missing_counts:
+        frag.notes.append(f"{missing_counts} channels have no recorded scored-frame count; "
+                          "the frame total includes only the recorded counts")
     frag.notes.append(
         f"summarised over the {len(present)} channels with a flagger comparison, on {fmt_int(scored)} frames of their "
         "current eras: the era's frames restricted to acquisitions long enough for a block statistic, so every flagger "
@@ -111,7 +116,8 @@ def build_ledger(run: Run) -> Fragment:
                      precision=3, row={"channel": c.channel}, column=f"f {t}")
             frag.add(f"appC.flaggers.{t}.suppression_db.ch{c.channel:02d}", _num(s.get(f"{t}_suppression_db")),
                      precision=2, row={"channel": c.channel}, column=f"dB {t}")
-        frag.add(f"appC.flaggers.scored_frames.ch{c.channel:02d}", int(_num(s.get("scored_frames")) or 0), kind="int",
+        scored = _num(s.get("scored_frames"))
+        frag.add(f"appC.flaggers.scored_frames.ch{c.channel:02d}", int(scored) if math.isfinite(scored) else math.nan, kind="int",
                  row={"channel": c.channel}, column="scored")
         frag.add(f"appC.flaggers.duty_cycle.ch{c.channel:02d}", _num(s.get("duty_cycle")), precision=3,
                  row={"channel": c.channel}, column="duty")

@@ -1,4 +1,10 @@
-"""Stable zeta = 1 bias tolerances per ATSC channel, one home.
+"""Historical constants retained only for reproducing superseded analyses.
+
+Do not use these constants for a new operational verdict. Some do not
+reproduce from the retained bank, and they do not enforce all overlapping
+bins or both dilation parameters at the declared target time. New archive
+analyses use ``rfisher_results.archive.tolerances.channel_tolerances`` with
+authenticated banks. The following documents the historical convention.
 
 These constants were previously duplicated (and, worse, derived on two
 different footings) across scripts/optimal_thresholds.py,
@@ -9,7 +15,7 @@ build), taken over the accepted multi-year grid --- the same convention for
 every channel, upper and lower band alike. The retired practice of extending
 the lower band from the completed-forecast ledger's single 1-on-sky-year
 point priced ch14-26 against tolerances up to ~1.8x looser than the
-convention applied to ch27-36; every consumer now imports these.
+convention applied to ch27-36; legacy scripts imported these.
 
 Keys are ATSC channel numbers; a channel straddling a bin boundary carries
 the tolerance of the bin that binds it. That is the higher-z (lower

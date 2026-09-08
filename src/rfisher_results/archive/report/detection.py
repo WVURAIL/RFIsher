@@ -83,7 +83,7 @@ between the two paths; the level offset is panel (b)'s per-trial residual.
 Two component rows close the table: the frozen transform's own shift of
 :data:`TRANSFORM_ONLY_DB` (Section ``sec:impl:fxfft``), listed as a component
 and not a bound --- and, since these evaluations form the designated set by
-direct three-term projection rather than by ``fxfft256``, a component that this
+coarse target/reference power summation rather than by ``fxfft256``, a component that this
 bench ladder does not exercise; and the same-seed CPU/GPU equality count, the
 number of trials whose packed CPU statistic equals the GPU statistic exactly
 (``cpu_gpu_abs_diff``).
@@ -114,11 +114,11 @@ is a list of missing measurements rather than an approximation:
   $1/\\sqrt{\\beta M}$ and $\\sqrt{M}$, with the fully correlated bracket --- has
   no input at all. Nothing here is scaled by $\\sqrt{M}$ to stand in for it.
 * **The second statistic.** These runs compute one statistic per trial, the
-  three-term designated-set ratio at ``bin_enbw_hz`` $=3051.76$ Hz. There is no
+  coarse target/reference power ratio at ``bin_enbw_hz`` $=3051.76$ Hz. There is no
   coarse channel-power counterpart on the same trials, so the fine-versus-coarse
   comparison and stub panel (c)'s predicted-versus-observed gain against
   $5\\log_{10}L\\approx10.5$ dB cannot be formed: the missing measurement is the
-  coarse statistic, not the bound.
+  fine statistic, not the bound.
 * **The pilot offsets.** ``frequency_offset_hz`` is $0$ on all 10\\,860 trials of
   both captures. The half-fine-bin straddle, $\\pm1$ kHz and $\\pm1.4$ kHz rows
   the stub asks for are dashed, not interpolated.
@@ -179,7 +179,7 @@ CRITERIA = (
 )
 # the campaign offsets the stub asks for and these products do not carry
 UNMEASURED_OFFSETS = (
-    ("half_bin", r"Pilot offset $+\tfrac{1}{2}$ fine bin (1526 Hz)"),
+    ("half_bin", r"Pilot offset $+\tfrac{1}{2}$ padded fine bin (5.96 Hz)"),
     ("khz1", r"Pilot offset $\pm 1$ kHz"),
     ("khz14", r"Pilot offset $\pm 1.4$ kHz"),
 )
@@ -469,7 +469,8 @@ def build(run: Run, *, captures: Sequence[Capture] | None = None, samples: int =
         points, fixed, positive, tau = detection_curves(capture)
         if rows:
             midrules.append(len(rows))
-        rows.append([r"\emph{" + tex(capture.label) + r"}, pilot offset " +
+        geometry = f"coarse M={','.join(map(str, capture.input_streams))}, rows={','.join(map(str, capture.detector_rows))}"
+        rows.append([r"\emph{" + tex(capture.label) + "}, " + tex(geometry) + "; offset " +
                      (r"$0$ Hz" if capture.offsets_hz == (0.0,) else tex(str(capture.offsets_hz))),
                      "", "", "", "", ""])
         for row in loss_rows(capture, samples=samples):
@@ -558,8 +559,7 @@ def _notes(caps: Sequence[Capture], measured: Sequence[LossRow] = ()) -> list[st
         f"the {MARGIN_DB:g} dB margin is Appendix A's declared bound for the retained 512-row study, reproduced "
         "here; chapter 6 declares no margin of its own",
         f"the frozen transform's {TRANSFORM_ONLY_DB:+.4f} dB is a component from Sec. sec:impl:fxfft, not a "
-        "bound, and this ladder does not exercise it: these evaluations form the designated set by direct "
-        "three-term projection rather than by fxfft256",
+        "bound, and this ladder does not exercise it: these evaluations sum coarse target/reference powers without fxfft256",
     ]
     if not caps:
         notes.append("no campaign products were found on this machine: every measured cell is dashed")
@@ -572,10 +572,9 @@ def _notes(caps: Sequence[Capture], measured: Sequence[LossRow] = ()) -> list[st
         "M = 2048; there is no M-sweep, no replicated-capture bracket and no 2048-input stack in these "
         "products, so the spatial-scaling panel of fig:detection:mscaling has no input and is not drawn")
     notes.append(
-        "these runs compute one statistic per trial (the three-term designated-set ratio); no coarse "
-        "channel-power counterpart exists on the same trials, so the fine-versus-coarse comparison and the "
+        "these runs compute one coarse ratio per trial; no fine designated-set counterpart exists on the same trials, so the fine-versus-coarse comparison and the "
         "predicted-versus-observed gain against the 10.5 dB aligned-tone benchmark cannot be formed -- the "
-        "missing measurement is the coarse statistic")
+        "missing measurement is the fine statistic")
     offsets = sorted({o for c in caps for o in c.offsets_hz})
     notes.append(
         f"frequency_offset_hz is {offsets} on every trial of every capture, so the half-fine-bin, +/-1 kHz and "

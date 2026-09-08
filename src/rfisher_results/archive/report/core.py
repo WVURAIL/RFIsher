@@ -250,6 +250,8 @@ def _sha256(path: Path) -> str:
 def write_report(run: Run, out_dir: Path | str, builders: Sequence[Builder], *, commit: str, generated: str,
                  extra_artifacts: Sequence[Path] = ()) -> dict:
     """Render every builder, write the fragments, numbers and manifest; return the manifest."""
+    from ..run import _producer
+    render_producer = _producer()
     out = Path(out_dir)
     (out / "tables").mkdir(parents=True, exist_ok=True)
     (out / "numbers").mkdir(parents=True, exist_ok=True)
@@ -260,6 +262,8 @@ def write_report(run: Run, out_dir: Path | str, builders: Sequence[Builder], *, 
         tex_path.write_text(frag.tex, encoding="utf-8")
         doc = nb.NumbersDocument.new(frag.name, repository=REPOSITORY, commit=commit,
                                      script=f"rfisher_results.archive.report.{frag.name}", generated=generated)
+        doc.producer.update({"source_digest": render_producer["source_digest"],
+                             "dirty": render_producer["dirty"]})
         for path in frag.inputs or run.inputs():
             doc.add_input(path)
         for number in frag.numbers:
@@ -273,6 +277,7 @@ def write_report(run: Run, out_dir: Path | str, builders: Sequence[Builder], *, 
                           "numbers": "", "sha256": _sha256(Path(path)), "numbers_sha256": "", "count": 0, "notes": []})
     producer = run.run.get("producer") if isinstance(run.run.get("producer"), Mapping) else {}
     manifest = {"schema": SCHEMA, "source": {"repository": REPOSITORY, "commit": commit},
+                "render_producer": render_producer,
                 # the run's own producer: a report is only as clean as the run it renders
                 "producer": {k: producer.get(k) for k in ("commit", "dirty", "dirty_files", "source_digest",
                                                           "source_changed_during_run") if k in producer},

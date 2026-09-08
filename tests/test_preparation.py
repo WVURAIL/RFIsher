@@ -565,8 +565,30 @@ def test_evaluable_candidate_needs_the_declared_half_support():
     thin = _hist(counts=(20, 20, 60), systematic=(2.0, 2.0, 16.0))
     result = _assessment(early=thin, late=thin,
                          minimum_half_retained_frames=30)
-    assert result.status == "refused_insufficient_support"
-    assert "rho=1" in result.reason
+    assert result.status == "passed"
+    assert result.points_skipped == 1
+    assert result.points_checked == 1
+
+
+def test_identical_fine_staircases_do_not_refuse_supported_tail():
+    hist = thresholds.ResidualScoreHistogram(
+        bulk_size=1, candidate_multiplier_q16=tuple(range(1, 101)),
+        counts=(1,) * 100 + (0,), systematic_residual_sums=(0.1,) * 100 + (0.0,))
+    result = _assessment(early=hist, late=hist)
+    assert result.passed
+    assert result.points_checked == 71
+    assert result.maximum_cost_ratio == pytest.approx(1.0)
+    assert result.maximum_systematic_residual_ratio == pytest.approx(1.0)
+
+
+def test_optimizer_cannot_select_candidate_excluded_by_half_support():
+    hist = thresholds.ResidualScoreHistogram(
+        bulk_size=1, candidate_multiplier_q16=(1, 2), counts=(40, 60, 0),
+        systematic_residual_sums=(0., 60., 0.), candidate_eligible=(False, True))
+    result = thresholds.optimize_threshold({1: hist}, 0.1)
+    assert result.selected is None
+    assert len(result.points) == 1
+    assert result.points[0].multiplier_q16 == 2
 
 
 def test_stability_requires_matching_ranks_and_grids():

@@ -18,10 +18,12 @@ from rfisher.fisherbank import (ARTIFACT_FORECAST, BANK_SCHEMA_VERSION,
 
 
 EXPECTED_SHA256 = {
-    resources.DEFAULT_BANK_NAME:
-        "7dcceff42b856264dd79def95d6f9f2844f62ee72f10694645dffbd10d2a38fe",
+    resources.CMBSPA2026_BANK_NAME:
+        "7220b1a636554d3fdc2fb058444ec83a69a3cd3871b6ba6f1d1c62d337c8f766",
+    resources.PLANCK2018_BANK_NAME:
+        "3dea0310b56bc99cd51e8a7401700a10601cf4fc1967174d2a5f3ae5170e5c8f",
     resources.PACT2025_BANK_NAME:
-        "866ce7e56f12c27cab2d86352c9f048bce0685672f66ec2890e8165e14fe1f68",
+        "ed14c10df2077cfd43e5c93135b0ee3b713bb2447a98f333a94e7d9b495d1a54",
     resources.DEFAULT_RATES_NAME:
         "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
     resources.PRODUCTS_MANIFEST_NAME:
@@ -34,6 +36,8 @@ EXPECTED_SHA256 = {
         "aaa8a35e42723c2df364616e40a73f340fb1887a7db35507496e6f17451daadf",
     "cache_pk_chime2022_pact2025.dat":
         "f7bdfdc9c241864432b888b670cc99a03d961c164e4e27a0c37e43b08c16e708",
+    "cache_pk_chime2022_cmbspa2026.dat":
+        "4703b937f8bb1c6a80391a9e0e91f6ee9b3d44d3291a312495e7dbba41501c81",
 }
 CANONICAL_TEXT_RESOURCES = frozenset({
     resources.DEFAULT_RATES_NAME,
@@ -41,12 +45,12 @@ CANONICAL_TEXT_RESOURCES = frozenset({
 })
 BULL_BANK_SHA256 = {
     "fisher_bank_bull2015_planck2013_epsfg1e-6.npz":
-        "18d0cb7c8738c4005b3f339b939bba9084c1a2a1101047ebd3e606257a203079",
+        "4aaa0828c0f385f57d5476da02bfff6697e789338721b3ab80d900e5b84b18a0",
     "fisher_bank_bull2015_planck2013_epsfg1e-5.npz":
-        "0b30413d2475d69d2f5b88c832e5bb4673f8941dc5a9e1bbca2a482b14f1f48d",
+        "0733b354e2b1b6cb925d1e6e382115527011569653291992015714c56fde6b52",
 }
 EXPECTED_RADIOFISHER_SOURCE_SHA256 = (
-    "f8cee56c077df6888a8806c8992ba4789a2823e50b29a76bb4382e329fec6a4f"
+    "574f16f12463f4305f089dfcf62889c6106513c909a6cedb35e7c76d6b2e6054"
 )
 
 
@@ -88,7 +92,7 @@ def test_source_checkout_defaults_load_from_package_data():
     assert bank.schema_version == BANK_SCHEMA_VERSION
     assert "version" not in bank.meta
     assert bank.meta["config"] == "chime2022"
-    assert bank.meta["cosmology"] == "planck2018"
+    assert bank.meta["cosmology"] == "cmbspa2026"
     assert bank.nbins == 15
     assert len(channels.legacy_rate_fractions()) == 23
 
@@ -102,10 +106,13 @@ def test_resource_annotations_resolve_on_supported_python():
 
 def test_named_bank_registry_is_exact_and_immutable():
     assert dict(resources.BANK_NAMES) == {
-        "planck2018": resources.DEFAULT_BANK_NAME,
+        "planck2018": resources.PLANCK2018_BANK_NAME,
         "pact2025": resources.PACT2025_BANK_NAME,
+        "cmbspa2026": resources.CMBSPA2026_BANK_NAME,
     }
-    assert resources.bank_file("planck2018") == resources.DEFAULT_BANK
+    assert resources.bank_file("planck2018") == resources.PLANCK2018_BANK
+    assert resources.bank_file() == resources.DEFAULT_BANK
+    assert resources.DEFAULT_BANK_NAME == resources.CMBSPA2026_BANK_NAME
     assert resources.PACT2025_BANK.name == resources.PACT2025_BANK_NAME
     with pytest.raises(TypeError):
         resources.BANK_NAMES["alias"] = resources.DEFAULT_BANK_NAME
@@ -116,14 +123,8 @@ def test_unknown_named_bank_fails_before_resource_lookup():
         resources.bank_file("unknown")
 
 
-@pytest.mark.parametrize("cosmology", ["planck2018", "pact2025"])
+@pytest.mark.parametrize("cosmology", list(resources.BANK_NAMES))
 def test_named_packaged_banks_are_strict_v2_forecasts(cosmology):
-    expected = (resources.DEFAULT_BANK if cosmology == "planck2018"
-                else resources.PACT2025_BANK)
-    if not expected.is_file():
-        pytest.skip(
-            f"{cosmology} bank is awaiting its reproducible release build")
-
     resource = resources.bank_file(cosmology)
     bank = FisherBank(resource)
 
@@ -156,13 +157,18 @@ def test_named_banks_are_distinct_matched_v3_builds():
     expected_caches = {
         "planck2018": "cache_pk_chime2022.dat",
         "pact2025": "cache_pk_chime2022_pact2025.dat",
+        "cmbspa2026": "cache_pk_chime2022_cmbspa2026.dat",
     }
     try:
         radiofisher_root = find_radiofisher_dir()
     except FileNotFoundError:
         radiofisher_root = None
     radio_digests = set()
-    for cosmology, bank in (("planck2018", planck), ("pact2025", pact)):
+    for cosmology in resources.BANK_NAMES:
+        bank = FisherBank(resources.bank_file(cosmology))
+        np.testing.assert_array_equal(bank.zs, planck.zs)
+        np.testing.assert_array_equal(bank.t_grid, planck.t_grid)
+        assert bank.paramnames == planck.paramnames
         provenance = bank.meta["provenance"]
         assert provenance["baonoise"]["version"] == "3.0.0"
         assert provenance["radiofisher"]["backend_version"] == "1.0.0"
@@ -192,12 +198,13 @@ def test_named_banks_are_distinct_matched_v3_builds():
     assert current_radio_digest == EXPECTED_RADIOFISHER_SOURCE_SHA256
 
 
-def test_packaged_pact_bank_matches_direct_backend_for_masked_bin():
+@pytest.mark.parametrize("cosmology", ["pact2025", "cmbspa2026"])
+def test_packaged_pact_bank_matches_direct_backend_for_masked_bin(cosmology):
     try:
         find_radiofisher_dir()
     except FileNotFoundError:
         pytest.skip("direct P-ACT validation requires a RadioFisher checkout")
-    bank = FisherBank(resources.PACT2025_BANK)
+    bank = FisherBank(resources.bank_file(cosmology))
     calculator = forecast.Forecast(bank, style="perbin_A")
     scenario = scenarios.legacy_rate_table_scenario()
     bank_sigma = calculator.sigma_A(scenario, 1.0e4, bins=[6])
@@ -360,7 +367,7 @@ assert importlib.util.find_spec('baonoise') is None
 assert products.freq_id(35) == 521
 found, missing = products.load()
 assert len(found) + len(missing) == 23
-assert set(resources.BANK_NAMES) == {{'planck2018', 'pact2025'}}
+assert set(resources.BANK_NAMES) == {{'planck2018', 'pact2025', 'cmbspa2026'}}
 for cosmology in resources.BANK_NAMES:
     bank = FisherBank(resources.bank_file(cosmology))
     assert bank.schema_version == BANK_SCHEMA_VERSION

@@ -1,52 +1,12 @@
-"""``tab:tolerance:worlds``: what a delay cut would buy, booked on both sides.
+"""Conditional delay-cut scenarios rendered from an archive ledger.
 
-Chapter 9 asks the question the delay filter invites: if the pipeline throws
-away the low-``k_parallel`` modes anyway, does the pilot residual stop
-mattering? The honest answer books the cut twice. The chain gains the shelf
-suppression the cut removes (``rfisher.residual.DELAY_SUPPRESSION_DB``), and
-the forecast loses the modes the cut removes, so the tolerance is re-derived
-from a Fisher bank built under that same cut. Reporting only the first half
-is the error the table exists to avoid.
-
-Four worlds, each a published cut: no filter, the two BAO-preserving design
-points (55 ns and 110 ns, the ``kfg`` 22 and 44 banks) and the deployed
-200 ns (``kfg`` 80). Each channel enters at its own operating point
-(:mod:`..operating`), the knee its calibration block chose, and each world
-divides that residual by its suppression and prices it against its own bank's
-tolerance. ``R = r / r_tol`` per parameter; ``R <= 1`` passes.
-
-Three fragments. ``worlds`` (``tab:tolerance:worlds``) is the chapter table:
-one row per channel, the residual under each world and the binding ratio there
---- the largest of the three parameters, which is the one that has to pass.
-``worlds_ledger`` (``tab:archive:worlds``) is Appendix~C's: the same rows
-opened out to every parameter's ratio, with the tolerance behind it. And
-``worlds_class_floor`` (``tab:tolerance:classfloor``) asks the stronger
-question.
-
-The class floor. An operating point is a choice, so a ratio quoted there says
-only that *this* policy fails. The residual is a functional of the per-frame
-shelf estimate alone, so the coarse rule's frontier is the lower envelope of
-the ``(f, r_sys)`` plane by construction and its minimum is the least residual
-any threshold on that statistic can leave, at any masked fraction, anywhere on
-the surface. Priced through the same four worlds, that minimum bounds the whole
-class of per-frame masking policies driven by this measurement rather than one
-member of it. The third fragment carries it, and the counts it reports --- how
-many channels reach each tier *at the floor* --- are the chapter's strongest
-claim.
-
-The tolerance is the smallest per-unit-residual bias over the integration
-times that pass the registered response-stability gate, taken over the
-forecast bins the channel overlaps --- the ledger's own footing
-(:mod:`..tolerances`), applied bank by bank.
-
-Numbers: ``ch09.worlds.<column>.chNN`` per cell and ``ch09.worlds.<name>``
-for the band-level counts; ``appC.worlds.*`` for the ledger fragment. A
-channel with no operating point, or none of whose bins the stability gate
-accepted, prints dashes and says so in the notes.
-
-What this table does not claim. It models the cut's mode geometry only. It
-says nothing about how well a delay filter removes foregrounds, and a world
-is not a statement that the filter has been applied.
+The Fisher banks price mode loss, while the separate suppression constants
+are hypothetical. Neither the coordinate map nor a scalar auto-power shelf
+measures complex-visibility transfer. Historical ledgers retain their original
+tolerances; rendering does not authenticate or recompute their analysis.
+Minimum frontier scores are booked allowances, not physical class bounds.
+Evaluation policies can differ from calibration knees and need separate
+identities. Era-conditioned retrospective replay is not a prospective holdout.
 """
 from __future__ import annotations
 
@@ -104,6 +64,8 @@ def binding(section, world: str) -> tuple[str, object]:
     best, name = None, ""
     for p in PARAMETERS:
         value = _num(section.get(f"{world}_{p}_R"))
+        if value is None:
+            return "", None
         if value is not None and (best is None or value > best):
             best, name = value, p
     return name, best
@@ -154,8 +116,8 @@ def _row(c: Channel, frag: Fragment, absent: list[str]) -> list[str]:
             add(f"{world}_binding", None, kind="text", renderings=(DASH,))
             continue
         cells.append(f"${sci(r)}$ / ${sci(R)}$")
-        add(f"{world}_r", r, renderings=(sci(r).replace("\\times", "x"),), status="bounded")
-        add(f"{world}_R", R, renderings=(sci(R).replace("\\times", "x"),), status="bounded")
+        add(f"{world}_r", r, renderings=(sci(r).replace("\\times", "x"),), status="derived")
+        add(f"{world}_R", R, renderings=(sci(R).replace("\\times", "x"),), status="derived")
         add(f"{world}_binding", name, kind="text", renderings=(PARAM_LABEL.get(name, name),))
     return cells
 
@@ -172,13 +134,13 @@ def _ledger_rows(c: Channel, frag: Fragment) -> list[list[str]]:
         cells = [str(ch) if world == WORLD_NAMES[0] else "", f"${WORLD_LABEL[world]}$",
                  _math(core.fmt(db, 1)), _math(sci(r)) if r is not None else DASH]
         frag.add(f"{LEDGER_KEY}.suppression_db.{world}.ch{ch:02d}", db, precision=1, row=row, column="suppression_db")
-        frag.add(f"{LEDGER_KEY}.r.{world}.ch{ch:02d}", r, row=row, column="r", status="bounded",
+        frag.add(f"{LEDGER_KEY}.r.{world}.ch{ch:02d}", r, row=row, column="r", status="derived",
                  renderings=(sci(r).replace("\\times", "x"),) if r is not None else (DASH,),
                  **({} if r is not None else {"kind": "text"}))
         for p in PARAMETERS:
             R, tol = _num(s.get(f"{world}_{p}_R")), _num(s.get(f"{world}_{p}_r_tol"))
             cells.append(_math(sci(R)) if R is not None else DASH)
-            frag.add(f"{LEDGER_KEY}.R.{world}.{p}.ch{ch:02d}", R, row=row, column=p, status="bounded",
+            frag.add(f"{LEDGER_KEY}.R.{world}.{p}.ch{ch:02d}", R, row=row, column=p, status="derived",
                      renderings=(sci(R).replace("\\times", "x"),) if R is not None else (DASH,),
                      **({} if R is not None else {"kind": "text"}))
             frag.add(f"{LEDGER_KEY}.r_tol.{world}.{p}.ch{ch:02d}", tol, row=row, column=f"{p}_r_tol",
@@ -248,7 +210,7 @@ def build(run: Run) -> Fragment:
         frag.add(f"{KEY}.suppression_db.{world}", suppression_db(world), precision=1, row={"world": world},
                  column="suppression_db")
         if v.best_channel is not None:
-            frag.add(f"{KEY}.best_ratio.{world}", v.best_ratio, row={"world": world}, column="best_ratio", status="bounded",
+            frag.add(f"{KEY}.best_ratio.{world}", v.best_ratio, row={"world": world}, column="best_ratio", status="derived",
                      renderings=(sci(v.best_ratio).replace("\\times", "x"),))
             frag.add(f"{KEY}.best_channel.{world}", v.best_channel, kind="int", row={"world": world},
                      column="best_channel")
@@ -358,7 +320,7 @@ def _best_over(c: Channel, parameters, *, floor: bool):
     for world in WORLD_NAMES:
         inside = [(_num(s.get(f"{world}_{p}{tag}")), p) for p in parameters]
         inside = [(v, p) for v, p in inside if v is not None]
-        if not inside:
+        if len(inside) != len(parameters):
             continue
         value, param = max(inside)
         if value < best[1]:
@@ -406,11 +368,11 @@ def build_class_floor(run: Run) -> Fragment:
             cells.append(WORLD_LABEL[world] if world else DASH)
         rows.append(cells)
 
-        add("r_floor", floor, status="bounded", renderings=(sci(floor).replace("\\times", "x"),))
+        add("r_floor", floor, status="derived", renderings=(sci(floor).replace("\\times", "x"),))
         add("floor_over_point", share, precision=3)
         for column, value, world in (("growth_R", gr, gw), ("dilation_R", dr, dw)):
             if math.isfinite(value):
-                add(column, value, status="bounded", renderings=(sci(value).replace("\\times", "x"),))
+                add(column, value, status="derived", renderings=(sci(value).replace("\\times", "x"),))
                 add(f"{column}_world", world, kind="text",
                     renderings=(WORLD_LABEL[world].replace("$", "").replace("~", " "),))
             else:
@@ -429,20 +391,18 @@ def build_class_floor(run: Run) -> Fragment:
     frag.add(f"{FLOOR_KEY}.n_growth_inside", len(growth_in), kind="int", column="channels")
     frag.add(f"{FLOOR_KEY}.n_dilation_inside", len(dil_in), kind="int", column="channels")
     if best_growth_ch is not None:
-        frag.add(f"{FLOOR_KEY}.best_growth_R", best_growth, status="bounded", column="R",
+        frag.add(f"{FLOOR_KEY}.best_growth_R", best_growth, status="derived", column="R",
                  renderings=(sci(best_growth).replace("\\times", "x"),))
         frag.add(f"{FLOOR_KEY}.best_growth_channel", best_growth_ch, kind="int", column="channel")
     worst = max((v for _, v in growth if math.isfinite(v)), default=math.nan)
     if math.isfinite(worst):
-        frag.add(f"{FLOOR_KEY}.worst_growth_R", worst, status="bounded", column="R",
+        frag.add(f"{FLOOR_KEY}.worst_growth_R", worst, status="derived", column="R",
                  renderings=(sci(worst).replace("\\times", "x"),))
 
     frag.notes.append(f"layout: one {len(FLOOR_HEADER)}-column tabular, natural width 336pt at 11pt; it sets "
                       "upright inside the text block unscaled")
-    frag.notes.append("the floor is the least r_sys anywhere on the coarse rule's own frontier, which is the lower "
-                      "envelope of the (f, r_sys) plane by construction because the residual is a functional of the "
-                      "per-frame shelf estimate alone; it is therefore a bound on every threshold on that statistic "
-                      "and not a setting anyone would operate at")
+    frag.notes.append("the floor is the minimum booked allowance on the evaluated coarse frontier; "
+                      "it is not a lower bound on actual residual contamination or on other masking policies")
     frag.notes.append(f"at the floor, and in the most favourable of the four worlds, {len(growth_in)} of "
                       f"{len(channels)} channels reach the growth-rate tolerance ({_channel_list(growth_in)}) and "
                       f"{len(dil_in)} reach both dilations ({_channel_list(dil_in)})")
@@ -450,9 +410,8 @@ def build_class_floor(run: Run) -> Fragment:
         frag.notes.append(f"the closest the band comes on the growth rate is ch{best_growth_ch:02d} at R = "
                           f"{core.fmt(best_growth, 3, sig=True)}, and the furthest is "
                           f"{core.fmt(worst, 3, sig=True)}")
-    frag.notes.append("scope: this bounds masking, not subtraction; it is at frame resolution, because the products "
-                      "carry one spectrum per frame and nothing within one; and it prices a residual transferred "
-                      "across the allocation rather than measured in the bins it protects")
+    frag.notes.append("scope: conditional scalar allowance with hypothetical delay suppression; "
+                      "visibility transfer, signal preservation and mask-dependent noise remain unmeasured")
     return frag
 
 
@@ -465,14 +424,7 @@ HELD_OUT_ALIGN = "lr" + "r" * 4 + "l"
 
 
 def build_held_out(run: Run) -> Fragment:
-    """``tab:tolerance:worlds_heldout``: the worlds priced on the block the calibration never saw.
-
-    The chapter's other world tables price the operating point on the block it
-    was chosen on, which grades the selection on its own homework. This one
-    replays the same point on the evaluation block and prices what it leaves
-    there. A channel marked ``floor`` has every kept frame at the sensitivity
-    floor, so its ratios are upper limits rather than measurements.
-    """
+    """Conditional scenarios on the replay block; its policy can differ from the knee."""
     frag = Fragment(HELD_OUT_NAME, HELD_OUT_LABEL, "")
     channels = [c for c in sorted(run.channels, key=lambda c: c.channel)
                 if c.has(SECTION) and _num(c.section(SECTION).get("r_evaluation")) is not None]
@@ -482,6 +434,7 @@ def build_held_out(run: Run) -> Fragment:
                           "was replayed on an evaluation block")
         return frag
     rows, inside_110, inside_200, bounded = [], [], [], []
+    growth_inside = {"110": [], "200": []}
     for c in channels:
         s_ = c.section(SECTION)
         ch = c.channel
@@ -495,41 +448,44 @@ def build_held_out(run: Run) -> Fragment:
         if fb:
             bounded.append(ch)
         cells = [str(ch), f"${sci(r)}$"]
-        add("r_evaluation", r, status="bounded" if fb else "measured",
+        add("r_evaluation", r, status="derived",
             renderings=(sci(r).replace("\\times", "x"),))
         for world, tag in (("peak2", "110"), ("deployed", "200")):
             g = _num(s_.get(f"{world}_{GROWTH}_evaluation_R"))
             ds = [_num(s_.get(f"{world}_{p}_evaluation_R")) for p in DILATIONS]
-            d = max([v for v in ds if v is not None], default=None)
+            d = max(ds) if all(v is not None for v in ds) else None
             for column, value in ((f"{tag}_growth_R", g), (f"{tag}_dilation_R", d)):
                 if value is None:
                     cells.append(DASH)
                     add(column, None, kind="text", status="pending", renderings=(DASH,))
                 else:
                     cells.append(f"${sci(value)}$")
-                    add(column, value, status="bounded", renderings=(sci(value).replace("\\times", "x"),))
+                    add(column, value, status="derived", renderings=(sci(value).replace("\\times", "x"),))
             if d is not None and d <= 1.0:
                 (inside_110 if tag == "110" else inside_200).append(ch)
-        cells.append("floor" if fb else "measured")
-        add("basis", "floor" if fb else "measured", kind="text",
-            renderings=("floor" if fb else "measured",))
+            if g is not None and g <= 1.0:
+                growth_inside[tag].append(ch)
+        cells.append("model/floor" if fb else "model")
+        add("basis", "model/floor" if fb else "model", kind="text",
+            renderings=("model/floor" if fb else "model",))
         rows.append(cells)
     frag.tex = core.booktabs(HELD_OUT_HEADER, rows, HELD_OUT_ALIGN, midrules=_half_band_breaks(channels))
 
     for key, value in (("channels", len(channels)), ("n_inside_110", len(inside_110)),
                        ("n_inside_200", len(inside_200)), ("n_floor_bound", len(bounded))):
         frag.add(f"{HELD_OUT_KEY}.{key}", value, kind="int", column=key)
-    frag.notes.append("the residual is the one the channel's own operating point leaves on the evaluation "
-                      "block, which the calibration never saw; every other world table in the chapter prices "
-                      "the block the point was chosen on")
+    frag.notes.append("the residual is the replayed diagnostic or selected policy, which may differ "
+                      "from the calibration knee; historical full-archive fits prevent an untouched-holdout claim")
     frag.notes.append(f"at the BAO-preserving 110 ns cut {len(inside_110)} of {len(channels)} channels reach "
                       f"R <= 1 on the two dilations ({_channel_list(inside_110)}); at the deployed 200 ns cut "
-                      f"{len(inside_200)} ({_channel_list(inside_200)}); on the growth rate, none at either")
+                      f"{len(inside_200)} ({_channel_list(inside_200)}); growth-rate counts are "
+                      f"{len(growth_inside['110'])} at 110 ns and {len(growth_inside['200'])} at 200 ns; "
+                      "all are conditional scenario counts")
     if bounded:
         frag.notes.append(f"floor-bound channels ({_channel_list(bounded)}): every kept frame sits at the "
                           "sensitivity floor, so the residual reported is the floor itself and the ratios are "
-                          "upper limits; the surviving contamination is somewhere below and this instrument "
-                          "cannot say where")
+                          "conditional assignments, not measurements or confidence limits; this calculation "
+                          "does not determine the true retained contamination")
     return frag
 
 

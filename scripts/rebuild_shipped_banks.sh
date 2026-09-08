@@ -1,5 +1,5 @@
 #!/bin/bash
-# Rebuild the four shipped Fisher banks with their exact release recipe,
+# Rebuild the five shipped Fisher banks with their exact release recipe,
 # copy them into place, and re-pin tests/test_resources.py.
 #
 # Banks record a working_tree_sha256 over pyproject + src/rfisher/*.py at
@@ -40,6 +40,7 @@ build() {  # outfile, then rfisher-build-bank args
 
 build fisher_bank_chime2022.npz          --config chime2022 --cosmology planck2018
 build fisher_bank_chime2022_pact2025.npz --config chime2022 --cosmology pact2025
+build fisher_bank_chime2022_cmbspa2026.npz --config chime2022 --cosmology cmbspa2026
 build fisher_bank_bull2015_planck2013_epsfg1e-6.npz \
       --config bull2015 --cosmology planck2013 --epsilon-fg 1e-6 \
       --extra-time-hours "$BULL_KNEE_HOURS"
@@ -49,6 +50,7 @@ build fisher_bank_bull2015_planck2013_epsfg1e-5.npz \
 
 cp "$WORK/fisher_bank_chime2022.npz"          src/rfisher/data/
 cp "$WORK/fisher_bank_chime2022_pact2025.npz" src/rfisher/data/
+cp "$WORK/fisher_bank_chime2022_cmbspa2026.npz" src/rfisher/data/
 cp "$WORK/fisher_bank_bull2015_planck2013_epsfg1e-6.npz" data/
 cp "$WORK/fisher_bank_bull2015_planck2013_epsfg1e-5.npz" data/
 python scripts/fg_sensitivity.py
@@ -58,6 +60,7 @@ python scripts/fg_sensitivity.py
 # aborts the re-stamp on any failure below.
 python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022.npz
 python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022_pact2025.npz
+python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022_cmbspa2026.npz
 # The pins still describe the pre-rebuild state here, so every pin-checking
 # test is deselected and run again after the re-stamp below; everything else
 # (provenance vs the live source trees, direct-backend agreement) must pass

@@ -46,6 +46,21 @@ def test_product_exposes_small_fields_without_copying_the_archive(product_path):
         assert p.selected.sum() <= p.valid.sum()
 
 
+def test_required_health_gate_does_not_silently_change_population(product_path, monkeypatch):
+    import builtins
+    original = builtins.__import__
+    def missing(name, *args, **kwargs):
+        if name == "pilot_proxy.archive_health":
+            raise ModuleNotFoundError("transitive dependency h5py missing")
+        return original(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", missing)
+    with Product(product_path, require_health=True) as p:
+        with pytest.raises(RuntimeError, match="valid-only population is not an allowed substitute"):
+            _ = p.selected
+    with Product(product_path) as p:
+        assert p.health.schema == "valid_only"
+
+
 def test_geometry_reproduces_the_scan_prediction_when_pilot_proxy_is_available(product_path):
     geometry_module = pytest.importorskip("pilot_proxy.detector_geometry")
     with Product(product_path) as p:

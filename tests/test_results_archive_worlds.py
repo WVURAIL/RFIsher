@@ -44,9 +44,9 @@ def test_the_binding_tolerance_is_the_smallest_over_the_channels_bins():
     assert worlds.tolerance_of(rows, "none", (8,), "aperp") == pytest.approx(9e-2)
 
 
-def test_a_gate_refusal_is_skipped_not_propagated():
+def test_a_gate_refusal_propagates_across_overlapping_bins():
     rows = _rows()
-    assert math.isfinite(worlds.tolerance_of(rows, "deployed", (7, 8), "fs8"))   # bin 7 survives
+    assert math.isnan(worlds.tolerance_of(rows, "deployed", (7, 8), "fs8"))
     assert math.isnan(worlds.tolerance_of(rows, "deployed", (8,), "fs8"))        # bin 8 alone does not
 
 
@@ -58,7 +58,7 @@ def test_bin_span_covers_every_bin_the_channel_overlaps():
 
 def test_a_world_divides_the_residual_by_its_own_suppression():
     cw = worlds.channel_worlds(29, (7,), 100.0, 0.4, _rows())
-    assert cw.status == "measured"
+    assert cw.status == "conditional"
     assert cw.residuals["none"] == pytest.approx(100.0)
     assert cw.residuals["deployed"] == pytest.approx(100.0 / 10 ** (11.4 / 10))
     # R is not simply the suppression: the tolerance moves with the bank too
@@ -81,7 +81,7 @@ def test_a_channel_that_overlaps_no_forecast_bin_says_so():
 
 def test_a_refused_parameter_is_named_in_the_notes():
     cw = worlds.channel_worlds(18, (8,), 100.0, 0.5, _rows())
-    assert cw.status == "measured"
+    assert cw.status == "conditional"
     assert math.isnan(cw.ratios[("deployed", "fs8")])
     assert "deployed/fs8" in cw.notes[0]
 
@@ -107,58 +107,52 @@ def test_the_csv_round_trips_floats_exactly(tmp_path):
     assert "np.float64" not in path.read_text(encoding="utf-8")       # numpy scalars are written as plain floats
 
 
-def test_the_cache_is_read_back_with_the_types_the_analysis_needs(tmp_path):
+def test_unauthenticated_cache_is_not_accepted(tmp_path):
     path = tmp_path / "cache.csv"
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(worlds.CACHE_COLUMNS), lineterminator="\n")
+    path.write_text("old,unverified,cache\n")
+    assert not worlds._cache_is_current(path, tmp_path)
+    with pytest.raises(ValueError, match="required bias-response bank is missing"):
+        worlds.tolerances(bank_dir=tmp_path, cache=path)
+
+
+def test_authenticated_cache_roundtrip_and_content_changes(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    for _, filename, _, _ in worlds.WORLDS:
+        (tmp_path / filename).write_bytes(b"fixture bank")
+    bt = SimpleNamespace(load_bias_bank=lambda *a, **k: SimpleNamespace(evaluation_identity={"source": "v1"}))
+    monkeypatch.setattr(worlds, "_bias_tolerance", lambda: bt)
+    path = tmp_path / "cache.csv"
+    with path.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(worlds.CACHE_COLUMNS))
         w.writeheader()
-        for r in _rows():
-            w.writerow({k: worlds._cell(r[k]) for k in worlds.CACHE_COLUMNS})
-    path.touch()
-    back = worlds.tolerances(bank_dir=tmp_path, cache=path)           # no bank present: the cache stands
-    assert len(back) == len(_rows())
-    assert isinstance(back[0]["bin_index"], int) and isinstance(back[0]["z_lo"], float)
-    assert isinstance(back[0]["at_target"], bool) and isinstance(back[0]["years_used"], float)
-    assert math.isnan([r for r in back if r["world"] == "deployed" and r["parameter"] == "fs8"
-                       and r["bin_index"] == 8][0]["tolerance"])
+        w.writerows(_rows())
+    path.with_suffix(".provenance.json").write_text(json.dumps(worlds._cache_identity(path, tmp_path)))
+    assert worlds._cache_is_current(path, tmp_path)
+    back = worlds.tolerances(bank_dir=tmp_path, cache=path)
+    assert isinstance(back[0]["bin_index"], int)
+    assert isinstance(back[0]["at_target"], bool)
+    old = path.read_bytes()
+    path.write_bytes(old + b"\n")
+    assert not worlds._cache_is_current(path, tmp_path)
+    path.write_bytes(old)
+    (tmp_path / worlds.WORLDS[0][1]).write_bytes(b"changed bank")
+    assert not worlds._cache_is_current(path, tmp_path)
 
 
-def test_the_shipped_cache_covers_every_world_and_parameter():
-    if not worlds.CACHE.is_file():
-        pytest.skip("the tolerance cache has not been built on this machine")
-    rows = worlds.tolerances()
-    assert {r["world"] for r in rows} == set(w[0] for w in worlds.WORLDS)
-    assert {r["parameter"] for r in rows} == set(worlds.PARAMETERS)
-    per_world = {w[0]: [r for r in rows if r["world"] == w[0]] for w in worlds.WORLDS}
-    assert len(set(len(v) for v in per_world.values())) == 1          # every world covers the same bins
-    assert all(math.isfinite(r["tolerance"]) for r in rows if r["years_accepted"])
-
-
-def test_the_tolerance_is_quoted_at_the_declared_target_where_the_gate_allows():
-    """T* is the time chapter 9 declares, so a cell that can be read there is read there."""
-    if not worlds.CACHE.is_file():
-        pytest.skip("the tolerance cache has not been built on this machine")
-    rows = worlds.tolerances()
-    dtv = [r for r in rows if 5 <= r["bin_index"] <= 11]
-    assert dtv, "the cache carries no DTV bin"
-    # every cell read at the target says so, and says which time it used
-    for r in dtv:
-        if r["at_target"]:
-            assert r["years_used"] == pytest.approx(worlds.TARGET_YEARS)
-        elif math.isfinite(r["tolerance"]):
-            assert r["years_used"] != worlds.TARGET_YEARS      # a substitute names its own time
-    # the growth rate is the parameter every verdict turns on: it must be at the target
-    fs8 = [r for r in dtv if r["parameter"] == "fs8" and math.isfinite(r["tolerance"])]
-    assert fs8 and all(r["at_target"] for r in fs8), \
-        "a growth-rate tolerance read off the declared target time would need disclosing"
-
-
-def test_a_substituted_cell_is_distinguishable_from_a_target_cell():
-    if not worlds.CACHE.is_file():
-        pytest.skip("the tolerance cache has not been built on this machine")
-    rows = worlds.tolerances()
-    subs = [r for r in rows if not r["at_target"] and math.isfinite(r["tolerance"])]
-    # the substitution is a real state of this run, not a hypothetical: the dilations are
-    # refused at T* in several worlds, and the chapter has to be able to say which
-    assert subs, "no substituted cell: the flag would be untestable against this cache"
-    assert all(r["parameter"] != "fs8" for r in subs)
+def test_target_time_refusal_is_not_replaced_by_another_year(monkeypatch):
+    from types import SimpleNamespace
+    target_hours = worlds.TARGET_YEARS * worlds.survey.OVERVIEW_ONSKY_YEAR_HOURS
+    bank = SimpleNamespace(paramnames=list(worlds.PARAMETERS), zs=[1.3, 1.4], F=lambda ib, t: t)
+    bt = SimpleNamespace(
+        load_bias_bank=lambda *a, **k: bank,
+        bias_per_unit_r=lambda *a: ({p: 1. for p in worlds.PARAMETERS}, {p: .01 for p in worlds.PARAMETERS}),
+        stability=lambda b, ib, t, names, p, frac: (2. if t == target_hours and p == "aperp" else 1., 1))
+    monkeypatch.setattr(worlds, "_bias_tolerance", lambda: bt)
+    rows = worlds.compute_tolerances()
+    for r in rows:
+        if r["parameter"] == "aperp":
+            assert not r["at_target"] and math.isnan(r["tolerance"])
+            assert r["years_accepted"] > 0
+        else:
+            assert r["at_target"] and r["years_used"] == worlds.TARGET_YEARS

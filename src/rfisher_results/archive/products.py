@@ -140,8 +140,9 @@ class Geometry:
 class Product:
     """One open v5 product; nothing large is read until asked for."""
 
-    def __init__(self, path: Path | str):
+    def __init__(self, path: Path | str, *, require_health: bool = False):
         self.path = Path(path)
+        self.require_health = require_health
         self._z = np.load(self.path, allow_pickle=False)
         token = str(np.asarray(self._z["schema_version"]).item()) if "schema_version" in self._z.files else ""
         if token != SCHEMA_TOKEN:
@@ -353,7 +354,11 @@ def health_gate(product: Product) -> HealthGate:
     """
     try:
         from pilot_proxy.archive_health import evaluate_frame_health  # type: ignore
-    except ImportError:
+    except ImportError as exc:
+        if product.require_health:
+            raise RuntimeError(
+                "archive analysis requires pilot_proxy.archive_health and its dependencies; "
+                "the valid-only population is not an allowed substitute") from exc
         return HealthGate("valid_only", product.valid.copy(), {"detector_invalid": int((~product.valid).sum())})
     result = evaluate_frame_health(product.archive)
     include = np.asarray(result.include, dtype=bool)

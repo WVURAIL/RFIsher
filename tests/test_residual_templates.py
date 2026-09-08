@@ -66,6 +66,14 @@ def test_loaded_metadata_fails_closed_if_formula_identity_changes():
 
 def test_named_template_builds_authenticated_response_bank_end_to_end(
         tmp_path):
+    _assert_authenticated_template_build(tmp_path, "planck2018")
+
+
+def test_current_cosmology_builds_authenticated_response_bank_end_to_end(tmp_path):
+    _assert_authenticated_template_build(tmp_path, "cmbspa2026")
+
+
+def _assert_authenticated_template_build(tmp_path, cosmology):
     try:
         rf_dir = find_radiofisher_dir()
     except FileNotFoundError:
@@ -76,7 +84,7 @@ def test_named_template_builds_authenticated_response_bank_end_to_end(
         {"k_parallel_scale_mpc_inv": 0.04})
     output = tmp_path / "named-template-response.npz"
     fisherbank.build_bank(
-        output, rf_dir=rf_dir, config="chime2022", cosmology="planck2018",
+        output, rf_dir=rf_dir, config="chime2022", cosmology=cosmology,
         t_grid_hours=np.array([8000.0, 10000.0]), nproc=4,
         expt_overrides={"P_res": template}, verbose=False)
 

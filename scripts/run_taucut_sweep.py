@@ -245,7 +245,7 @@ def _make_configs(rf, rf_dir, chime2025_ttot_hours=None):
     }
 
 
-def _init_context(rf_dir=None, cosmology="planck2018",
+def _init_context(rf_dir=None, cosmology=cosmologies.DEFAULT_COSMOLOGY,
                   chime2025_ttot_hours=None):
     rf, rf_dir = import_radiofisher(rf_dir)
     require_backend_capabilities(
@@ -818,7 +818,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="out", help="output directory")
     ap.add_argument("--rf-dir", default=None)
-    ap.add_argument("--cosmology", default="planck2018")
+    ap.add_argument("--cosmology", default=cosmologies.DEFAULT_COSMOLOGY,
+                    help="named fiducial (default: cmbspa2026); use "
+                         "planck2018 to reproduce historical sweep tables")
     ap.add_argument("--nproc", type=int, default=None)
     ap.add_argument("--tau-ns", type=float, nargs="+", default=None,
                     help=f"delay grid [ns] (default {list(TAU_NS_DEFAULT)})")

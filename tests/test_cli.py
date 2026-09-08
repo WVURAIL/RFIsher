@@ -28,6 +28,7 @@ def test_cli_version_matches_the_release(entrypoint, program, capsys):
     ("chime2022", None),
     ("chime2022", "planck2018"),
     ("chime2022", "pact2025"),
+    ("chime2022", "cmbspa2026"),
 ])
 def test_build_cli_routes_supported_config_cosmology_pairs(
         monkeypatch, tmp_path, config, cosmology):
@@ -153,7 +154,7 @@ def test_forecast_cli_routes_named_bank_and_explicit_band(
         "hours": 12.5, "years": 0.25}
 
 
-def test_forecast_cli_defaults_to_planck_and_dtv(monkeypatch, capsys):
+def test_forecast_cli_defaults_to_current_cosmology_and_dtv(monkeypatch, capsys):
     seen = {}
     monkeypatch.setattr(
         cli.resources, "bank_file",
@@ -168,7 +169,7 @@ def test_forecast_cli_defaults_to_planck_and_dtv(monkeypatch, capsys):
 
     assert cli.forecast_main(["--uniform", "0"]) == 0
 
-    assert seen["cosmology"] == "planck2018"
+    assert seen["cosmology"] == "cmbspa2026"
     assert seen["band"] is scenarios.DTV_BAND
     # The Overview on-sky normalization (1 yr = 8,760 on-sky hours) is the
     # convention every quoted time in this repository uses.

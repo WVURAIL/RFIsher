@@ -25,6 +25,7 @@ identically through this module.
 from __future__ import annotations
 
 import contextlib
+import copy
 import datetime as dt
 import fnmatch
 import hashlib
@@ -50,7 +51,7 @@ BIAS_PARAMETER = "_Pres"
 SUPPORTED_CONFIGS = frozenset({"bull2015", "chime2022"})
 SUPPORTED_COSMOLOGIES = {
     "bull2015": frozenset({None, "planck2013"}),
-    "chime2022": frozenset({None, "planck2018", "pact2025"}),
+    "chime2022": frozenset({None, "planck2018", "pact2025", "cmbspa2026"}),
 }
 PROFILE_MODEL_CONTRACT = {
     "bull2015": {
@@ -378,10 +379,11 @@ def _build_provenance() -> dict:
         },
         "cosmology": {
             "name": (_CTX.get("cosmology_name")
-                     or ("planck2018" if _CTX["config"] == "chime2022"
+                     or ("cmbspa2026" if _CTX["config"] == "chime2022"
                          else "planck2013")),
             "sha256": pkcache.cosmology_fingerprint(cosmo),
             "parameters": pkcache.cosmology_payload(cosmo),
+            "reference": copy.deepcopy(cosmo.get("fiducial_source", {})),
             "astrophysical_model_profile":
                 _CTX["astrophysical_model_profile"],
             "astrophysical_models": {
@@ -448,7 +450,8 @@ def build_bank(outfile: str | Path, rf_dir=None,
     filters away."""
     _validate_configuration(config, cosmology)
     outfile = Path(outfile)
-    ctag = f"_{cosmology}" if cosmology not in (None, "planck2018") else ""
+    cosmology = cosmology or ("cmbspa2026" if config == "chime2022" else "planck2013")
+    ctag = f"_{cosmology}" if cosmology not in ("planck2013", "planck2018") else ""
     default_cache = (f"cache_pk_chime2022{ctag}.dat" if config == "chime2022"
                      else "cache_pk.dat")
     if cachefile is None:
@@ -509,7 +512,7 @@ def build_bank(outfile: str | Path, rf_dir=None,
                 expt_overrides=dict(expt_overrides or {}),
                 config=config,
                 cosmology=(cosmology or
-                           ("planck2018" if config == "chime2022"
+                           ("cmbspa2026" if config == "chime2022"
                             else "planck2013")),
                 experiment="CHIME (RadioFisher 'yCHIME', mode icyl)",
                 astrophysical_model_profile=

@@ -51,15 +51,13 @@ mixture-read convention), labelled ``stated (bulk, not H0)``, provided the bulk 
 a mixture with a null, and the floor is refused: channels 15, 17, 22, 24,
 28, 30, 31, 36). Both values are always reported.
 
-Off population. The floor of a channel whose current era is a recorded off
-era is the 90th percentile of that era's shelf estimates on the calibration
-block (chapter 8: "the most defensible floor of all"), labelled
-``measured``. :func:`null_like` describes the population beside it (centre
-within ``OFF_CENTRE_TOLERANCE`` of ``mu_0``, robust-core width factor at
-most ``OFF_WIDTH_LIMIT``): channels 20 and 27 fail it (centres 1.11 and
-1.03, width factors 19 and 10: a carrier persists after the recorded
-sign-off), which the row says; the check is reported, it does not change
-the floor's basis.
+Off population. A caller-supplied, independently supported off population is
+eligible only if its centre and robust width pass ``off_population_check``.
+A failed check cannot calibrate the off-null or its measured percentile floor;
+the fallback remains explicitly mixture-conditioned. Archive-inferred dates
+are not independent evidence and the archive runner does not supply them as
+verified nulls. Even an empirical floor percentile is an assigned screening
+allowance, not a physical lower bound or a coverage-calibrated upper limit.
 
 Exchangeability (ch08 §275-283): on quiet frames a null bin tested against
 the rank ``rho`` of the bulk exceeds it at the combinatorial rate
@@ -317,7 +315,7 @@ def floor_estimate(product: Product, off_era: np.ndarray | None, coarse: NullWid
         population = "bulk left-side scale about its median (" + "; ".join(why) + ")"
     else:
         stated, basis, population = math.nan, "none", "no measurable null width"
-    if off_era is not None and np.asarray(off_era, dtype=bool).any():
+    if off_era is not None and np.asarray(off_era, dtype=bool).any() and off_population_check(product, off_era)[0]:
         mask = np.asarray(off_era, dtype=bool) & product.selected
         shelf = product.shelf_db[mask]
         shelf = shelf[np.isfinite(shelf)]
@@ -397,14 +395,12 @@ def calibrate_null(product: Product, era: np.ndarray, *, anchor_bin: int, bulk_m
     kept = kept_half_null(q[era])
     off_ok, off_widths, off_reason = off_population_check(product, off_era)
     off_null = None if off_widths is None else off_ok
-    if off_widths is not None:
-        # the recorded off population is the null (chapter 8); its likeness to a null is reported beside it
+    if off_widths is not None and off_ok:
         null_frames = np.asarray(off_era, dtype=bool) & product.selected
         source, mixture = "verified transmitter-off era", False
-        if not off_ok:
-            source = "verified transmitter-off era (not null-like)"
-            notes.append(f"recorded off population is not null-like ({off_reason}): a carrier persists after the record")
     else:
+        if off_widths is not None:
+            notes.append(f"off candidate rejected as null ({off_reason}); its positive shelf is not a sensitivity calibration")
         null_frames = era
         source, mixture = "bulk of the mixture (declared)", True
         notes.append("coarse null read from the bulk of the block's mixture: centre = median, scale = left side")

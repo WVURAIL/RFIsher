@@ -13,13 +13,17 @@ except ModuleNotFoundError:  # Python 3.10
     from importlib.abc import Traversable
 from pathlib import Path
 from types import MappingProxyType
+from .cosmologies import DEFAULT_COSMOLOGY
 
 DATA_PACKAGE = "rfisher.data"
-DEFAULT_BANK_NAME = "fisher_bank_chime2022.npz"
+PLANCK2018_BANK_NAME = "fisher_bank_chime2022.npz"
 PACT2025_BANK_NAME = "fisher_bank_chime2022_pact2025.npz"
+CMBSPA2026_BANK_NAME = "fisher_bank_chime2022_cmbspa2026.npz"
+DEFAULT_BANK_NAME = CMBSPA2026_BANK_NAME
 BANK_NAMES = MappingProxyType({
-    "planck2018": DEFAULT_BANK_NAME,
+    "planck2018": PLANCK2018_BANK_NAME,
     "pact2025": PACT2025_BANK_NAME,
+    "cmbspa2026": CMBSPA2026_BANK_NAME,
 })
 DEFAULT_RATES_NAME = "survey_quarterly_rates_all23.csv"
 PRODUCTS_MANIFEST_NAME = "products.json"
@@ -28,6 +32,7 @@ CACHE_NAMES = frozenset({
     "cache_pk.dat",
     "cache_pk_chime2022.dat",
     "cache_pk_chime2022_pact2025.dat",
+    "cache_pk_chime2022_cmbspa2026.dat",
 })
 RADIOFISHER_FILESYSTEM_NAMES = CACHE_NAMES | {SYNTHETIC_BASELINE_NAME}
 
@@ -42,7 +47,7 @@ def data_file(name: str) -> Traversable:
     return resource
 
 
-def bank_file(cosmology: str = "planck2018") -> Traversable:
+def bank_file(cosmology: str = DEFAULT_COSMOLOGY) -> Traversable:
     """Return a packaged CHIME bank by its named fiducial cosmology."""
     try:
         name = BANK_NAMES[cosmology]
@@ -74,7 +79,10 @@ def filesystem_data_file(name: str) -> Path:
     return path
 
 
-DEFAULT_BANK = data_file(DEFAULT_BANK_NAME)
+# Resolve lazily enough to allow building a missing default bank from source.
+# bank_file()/data_file() validate existence when a forecast requests it.
+DEFAULT_BANK = files(DATA_PACKAGE).joinpath(DEFAULT_BANK_NAME)
+PLANCK2018_BANK = data_file(PLANCK2018_BANK_NAME)
 PACT2025_BANK = data_file(PACT2025_BANK_NAME)
 DEFAULT_RATES_CSV = data_file(DEFAULT_RATES_NAME)
 PRODUCTS_MANIFEST = data_file(PRODUCTS_MANIFEST_NAME)

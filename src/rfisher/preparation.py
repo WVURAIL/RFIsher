@@ -443,13 +443,8 @@ def assess_histogram_stability(
                 continue
             if (epoint is None or lpoint is None
                     or early_kept < min_half or late_kept < min_half):
-                unsupported = dict(base)
-                unsupported["points_skipped"] = skipped
-                return StabilityAssessment(
-                    status="refused_insufficient_support",
-                    reason=(f"candidate rho={rho}, eta={eta:g} retains fewer "
-                            f"than {min_half} frames in one era half"),
-                    **unsupported)
+                skipped += 1
+                continue
             key = (rho, eta)
             q16 = early_hist.candidate_multiplier_q16[index]
             cost_rows.append((_ratio(epoint[4], lpoint[4]), key, q16))
@@ -690,9 +685,13 @@ def _block_stability_assessment(
     for rho, values in requirements.items():
         candidates = candidate_multiplier_q16_values(values)
         ordered = sorted(values)
+        early_ordered = sorted(v for v, keep in zip(values, early_mask) if keep)
+        late_ordered = sorted(v for v, keep in zip(values, early_mask) if not keep)
         selected = [
             candidate for candidate in candidates
             if bisect_right(ordered, candidate) >= MIN_RETAINED_FRAMES
+            and bisect_right(early_ordered, candidate) >= stability.minimum_half_retained_frames
+            and bisect_right(late_ordered, candidate) >= stability.minimum_half_retained_frames
         ]
         if selected:
             candidates_by_rho[rho] = tuple(selected)
@@ -926,6 +925,14 @@ def prepare_threshold_family(
             systematic[late_mask], q16, bulk_size=bulk_size,
             variance_residuals=(None if variance is None else
                                 variance[late_mask]))
+        if minimum_half_retained_frames is not None:
+            # The optimizer must use exactly the supported surface assessed
+            # below, while retaining all bins for exact cumulative sums.
+            ec = np.cumsum(early[rho].counts[:-1])
+            lc = np.cumsum(late[rho].counts[:-1])
+            pooled[rho] = replace(pooled[rho], candidate_eligible=tuple(
+                bool(e >= minimum_half_retained_frames and l >= minimum_half_retained_frames)
+                for e, l in zip(ec, lc)))
 
     early_support = _half_support(
         times[early_mask], tuple(value for value, keep

@@ -143,12 +143,12 @@ def test_the_binding_ratio_is_the_largest_of_the_parameters(tmp_path):
     assert R == max(ch29.section("worlds")[f"none_{p}_R"] for p in PARAMETERS)
 
 
-def test_a_refused_parameter_does_not_hide_the_others(tmp_path):
+def test_a_refused_parameter_prevents_a_combined_verdict(tmp_path):
     run = core.load_run(_ledger(tmp_path))
     section = run.by_channel()[21].section("worlds")
     name, R = rw.binding(section, "deployed")
     assert math.isnan(section["deployed_fs8_R"])
-    assert name in ("aperp", "apar") and math.isfinite(R)
+    assert name == "" and R is None
 
 
 def test_a_channel_without_a_point_dashes_every_world(tmp_path):
@@ -167,7 +167,7 @@ def test_the_verdict_counts_what_passes(tmp_path):
     channels = [c for c in run.channels if c.has("worlds")]
     none = rw.verdict(channels, "none")
     deployed = rw.verdict(channels, "deployed")
-    assert none.channels == deployed.channels == 3            # ch15 and ch36 score in no world
+    assert none.channels == 3 and deployed.channels == 2     # deployed/ch21 has a refused required parameter
     assert none.passing == ()                                 # nothing passes without the cut
     assert deployed.passing == (29,)                          # the cut carries one channel under R = 1
     assert deployed.best_channel == none.best_channel == 29
@@ -290,12 +290,12 @@ def test_the_counts_are_taken_at_the_floor_not_the_point(tmp_path):
     assert counts["n_growth_inside"] == len(inside)
 
 
-def test_the_notes_state_the_bound_and_its_scope(tmp_path):
+def test_the_notes_state_the_allowance_and_its_scope(tmp_path):
     joined = " ".join(_floor(tmp_path).notes)
-    assert "lower envelope of the (f, r_sys) plane by construction" in joined
-    assert "not a setting anyone would operate at" in joined
-    assert "bounds masking, not subtraction" in joined
-    assert "frame resolution" in joined
+    assert "minimum booked allowance" in joined
+    assert "not a lower bound" in joined
+    assert "conditional scalar allowance" in joined
+    assert "mask-dependent noise remain unmeasured" in joined
 
 
 def test_a_run_without_floors_says_so(tmp_path):
@@ -348,19 +348,19 @@ def test_the_held_out_table_prices_the_evaluation_residual(tmp_path):
     assert got["200_growth_R"] == pytest.approx((2.0 / drop) / (1e-2 / 3))
 
 
-def test_a_floor_bound_channel_is_marked_and_its_ratios_are_limits(tmp_path):
+def test_a_floor_only_assignment_is_marked_without_claiming_a_confidence_limit(tmp_path):
     frag = _with_heldout(tmp_path, 2.0, floor_bound=True)
-    assert _rows(frag)[0][-1] == "floor"
+    assert _rows(frag)[0][-1] == "model/floor"
     joined = " ".join(frag.notes)
-    assert "upper limits" in joined and "cannot say where" in joined
+    assert "not measurements or confidence limits" in joined
     assert any(n.key.endswith("n_floor_bound") and n.value == 1 for n in frag.numbers)
 
 
 def test_the_held_out_counts_are_read_on_the_evaluation_block(tmp_path):
     frag = _with_heldout(tmp_path, 2.0)
     joined = " ".join(frag.notes)
-    assert "the calibration never saw" in joined
-    assert "on the growth rate, none at either" in joined
+    assert "prevent an untouched-holdout claim" in joined
+    assert "growth-rate counts are 0 at 110 ns and 0 at 200 ns" in joined
 
 
 def test_a_run_without_a_replay_says_so(tmp_path):
@@ -376,3 +376,13 @@ def test_a_run_without_a_replay_says_so(tmp_path):
          "notes": [], "sections": {"worlds": section}}))
     frag = rw.build_held_out(core.load_run(tmp_path))
     assert frag.tex == "" and "no channel carries a held-out residual" in frag.notes[0]
+
+
+def test_world_binding_refuses_a_missing_required_parameter():
+    section = _section(1e-6, refuse=(("deployed", "apar"),))
+    assert rw.binding(section, "deployed") == ("", None)
+
+
+def test_growth_count_is_computed_for_a_passing_replay(tmp_path):
+    frag = _with_heldout(tmp_path, 1e-8)
+    assert "growth-rate counts are 1 at 110 ns and 1 at 200 ns" in " ".join(frag.notes)
