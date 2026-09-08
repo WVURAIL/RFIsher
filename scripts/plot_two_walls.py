@@ -43,7 +43,12 @@ import matplotlib.pyplot as plt
 # Stable zeta = 1 tolerances on the binding dilation, alpha_perp, per z bin
 # (one home: rfisher.tolerances). The figure shows the first-measured block.
 from rfisher.tolerances import TOL_APERP, TOL_FS8
-CHANNELS = tuple(sorted(TOL_FS8))
+# Named rather than read off TOL_FS8's keys. That table has since grown from
+# these ten channels to all 23, and a figure whose scope follows a constants
+# table silently redraws itself the next time the table is extended -- which
+# would widen the band this figure is about without anyone choosing to.
+CHANNELS = (27, 28, 29, 30, 31, 32, 33, 34, 35, 36)
+assert set(CHANNELS) <= set(TOL_FS8), "the figure names a channel the constants do not price"
 # fs8 tolerance relative to alpha_perp's, per bin, drawn as a band because
 # the ratio differs between the two z bins the five channels occupy.
 _FS8_RATIOS = tuple(TOL_FS8[ch] / TOL_APERP[ch] for ch in CHANNELS)

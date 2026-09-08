@@ -190,6 +190,8 @@ def test_end_to_end_exit_codes(tmp_path):
            "48.5% of verified-quiet time", "fine_gain_mc evidence",
            "Youden-J table", r"\input{tables/archive/worlds.tex}",
            r"\input{tables/archive/saveability.tex}",
+           r"\input{tables/archive/flagger_survey.tex}",
+           r"\input{tables/archive/tolerance_eta.tex}",
            _forecast_headline_rows()])
     red = green + " eight years; 316x over; 5.9-7.8 dB; ten measured channels"
     g, r = tmp_path / "g.txt", tmp_path / "r.txt"
@@ -222,6 +224,8 @@ def _green_min() -> str:
            "XOR 0x88", "48.5%", "fine_gain_mc", "Youden",
            r"\input{tables/archive/worlds.tex}",
            r"\input{tables/archive/saveability.tex}",
+           r"\input{tables/archive/flagger_survey.tex}",
+           r"\input{tables/archive/tolerance_eta.tex}",
            _forecast_headline_rows()])
 
 

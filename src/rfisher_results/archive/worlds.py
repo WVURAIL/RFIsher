@@ -44,8 +44,9 @@ WORLDS = (("none", "fisher_bank_chime2022_pres_dense.npz", None, "none"),
           ("deployed", "fisher_bank_chime2022_pres_kfg80_dense.npz", 80.0, "aggressive_200ns"))
 WORLD_LABEL = {"none": "no filter", "peak1": r"$55$~ns", "peak2": r"$110$~ns", "deployed": r"$200$~ns"}
 PARAMETERS = tuple(selection_policy.value("archive_reference.three_worlds_parameters"))
-CACHE_COLUMNS = ("world", "bin_index", "z_lo", "z_hi", "parameter", "tolerance",
-                 "years_accepted", "years_refused")
+CACHE_COLUMNS = ("world", "bin_index", "z_lo", "z_hi", "parameter", "tolerance", "at_target",
+                 "years_used", "years_accepted", "years_refused")
+TARGET_YEARS = 1.0     # T*, the declared target integration; chapter 9 quotes r_tol there
 
 
 def _cell(value):
@@ -73,6 +74,8 @@ def compute_tolerances(bank_dir: Path | str = BANK_DIR) -> list[dict]:
     limit = float(selection_policy.value("science.response_stability.maximum_tolerance_ratio"))
     years = tuple(float(v) for v in selection_policy.value("archive_reference.forecast_year_grid"))
     rows = []
+    if TARGET_YEARS not in years:                 # the declared target must be on the grid
+        years = tuple(sorted(set(years) | {TARGET_YEARS}))
     for world, filename, kfg, _ in WORLDS:
         bank = bt.load_bias_bank(Path(bank_dir) / filename, build_command="see scripts/three_worlds.py",
                                  expected_kfg_fac=kfg, expected_epsilon_fg=0.0)
@@ -81,6 +84,7 @@ def compute_tolerances(bank_dir: Path | str = BANK_DIR) -> list[dict]:
         for ib in range(len(zs) - 1):
             accepted = {p: [] for p in PARAMETERS}
             refused = {p: 0 for p in PARAMETERS}
+            at_target = {p: math.nan for p in PARAMETERS}
             for year in years:
                 t = year * survey.OVERVIEW_ONSKY_YEAR_HOURS
                 try:
@@ -96,13 +100,32 @@ def compute_tolerances(bank_dir: Path | str = BANK_DIR) -> list[dict]:
                         refused[p] += 1
                         continue
                     if drift <= limit and nsign == 1:
-                        accepted[p].append(sig[p] / abs(dth[p]))
+                        value = sig[p] / abs(dth[p])
+                        accepted[p].append((year, value))
+                        if year == TARGET_YEARS:
+                            at_target[p] = value
                     else:
                         refused[p] += 1
             for p in PARAMETERS:
+                # Chapter 9 fixes the target integration at T* and quotes r_tol there. Where
+                # the response-stability gate accepts T*, that is the value: it is the one the
+                # text declares and it removes the grid from the answer. Where the gate refuses
+                # T* -- which happens for the dilations in four of the seven DTV bins and never
+                # for the growth rate -- there is no tolerance at the declared time, and the
+                # smallest accepted elsewhere stands in. The substitution is recorded per cell
+                # rather than absorbed, because a reader comparing two tables built on two
+                # grids would otherwise see a factor of three and no reason for it.
+                if math.isfinite(at_target[p]):
+                    value, used, on_target = at_target[p], TARGET_YEARS, True
+                elif accepted[p]:
+                    used, value = min(accepted[p], key=lambda yv: yv[1])
+                    on_target = False
+                else:
+                    value, used, on_target = math.nan, math.nan, False
                 rows.append({"world": world, "bin_index": ib, "z_lo": round(float(zs[ib]), 4),
                              "z_hi": round(float(zs[ib + 1]), 4), "parameter": p,
-                             "tolerance": float(min(accepted[p])) if accepted[p] else math.nan,
+                             "tolerance": float(value) if math.isfinite(value) else math.nan,
+                             "at_target": on_target, "years_used": used,
                              "years_accepted": len(accepted[p]), "years_refused": refused[p]})
     return rows
 
@@ -125,6 +148,8 @@ def tolerances(bank_dir: Path | str = BANK_DIR, cache: Path | str = CACHE, *, re
     if not rebuild and _cache_is_current(cache, bank_dir):
         with cache.open(newline="", encoding="utf-8") as fh:
             return [{**r, "bin_index": int(r["bin_index"]), "z_lo": float(r["z_lo"]), "z_hi": float(r["z_hi"]),
+                     "at_target": str(r.get("at_target", "")).lower() == "true",
+                     "years_used": float(r["years_used"]) if r.get("years_used") not in ("", "nan", None) else math.nan,
                      "tolerance": float(r["tolerance"]) if r["tolerance"] not in ("", "nan") else math.nan,
                      "years_accepted": int(r["years_accepted"]), "years_refused": int(r["years_refused"])}
                     for r in csv.DictReader(fh)]

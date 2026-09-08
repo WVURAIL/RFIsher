@@ -48,6 +48,8 @@ class ArchiveProductAccounting:
     unit_count: int
     frames_by_unit: tuple[int, ...]
     valid_by_unit: tuple[int, ...]
+    untimed_units: int
+    untimed_frames: int
     weights_hash: str
 
 
@@ -78,6 +80,20 @@ class ArchiveAcceptanceReport:
     def unit_count(self) -> int:
         return sum(item.unit_count for item in self.products)
 
+    @property
+    def untimed_units(self) -> int:
+        """Units whose acquisition recorded no sample interval.
+
+        Their frames have no frame time, so a calendar or exposure statement
+        made from this cohort has to name them as its missing denominator
+        rather than average over them silently.
+        """
+        return sum(item.untimed_units for item in self.products)
+
+    @property
+    def untimed_frames(self) -> int:
+        return sum(item.untimed_frames for item in self.products)
+
     def summary(self) -> str:
         lines = [
             "archive cohort accepted",
@@ -86,6 +102,8 @@ class ArchiveAcceptanceReport:
             f"  frames: {self.frame_count}",
             f"  valid: {self.valid_frames}",
             f"  invalid: {self.invalid_frames}",
+            f"  untimed units: {self.untimed_units} "
+            f"(frames without a frame time: {self.untimed_frames})",
             f"  kernel: {self.kernel_sha256}",
             f"  weight bank: {self.weight_bank_sha256}",
             f"  weight manifest: {self.weight_manifest_sha256}",
@@ -93,7 +111,8 @@ class ArchiveAcceptanceReport:
         lines.extend(
             f"  ch{item.physical_channel}: freq_id={item.freq_id}, "
             f"units={item.unit_count}, frames={item.frame_count}, "
-            f"valid={item.valid_frames}, invalid={item.invalid_frames}"
+            f"valid={item.valid_frames}, invalid={item.invalid_frames}, "
+            f"untimed_units={item.untimed_units}"
             for item in self.products
         )
         return "\n".join(lines)
@@ -281,7 +300,7 @@ def _fine_identity(product: Mapping, detector: dict,
 
 def _unit_accounting(product: Mapping, frame_count: int, freq_id: int,
                      valid: np.ndarray) -> tuple[int, tuple[int, ...],
-                                                  tuple[int, ...]]:
+                                                  tuple[int, ...], int, int]:
     source_values = np.asarray(product.get("source_event_keys"))
     if source_values.ndim != 1 or source_values.dtype.kind not in {"U", "S"}:
         raise ArchiveAcceptanceError("source_event_keys must be a string vector")
@@ -341,8 +360,24 @@ def _unit_accounting(product: Mapping, frame_count: int, freq_id: int,
                        provenance["unit_scope"], unit_event_id))):
         raise ArchiveAcceptanceError("unit event or time provenance is invalid")
     sample_rate = _float_scalar(product, "sample_rate_hz", positive=True)
-    if (not np.isfinite(delta).all() or np.any(delta <= 0.0)
-            or not np.allclose(delta, 1.0 / sample_rate,
+    # A unit whose acquisition never recorded a sample interval carries NaN
+    # here, and that is a product state the v5 contract admits rather than a
+    # corruption: the producer's own check (pilot_proxy.product_contract, the
+    # ``allow_nan=True`` unit_delta_time array) constrains only the recorded
+    # entries, and the rest of RFIsher reads the field the same way ---
+    # residual_scores.bundle requires finite timing only of the frames a caller
+    # actually selects, and rfisher_results.archive.products.frame_time returns
+    # NaN for such frames so that a calendar statistic must state its
+    # denominator. Demanding every unit be timed would refuse the whole
+    # September rebuild over 470 of its 167,728 units. What the cohort does
+    # need is that the intervals that *were* recorded agree with the declared
+    # sample rate, and that a product is not entirely untimed --- an untimed
+    # product has no exposure or time axis for any downstream era split.
+    recorded = np.isfinite(delta)
+    if not recorded.any():
+        raise ArchiveAcceptanceError("no unit records a sampling interval")
+    if (np.any(delta[recorded] <= 0.0)
+            or not np.allclose(delta[recorded], 1.0 / sample_rate,
                                rtol=1e-12, atol=0.0)):
         raise ArchiveAcceptanceError("unit sampling intervals are inconsistent")
 
@@ -372,7 +407,13 @@ def _unit_accounting(product: Mapping, frame_count: int, freq_id: int,
     )
     if sum(frames_by_unit) != frame_count or sum(valid_by_unit) != int(valid.sum()):
         raise ArchiveAcceptanceError("unit frame accounting does not close")
-    return unit_count, frames_by_unit, valid_by_unit
+    # Accepting untimed units silently would hand downstream code a frame-time
+    # vector with unannounced NaNs, so the report carries their count: any
+    # calendar statement built on this cohort has to quote this denominator.
+    untimed_units = int(np.count_nonzero(~recorded))
+    untimed_frames = int(np.isin(frame_unit, np.flatnonzero(~recorded)).sum())
+    return (unit_count, frames_by_unit, valid_by_unit,
+            untimed_units, untimed_frames)
 
 
 def _sample_accounting(product: Mapping, frame_count: int) -> dict[str, int]:
@@ -468,7 +509,8 @@ def _product_record(path: Path) -> tuple[ArchiveProductAccounting, dict]:
             detector_sha = _common_detector_sha256(detector)
             _, decision_sha = _json_record(product, "decision_contract_json")
             fine_identity = _fine_identity(product, detector, frame_count)
-            unit_count, frames_by_unit, valid_by_unit = _unit_accounting(
+            (unit_count, frames_by_unit, valid_by_unit,
+             untimed_units, untimed_frames) = _unit_accounting(
                 product, frame_count, view.freq_id, view.valid)
             sample_identity = _sample_accounting(product, frame_count)
             expected_frequency = (
@@ -533,6 +575,8 @@ def _product_record(path: Path) -> tuple[ArchiveProductAccounting, dict]:
                 unit_count=unit_count,
                 frames_by_unit=frames_by_unit,
                 valid_by_unit=valid_by_unit,
+                untimed_units=untimed_units,
+                untimed_frames=untimed_frames,
                 weights_hash=_digest(product, "weights_hash"),
             )
             return accounting, identity

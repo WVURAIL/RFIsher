@@ -23,8 +23,29 @@ WIN = 390.625e3 / 128             # 3.05 kHz window integration width
 FIT_IN, FIT_OUT = 5e3, 12e3       # fit annulus: past the cluster, local
 
 from rfisher import products
-from rfisher.npzio import load_npz
 PRODUCTS = products.paths()
+NBINS = 16384
+DC_GUARD = 100                    # bins around the FFT DC artifact to distrust
+CLUSTER = 209                     # 5 kHz: the pilot cluster the anchor lives in
+
+
+def spectrum_fields(path):
+    """The four fields this study reads, loaded without pickle.
+
+    ``rfisher.npzio.load_npz`` materialises every field, which was free for the
+    32 MB products of the superseded cohort but costs a 768 MB read and roughly
+    4 GB of resident frame spectra per channel in the current v5 rebuild
+    (``du -sh`` on 844.npz: 32M then, 768M now). This study only needs the
+    archive-averaged spectrum and the three pieces of geometry that locate the
+    pilot in it, so it takes those and leaves the per-frame cube on disk. The
+    pickle refusal and the closed handle are kept for the same reason npzio
+    keeps them: survey products are external inputs.
+    """
+    with np.load(path, allow_pickle=False) as archive:
+        return {name: np.array(archive[name], copy=True)
+                for name in ("integrated_spectrum_before_mask",
+                             "pilot_frequency_hz", "chime_frequency_hz",
+                             "sense")}
 
 
 def main():
@@ -36,19 +57,30 @@ def main():
           "   (fractions of local background)")
     res = []
     for ch, p in sorted(PRODUCTS.items()):
-        d = load_npz(p)
+        d = spectrum_fields(p)
         s = d["integrated_spectrum_before_mask"].astype(float)
         dfhz = (float(d["pilot_frequency_hz"][0])
                 - float(d["chime_frequency_hz"][0]))
-        nom = int(round(int(d["sense"]) * dfhz / DF)) % 16384
-        lo, hi = max(0, nom - 209), min(16384, nom + 209)
-        pk = lo + int(np.argmax(s[lo:hi]))   # metadata-anchored: the frame
-        # DC artifact at bin 0 can exceed the archive-averaged pilot
-        off = (np.arange(16384) - pk) * DF
+        nom = int(round(int(d["sense"]) * dfhz / DF)) % NBINS
+        idx = np.arange(NBINS)
+        # The spectral axis is cyclic, so bin distance is measured the short way
+        # round; a channel whose pilot sits near bin 0 (ch14's is at bin 128)
+        # otherwise loses its lower reference off the end of the array and gets
+        # a one-sided fit. The same wrap keeps the DC artifact outside both the
+        # anchor search and the fit: it is a frame artifact, it can exceed the
+        # archive-averaged pilot (ch14, 5.6e14 at bin 0 against 2.7e14 at bin
+        # 128), and a plain argmax over a clipped window locks onto it.
+        clear = (idx > DC_GUARD) & (idx < NBINS - DC_GUARD)
+
+        def cyclic(center):
+            return ((idx - center + NBINS // 2) % NBINS - NBINS // 2) * DF
+
+        win = (np.abs(cyclic(nom)) <= CLUSTER * DF) & clear
+        pk = int(idx[win][np.argmax(s[win])])   # metadata-anchored
+        off = cyclic(pk)
         sm = median_filter(s, 21)            # suppress narrow lines
-        idx = np.arange(16384)
         m = ((np.abs(off) >= FIT_IN) & (np.abs(off) <= FIT_OUT)
-             & (idx > 100) & (idx < 16284))  # keep clear of the DC artifact
+             & clear)                        # keep clear of the DC artifact
         x, y = off[m] / DELTA, sm[m]
         b0 = np.median(y)
         yn = y / b0
@@ -60,7 +92,7 @@ def main():
         a1, a2, a4 = c[1], c[2], c[4]
 
         def wavg(f0):
-            w = ((np.abs(off - f0) <= WIN / 2) & (idx > 100) & (idx < 16284))
+            w = (np.abs(off - f0) <= WIN / 2) & clear
             return s[w].mean() if w.any() else np.nan
 
         center = np.polynomial.polynomial.polyval(0.0, c) * b0

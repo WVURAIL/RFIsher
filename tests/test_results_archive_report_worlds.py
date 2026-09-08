@@ -49,15 +49,22 @@ def _ledger(tmp_path):
     if tmp_path in _LEDGERS:
         return tmp_path
     _LEDGERS.add(tmp_path)
+    def _sel(coarse_min_R, r_tol=1e-2):
+        """The selection fields the class bound reads: the coarse frontier's least ratio."""
+        return {"coarse_min_R": coarse_min_R, "r_tol": r_tol}
+
     records = {
         # far outside every world: the ratios stay astronomically large
-        18: {"worlds": _section(3.2e4, bins="10", z=(1.8, 1.9), f=0.527)},
+        18: {"worlds": _section(3.2e4, bins="10", z=(1.8, 1.9), f=0.527),
+             "selection": _sel(1.6e6)},
         # the closest channel: passes under the deployed cut only
-        29: {"worlds": _section(6.0e-3, bins="7", z=(1.7, 1.8), f=0.473, scale=1.0)},
+        29: {"worlds": _section(6.0e-3, bins="7", z=(1.7, 1.8), f=0.473, scale=1.0),
+             "selection": _sel(0.3)},
         # a channel one parameter's gate refused in the hardest world
         21: {"worlds": _section(0.5, bins="8", z=(1.8, 1.9), f=0.584,
                                 refuse=(("deployed", "fs8"),),
-                                notes=("the stability gate accepted no integration time for deployed/fs8",))},
+                                notes=("the stability gate accepted no integration time for deployed/fs8",)),
+             "selection": _sel(25.0)},
         # no operating point to carry through
         15: {"worlds": {"channel": 15, "bins": "9", "z_lo": 1.9, "z_hi": 2.0, "r_point": None,
                         "masked_fraction": None, "status": "no operating point",
@@ -241,9 +248,10 @@ def test_the_class_floor_builder_is_registered():
     assert rw.BUILDERS == (rw.build, rw.build_ledger, rw.build_class_floor, rw.build_held_out)
 
 
-def test_only_channels_carrying_a_floor_appear(tmp_path):
+def test_only_channels_carrying_a_coarse_frontier_appear(tmp_path):
     frag = _floor(tmp_path)
-    # the fixture gives every measured channel a floor; the two without a point carry none
+    # the class bound is the coarse frontier's minimum, so only channels whose
+    # selection section carries one are in the table
     assert [row[0] for row in _rows(frag)] == ["18", "21", "29"]
 
 
