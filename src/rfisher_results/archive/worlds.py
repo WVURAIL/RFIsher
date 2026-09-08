@@ -156,7 +156,19 @@ def bin_span(rows: Sequence[dict], bins: Sequence[int]) -> tuple[float, float]:
 
 @dataclass(frozen=True)
 class ChannelWorlds:
-    """One channel through the four worlds at its operating point."""
+    """One channel through the four worlds, at its operating point and at its frontier floor.
+
+    Two bases, and the difference between them is what makes the second one
+    worth carrying. The operating point is a *choice* -- the knee its
+    calibration block selected -- so a ratio quoted there answers "does this
+    policy fail". The frontier floor is the least residual any threshold on
+    the same statistic can leave behind, at any masked fraction, anywhere on
+    the surface, because the residual is a functional of that statistic alone
+    and the coarse rule's frontier is the plane's lower envelope by
+    construction. A ratio quoted at the floor therefore answers the stronger
+    question, "does every policy of this kind fail", and it is the only one of
+    the two that bounds a class rather than an instance.
+    """
 
     channel: int
     bins: tuple
@@ -164,50 +176,88 @@ class ChannelWorlds:
     z_hi: float
     r_point: float                      # the residual at the operating point, no delay credit
     masked_fraction: float
-    ratios: dict = field(default_factory=dict)          # (world, parameter) -> R
+    ratios: dict = field(default_factory=dict)          # (world, parameter) -> R at the operating point
     residuals: dict = field(default_factory=dict)       # world -> r after that world's suppression
     tolerances: dict = field(default_factory=dict)      # (world, parameter) -> r_tol
+    r_floor: float = math.nan                           # the frontier's least residual, the class bound
+    floor_ratios: dict = field(default_factory=dict)    # (world, parameter) -> R at the floor
+    floor_residuals: dict = field(default_factory=dict)
     status: str = "measured"
     notes: tuple[str, ...] = ()
 
+    def binding(self, parameters: Sequence[str], *, floor: bool = False) -> tuple[str, float, str]:
+        """``(world, R, parameter)`` of the best any world reaches over ``parameters``.
+
+        The binding parameter is the largest ratio inside a world, because that
+        is the one that has to pass; the best world is the smallest of those.
+        ``('', inf, '')`` when no world prices any of the parameters.
+        """
+        table = self.floor_ratios if floor else self.ratios
+        best = ("", math.inf, "")
+        for world, _, _, _ in WORLDS:
+            inside = [(table.get((world, p), math.nan), p) for p in parameters]
+            inside = [(v, p) for v, p in inside if math.isfinite(v)]
+            if not inside:
+                continue
+            value, param = max(inside)
+            if value < best[1]:
+                best = (world, value, param)
+        return best
+
     def as_row(self) -> dict:
         row = {"channel": self.channel, "bins": ";".join(str(b) for b in self.bins),
-               "z_lo": self.z_lo, "z_hi": self.z_hi, "r_point": self.r_point,
+               "z_lo": self.z_lo, "z_hi": self.z_hi, "r_point": self.r_point, "r_floor": self.r_floor,
                "masked_fraction": self.masked_fraction, "status": self.status, "notes": "; ".join(self.notes)}
         for world, _, _, _ in WORLDS:
             row[f"{world}_r"] = self.residuals.get(world, math.nan)
+            row[f"{world}_floor_r"] = self.floor_residuals.get(world, math.nan)
             row[f"{world}_suppression_db"] = suppression_db(world)
             for p in PARAMETERS:
                 row[f"{world}_{p}_R"] = self.ratios.get((world, p), math.nan)
+                row[f"{world}_{p}_floor_R"] = self.floor_ratios.get((world, p), math.nan)
                 row[f"{world}_{p}_r_tol"] = self.tolerances.get((world, p), math.nan)
         return row
 
 
 def channel_worlds(channel: int, bins: Sequence[int], r_point: float, masked_fraction: float,
-                   rows: Sequence[dict]) -> ChannelWorlds:
-    """One channel's four worlds from its residual and its bins' tolerances."""
+                   rows: Sequence[dict], *, r_floor: float = math.nan) -> ChannelWorlds:
+    """One channel's four worlds from its residuals and its bins' tolerances.
+
+    ``r_point`` is the operating point's residual and ``r_floor`` the frontier's
+    least, priced through the same worlds so the chapter can quote a class
+    bound beside a policy verdict.
+    """
     bins = tuple(int(b) for b in bins)
     z_lo, z_hi = bin_span(rows, bins)
-    ratios, residuals, tols = {}, {}, {}
+    ratios, residuals, tols, floor_ratios, floor_residuals = {}, {}, {}, {}, {}
     notes = []
     if not bins:
-        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, status="no overlapping bin",
+        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, r_floor=r_floor,
+                             status="no overlapping bin",
                              notes=("the channel overlaps no forecast bin, so no world applies",))
     if not math.isfinite(r_point):
-        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, status="no operating point",
+        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, r_floor=r_floor,
+                             status="no operating point",
                              notes=("the channel has no operating point to carry through the worlds",))
     for world, _, _, _ in WORLDS:
-        r = r_point / (10.0 ** (suppression_db(world) / 10.0))
+        drop = 10.0 ** (suppression_db(world) / 10.0)
+        r = r_point / drop
         residuals[world] = r
+        floor_residuals[world] = r_floor / drop if math.isfinite(r_floor) else math.nan
         for p in PARAMETERS:
             tol = tolerance_of(rows, world, bins, p)
             tols[(world, p)] = tol
-            ratios[(world, p)] = r / tol if math.isfinite(tol) and tol > 0 else math.nan
+            usable = math.isfinite(tol) and tol > 0
+            ratios[(world, p)] = r / tol if usable else math.nan
+            floor_ratios[(world, p)] = (floor_residuals[world] / tol
+                                        if usable and math.isfinite(floor_residuals[world]) else math.nan)
     missing = [f"{w}/{p}" for (w, p), t in tols.items() if not math.isfinite(t)]
     if missing:
         notes.append(f"the stability gate accepted no integration time for {', '.join(sorted(missing))}")
+    if not math.isfinite(r_floor):
+        notes.append("the channel carries no frontier floor, so no class bound is quoted beside its point")
     return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, ratios, residuals, tols,
-                         "measured", tuple(notes))
+                         r_floor, floor_ratios, floor_residuals, "measured", tuple(notes))
 
 
 def write_world_rows(results: Sequence[ChannelWorlds], path: Path | str) -> Path:

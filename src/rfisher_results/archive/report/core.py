@@ -179,8 +179,17 @@ def fmt_range(low, high, digits: int = 2, dash: str = DASH) -> str:
     return f"{fmt(low, digits)}--{fmt(high, digits)}"
 
 
-def booktabs(header: Sequence[str], rows: Iterable[Sequence[str]], align: str, *, midrules: Iterable[int] = ()) -> str:
-    """A booktabs ``tabular``: cells are final LaTeX (escape with :func:`tex` first)."""
+def booktabs(header: Sequence[str], rows: Iterable[Sequence[str]], align: str, *, midrules: Iterable[int] = (),
+             longtable: bool = False, caption: str | None = None, label: str | None = None) -> str:
+    """A booktabs table: cells are final LaTeX (escape with :func:`tex` first).
+
+    ``longtable=True`` emits a ``longtable`` instead of a ``tabular``, with the
+    header repeated on every page. A table taller than the text block silently
+    loses its last rows inside a float, so any fragment that can outgrow a page
+    -- anything with a row per channel per world, say -- must ask for one. The
+    caption and label then belong to the environment rather than to a float
+    around it, so pass them here and do not wrap the fragment in a ``table``.
+    """
     rows = [list(r) for r in rows]
     n = len(header)
     if len(align.replace("|", "")) != n:
@@ -189,12 +198,22 @@ def booktabs(header: Sequence[str], rows: Iterable[Sequence[str]], align: str, *
         if len(r) != n:
             raise ValueError(f"row has {len(r)} cells, header {n}: {r}")
     breaks = set(midrules)
-    lines = [f"\\begin{{tabular}}{{{align}}}", "\\toprule", " & ".join(header) + r" \\", "\\midrule"]
+    head = " & ".join(header) + r" \\"
+    if longtable:
+        lines = [f"\\begin{{longtable}}{{{align}}}"]
+        if caption is not None:
+            lines.append(f"\\caption{{{caption}}}" + (f"\\label{{{label}}}" if label else "") + r" \\")
+        lines += ["\\toprule", head, "\\midrule", "\\endfirsthead",
+                  "\\toprule", head, "\\midrule", "\\endhead",
+                  "\\midrule", f"\\multicolumn{{{n}}}{{r}}{{\\emph{{continued on the next page}}}} \\\\",
+                  "\\endfoot", "\\bottomrule", "\\endlastfoot"]
+    else:
+        lines = [f"\\begin{{tabular}}{{{align}}}", "\\toprule", head, "\\midrule"]
     for i, r in enumerate(rows):
         if i in breaks and i > 0:
             lines.append("\\midrule")
         lines.append(" & ".join(r) + r" \\")
-    lines += ["\\bottomrule", "\\end{tabular}"]
+    lines += ["\\end{longtable}"] if longtable else ["\\bottomrule", "\\end{tabular}"]
     return "\n".join(lines) + "\n"
 
 

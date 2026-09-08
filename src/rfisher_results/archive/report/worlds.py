@@ -15,11 +15,24 @@ points (55 ns and 110 ns, the ``kfg`` 22 and 44 banks) and the deployed
 divides that residual by its suppression and prices it against its own bank's
 tolerance. ``R = r / r_tol`` per parameter; ``R <= 1`` passes.
 
-Two fragments. ``worlds`` (``tab:tolerance:worlds``) is the chapter table: one
-row per channel, the residual under each world and the binding ratio there
+Three fragments. ``worlds`` (``tab:tolerance:worlds``) is the chapter table:
+one row per channel, the residual under each world and the binding ratio there
 --- the largest of the three parameters, which is the one that has to pass.
 ``worlds_ledger`` (``tab:archive:worlds``) is Appendix~C's: the same rows
-opened out to every parameter's ratio, with the tolerance behind it.
+opened out to every parameter's ratio, with the tolerance behind it. And
+``worlds_class_floor`` (``tab:tolerance:classfloor``) asks the stronger
+question.
+
+The class floor. An operating point is a choice, so a ratio quoted there says
+only that *this* policy fails. The residual is a functional of the per-frame
+shelf estimate alone, so the coarse rule's frontier is the lower envelope of
+the ``(f, r_sys)`` plane by construction and its minimum is the least residual
+any threshold on that statistic can leave, at any masked fraction, anywhere on
+the surface. Priced through the same four worlds, that minimum bounds the whole
+class of per-frame masking policies driven by this measurement rather than one
+member of it. The third fragment carries it, and the counts it reports --- how
+many channels reach each tier *at the floor* --- are the chapter's strongest
+claim.
 
 The tolerance is the smallest per-unit-residual bias over the integration
 times that pass the registered response-stability gate, taken over the
@@ -49,8 +62,21 @@ NAME = "worlds"
 LABEL = "tab:tolerance:worlds"
 LEDGER_NAME = "worlds_ledger"
 LEDGER_LABEL = "tab:archive:worlds"
+FLOOR_NAME = "worlds_class_floor"
+FLOOR_LABEL = "tab:tolerance:classfloor"
 KEY = "ch09.worlds"
 LEDGER_KEY = "appC.worlds"
+FLOOR_KEY = "ch09.classfloor"
+LEDGER_CAPTION = (
+    "The four delay-cut worlds opened out per parameter, behind the binding ratios of "
+    "Table~\\ref{tab:tolerance:worlds}. Four rows per channel, one per world: the shelf suppression that "
+    "world's cut removes, the residual it leaves at the channel's operating point, and $R = r_{\\rm sys}/"
+    "r_{\\rm tol}$ for each of the three parameters against that world's own bank. The tolerances behind the "
+    "ratios are carried as numbers rather than printed; the ratio is what the reader needs, and the tolerance "
+    "changes bank by bank. Each world's tolerance is a minimum over the integration times its own stability "
+    "gate accepts, so a ratio may rise between worlds without the cut removing less power.")
+DILATIONS = tuple(p for p in PARAMETERS if p != "fs8")
+GROWTH = "fs8"
 SECTION = "worlds"
 HALF_BAND_BREAK = 25
 PARAM_LABEL = {"aperp": r"\alpha_\perp", "apar": r"\alpha_\parallel", "fs8": r"f\sigma_8"}
@@ -286,9 +312,14 @@ def build_ledger(run: Run) -> Fragment:
         if rows:
             breaks.append(len(rows))
         rows.extend(_ledger_rows(c, frag))
-    frag.tex = core.booktabs(LEDGER_HEADER, rows, LEDGER_ALIGN, midrules=tuple(breaks))
-    frag.notes.append(f"layout: {len(LEDGER_HEADER)} columns, four rows per channel (one per world), a midrule "
-                      "between channels; natural width 340pt at 11pt, upright inside the text block unscaled")
+    # four rows per channel is taller than any page: a float would silently drop the tail,
+    # so the fragment is a longtable and carries its own caption and label
+    frag.tex = core.booktabs(LEDGER_HEADER, rows, LEDGER_ALIGN, midrules=tuple(breaks), longtable=True,
+                             caption=LEDGER_CAPTION, label=LEDGER_LABEL)
+    frag.notes.append(f"layout: a longtable of {len(LEDGER_HEADER)} columns, four rows per channel (one per "
+                      f"world) over {len(channels)} channels, a midrule between channels and the header repeated "
+                      "on every page; it carries its own caption and label, so the chapter must input it directly "
+                      "rather than wrapping it in a table float")
     frag.notes.append("cut (dB) is the shelf suppression the world's delay cut removes; r is the operating point's "
                       "residual after it; each R is r over that world's own bank tolerance for the parameter")
     frag.notes.append("the tolerances are carried as numbers (appC.worlds.r_tol.*) but not printed: the ratio is what "
@@ -296,4 +327,112 @@ def build_ledger(run: Run) -> Fragment:
     return frag
 
 
-BUILDERS = (build, build_ledger)
+FLOOR_HEADER = ("ch", r"$r_{\rm floor}$", r"$r_{\rm floor}/r_{\rm point}$", r"best $R_{f\sigma_8}$",
+                "world", r"best $R_{\rm dil}$", "world")
+FLOOR_ALIGN = "lrr" + "rl" * 2
+
+
+def _best_over(c: Channel, parameters, *, floor: bool):
+    """``(world, R, parameter)`` the channel reaches over ``parameters``, at the floor or the point."""
+    s = c.section(SECTION)
+    tag = "_floor_R" if floor else "_R"
+    best = ("", math.inf, "")
+    for world in WORLD_NAMES:
+        inside = [(_num(s.get(f"{world}_{p}{tag}")), p) for p in parameters]
+        inside = [(v, p) for v, p in inside if v is not None]
+        if not inside:
+            continue
+        value, param = max(inside)
+        if value < best[1]:
+            best = (world, value, param)
+    return best
+
+
+def build_class_floor(run: Run) -> Fragment:
+    """``tab:tolerance:classfloor``: the least residual any threshold on this statistic can leave.
+
+    One row per channel: the frontier's floor, how far below the operating
+    point it sits, and the best ratio any of the four worlds reaches *there*
+    for the growth rate and for the dilations. A channel outside at the floor
+    is outside for every threshold on the statistic, not just for the one the
+    knee chose.
+    """
+    frag = Fragment(FLOOR_NAME, FLOOR_LABEL, "")
+    channels = [c for c in sorted(run.channels, key=lambda c: c.channel)
+                if c.has(SECTION) and _num(c.section(SECTION).get("r_floor")) is not None]
+    if not channels:
+        frag.tex = ""
+        frag.notes.append("no channel carries a frontier floor: the run predates the class bound, or no channel's "
+                          "calibration surface produced a frontier")
+        return frag
+
+    rows = []
+    for c in channels:
+        s = c.section(SECTION)
+        ch = c.channel
+        row = {"channel": ch}
+
+        def add(column, value, **kw):
+            frag.add(f"{FLOOR_KEY}.{column}.ch{ch}", value, row=row, column=column, **kw)
+
+        floor, point = _num(s.get("r_floor")), _num(s.get("r_point"))
+        gw, gr, _ = _best_over(c, (GROWTH,), floor=True)
+        dw, dr, _ = _best_over(c, DILATIONS, floor=True)
+        share = floor / point if point else math.nan
+        cells = [str(ch), f"${sci(floor)}$", f"${core.fmt(share, 3)}$" if math.isfinite(share) else DASH]
+        for value, world in ((gr, gw), (dr, dw)):
+            cells.append(f"${sci(value)}$" if math.isfinite(value) else DASH)
+            cells.append(WORLD_LABEL[world] if world else DASH)
+        rows.append(cells)
+
+        add("r_floor", floor, status="bounded", renderings=(sci(floor).replace("\\times", "x"),))
+        add("floor_over_point", share, precision=3)
+        for column, value, world in (("growth_R", gr, gw), ("dilation_R", dr, dw)):
+            if math.isfinite(value):
+                add(column, value, status="bounded", renderings=(sci(value).replace("\\times", "x"),))
+                add(f"{column}_world", world, kind="text",
+                    renderings=(WORLD_LABEL[world].replace("$", "").replace("~", " "),))
+            else:
+                add(column, None, kind="text", status="pending", renderings=(DASH,))
+                add(f"{column}_world", None, kind="text", status="pending", renderings=(DASH,))
+
+    frag.tex = core.booktabs(FLOOR_HEADER, rows, FLOOR_ALIGN, midrules=_half_band_breaks(channels))
+
+    growth = [(c.channel, _best_over(c, (GROWTH,), floor=True)[1]) for c in channels]
+    dil = [(c.channel, _best_over(c, DILATIONS, floor=True)[1]) for c in channels]
+    growth_in = [ch for ch, v in growth if v <= 1.0]
+    dil_in = [ch for ch, v in dil if v <= 1.0]
+    best_growth = min((v for _, v in growth if math.isfinite(v)), default=math.nan)
+    best_growth_ch = next((ch for ch, v in growth if v == best_growth), None)
+    frag.add(f"{FLOOR_KEY}.channels", len(channels), kind="int", column="channels")
+    frag.add(f"{FLOOR_KEY}.n_growth_inside", len(growth_in), kind="int", column="channels")
+    frag.add(f"{FLOOR_KEY}.n_dilation_inside", len(dil_in), kind="int", column="channels")
+    if best_growth_ch is not None:
+        frag.add(f"{FLOOR_KEY}.best_growth_R", best_growth, status="bounded", column="R",
+                 renderings=(sci(best_growth).replace("\\times", "x"),))
+        frag.add(f"{FLOOR_KEY}.best_growth_channel", best_growth_ch, kind="int", column="channel")
+    worst = max((v for _, v in growth if math.isfinite(v)), default=math.nan)
+    if math.isfinite(worst):
+        frag.add(f"{FLOOR_KEY}.worst_growth_R", worst, status="bounded", column="R",
+                 renderings=(sci(worst).replace("\\times", "x"),))
+
+    frag.notes.append(f"layout: one {len(FLOOR_HEADER)}-column tabular, natural width 336pt at 11pt; it sets "
+                      "upright inside the text block unscaled")
+    frag.notes.append("the floor is the least r_sys anywhere on the coarse rule's own frontier, which is the lower "
+                      "envelope of the (f, r_sys) plane by construction because the residual is a functional of the "
+                      "per-frame shelf estimate alone; it is therefore a bound on every threshold on that statistic "
+                      "and not a setting anyone would operate at")
+    frag.notes.append(f"at the floor, and in the most favourable of the four worlds, {len(growth_in)} of "
+                      f"{len(channels)} channels reach the growth-rate tolerance ({_channel_list(growth_in)}) and "
+                      f"{len(dil_in)} reach both dilations ({_channel_list(dil_in)})")
+    if best_growth_ch is not None:
+        frag.notes.append(f"the closest the band comes on the growth rate is ch{best_growth_ch:02d} at R = "
+                          f"{core.fmt(best_growth, 3, sig=True)}, and the furthest is "
+                          f"{core.fmt(worst, 3, sig=True)}")
+    frag.notes.append("scope: this bounds masking, not subtraction; it is at frame resolution, because the products "
+                      "carry one spectrum per frame and nothing within one; and it prices a residual transferred "
+                      "across the allocation rather than measured in the bins it protects")
+    return frag
+
+
+BUILDERS = (build, build_ledger, build_class_floor)
