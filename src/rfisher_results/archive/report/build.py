@@ -41,8 +41,8 @@ def table_builders(modules: Sequence[str] = TABLE_MODULES) -> list[Callable[[Run
 
 
 def build_report(results_dir: Path | str, out_dir: Path | str | None = None, *, commit: str | None = None,
-                 generated: str | None = None, figures: bool = True, modules: Sequence[str] = TABLE_MODULES,
-                 figure_modules: Sequence[str] = FIGURE_MODULES, require_tex: bool = True) -> dict:
+                 generated: str | None = None, figures: bool = True, modules: Sequence[str] | None = None,
+                 figure_modules: Sequence[str] | None = None, require_tex: bool = True) -> dict:
     """Render tables, numbers and figures for one run; return the manifest.
 
     ``require_tex`` is the document's typography contract: the figures are set
@@ -52,6 +52,11 @@ def build_report(results_dir: Path | str, out_dir: Path | str | None = None, *, 
     """
     import datetime as dt
 
+    # the registries are read here rather than bound as default arguments: a default is
+    # evaluated once at definition, so a caller (or a test) that replaces TABLE_MODULES or
+    # FIGURE_MODULES on the module would have been ignored and the full registry rendered
+    modules = TABLE_MODULES if modules is None else modules
+    figure_modules = FIGURE_MODULES if figure_modules is None else figure_modules
     run = load_run(results_dir)
     out = Path(out_dir) if out_dir is not None else run.results_dir / "dissertation"
     commit = commit or run.commit
