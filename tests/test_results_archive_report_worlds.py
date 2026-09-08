@@ -16,23 +16,39 @@ REAL_RUN = Path(os.environ.get("RFISHER_ARCHIVE_RESULTS", "/home/djg/rail/result
 WORLD_NAMES = tuple(w[0] for w in WORLDS)
 
 
-def _section(r_point, *, bins="7", z=(1.7, 1.8), f=0.4, status="measured", scale=1.0, refuse=(), notes=()):
-    """A worlds section: the residual carried through each cut, priced on a tolerance that tightens with it."""
-    out = {"channel": 0, "bins": bins, "z_lo": z[0], "z_hi": z[1], "r_point": r_point,
+def _section(r_point, *, bins="7", z=(1.7, 1.8), f=0.4, status="measured", scale=1.0, refuse=(), notes=(),
+             floor_share=0.5):
+    """A worlds section: the residual carried through each cut, priced on a tolerance that tightens with it.
+
+    ``floor_share`` sets the frontier floor as a fraction of the operating
+    point's residual, so the class-bound columns have something to price.
+    """
+    r_floor = r_point * floor_share if r_point is not None and math.isfinite(r_point) else math.nan
+    out = {"channel": 0, "bins": bins, "z_lo": z[0], "z_hi": z[1], "r_point": r_point, "r_floor": r_floor,
            "masked_fraction": f, "status": status, "notes": "; ".join(notes)}
     for world in WORLD_NAMES:
         db = suppression_db(world)
-        r = r_point / 10 ** (db / 10) if r_point is not None and math.isfinite(r_point) else math.nan
+        drop = 10 ** (db / 10)
+        r = r_point / drop if r_point is not None and math.isfinite(r_point) else math.nan
         out[f"{world}_r"] = r
+        out[f"{world}_floor_r"] = r_floor / drop if math.isfinite(r_floor) else math.nan
         out[f"{world}_suppression_db"] = db
         for p in PARAMETERS:
             tol = math.nan if (world, p) in refuse else scale * 1e-2 / (PARAMETERS.index(p) + 1)
+            usable = math.isfinite(tol) and math.isfinite(r)
             out[f"{world}_{p}_r_tol"] = tol
-            out[f"{world}_{p}_R"] = r / tol if math.isfinite(tol) and math.isfinite(r) else math.nan
+            out[f"{world}_{p}_R"] = r / tol if usable else math.nan
+            out[f"{world}_{p}_floor_R"] = out[f"{world}_floor_r"] / tol if usable else math.nan
     return out
 
 
+_LEDGERS = set()
+
+
 def _ledger(tmp_path):
+    if tmp_path in _LEDGERS:
+        return tmp_path
+    _LEDGERS.add(tmp_path)
     records = {
         # far outside every world: the ratios stay astronomically large
         18: {"worlds": _section(3.2e4, bins="10", z=(1.8, 1.9), f=0.527)},
@@ -72,14 +88,21 @@ def _both(tmp_path):
     return rw.build(run), rw.build_ledger(run)
 
 
+_STRUCTURE = (r"\midrule", r"\toprule", r"\bottomrule", r"\endfirsthead", r"\endhead",
+              r"\endfoot", r"\endlastfoot")
+
+
 def _rows(frag):
+    """The body rows of a tabular or a longtable, with the structural lines dropped."""
     lines = frag.tex.splitlines()
-    body = lines[lines.index(r"\midrule") + 1:lines.index(r"\bottomrule")]
-    return [[c.strip() for c in line.rstrip(" \\").split(" & ")] for line in body if line != r"\midrule"]
+    start = lines.index(r"\endlastfoot") + 1 if r"\endlastfoot" in lines else lines.index(r"\midrule") + 1
+    stop = lines.index(r"\end{longtable}") if r"\end{longtable}" in lines else lines.index(r"\bottomrule")
+    body = [ln for ln in lines[start:stop] if ln not in _STRUCTURE and not ln.startswith(r"\multicolumn")]
+    return [[c.strip() for c in line.rstrip(" \\").split(" & ")] for line in body]
 
 
 def test_builders_are_registered():
-    assert rw.BUILDERS == (rw.build, rw.build_ledger)
+    assert rw.BUILDERS == (rw.build, rw.build_ledger, rw.build_class_floor)
     from rfisher_results.archive.report import build as b
     assert "worlds" in b.TABLE_MODULES
 
@@ -152,6 +175,13 @@ def test_the_notes_book_both_sides_of_the_cut(tmp_path):
     assert "mode geometry only" in joined
 
 
+def test_the_ledger_is_a_longtable_carrying_its_own_caption(tmp_path):
+    _, led = _both(tmp_path)
+    assert r"\begin{longtable}" in led.tex and r"\endhead" in led.tex
+    assert rw.LEDGER_LABEL in led.tex          # the label rides with the environment, not a float
+    assert r"\begin{tabular}" not in led.tex
+
+
 def test_the_ledger_opens_out_every_parameter(tmp_path):
     _, led = _both(tmp_path)
     rows = _rows(led)
@@ -200,3 +230,76 @@ def test_the_real_run_builds_when_it_carries_the_section():
     chapter, led = rw.build(run), rw.build_ledger(run)
     assert chapter.tex.count(r"\\") >= 5 and led.tex
     assert any(n.key.startswith("ch09.worlds.n_passing.") for n in chapter.numbers)
+
+
+# ---------------------------------------------------------------- the class floor
+def _floor(tmp_path):
+    return rw.build_class_floor(core.load_run(_ledger(tmp_path)))
+
+
+def test_the_class_floor_builder_is_registered():
+    assert rw.BUILDERS == (rw.build, rw.build_ledger, rw.build_class_floor)
+
+
+def test_only_channels_carrying_a_floor_appear(tmp_path):
+    frag = _floor(tmp_path)
+    # the fixture gives every measured channel a floor; the two without a point carry none
+    assert [row[0] for row in _rows(frag)] == ["18", "21", "29"]
+
+
+def test_the_floor_ratio_is_the_point_ratio_scaled_by_the_floor(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+
+    s = run.by_channel()[29].section("worlds")
+    for world in WORLD_NAMES:
+        for p in PARAMETERS:
+            point, floor = s[f"{world}_{p}_R"], s[f"{world}_{p}_floor_R"]
+            assert floor == pytest.approx(point * s["r_floor"] / s["r_point"])
+
+
+def test_the_floor_is_never_worse_than_the_point(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    for c in run.channels:
+        if not c.has("worlds"):
+            continue
+        s = c.section("worlds")
+        if s.get("r_floor") is None:
+            continue
+        assert s["r_floor"] <= s["r_point"]
+        _, at_floor, _ = rw._best_over(c, PARAMETERS, floor=True)
+        _, at_point, _ = rw._best_over(c, PARAMETERS, floor=False)
+        assert at_floor <= at_point
+
+
+def test_the_counts_are_taken_at_the_floor_not_the_point(tmp_path):
+    run = core.load_run(_ledger(tmp_path))
+    frag = rw.build_class_floor(run)
+    counts = {n.key.rsplit(".", 1)[-1]: n.value for n in frag.numbers
+              if n.key.startswith("ch09.classfloor.n_")}
+    inside = [c.channel for c in run.channels
+              if c.has("worlds") and c.section("worlds").get("r_floor") is not None
+              and rw._best_over(c, ("fs8",), floor=True)[1] <= 1.0]
+    assert counts["n_growth_inside"] == len(inside)
+
+
+def test_the_notes_state_the_bound_and_its_scope(tmp_path):
+    joined = " ".join(_floor(tmp_path).notes)
+    assert "lower envelope of the (f, r_sys) plane by construction" in joined
+    assert "not a setting anyone would operate at" in joined
+    assert "bounds masking, not subtraction" in joined
+    assert "frame resolution" in joined
+
+
+def test_a_run_without_floors_says_so(tmp_path):
+    ledger = tmp_path / "ledger"
+    (ledger / "channels").mkdir(parents=True)
+    (ledger / "run.json").write_text(json.dumps(
+        {"schema": {"name": "rfisher-archive-ledger", "version": 1}, "generated": "x", "producer": {},
+         "channels": ["channels/ch29_fid871.json"]}))
+    section = _section(1.0)
+    section.pop("r_floor", None)
+    (ledger / "channels" / "ch29_fid871.json").write_text(json.dumps(
+        {"channel": 29, "freq_id": 871, "product": "x.npz", "product_sha256": "b" * 64, "notes": [],
+         "sections": {"worlds": section}}))
+    frag = rw.build_class_floor(core.load_run(tmp_path))
+    assert frag.tex == "" and "no channel carries a frontier floor" in frag.notes[0]

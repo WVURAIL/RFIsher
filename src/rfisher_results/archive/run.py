@@ -568,7 +568,8 @@ def _worlds(results: Sequence[dict]) -> list:
         op = r["operating_row"] or {}
         out.append(worlds.channel_worlds(ch, bins_of.get(ch, ()),
                                          float(op.get("operating_r_sys", math.nan)),
-                                         float(op.get("operating_masked_fraction", math.nan)), rows))
+                                         float(op.get("operating_masked_fraction", math.nan)), rows,
+                                         r_floor=float(op.get("r_floor", math.nan))))
     return out
 
 
