@@ -562,14 +562,35 @@ def _worlds(results: Sequence[dict]) -> list:
     except Exception as exc:                                  # no banks, or no released mapping
         print(f"worlds: skipped ({type(exc).__name__}: {exc})", flush=True)
         return []
+
+    def _num(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return math.nan
+
     out = []
     for r in results:
         ch = r["record"].channel
         op = r["operating_row"] or {}
+        sel = (r["selection_row"] or {})
+        null = (r["null_row"] or {})
+        chain = (r["chain_row"] or {})
+        # A residual that equals the floor times the gain is the floor: every kept
+        # frame sits at or below the level the instrument can resolve, so what is
+        # reported is a detection limit and not a measurement of what survived.
+        floor_db, gain = _num(null.get("floor_db")), _num(chain.get("chain_gain"))
+        r_eval = _num(sel.get("r_sys_evaluation"))
+        floor_bound = False
+        if math.isfinite(floor_db) and math.isfinite(gain) and gain > 0:
+            at_floor = 10.0 ** (floor_db / 10.0) * gain
+            floor_bound = any(math.isfinite(v) and at_floor > 0 and abs(v / at_floor - 1.0) < 1e-3
+                              for v in (r_eval, _num(op.get("operating_r_sys"))))
         out.append(worlds.channel_worlds(ch, bins_of.get(ch, ()),
-                                         float(op.get("operating_r_sys", math.nan)),
-                                         float(op.get("operating_masked_fraction", math.nan)), rows,
-                                         r_floor=float(op.get("r_floor", math.nan))))
+                                         _num(op.get("operating_r_sys")),
+                                         _num(op.get("operating_masked_fraction")), rows,
+                                         r_floor=_num(op.get("r_floor")),
+                                         r_evaluation=r_eval, floor_bound=floor_bound))
     return out
 
 

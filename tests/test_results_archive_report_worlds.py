@@ -102,7 +102,7 @@ def _rows(frag):
 
 
 def test_builders_are_registered():
-    assert rw.BUILDERS == (rw.build, rw.build_ledger, rw.build_class_floor)
+    assert rw.BUILDERS == (rw.build, rw.build_ledger, rw.build_class_floor, rw.build_held_out)
     from rfisher_results.archive.report import build as b
     assert "worlds" in b.TABLE_MODULES
 
@@ -238,7 +238,7 @@ def _floor(tmp_path):
 
 
 def test_the_class_floor_builder_is_registered():
-    assert rw.BUILDERS == (rw.build, rw.build_ledger, rw.build_class_floor)
+    assert rw.BUILDERS == (rw.build, rw.build_ledger, rw.build_class_floor, rw.build_held_out)
 
 
 def test_only_channels_carrying_a_floor_appear(tmp_path):
@@ -303,3 +303,68 @@ def test_a_run_without_floors_says_so(tmp_path):
          "sections": {"worlds": section}}))
     frag = rw.build_class_floor(core.load_run(tmp_path))
     assert frag.tex == "" and "no channel carries a frontier floor" in frag.notes[0]
+
+
+# ------------------------------------------------- the held-out basis
+def _with_heldout(tmp_path, r_eval, floor_bound=False):
+    """A one-channel run whose point was replayed on the evaluation block."""
+    ledger = tmp_path / "ledger"
+    (ledger / "channels").mkdir(parents=True, exist_ok=True)
+    (ledger / "run.json").write_text(json.dumps(
+        {"schema": {"name": "rfisher-archive-ledger", "version": 1}, "generated": "x",
+         "producer": {"commit": "a" * 40}, "channels": ["channels/ch29_fid871.json"]}))
+    section = _section(1.0)
+    section["r_evaluation"] = r_eval
+    section["floor_bound"] = floor_bound
+    for world in WORLD_NAMES:
+        drop = 10 ** (suppression_db(world) / 10)
+        section[f"{world}_evaluation_r"] = r_eval / drop if r_eval is not None else math.nan
+        for p in PARAMETERS:
+            tol = section[f"{world}_{p}_r_tol"]
+            section[f"{world}_{p}_evaluation_R"] = (
+                (r_eval / drop) / tol if r_eval is not None and math.isfinite(tol) else math.nan)
+    (ledger / "channels" / "ch29_fid871.json").write_text(json.dumps(
+        {"channel": 29, "freq_id": 871, "product": "x.npz", "product_sha256": "b" * 64,
+         "notes": [], "sections": {"worlds": section}}))
+    return rw.build_held_out(core.load_run(tmp_path))
+
+
+def test_the_held_out_table_prices_the_evaluation_residual(tmp_path):
+    frag = _with_heldout(tmp_path, 2.0)
+    body = _rows(frag)
+    assert [r[0] for r in body] == ["29"]
+    got = {n.key.rsplit(".", 2)[-2]: n.value for n in frag.numbers if ".ch29" in n.key}
+    assert got["r_evaluation"] == pytest.approx(2.0)
+    # the 200 ns column is the residual after that cut, over that world's tolerance
+    drop = 10 ** (suppression_db("deployed") / 10)
+    assert got["200_growth_R"] == pytest.approx((2.0 / drop) / (1e-2 / 3))
+
+
+def test_a_floor_bound_channel_is_marked_and_its_ratios_are_limits(tmp_path):
+    frag = _with_heldout(tmp_path, 2.0, floor_bound=True)
+    assert _rows(frag)[0][-1] == "floor"
+    joined = " ".join(frag.notes)
+    assert "upper limits" in joined and "cannot say where" in joined
+    assert any(n.key.endswith("n_floor_bound") and n.value == 1 for n in frag.numbers)
+
+
+def test_the_held_out_counts_are_read_on_the_evaluation_block(tmp_path):
+    frag = _with_heldout(tmp_path, 2.0)
+    joined = " ".join(frag.notes)
+    assert "the calibration never saw" in joined
+    assert "on the growth rate, none at either" in joined
+
+
+def test_a_run_without_a_replay_says_so(tmp_path):
+    ledger = tmp_path / "ledger"
+    (ledger / "channels").mkdir(parents=True, exist_ok=True)
+    (ledger / "run.json").write_text(json.dumps(
+        {"schema": {"name": "rfisher-archive-ledger", "version": 1}, "generated": "x", "producer": {},
+         "channels": ["channels/ch29_fid871.json"]}))
+    section = _section(1.0)
+    section.pop("r_evaluation", None)
+    (ledger / "channels" / "ch29_fid871.json").write_text(json.dumps(
+        {"channel": 29, "freq_id": 871, "product": "x.npz", "product_sha256": "b" * 64,
+         "notes": [], "sections": {"worlds": section}}))
+    frag = rw.build_held_out(core.load_run(tmp_path))
+    assert frag.tex == "" and "no channel carries a held-out residual" in frag.notes[0]
