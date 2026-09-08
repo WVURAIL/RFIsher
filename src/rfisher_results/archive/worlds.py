@@ -182,17 +182,25 @@ class ChannelWorlds:
     r_floor: float = math.nan                           # the frontier's least residual, the class bound
     floor_ratios: dict = field(default_factory=dict)    # (world, parameter) -> R at the floor
     floor_residuals: dict = field(default_factory=dict)
+    r_evaluation: float = math.nan                      # the residual the point leaves on the held-out block
+    evaluation_ratios: dict = field(default_factory=dict)
+    evaluation_residuals: dict = field(default_factory=dict)
+    floor_bound: bool = False                           # every kept frame is at the sensitivity floor
     status: str = "measured"
     notes: tuple[str, ...] = ()
 
-    def binding(self, parameters: Sequence[str], *, floor: bool = False) -> tuple[str, float, str]:
+    def _table(self, basis: str) -> dict:
+        return {"point": self.ratios, "floor": self.floor_ratios,
+                "evaluation": self.evaluation_ratios}[basis]
+
+    def binding(self, parameters: Sequence[str], *, floor: bool = False, basis: str | None = None) -> tuple[str, float, str]:
         """``(world, R, parameter)`` of the best any world reaches over ``parameters``.
 
         The binding parameter is the largest ratio inside a world, because that
         is the one that has to pass; the best world is the smallest of those.
         ``('', inf, '')`` when no world prices any of the parameters.
         """
-        table = self.floor_ratios if floor else self.ratios
+        table = self._table(basis) if basis else (self.floor_ratios if floor else self.ratios)
         best = ("", math.inf, "")
         for world, _, _, _ in WORLDS:
             inside = [(table.get((world, p), math.nan), p) for p in parameters]
@@ -207,57 +215,77 @@ class ChannelWorlds:
     def as_row(self) -> dict:
         row = {"channel": self.channel, "bins": ";".join(str(b) for b in self.bins),
                "z_lo": self.z_lo, "z_hi": self.z_hi, "r_point": self.r_point, "r_floor": self.r_floor,
+               "r_evaluation": self.r_evaluation, "floor_bound": self.floor_bound,
                "masked_fraction": self.masked_fraction, "status": self.status, "notes": "; ".join(self.notes)}
         for world, _, _, _ in WORLDS:
             row[f"{world}_r"] = self.residuals.get(world, math.nan)
             row[f"{world}_floor_r"] = self.floor_residuals.get(world, math.nan)
+            row[f"{world}_evaluation_r"] = self.evaluation_residuals.get(world, math.nan)
             row[f"{world}_suppression_db"] = suppression_db(world)
             for p in PARAMETERS:
                 row[f"{world}_{p}_R"] = self.ratios.get((world, p), math.nan)
                 row[f"{world}_{p}_floor_R"] = self.floor_ratios.get((world, p), math.nan)
+                row[f"{world}_{p}_evaluation_R"] = self.evaluation_ratios.get((world, p), math.nan)
                 row[f"{world}_{p}_r_tol"] = self.tolerances.get((world, p), math.nan)
         return row
 
 
 def channel_worlds(channel: int, bins: Sequence[int], r_point: float, masked_fraction: float,
-                   rows: Sequence[dict], *, r_floor: float = math.nan) -> ChannelWorlds:
-    """One channel's four worlds from its residuals and its bins' tolerances.
+                   rows: Sequence[dict], *, r_floor: float = math.nan,
+                   r_evaluation: float = math.nan, floor_bound: bool = False) -> ChannelWorlds:
+    """One channel's four worlds on three bases, each priced through the same cuts.
 
-    ``r_point`` is the operating point's residual and ``r_floor`` the frontier's
-    least, priced through the same worlds so the chapter can quote a class
-    bound beside a policy verdict.
+    ``r_point`` is the operating point's residual on the calibration block --- a
+    policy verdict. ``r_floor`` is the frontier's least, which bounds the whole
+    class of thresholds on the statistic. ``r_evaluation`` is what the same
+    point leaves on the held-out block the calibration never saw, and it is the
+    only one of the three that is not graded on its own homework.
+
+    ``floor_bound`` marks a channel whose kept frames all sit at the sensitivity
+    floor, so the residual reported is the floor itself rather than a
+    measurement of what survived. Its ratios are upper limits: the true residual
+    is somewhere below and the instrument cannot say where.
     """
     bins = tuple(int(b) for b in bins)
     z_lo, z_hi = bin_span(rows, bins)
-    ratios, residuals, tols, floor_ratios, floor_residuals = {}, {}, {}, {}, {}
+    ratios, residuals, tols = {}, {}, {}
+    floor_ratios, floor_residuals, ev_ratios, ev_residuals = {}, {}, {}, {}
     notes = []
+    common = dict(r_floor=r_floor, r_evaluation=r_evaluation, floor_bound=floor_bound)
     if not bins:
-        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, r_floor=r_floor,
-                             status="no overlapping bin",
-                             notes=("the channel overlaps no forecast bin, so no world applies",))
+        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, status="no overlapping bin",
+                             notes=("the channel overlaps no forecast bin, so no world applies",), **common)
     if not math.isfinite(r_point):
-        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, r_floor=r_floor,
-                             status="no operating point",
-                             notes=("the channel has no operating point to carry through the worlds",))
+        return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, status="no operating point",
+                             notes=("the channel has no operating point to carry through the worlds",), **common)
     for world, _, _, _ in WORLDS:
         drop = 10.0 ** (suppression_db(world) / 10.0)
         r = r_point / drop
         residuals[world] = r
         floor_residuals[world] = r_floor / drop if math.isfinite(r_floor) else math.nan
+        ev_residuals[world] = r_evaluation / drop if math.isfinite(r_evaluation) else math.nan
         for p in PARAMETERS:
             tol = tolerance_of(rows, world, bins, p)
             tols[(world, p)] = tol
             usable = math.isfinite(tol) and tol > 0
             ratios[(world, p)] = r / tol if usable else math.nan
-            floor_ratios[(world, p)] = (floor_residuals[world] / tol
-                                        if usable and math.isfinite(floor_residuals[world]) else math.nan)
+            for table, source in ((floor_ratios, floor_residuals), (ev_ratios, ev_residuals)):
+                table[(world, p)] = (source[world] / tol
+                                     if usable and math.isfinite(source[world]) else math.nan)
     missing = [f"{w}/{p}" for (w, p), t in tols.items() if not math.isfinite(t)]
     if missing:
         notes.append(f"the stability gate accepted no integration time for {', '.join(sorted(missing))}")
     if not math.isfinite(r_floor):
         notes.append("the channel carries no frontier floor, so no class bound is quoted beside its point")
+    if not math.isfinite(r_evaluation):
+        notes.append("the point was not replayed on the held-out block, so only the calibration bases are priced")
+    if floor_bound:
+        notes.append("every kept frame sits at the sensitivity floor, so the residual is the floor itself and "
+                     "every ratio here is an upper limit rather than a measurement")
     return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, ratios, residuals, tols,
-                         r_floor, floor_ratios, floor_residuals, "measured", tuple(notes))
+                         floor_ratios=floor_ratios, floor_residuals=floor_residuals,
+                         evaluation_ratios=ev_ratios, evaluation_residuals=ev_residuals,
+                         status="measured", notes=tuple(notes), **common)
 
 
 def write_world_rows(results: Sequence[ChannelWorlds], path: Path | str) -> Path:

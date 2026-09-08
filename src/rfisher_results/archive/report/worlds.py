@@ -435,4 +435,81 @@ def build_class_floor(run: Run) -> Fragment:
     return frag
 
 
-BUILDERS = (build, build_ledger, build_class_floor)
+HELD_OUT_NAME = "worlds_held_out"
+HELD_OUT_LABEL = "tab:tolerance:worlds_heldout"
+HELD_OUT_KEY = "ch09.worlds_heldout"
+HELD_OUT_HEADER = ("ch", r"$r$ (held out)", r"$110$~ns: $R_{f\sigma_8}$", r"$R_{\rm dil}$",
+                   r"$200$~ns: $R_{f\sigma_8}$", r"$R_{\rm dil}$", "basis")
+HELD_OUT_ALIGN = "lr" + "r" * 4 + "l"
+
+
+def build_held_out(run: Run) -> Fragment:
+    """``tab:tolerance:worlds_heldout``: the worlds priced on the block the calibration never saw.
+
+    The chapter's other world tables price the operating point on the block it
+    was chosen on, which grades the selection on its own homework. This one
+    replays the same point on the evaluation block and prices what it leaves
+    there. A channel marked ``floor`` has every kept frame at the sensitivity
+    floor, so its ratios are upper limits rather than measurements.
+    """
+    frag = Fragment(HELD_OUT_NAME, HELD_OUT_LABEL, "")
+    channels = [c for c in sorted(run.channels, key=lambda c: c.channel)
+                if c.has(SECTION) and _num(c.section(SECTION).get("r_evaluation")) is not None]
+    if not channels:
+        frag.tex = ""
+        frag.notes.append("no channel carries a held-out residual: the run predates the replay, or no point "
+                          "was replayed on an evaluation block")
+        return frag
+    rows, inside_110, inside_200, bounded = [], [], [], []
+    for c in channels:
+        s_ = c.section(SECTION)
+        ch = c.channel
+        row = {"channel": ch}
+
+        def add(column, value, **kw):
+            frag.add(f"{HELD_OUT_KEY}.{column}.ch{ch}", value, row=row, column=column, **kw)
+
+        r = _num(s_.get("r_evaluation"))
+        fb = bool(s_.get("floor_bound"))
+        if fb:
+            bounded.append(ch)
+        cells = [str(ch), f"${sci(r)}$"]
+        add("r_evaluation", r, status="bounded" if fb else "measured",
+            renderings=(sci(r).replace("\\times", "x"),))
+        for world, tag in (("peak2", "110"), ("deployed", "200")):
+            g = _num(s_.get(f"{world}_{GROWTH}_evaluation_R"))
+            ds = [_num(s_.get(f"{world}_{p}_evaluation_R")) for p in DILATIONS]
+            d = max([v for v in ds if v is not None], default=None)
+            for column, value in ((f"{tag}_growth_R", g), (f"{tag}_dilation_R", d)):
+                if value is None:
+                    cells.append(DASH)
+                    add(column, None, kind="text", status="pending", renderings=(DASH,))
+                else:
+                    cells.append(f"${sci(value)}$")
+                    add(column, value, status="bounded", renderings=(sci(value).replace("\\times", "x"),))
+            if d is not None and d <= 1.0:
+                (inside_110 if tag == "110" else inside_200).append(ch)
+        cells.append("floor" if fb else "measured")
+        add("basis", "floor" if fb else "measured", kind="text",
+            renderings=("floor" if fb else "measured",))
+        rows.append(cells)
+    frag.tex = core.booktabs(HELD_OUT_HEADER, rows, HELD_OUT_ALIGN, midrules=_half_band_breaks(channels))
+
+    for key, value in (("channels", len(channels)), ("n_inside_110", len(inside_110)),
+                       ("n_inside_200", len(inside_200)), ("n_floor_bound", len(bounded))):
+        frag.add(f"{HELD_OUT_KEY}.{key}", value, kind="int", column=key)
+    frag.notes.append("the residual is the one the channel's own operating point leaves on the evaluation "
+                      "block, which the calibration never saw; every other world table in the chapter prices "
+                      "the block the point was chosen on")
+    frag.notes.append(f"at the BAO-preserving 110 ns cut {len(inside_110)} of {len(channels)} channels reach "
+                      f"R <= 1 on the two dilations ({_channel_list(inside_110)}); at the deployed 200 ns cut "
+                      f"{len(inside_200)} ({_channel_list(inside_200)}); on the growth rate, none at either")
+    if bounded:
+        frag.notes.append(f"floor-bound channels ({_channel_list(bounded)}): every kept frame sits at the "
+                          "sensitivity floor, so the residual reported is the floor itself and the ratios are "
+                          "upper limits; the surviving contamination is somewhere below and this instrument "
+                          "cannot say where")
+    return frag
+
+
+BUILDERS = (build, build_ledger, build_class_floor, build_held_out)
