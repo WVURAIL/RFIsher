@@ -51,6 +51,79 @@ against the current cleanup tree. Do not restamp them. Regenerate a new
 snapshot only when the archived products are available to run the full
 pipeline.
 
+<!-- BEGIN CALIBRATION_PROGRESS -->
+## Calibration progress and producer evidence — September 9, 2026
+
+`calibration_progress_2026-09-09` separately preserves waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; [physical-calibration.md](physical-calibration.md) describes their scope.
+
+The fresh digital result is **197/200 joint successes**, with a **96.1690%** one-sided 95% lower limit; its predeclared 95% evaluation target is **demonstrated**. Calibration's 99% content target is distinct. The prior 59/60 result and all earlier release bytes remain unchanged.
+
+The waveform audit explains the startup discrepancy and preserves newly generated IQ with explicit discard and provenance. Corus reports an October 2018 shutdown month for 44 named transmitters; continuous off intervals and the separate multiplex cutover remain unverified. The causal replay preserves as-known assignments and accepts no operating policy. Recovered visibility histories show that saved matrices omit a later data-dependent median subtraction, and the nominal cleaner comparison uses different upstream revisions. Physical in-band transfer, untouched telescope evaluation and Pathfinder validation remain open.
+
+<!-- END CALIBRATION_PROGRESS -->
+
+## Joint calibration and evidence follow-up — September 8, 2026
+
+`calibration_next_2026-09-08` separately releases a signed joint digital
+tolerance experiment, regulatory-history sidecars, a 23-channel monthly-prefix
+era audit and four bounded saved-filter examples. Its
+[manifest](releases/calibration_next_2026-09-08.manifest.json) binds the source
+snapshots and evidence; the [workflow](physical-calibration.md) explains the
+method and remaining physical requirements.
+
+The new experiment uses 60 calibration and 60 fresh evaluation blocks, each
+with 15 dependent cases. Its frozen reduced bound has 59/60 joint successes
+and a one-sided 95% lower success limit of 92.34%, below the predeclared 95%
+validation target. One shared block under-books two cases; no support fails.
+The original assignment covers all 60 blocks. The correction was not refitted.
+This result does not qualify a reduced archive floor or an operating policy.
+
+ISED/CRTC and FCC supply administrative transmitter-history leads without
+requiring CANFAR. Actual RF transition intervals remain unverified. The era
+audit quantifies 126 prior assignment revisions across 1,722 prefixes; the
+saved filters demonstrate vector-dependent response outside the nominal DTV
+band. Neither supplies prospective or in-band physical certification.
+
+## Calibration follow-up — September 8, 2026
+
+`calibration_followup_2026-09-08` is a separate conditional evidence release.
+It contains a frozen fresh-draw digital protocol, 18 generated frame shards,
+coverage and post-hoc batch diagnostics, a six-frame GPU/CPU arithmetic audit,
+the eight-product collaboration preflight and a pending physical-data plan.
+Its [manifest](releases/calibration_followup_2026-09-08.manifest.json) preserves
+the input and output identities. The [workflow](physical-calibration.md)
+explains the new validation helpers and the remaining physical requirements.
+
+All twelve fixed digital cases have 60 supported batches without under-booking;
+the simultaneous one-sided 95% lower success limit is 91.27%. This does not
+establish physical confidence coverage or science-tolerance compliance. The
+collaboration data are outside the DTV band, and the all-days/p1 HyFoRes pairs
+require matched-day re-stacking. No operational policy is authorized.
+
+## Corrected retrospective archive — September 8, 2026
+
+`archive_v5_2026-09-08_corrected/` in the results tree is a separate 23-channel
+analysis. Its input products match both September 7b and September 7c by hash.
+It uses rebuilt scalar-response banks and target-only, all-overlap one-year
+tolerances, calibration-only fitted inputs, and the corrected support gates.
+
+Joint dilations are priced on eight channels and growth on all 23. No channel
+receives a selected operating point: fifteen are unpriced for joint dilations,
+one lacks a floor, two lack time coverage, and five fail supported-candidate
+drift limits. Physical residual calibration, independent states,
+complex-visibility/filter transfer and prospective validation remain pending.
+The dissertation's independent physical-calibration stub tracks the remaining
+requirements; the newer evidence release above records the available
+regulatory leads and local out-of-band visibility diagnostics.
+
+The release `README.md` explains the results and policy-specific exposure.
+Its input, bank, product, comparison and policy-check records remain beside
+its channel ledgers and full dissertation report. The repository copy of the
+release inventory is `docs/releases/archive_2026-09-08_corrected.manifest.json`.
+Analysis and renderer source identities are recorded separately, including
+working-tree patches. This release does not restamp historical outputs or
+claim measured delay suppression.
+
 ## Existing releases
 
 ### First release

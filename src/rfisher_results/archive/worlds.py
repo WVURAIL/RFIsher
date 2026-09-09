@@ -204,7 +204,7 @@ class ChannelWorlds:
     r_evaluation: float = math.nan                      # the residual the point leaves on the held-out block
     evaluation_ratios: dict = field(default_factory=dict)
     evaluation_residuals: dict = field(default_factory=dict)
-    floor_bound: bool = False                           # every kept frame is at the sensitivity floor
+    floor_bound: bool = False                           # evaluation allowance matches the assigned floor
     status: str = "conditional"
     notes: tuple[str, ...] = ()
     point_policy: str = "unspecified"
@@ -269,8 +269,8 @@ def channel_worlds(channel: int, bins: Sequence[int], r_point: float, masked_fra
     ``r_point`` and ``r_evaluation`` must retain their respective policy
     identities; a diagnostic replay can differ from the displayed knee.
     ``r_floor`` is the minimum booked allowance, not a physical class bound.
-    ``floor_bound`` is a legacy field name for a floor-only assignment; it
-    does not establish a confidence limit on the actual residual.
+    ``floor_bound`` is a legacy field name for a floor-only evaluation
+    assignment; it does not establish a confidence limit on the actual residual.
     """
     bins = tuple(int(b) for b in bins)
     z_lo, z_hi = bin_span(rows, bins)
@@ -308,8 +308,8 @@ def channel_worlds(channel: int, bins: Sequence[int], r_point: float, masked_fra
     if not math.isfinite(r_evaluation):
         notes.append("the point was not replayed on the held-out block, so only the calibration bases are priced")
     if floor_bound:
-        notes.append("every kept frame sits at the sensitivity floor, so the residual is the floor itself and "
-                     "every ratio here is a conditional allowance, not a measurement or confidence limit")
+        notes.append("the evaluation allowance is within 0.1 percent of its floor-only assignment; "
+                     "it is a conditional allowance, not a measurement or confidence limit")
     return ChannelWorlds(channel, bins, z_lo, z_hi, r_point, masked_fraction, ratios, residuals, tols,
                          floor_ratios=floor_ratios, floor_residuals=floor_residuals,
                          evaluation_ratios=ev_ratios, evaluation_residuals=ev_residuals,

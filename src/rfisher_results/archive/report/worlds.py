@@ -28,13 +28,32 @@ KEY = "ch09.worlds"
 LEDGER_KEY = "appC.worlds"
 FLOOR_KEY = "ch09.classfloor"
 LEDGER_CAPTION = (
-    "The four delay-cut worlds opened out per parameter, behind the binding ratios of "
-    "Table~\\ref{tab:tolerance:worlds}. Four rows per channel, one per world: the shelf suppression that "
-    "world's cut removes, the residual it leaves at the channel's operating point, and $R = r_{\\rm sys}/"
-    "r_{\\rm tol}$ for each of the three parameters against that world's own bank. The tolerances behind the "
-    "ratios are carried as numbers rather than printed; the ratio is what the reader needs, and the tolerance "
-    "changes bank by bank. Each world's tolerance is a minimum over the integration times its own stability "
-    "gate accepts, so a ratio may rise between worlds without the cut removing less power.")
+    "Conditional delay-cut scenarios behind Table~\\ref{tab:tolerance:worlds}. "
+    "Four rows per channel: the hypothetical shelf-suppression credit, the resulting "
+    "booked residual allowance at the calibration operating point, and "
+    "$R = r_{\\rm sys}/r_{\\rm tol}$ for each parameter against that world's bank. "
+    "The suppression credits are assumptions, not measured filter attenuation or "
+    "complex-visibility transfer. Tolerances are retained in the numerical ledger. ")
+
+
+def tolerance_note(run: Run) -> str:
+    """Describe the recorded time contract without relabelling older results."""
+    contract = run.run.get("worlds_contract") or {}
+    rule = contract.get("time_rule")
+    if rule == "target_only":
+        years = _num(contract.get("target_years"))
+        if years is not None and years > 0:
+            return (f"Tolerances use the declared target of {years:g} on-sky year(s), "
+                    "taking each parameter's minimum over every overlapping forecast bin; "
+                    "joint dilation results require both dilations. Refused target-time cells remain unpriced. "
+                    "No alternative integration time supplies a refused tolerance.")
+    elif rule == "accepted_time_minimum":
+        return ("This historical ledger uses the minimum over the integration times accepted "
+                "by each world's response-stability gate. Those historical tolerances are "
+                "preserved; rendering does not recompute them at a new target time.")
+    return ("The integration-time convention is not recorded in this ledger. Its original "
+            "tolerances are preserved; rendering does not authenticate or recompute them.")
+
 DILATIONS = tuple(p for p in PARAMETERS if p != "fs8")
 GROWTH = "fs8"
 SECTION = "worlds"
@@ -222,11 +241,11 @@ def build(run: Run) -> Fragment:
     frag.notes.append("each cell is the residual under that world's cut over the binding ratio R = r / r_tol, the "
                       "largest of the three parameters; R <= 1 passes; the per-parameter ratios and the tolerances "
                       f"behind them are the companion fragment {LEDGER_NAME} ({LEDGER_LABEL}, Appendix C)")
-    frag.notes.append("both sides of the cut are booked: the chain gains the suppression "
+    frag.notes.append("the conditional calculation assigns hypothetical suppression credits of "
                       + ", ".join(f"{WORLD_LABEL[w].replace('$', '').replace('~', ' ')} {suppression_db(w):.1f} dB"
                                   for w in WORLD_NAMES if suppression_db(w) > 0)
-                      + " (rfisher.residual.DELAY_SUPPRESSION_DB) and the tolerance is re-derived from the Fisher bank "
-                        "built under the same cut, so no world claims the credit without the cost")
+                      + " (rfisher.residual.DELAY_SUPPRESSION_DB); the recorded tolerance comes from the Fisher bank "
+                        "built with that mode cut. These credits do not measure filter attenuation.")
     frag.notes.append(f"verdict: {len(deployed.passing)} of {deployed.channels} scored channels reach R <= 1 in the "
                       f"deployed 200 ns world ({_channel_list(deployed.passing)}); the closest is "
                       + (f"ch{deployed.best_channel:02d} at R = {core.fmt(deployed.best_ratio, 3, sig=True)}"
@@ -235,13 +254,7 @@ def build(run: Run) -> Fragment:
     frag.notes.append("the residual entering every world is the channel's own operating point on its calibration "
                       "block (the knee of the mask-against-residual frontier), with no delay credit: that is the "
                       "convention the rest of the chapter uses, and the worlds are the only place a credit is taken")
-    frag.notes.append("the tolerance is the smallest per-unit-residual bias over the integration times passing the "
-                      "registered response-stability gate, over the forecast bins the channel overlaps (the ledger's "
-                      "own footing), taken bank by bank so each world prices against its own forecast")
-    frag.notes.append("the tolerance is a minimum over a gate-filtered set, and the gate accepts different "
-                      "integration times in different worlds, so a tolerance need not move monotonically with cut "
-                      "depth; a ratio that rises between adjacent columns is a statement about which times survived "
-                      "the gate in each world, not about the cut removing less")
+    frag.notes.append(tolerance_note(run))
     frag.notes.append("scope: the worlds model the cut's mode geometry only; the table says nothing about how well a "
                       "delay filter removes foregrounds, and no world asserts that the filter has been applied")
     uneven = []
@@ -252,8 +265,8 @@ def build(run: Run) -> Fragment:
             uneven.append(c.channel)
     if uneven:
         frag.notes.append(f"on {_channel_list(uneven)} the stability gate accepts a different parameter set in "
-                          "different worlds, so the binding ratio is over different parameters from column to "
-                          "column and a fall between columns there is not by itself a gain from the cut; the "
+                          "different worlds; incomplete parameter sets remain unpriced and cannot establish a "
+                          "combined pass. The "
                           f"per-parameter ratios in {LEDGER_NAME} are the ones to compare")
     if absent:
         frag.notes.append("absent cells: " + "; ".join(absent[:12])
@@ -277,13 +290,13 @@ def build_ledger(run: Run) -> Fragment:
     # four rows per channel is taller than any page: a float would silently drop the tail,
     # so the fragment is a longtable and carries its own caption and label
     frag.tex = core.booktabs(LEDGER_HEADER, rows, LEDGER_ALIGN, midrules=tuple(breaks), longtable=True,
-                             caption=LEDGER_CAPTION, label=LEDGER_LABEL)
+                             caption=LEDGER_CAPTION + tolerance_note(run), label=LEDGER_LABEL)
     frag.notes.append(f"layout: a longtable of {len(LEDGER_HEADER)} columns, four rows per channel (one per "
                       f"world) over {len(channels)} channels, a midrule between channels and the header repeated "
                       "on every page; it carries its own caption and label, so the chapter must input it directly "
                       "rather than wrapping it in a table float")
-    frag.notes.append("cut (dB) is the shelf suppression the world's delay cut removes; r is the operating point's "
-                      "residual after it; each R is r over that world's own bank tolerance for the parameter")
+    frag.notes.append("cut (dB) is an assigned hypothetical suppression credit; r is the corresponding "
+                      "booked allowance, not a measured visibility residual; each R uses the world's recorded tolerance")
     frag.notes.append("the tolerances are carried as numbers (appC.worlds.r_tol.*) but not printed: the ratio is what "
                       "the reader needs, and the tolerance changes bank by bank")
     return frag
@@ -295,19 +308,14 @@ FLOOR_ALIGN = "lrr" + "rl" * 2
 
 
 def _coarse_floor(c: Channel) -> float | None:
-    """The least residual the coarse rule's own frontier leaves, or None.
+    """Minimum booked allowance on the evaluated coarse frontier, or None.
 
-    The class bound is the coarse frontier's minimum, not the fine surface's:
-    the residual is a functional of the coarse statistic alone, so that
-    frontier is the lower envelope of the plane by construction and the fine
-    surface's own minimum sits at or above it. The selection section carries
-    the frontier's smallest ratio and the tolerance it was taken against, so
-    the residual is their product. A channel whose coarse sweep left no
-    evaluable frontier has no class bound and is not in the table.
+    This is the recorded coarse minimum ratio times its tolerance. It is not
+    a lower bound on physical contamination or on unevaluated masking rules.
     """
     sel = c.selection or {}
     ratio, tol = _num(sel.get("coarse_min_R")), _num(sel.get("r_tol"))
-    if ratio is None or tol is None or not (tol > 0):
+    if ratio is None or ratio < 0 or tol is None or not (tol > 0):
         return None
     return ratio * tol
 
@@ -328,21 +336,37 @@ def _best_over(c: Channel, parameters, *, floor: bool):
     return best
 
 
-def build_class_floor(run: Run) -> Fragment:
-    """``tab:tolerance:classfloor``: the least residual any threshold on this statistic can leave.
+def _coarse_floor_best(c: Channel, parameters):
+    """Price the displayed allowance using recorded credits and tolerances."""
+    floor = _coarse_floor(c)
+    if floor is None:
+        return "", math.inf, ""
+    section = c.section(SECTION)
+    best = ("", math.inf, "")
+    for world in WORLD_NAMES:
+        credit = _num(section.get(f"{world}_suppression_db"))
+        tols = [(_num(section.get(f"{world}_{p}_r_tol")), p) for p in parameters]
+        if credit is None or any(tol is None or tol <= 0 for tol, _ in tols):
+            continue
+        residual = floor * 10.0 ** (-credit / 10.0)
+        ratio, parameter = max((residual / tol, p) for tol, p in tols)
+        if ratio < best[1]:
+            best = world, ratio, parameter
+    return best
 
-    One row per channel: the frontier's floor, how far below the operating
-    point it sits, and the best ratio any of the four worlds reaches *there*
-    for the growth rate and for the dilations. A channel outside at the floor
-    is outside for every threshold on the statistic, not just for the one the
-    knee chose.
+
+def build_class_floor(run: Run) -> Fragment:
+    """``tab:tolerance:classfloor``: minimum booked coarse-frontier allowance.
+
+    The rows and summary price the same coarse minimum in each recorded
+    scenario. None of these scalar allowances establishes a physical bound.
     """
     frag = Fragment(FLOOR_NAME, FLOOR_LABEL, "")
     channels = [c for c in sorted(run.channels, key=lambda c: c.channel)
                 if _coarse_floor(c) is not None]
     if not channels:
         frag.tex = ""
-        frag.notes.append("no channel carries a frontier floor: the run predates the class bound, or no channel's "
+        frag.notes.append("no channel carries a frontier allowance: the run predates this diagnostic, or no channel's "
                           "calibration surface produced a frontier")
         return frag
 
@@ -356,11 +380,8 @@ def build_class_floor(run: Run) -> Fragment:
             frag.add(f"{FLOOR_KEY}.{column}.ch{ch}", value, row=row, column=column, **kw)
 
         floor, point = _coarse_floor(c), _num(s.get("r_point"))
-        scale = floor / _num(s.get("r_floor")) if _num(s.get("r_floor")) else math.nan
-        gw, gr, _ = _best_over(c, (GROWTH,), floor=True)
-        dw, dr, _ = _best_over(c, DILATIONS, floor=True)
-        if math.isfinite(scale):                       # re-price onto the coarse floor
-            gr, dr = gr * scale, dr * scale
+        gw, gr, _ = _coarse_floor_best(c, (GROWTH,))
+        dw, dr, _ = _coarse_floor_best(c, DILATIONS)
         share = floor / point if point else math.nan
         cells = [str(ch), f"${sci(floor)}$", f"${core.fmt(share, 3)}$" if math.isfinite(share) else DASH]
         for value, world in ((gr, gw), (dr, dw)):
@@ -381,8 +402,8 @@ def build_class_floor(run: Run) -> Fragment:
 
     frag.tex = core.booktabs(FLOOR_HEADER, rows, FLOOR_ALIGN, midrules=_half_band_breaks(channels))
 
-    growth = [(c.channel, _best_over(c, (GROWTH,), floor=True)[1]) for c in channels]
-    dil = [(c.channel, _best_over(c, DILATIONS, floor=True)[1]) for c in channels]
+    growth = [(c.channel, _coarse_floor_best(c, (GROWTH,))[1]) for c in channels]
+    dil = [(c.channel, _coarse_floor_best(c, DILATIONS)[1]) for c in channels]
     growth_in = [ch for ch, v in growth if v <= 1.0]
     dil_in = [ch for ch, v in dil if v <= 1.0]
     best_growth = min((v for _, v in growth if math.isfinite(v)), default=math.nan)
@@ -476,14 +497,14 @@ def build_held_out(run: Run) -> Fragment:
         frag.add(f"{HELD_OUT_KEY}.{key}", value, kind="int", column=key)
     frag.notes.append("the residual is the replayed diagnostic or selected policy, which may differ "
                       "from the calibration knee; historical full-archive fits prevent an untouched-holdout claim")
-    frag.notes.append(f"at the BAO-preserving 110 ns cut {len(inside_110)} of {len(channels)} channels reach "
+    frag.notes.append(f"in the hypothetical 110 ns scenario {len(inside_110)} of {len(channels)} channels reach "
                       f"R <= 1 on the two dilations ({_channel_list(inside_110)}); at the deployed 200 ns cut "
                       f"{len(inside_200)} ({_channel_list(inside_200)}); growth-rate counts are "
                       f"{len(growth_inside['110'])} at 110 ns and {len(growth_inside['200'])} at 200 ns; "
                       "all are conditional scenario counts")
     if bounded:
-        frag.notes.append(f"floor-bound channels ({_channel_list(bounded)}): every kept frame sits at the "
-                          "sensitivity floor, so the residual reported is the floor itself and the ratios are "
+        frag.notes.append(f"floor-only evaluation assignments ({_channel_list(bounded)}): the replayed allowance "
+                          "matches the assigned floor within the recorded numerical tolerance. The ratios are "
                           "conditional assignments, not measurements or confidence limits; this calculation "
                           "does not determine the true retained contamination")
     return frag

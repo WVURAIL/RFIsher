@@ -5,6 +5,7 @@ import csv
 import importlib.util
 import json
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -168,8 +169,12 @@ def _run_dir(tmp_path: Path) -> Path:
 
 
 def _ungated() -> bool:
-    """Whether this interpreter lacks pilot_proxy, so the run's frame-health gate cannot be applied."""
-    return importlib.util.find_spec("pilot_proxy") is None
+    """Whether the actual health provider or one of its dependencies is absent."""
+    try:
+        from pilot_proxy.archive_health import evaluate_frame_health  # noqa: F401
+    except ImportError:
+        return True
+    return False
 
 
 @pytest.fixture(autouse=True)
@@ -295,15 +300,18 @@ def test_compute_every_path(tmp_path):
 
     ch14 = by[14]
     assert ch14.present and ch14.has_point and ch14.era_months == f"{MONTHS[0]}..{MONTHS[-1]}"
-    assert ch14.era_frames == FRAMES and ch14.era_frames_untimed == 0
-    assert ch14.reference_is_current and ch14.coarse.size == FRAMES and ch14.level_db.size == FRAMES
-    assert ch14.input_power.size == FRAMES and ch14.rail_frames == 1
+    # The fixture has one saturated-ceiling frame; a working health provider
+    # excludes it from every plotted current-era population.
+    selected_frames = FRAMES if _ungated() else FRAMES - 1
+    assert ch14.era_frames == selected_frames and ch14.era_frames_untimed == 0
+    assert ch14.reference_is_current and ch14.coarse.size == selected_frames and ch14.level_db.size == selected_frames
+    assert ch14.input_power.size == selected_frames and ch14.rail_frames == int(_ungated())
     # Z = peak / 20 on every frame but the one whose bulk denominators are all zero (always masked)
     assert math.isinf(ch14.z.max())
     finite = np.round(ch14.z[np.isfinite(ch14.z)], 6)
     assert set(finite) == {round(peak / BULK_REFERENCE, 6) for peak in PEAKS}
     assert ch14.kept_frames == int((ch14.z <= ch14.eta).sum())
-    assert ch14.masked_fraction_era == pytest.approx(1.0 - ch14.kept_frames / FRAMES)
+    assert ch14.masked_fraction_era == pytest.approx(1.0 - ch14.kept_frames / selected_frames)
     assert ch14.has_keep and math.isfinite(ch14.removed_fraction) and ch14.removed_fraction > 0
     assert ch14.heat_months.size == len(MONTHS) and ch14.heat_db.shape == (len(MONTHS), 256)
     assert ch14.populated_months == len(MONTHS)
@@ -321,7 +329,7 @@ def test_compute_every_path(tmp_path):
     assert ch28.present and not ch28.has_point and ch28.z.size == 0 and not ch28.has_keep
     assert ch28.after_mask_reason == "no diagnostic point to apply"
     assert not ch28.curves.present and ch28.no_point_reason.startswith("no floor")
-    assert ch28.coarse.size == FRAMES                               # the histograms still stand
+    assert ch28.coarse.size == selected_frames                               # the histograms still stand
 
     ch31 = by[31]
     assert ch31.has_point and ch31.kept_frames == 0 and not ch31.has_keep
@@ -384,8 +392,8 @@ def test_build_every_column(tmp_path):
     assert f"{p}.era_frames.ch35" not in keys and f"{p}.era.ch35" in keys
     assert f"{p}.kept_frames.ch35" not in keys and f"{p}.eta.ch35" in keys      # the ledger's point, no product
     assert f"{p}.rho.ch28" not in keys and f"{p}.removed_fraction.ch31" not in keys
-    assert _value(frag, f"{p}.era_frames.ch14").value == FRAMES
-    assert _value(frag, f"{p}.input_rail_frames.ch14").value == 1
+    assert _value(frag, f"{p}.era_frames.ch14").value == (FRAMES if _ungated() else FRAMES - 1)
+    assert _value(frag, f"{p}.input_rail_frames.ch14").value == int(_ungated())
     assert _value(frag, f"{p}.bulk_centre.ch14").value == 1.01
     assert _value(frag, f"{p}.in_span_128.ch14").precision == 3
     assert _value(frag, f"{p}.measured_anchor_hz.ch14").value == pytest.approx(23.8)
@@ -542,3 +550,9 @@ def test_fine_statistic_marks_the_dead_reference_bins(tmp_path):
     assert ratio.shape == (FRAMES, 256) and positive.shape == ratio.shape
     assert not positive[0].any() and positive[1].all()       # frame 0's references were zeroed
     assert np.all(ratio[0] == 0.0) and np.allclose(ratio[1, 5], 1.0)
+
+
+@pytest.mark.parametrize("check", [test_compute_every_path, test_build_every_column])
+def test_plate_denominators_without_health_dependency(tmp_path, monkeypatch, check):
+    monkeypatch.setitem(sys.modules, "pilot_proxy.archive_health", None)
+    check(tmp_path)

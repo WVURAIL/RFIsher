@@ -122,16 +122,17 @@ Current unity shelf-to-science transfer remains conditional. It can enter the
 strict wrapper only with `allow_screening=True`; the returned selection keeps
 the screening claim, source identity, and policy digest.
 
-The current survey archive does not retain the exact per-frame fine-power
-fields needed to derive the Q16 boundaries. Its floating summary is
-insufficient for strict preparation, so an operational fine-threshold product
-requires a detector rerun with those fields retained. See the
+The current schema-v5 archive retains the exact per-frame fine-power fields
+needed to derive Q16 boundaries; the older floating summaries did not. The
+corrected September 8 release exercises the exact path, but no channel passes
+all selection gates. Exact bookkeeping does not supply independent null states,
+physical transfer calibration or an untouched holdout. See the
 [threshold decision register](threshold-decision-register.md) for every
 current value, justification class, sensitivity value, and open decision.
 
 ## Residual budget
 
-The released scalar budget maps a pilot-proxy survey product to `r` through
+The historical scalar screening budget maps a pilot-proxy survey product to `r` through
 four terms:
 
 1. the transmitter-on shelf;
@@ -139,20 +140,26 @@ four terms:
 3. ground or `m = 0` filtering;
 4. delay filtering and the residual correlation time.
 
-For the channel-35 reference product, the representative chain is:
+For the historical channel-35 reference product, the representative chain is
+below. These are conditional proxy assignments, not measured visibility
+residuals or calibrated confidence limits. The current corrected release is
+documented in [releases.md](releases.md).
 
 | Term | Value | Status |
 |---|---:|---|
-| Transmitter-on shelf | -10.6 dB | measured |
-| Retained-frame bound | -26.2 dB | bounded by the single-frame floor |
-| Ground / `m = 0` filter | -20.6 dB | measured decomposition |
-| Delay filter | -3.6 to -11.4 dB | analysis choice |
-| Coherence | +27.5 dB | measured, 46 min |
-| `P_res / P_N` | 0.59 | 0.41--0.74 interval |
+| Inferred transmitter-on shelf | -10.6 dB | proxy estimate; state not independently verified |
+| Retained-frame assignment | -26.2 dB | assigned single-frame floor; coverage uncalibrated |
+| Ground / `m = 0` filter | -20.6 dB | proxy decomposition with assumed removal |
+| Delay filter | -3.6 to -11.4 dB | hypothetical suppression |
+| Coherence | +27.5 dB | proxy-derived 46 min under a scalar closure |
+| `P_res / P_N` | 0.59 | historical conditional interval 0.41--0.74 |
 
-The retained-frame quantity is a bound, not a direct measurement of the
-surviving shelf. A frame with no pilot excess can only place that shelf below
-the single-frame sensitivity floor.
+The retained-frame quantity is a floor-based assignment. A nondetection alone
+does not establish an upper confidence bound on the surviving shelf. Coverage
+must be tested with independent controls and a fixed policy; the digital
+injected-truth check is conditional on its generator. The
+[physical-calibration workflow](physical-calibration.md) records the available
+checks and the remaining evidence requirements.
 
 Run the budget with:
 
@@ -162,16 +169,16 @@ python scripts/residual_budget.py 521.npz --off-through 2021-08 --plot
 
 ## Sidereal decomposition
 
-The ground-filter term is derived from a decomposition keyed by sidereal day
+The historical ground-filter scenario is derived from a proxy decomposition keyed by sidereal day
 and acquisition. For the channel-35 reference cohort of 5,647 acquisitions on
 1,438 sidereal days:
 
 | Timescale | Shelf-power share | Treatment |
 |---|---:|---|
-| Constant | 94.52% | removed as `m = 0` |
-| Inter-day drift | 4.62% | removed within each day |
-| Intra-day | 0.85% | survives |
-| Sub-acquisition | 0.02% | survives and averages down |
+| Constant | 94.52% | assumed removed as `m = 0` |
+| Inter-day drift | 4.62% | assumed removed within each day |
+| Intra-day | 0.85% | assumed to survive |
+| Sub-acquisition | 0.02% | assumed to survive and average down |
 
 The sidereal-day boundary is load-bearing. Splitting at acquisition boundaries
 instead places day-to-day drift in the surviving term, understates filtering
@@ -197,12 +204,13 @@ The estimator refuses rather than guessing. Its gates require:
 - correlation time stable across trim level; and
 - surviving power stable across trim level.
 
-Channel 35 passes: its answer moves by only 1.08x over the tested 75--95% trim
+In that historical cohort, channel 35 passes the proxy trim screen: its answer moves by only 1.08x over the tested 75--95% trim
 range. Channels 34 and 36 are tail-dominated and fail. For them, the top 1% of
 frames carry 99.5% and 91.4% of the linear variance, respectively, so the
 estimated moment is controlled by the trim boundary. A refusal receives no
 ground-filter credit; the fallback carries all shelf power at the one-sidereal-
-day cap and is labeled `[BOUND]`.
+day cap and is labeled `[BOUND]` by the legacy script. That label denotes a
+screening convention, not calibrated physical coverage.
 
 The crossing is an e-folding time only under an approximately
 single-exponential autocorrelation model. The released conversion
@@ -252,7 +260,7 @@ net = (1 + r_unmasked) / (1 + r_masked) * (1 - f) > 1.
 `residual.threshold_sweep` reference path follows it as the detector threshold
 moves; prepared operating-point selection uses `thresholds.optimize_threshold`.
 
-At the deployed `F > mu0` decision for the two channels with a measurable
+At the historical `F > mu0` decision for the two channels with an inferred
 transmitter-off epoch:
 
 | Channel | Masked fraction | Residual change | Cleaning gain | Exposure cost | Net |
@@ -260,15 +268,16 @@ transmitter-off epoch:
 | 35 | 0.988 | 20.7 to 0.563 | 13.9x | 85.7x | 0.162 |
 | 34 | 0.995 | 51.4 to 5.03 | 8.7x | 214.9x | 0.041 |
 
-Both decisions fail the cost test. The contamination reduction is real, but
-it is bought with much more exposure than it saves. `scenarios.from_mask_decisions`
+Both historical assignments fail the conditional cost test. The proxy reduction
+does not establish an equivalent reduction in visibility contamination.
+`scenarios.from_mask_decisions`
 builds the selective policy: it masks where the decision pays and carries the
 full contamination where masking is declined. It never drops a declined
 channel merely to make the forecast look cleaner. `force=True` constructs the
 uniform policy for comparison.
 
-For the channel-35 reference chain, including the measured contamination
-residual moves the result from:
+For the historical channel-35 reference chain, including the assigned
+contamination residual moves the conditional result from:
 
 | Scope | Masking only | Masking plus contamination residual |
 |---|---:|---:|
@@ -276,8 +285,8 @@ residual moves the result from:
 | `z = 1.40--1.50` | 1.347x | 2.14x, interval 1.90--2.34 |
 
 At the sidereal-day bound the corresponding penalties would be about 1.25x
-and 26x. Measuring coherence therefore changes the worst-bin conclusion by
-about an order of magnitude.
+and 26x. Changing the assumed coherence closure therefore changes the worst-bin
+screen by about an order of magnitude; this is not a measured science gain.
 
 ## Coherent bias path
 
