@@ -35,8 +35,11 @@ WORLD_SUPPRESSION_DB = {'none': 0.0, 'deployed': 11.4}
 
 
 def sha(path):
-    with Path(path).open('rb') as f:
-        return hashlib.file_digest(f, 'sha256').hexdigest()
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def clean(obj):
