@@ -417,3 +417,41 @@ def test_archive_report_checks_verify_markers_against_the_numbers_documents(tmp_
     # the unbound ch09 marker is reported as unbound, never verified by a coincidence of value
     assert "1 rerun markers not bound to a report key" in out and "chapters/ch09.tex" not in report_by_chapter
     assert "2 of 3 markers bound to a report key" in out
+
+
+@pytest.mark.parametrize("text", [
+    "The hand-back is 3.2-7.8 dB.",
+    "The hand back is 3.2 - 7.8 dB.",
+    "The Hand\u2011back is 3.2\u20137.8 dB.",
+    r"The hand-back is $3.2$--$7.8$~dB.",
+])
+def test_retained_handback_claim_requires_its_corrected_range(text, capsys):
+    ck = cdn.Checker(cdn.normalize(text, tex=True))
+    cdn.check_handback_range(ck)
+    assert ck.failures == 0
+    assert "PASS  corrected hand-back range" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("text", [
+    "The hand-back is 5.9-7.8 dB.",
+    "The hand back is 4.0 - 7.8 dB.",
+    "The hand-back is not quantified.",
+])
+def test_retained_handback_claim_rejects_wrong_or_missing_range(text):
+    ck = cdn.Checker(cdn.normalize(text))
+    cdn.check_handback_range(ck)
+    assert ck.failures > 0
+
+
+def test_retired_handback_claim_does_not_reintroduce_a_number(capsys):
+    ck = cdn.Checker("The hypothetical credits are 3.6, 8.2 and 11.4 dB.")
+    cdn.check_handback_range(ck)
+    assert ck.failures == 0
+    out = capsys.readouterr().out
+    assert "SKIP  corrected hand-back range" in out and "claim is retired" in out
+
+
+def test_retired_handback_claim_still_forbids_its_stale_range():
+    ck = cdn.Checker(cdn.normalize("The old estimate was 5.9 \u2013 7.8 dB."))
+    cdn.check_handback_range(ck)
+    assert ck.failures == 1
