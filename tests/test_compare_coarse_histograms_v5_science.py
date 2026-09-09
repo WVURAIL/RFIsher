@@ -58,7 +58,7 @@ def test_just_below_null_does_not_silently_cross_parameter_boundary():
 
 def test_exact_bin_mass_has_full_normalization_and_survives_upper_tail_cdf_roundoff():
     # F(2,4) has exact survival S(r)=4/(r+2)^2. At r>=1e10, CDFs
-    # round to1 but interval probabilities are still positive and meaningful.
+    # lose the interval probabilities through roundoff, though the masses remain positive.
     edges=np.array([0.,.1,1.,10.,1000.,1e8,1e10,1e12,np.inf])
     survival=4/(edges+2)**2
     expected=survival[:-1]-survival[1:]
@@ -66,7 +66,8 @@ def test_exact_bin_mass_has_full_normalization_and_survives_upper_tail_cdf_round
     np.testing.assert_allclose(actual,expected,rtol=2e-13,atol=1e-17)
     assert actual.sum()==pytest.approx(1.,abs=2e-15)
     assert actual[-2]>0 and actual[-1]>0
-    assert stats.f.cdf(edges[-2],2,4)==1.
+    cdf_masses=np.diff(stats.f.cdf(edges,2,4))[-2:]
+    assert not np.allclose(cdf_masses,expected[-2:],rtol=1e-3,atol=0)
     assert actual[-2]==pytest.approx(expected[-2],rel=2e-13,abs=0)
     assert actual[-1]==pytest.approx(expected[-1],rel=2e-13,abs=0)
 
