@@ -1,3 +1,6 @@
 # Keep test-only tooling outside pyproject.toml: that file is bank provenance.
 pytest-cov>=6,<8
 h5py>=3.11,<4
+
+# Exercise the original health gate used by the coarse-frame exporter.
+pilot-proxy @ git+https://github.com/WVURAIL/pilot-proxy.git@79d5480f1c8b539e1633d95ba832f53208f9afa6
