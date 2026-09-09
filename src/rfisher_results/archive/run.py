@@ -605,16 +605,16 @@ def _worlds(results: Sequence[dict]) -> list:
         sel = (r["selection_row"] or {})
         null = (r["null_row"] or {})
         chain = (r["chain_row"] or {})
-        # A residual that equals the floor times the gain is the floor: every kept
-        # frame sits at or below the level the instrument can resolve, so what is
-        # reported is a detection limit and not a measurement of what survived.
+        # This legacy flag is consumed by evaluation tables. A calibration
+        # knee at the floor cannot classify a different replay policy's residual.
+        # Equality is only a floor-only model assignment, not a confidence limit.
         floor_db, gain = _num(null.get("floor_db")), _num(chain.get("chain_gain"))
         r_eval = _num(sel.get("r_sys_evaluation"))
         floor_bound = False
         if math.isfinite(floor_db) and math.isfinite(gain) and gain > 0:
             at_floor = 10.0 ** (floor_db / 10.0) * gain
-            floor_bound = any(math.isfinite(v) and at_floor > 0 and abs(v / at_floor - 1.0) < 1e-3
-                              for v in (r_eval, _num(op.get("operating_r_sys"))))
+            floor_bound = (math.isfinite(r_eval) and at_floor > 0
+                           and abs(r_eval / at_floor - 1.0) < 1e-3)
         out.append(worlds.channel_worlds(ch, bins_of.get(ch, ()),
                                          _num(op.get("operating_r_sys")),
                                          _num(op.get("operating_masked_fraction")), rows,
@@ -723,6 +723,9 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
         "channels": sorted(by_channel), "campaign_last_month": blocks.month_label(campaign_last),
         "era_config": json.loads(config.canonical_json()), "era_config_digest": config.digest,
         "bootstrap": {"replicates": replicates, "seed": seed},
+        "worlds_contract": {"time_rule": "target_only", "target_years": worlds.TARGET_YEARS,
+                            "bin_rule": "every overlapping bin; both dilations required",
+                            "delay_suppression": "hypothetical", "physical_recovery_certified": False},
         "provisional": {"stability.minimum_half_retained_frames": selection.PROVISIONAL_MIN_HALF_RETAINED,
                         "stability.maximum_cost_ratio": selection.PROVISIONAL_MAX_COST_RATIO,
                         "stability.maximum_systematic_residual_ratio": selection.PROVISIONAL_MAX_SYSTEMATIC_RATIO,

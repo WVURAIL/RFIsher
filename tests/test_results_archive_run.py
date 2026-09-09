@@ -51,6 +51,9 @@ def test_driver_runs_every_stage_and_writes_the_tree(tmp_path, monkeypatch, synt
     run = json.loads((out / "ledger" / "run.json").read_text())
     assert run["era_config_digest"] and run["bootstrap"] == {"replicates": 5, "seed": 3}
     assert run["provisional"]["stability.maximum_cost_ratio"] == 1.05
+    assert run["worlds_contract"]["time_rule"] == "target_only"
+    assert run["worlds_contract"]["target_years"] == archive_run.worlds.TARGET_YEARS
+    assert run["worlds_contract"]["physical_recovery_certified"] is False
     rows = list(csv.DictReader((out / "ledger" / "ledger.csv").open()))
     assert [r["channel"] for r in rows] == ["33", "35"]
     for r in rows:
@@ -72,3 +75,24 @@ def test_driver_runs_every_stage_and_writes_the_tree(tmp_path, monkeypatch, synt
     assert "no authenticated bank" in ch35["sections"]["tolerance"]["refusal"]
     assert ch35["sections"]["evaluation_contract"]["station_event_basis"] == "archive-inferred, not independently verified"
     assert ch35["sections"]["screening"]["off_through"] == "2021-10"
+
+
+@pytest.mark.parametrize("point,evaluation,expected", [
+    (0.02, 0.04, False), (0.04, 0.02, True), (0.02, float("nan"), False), (0.02, 0.02, True),
+])
+def test_world_floor_flag_belongs_to_evaluation_policy(monkeypatch, point, evaluation, expected):
+    from types import SimpleNamespace
+    from rfisher_results.archive import run, worlds
+    rows = [{"world": name, "parameter": parameter, "bin_index": 7, "z_lo": 1.5, "z_hi": 1.6,
+             "tolerance": 1.0, "at_target": True}
+            for name, _, _, _ in worlds.WORLDS for parameter in worlds.PARAMETERS]
+    monkeypatch.setattr(worlds, "tolerances", lambda: rows)
+    monkeypatch.setattr(run.tolerances, "channel_tolerances",
+                        lambda **kwargs: [SimpleNamespace(channel=29, bins=(7,))])
+    result = run._worlds([{
+        "record": SimpleNamespace(channel=29),
+        "operating_row": {"operating_r_sys": point, "operating_masked_fraction": 0.5, "r_floor": 0.02},
+        "selection_row": {"r_sys_evaluation": evaluation},
+        "null_row": {"floor_db": -20.0}, "chain_row": {"chain_gain": 2.0},
+    }])[0]
+    assert result.floor_bound is expected

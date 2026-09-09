@@ -37,9 +37,9 @@ if __name__ == "__main__":
                     help="delay-filter mode cut, kfg_fac = tau_cut_s * survey "
                          "bandwidth_Hz (CHIME: 22 for the 55 ns first-peak-"
                          "preserving cut, 44 for 110 ns, 80 for the deployed "
-                         "200 ns). Modeled on BOTH sides: the forecast loses "
-                         "the cut modes and the residual chain claims the "
-                         "matching suppression.")
+                         "200 ns). This prices cosmological mode loss only. "
+                         "Residual suppression is a separate hypothetical "
+                         "assumption, not a transfer measured by this bank.")
     residual = ap.add_mutually_exclusive_group()
     residual.add_argument("--p-res", type=float, default=None,
                     metavar="AMPLITUDE",

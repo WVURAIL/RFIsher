@@ -180,7 +180,7 @@ The supported entry point displays the strict bank-builder surface:
 rfisher-build-bank --help
 ```
 
-The canonical four-bank recipe is:
+The canonical five-bank recipe is:
 
 ```bash
 NPROC=24 RADIOFISHER_DIR=../RadioFisher \
@@ -191,6 +191,7 @@ It produces:
 
 - the installed Planck-2018 CHIME bank;
 - the installed P-ACT-LB CHIME bank;
+- the installed CMBSPA2026 CHIME bank;
 - the Bull-2015 Planck-2013 `epsilon_fg = 1e-6` comparison bank; and
 - the matched Bull-2015 `epsilon_fg = 1e-5` comparison bank.
 
@@ -260,6 +261,55 @@ python scripts/three_worlds.py
 
 These workflows require strict-v2 `bias_response` artifacts with the CHIME
 Overview profile, Planck-2018, and unit normalization `P_res = 1.0`.
+
+The four response banks are separate from the five shipped forecast banks.
+Keep the previous response-bank bytes and build replacements in a staging
+directory. Authenticate all four with `scripts/bias_tolerance.py`'s
+`load_bias_bank` before replacing the active prerequisites. A changed source
+digest requires a new calculation, not new metadata on old matrices. Preserve
+the exact integration-time grid and experiment settings in the release record.
+
+### Corrected retrospective archive analysis
+
+Use a Python environment containing `h5py` and the local `pilot-proxy` source;
+the official driver refuses missing health-audit support. After authenticating
+the response banks, regenerate `data/world_tolerances.csv` and its provenance
+sidecar with `rfisher_results.archive.worlds.tolerances(rebuild=True)`.
+Every required bin/parameter must be accepted at the declared one-on-sky-year
+target; a refusal cannot borrow a different integration time.
+
+Run into a new directory:
+
+```bash
+export PYTHONPATH="src:../RadioFisher:../pilot-proxy/src"
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+python -m rfisher_results.cli archive \
+  --products ../products/chime_pilots_rebuild_20260829/products/_per_pilot \
+  --out ../results/NEW_ARCHIVE_RELEASE --workers 6 --replicates 1000 --seed 20260907
+python -m rfisher_results.cli archive-report \
+  --results ../results/NEW_ARCHIVE_RELEASE
+```
+
+Freeze source and bank bytes throughout the run. Retain the four bank hashes
+and build identities, tolerance CSV and sidecar, package versions, source
+commits and any uncommitted patch beside the analysis ledger. Check the source
+and input identities again after execution, require all 23 channels without
+worker errors, and compare health denominators, fitted preparation, support,
+refusals and policy-specific residual/exposure values with the historical run.
+
+A new run records `worlds_contract` for its report captions. Historical ledgers
+without that field remain explicitly unspecified when rendered; the renderer
+does not assign them a new target-time convention. Delay credits are
+hypothetical in either case. The class-floor table and its summary price the
+same recorded coarse-frontier allowance against recorded scenario tolerances.
+The floor-only flag in evaluation tables is computed from the evaluation
+allowance alone; a different calibration policy cannot supply that label.
+
+This release procedure establishes computational provenance, not physical
+calibration. Independent transmitter-state records, selected-residual coverage,
+complex-visibility covariance, filter response and retained science information
+remain required for a physical recovery claim. Possible CANFAR inputs for those
+checks are an open data-inventory task in the dissertation's Chapter 9 stub.
 
 ## Forecast-completion evidence
 

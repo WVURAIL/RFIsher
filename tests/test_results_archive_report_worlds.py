@@ -177,8 +177,9 @@ def test_the_verdict_counts_what_passes(tmp_path):
 def test_the_notes_book_both_sides_of_the_cut(tmp_path):
     chapter, _ = _both(tmp_path)
     joined = " ".join(chapter.notes)
-    assert "re-derived from the Fisher bank" in joined
-    assert "no world claims the credit without the cost" in joined
+    assert "recorded tolerance comes from the Fisher bank" in joined
+    assert "hypothetical suppression credits" in joined
+    assert "do not measure filter attenuation" in joined
     assert "mode geometry only" in joined
 
 
@@ -310,7 +311,7 @@ def test_a_run_without_floors_says_so(tmp_path):
         {"channel": 29, "freq_id": 871, "product": "x.npz", "product_sha256": "b" * 64, "notes": [],
          "sections": {"worlds": section}}))
     frag = rw.build_class_floor(core.load_run(tmp_path))
-    assert frag.tex == "" and "no channel carries a frontier floor" in frag.notes[0]
+    assert frag.tex == "" and "no channel carries a frontier allowance" in frag.notes[0]
 
 
 # ------------------------------------------------- the held-out basis
@@ -353,6 +354,8 @@ def test_a_floor_only_assignment_is_marked_without_claiming_a_confidence_limit(t
     assert _rows(frag)[0][-1] == "model/floor"
     joined = " ".join(frag.notes)
     assert "not measurements or confidence limits" in joined
+    assert "floor-only evaluation assignments" in joined
+    assert "every kept frame" not in joined
     assert any(n.key.endswith("n_floor_bound") and n.value == 1 for n in frag.numbers)
 
 
@@ -386,3 +389,67 @@ def test_world_binding_refuses_a_missing_required_parameter():
 def test_growth_count_is_computed_for_a_passing_replay(tmp_path):
     frag = _with_heldout(tmp_path, 1e-8)
     assert "growth-rate counts are 1 at 110 ns and 1 at 200 ns" in " ".join(frag.notes)
+
+
+@pytest.mark.parametrize("contract, expected, absent", [
+    ({"time_rule": "target_only", "target_years": 1.0},
+     "declared target of 1 on-sky year", "minimum over the integration times"),
+    ({"time_rule": "accepted_time_minimum"},
+     "minimum over the integration times accepted", "declared target"),
+    ({}, "integration-time convention is not recorded", "declared target"),
+    ({"time_rule": "target_only", "target_years": -1},
+     "integration-time convention is not recorded", "declared target"),
+])
+def test_emitted_caption_preserves_the_recorded_time_and_evidence_contract(tmp_path, contract, expected, absent):
+    root = _ledger(tmp_path)
+    path = root / "ledger/run.json"
+    data = json.loads(path.read_text())
+    data["worlds_contract"] = contract
+    path.write_text(json.dumps(data))
+    run = core.load_run(root)
+    frag = rw.build_ledger(run)
+    assert expected in frag.tex and absent not in frag.tex
+    assert "hypothetical" in frag.tex and "not measured filter attenuation" in frag.tex
+    assert "cut removes" not in frag.tex
+    assert expected in " ".join(rw.build(run).notes)
+
+
+def test_floor_summary_counts_and_best_ratio_use_the_displayed_coarse_floor(tmp_path):
+    root = _ledger(tmp_path)
+    path = root / "ledger/channels/ch29_fid871.json"
+    record = json.loads(path.read_text())
+    record["sections"]["selection"]["coarse_min_R"] = 30.0
+    path.write_text(json.dumps(record))
+    frag = rw.build_class_floor(core.load_run(root))
+    values = {n.key: n.value for n in frag.numbers}
+    displayed = values["ch09.classfloor.growth_R.ch29"]
+    assert displayed > 1.0
+    assert values["ch09.classfloor.n_growth_inside"] == 0
+    assert values["ch09.classfloor.n_dilation_inside"] == 0
+    assert values["ch09.classfloor.best_growth_R"] == pytest.approx(displayed)
+
+
+def test_zero_coarse_allowance_is_priced_without_dividing_by_a_fine_floor(tmp_path):
+    path = _ledger(tmp_path) / "ledger" / "channels" / "ch29_fid871.json"
+    record = json.loads(path.read_text())
+    record["sections"]["selection"]["coarse_min_R"] = 0.0
+    record["sections"]["worlds"]["r_floor"] = 0.0
+    path.write_text(json.dumps(record))
+    fragment = rw.build_class_floor(core.load_run(tmp_path))
+    numbers = {n.key: n.value for n in fragment.numbers}
+    assert numbers["ch09.classfloor.growth_R.ch29"] == 0.0
+    assert numbers["ch09.classfloor.dilation_R.ch29"] == 0.0
+
+
+def test_coarse_allowance_uses_recorded_suppression_and_refuses_missing_tolerance(tmp_path):
+    path = _ledger(tmp_path) / "ledger" / "channels" / "ch29_fid871.json"
+    record = json.loads(path.read_text())
+    section = record["sections"]["worlds"]
+    for world in WORLD_NAMES:
+        section[f"{world}_suppression_db"] = 0.0
+        section[f"{world}_apar_r_tol"] = None
+    path.write_text(json.dumps(record))
+    fragment = rw.build_class_floor(core.load_run(tmp_path))
+    numbers = {n.key: n.value for n in fragment.numbers}
+    assert numbers["ch09.classfloor.growth_R.ch29"] == pytest.approx(0.9)
+    assert numbers["ch09.classfloor.dilation_R.ch29"] is None
