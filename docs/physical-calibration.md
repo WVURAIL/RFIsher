@@ -9,6 +9,79 @@ results and response banks are unchanged. These checks live in
 `rfisher_results.validation` so that evidence tooling does not invalidate
 the banks' scientific-source identity.
 
+## Channel 29 follow-up after the corrected reanalysis
+
+The fresh September 9 reanalysis reproduced the corrected archive and added
+fixed coarse-retention comparisons. A channel 29 candidate is now specified in
+[channel29-followup.md](channel29-followup.md), with a new metadata-only cohort
+checker and a development exclusion set expanded from 9,214 to 9,335 events.
+The additional 121 events were already used in the completed campaign.
+
+The candidate/design freeze is separate from the later physical-calibration
+freeze and prospective confirmation. Its exact coarse threshold and provisional
+planning rules confer no physical or operational acceptance. The study and
+frozen protocol are in `../results/channel29_followup_2026-09-09/` in the parent
+workspace. The first candidate-specific retained-set control study is complete
+below. Physical residual calibration and matched in-band visibility transfer
+remain open.
+
+### Channel 29 retained-set controls: failed reduced-bound validation
+
+`../results/channel29_residual_controls_2026-09-09/` preserves a separately
+frozen study of the exact coarse candidate through the full 2,048-stream packed
+detector. Seven full-frame CPU/GPU packing and coarse-power checks agree
+exactly. The study uses 100 calibration blocks, 100 fresh evaluation blocks,
+five fixed null/intermittent cases, and separate reference-contamination
+controls. Its 38,791 prescribed frame identities, including seven audit frames,
+are distinct from recorded development identities. The README, three-page PDF,
+source snapshots and independent recount retain the complete scope and data.
+
+The candidate cutoff caps each kept positive-excess shelf at `8.18028e-6`,
+below the assigned floor `2.1551920577866108e-5`; every kept frame therefore
+receives that same original assignment. The maximum of 100 joint calibration
+errors fits an absolute retained-set upper candidate of
+`6.057908361096407e-6`, targeting 97% content with 95.2447% calibration
+confidence. Independent evaluation gives **97/100 joint successes** and a
+**92.43%** one-sided 95% lower limit. The separately predeclared **95%
+evaluation target is not demonstrated**. All three failures are supported
+variable-amplitude cases; no case has insufficient support, and every case
+retains at least 51 evaluation frames. The original floor covers 100/100
+primary blocks. No bound refit, padding, sample extension or archive replacement
+follows this result. Calibration confidence and finite evaluation answer
+different questions; the latter does not establish true coverage below 95%.
+
+Two additional scope checks prevent generalization. Pooling the steady -50 dB
+evaluation population gives 1,716/3,200 retained frames (53.625%) with known
+ATSC truth `1e-5`, above the fitted intermittent-case candidate even without
+extra reference tones. These pooled populations are descriptive, not new
+independently supported block tests. In the separate -35 dB stress control,
+baseline references retain 0/128 frames; added reference tones retain 128/128
+at the same ATSC truth `3.1622776601683794e-4`, 14.67 times the original floor.
+Each ideal reference receives added projection power 0.1 times its expected
+uncontaminated thermal power; actual packed-weight leakage and coherent cross
+terms are recorded. Zero ATSC truth in the reference-only control excludes
+the tones' own interference and does not certify an interference-free frame.
+
+The original floor's primary-case coverage does not qualify a physical floor,
+and the smaller candidate must not replace it. Physical calibration requires
+an applicable duty-cycle/amplitude family, independent reference-quality and
+thermal-baseline evidence, and matched in-band visibility/noise and filter
+injections. A small target/reference ratio alone is insufficient. These are
+nominal prequantization digital labels, not measured telescope residuals or a
+new CHIME holdout; no physical calibration bundle or confirmation interval is
+activated. The counterexamples do not establish their prevalence in CANFAR or
+prove channel 29 recoverable or irrecoverable.
+
+## In-band voltage development step
+
+The [one-event coherence prototype](inband-coherence.md) now computes actual
+complex cross-products for 32 fixed inputs in 15 adjacent in-band voltage
+shards. Its 0.2943-second development record, exact byte snapshots, dual
+sample-code diagnostics and independent recount advance the implementation.
+The event remains excluded from independent validation. Gains, delays,
+packet validity, full-allocation coverage and actual-cleaner response remain
+open; no physical residual or forecast credit follows from this result.
+
 ## Local visibility evidence
 
 The September 8 collaboration delivery contains two `HybridVisStream` stacks
