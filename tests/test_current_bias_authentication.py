@@ -1,5 +1,6 @@
 """Named fiducials and their citations remain authenticated in bias workflows."""
 from copy import deepcopy
+import hashlib
 import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
@@ -76,3 +77,21 @@ def test_bias_loader_accepts_only_registered_chime_cosmologies(
             bt.load_bias_bank(path)
     else:
         assert bt.load_bias_bank(path) is bank
+
+
+@pytest.mark.parametrize("recorded_newline", [b"\n", b"\r\n"])
+@pytest.mark.parametrize("checkout_newline", [b"\n", b"\r\n"])
+def test_baseline_identity_preserves_only_checkout_newline_equivalence(
+        tmp_path, recorded_newline, checkout_newline):
+    rows = [b"0.0 1.0", b"1.0 2.0", b""]
+    recorded = hashlib.sha256(recorded_newline.join(rows)).hexdigest()
+    path = tmp_path / "baseline.dat"
+    path.write_bytes(checkout_newline.join(rows))
+    assert bt._baseline_identity_sha256(path, recorded) == recorded
+    path.write_bytes(checkout_newline.join([b"0.0 1.1", *rows[1:]]))
+    assert bt._baseline_identity_sha256(path, recorded) != recorded
+
+
+def test_missing_baseline_cannot_authenticate_a_recorded_file(tmp_path):
+    assert bt._baseline_identity_sha256(tmp_path / "missing.dat", "a" * 64) is None
+    assert bt._baseline_identity_sha256(None, "a" * 64) is None

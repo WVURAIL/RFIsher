@@ -768,6 +768,18 @@ def missing_tables() -> set[str]:
     return {name for name in SHIPPED_TABLES if not (OUT / name).is_file()}
 
 
+def check_handback_range(ck: Checker) -> None:
+    """Check the legacy range only while the dissertation retains that claim."""
+    ck.forbid("stale hand-back range", r"5\.9\s*-\s*7\.8",
+              "the former hand-back calculation used 3.2-7.8 dB")
+    if re.search(r"\bhand[\s-]*back\b", ck.text, re.IGNORECASE):
+        ck.require("corrected hand-back range", r"3\.2\s*-\s*7\.8",
+                   "a retained hand-back claim must quote the corrected range")
+    else:
+        ck.skip("corrected hand-back range",
+                "hand-back claim is retired; no range is required")
+
+
 def run_checks(ck: Checker, summary: dict | None) -> None:
     absent = missing_tables()
 
@@ -1089,10 +1101,7 @@ def run_checks(ck: Checker, summary: dict | None) -> None:
 
     # ---- SS9.4 hand-back range & SS6.3 factor of ten ----------------------
     ck.section("SS9.4 / SS6.3 -- ranges and factors")
-    ck.forbid("stale hand-back range", r"5\.9-7\.8",
-              "with 11.4 dB at 200 ns, 8.2/3.6 dB at the cuts the hand-back"
-              " is 3.2-7.8 dB (2.1-6x); SS9.9 already says 3.2 dB")
-    ck.require("corrected hand-back range", r"3\.2-7\.8", "see above")
+    check_handback_range(ck)
     ck.forbid_pair("fxfft statistic-move dB self-consistent",
                    r"0\.00026 ?dB", r"5\.9 ?x ?10",
                    "10 log10(1 - 5.9e-4) = -0.0026 dB: one of the two is 10x"

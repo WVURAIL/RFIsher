@@ -175,6 +175,21 @@ def _bank_build_identity(bank) -> dict:
     return identity
 
 
+def _baseline_identity_sha256(path: Path | None, recorded: str | None) -> str | None:
+    """Authenticate historical baseline bytes across LF and CRLF checkouts."""
+    if path is None or not path.is_file():
+        return None
+    content = path.read_bytes()
+    actual = hashlib.sha256(content).hexdigest()
+    if actual == recorded:
+        return actual
+    lf = content.replace(b"\r\n", b"\n")
+    for equivalent in (lf, lf.replace(b"\n", b"\r\n")):
+        if hashlib.sha256(equivalent).hexdigest() == recorded:
+            return recorded
+    return actual
+
+
 def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
     """Reconstruct and authenticate every scientific input used at runtime."""
     build = bank.meta["provenance"]
@@ -248,9 +263,8 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
     evaluation_experiment = {
         "sha256": _sha256_json(experiment_payload),
         "settings": experiment_payload,
-        "baseline_sha256": (
-            pkcache.file_sha256(baseline_path)
-            if baseline_path is not None and baseline_path.is_file() else None),
+        "baseline_sha256": _baseline_identity_sha256(
+            baseline_path, build["experiment"]["baseline_sha256"]),
     }
     evaluation_foregrounds = {
         key: experiment_payload.get(key) for key in FOREGROUND_KEYS}

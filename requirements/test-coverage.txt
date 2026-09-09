@@ -1,2 +1,3 @@
 # Keep test-only tooling outside pyproject.toml: that file is bank provenance.
 pytest-cov>=6,<8
+h5py>=3.11,<4
