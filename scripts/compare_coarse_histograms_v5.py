@@ -30,9 +30,14 @@ A, B = 2 * P, 4 * P
 PROBS = np.array([.001, .01, .025, .15865525393145707, .25, .5, .75, .8413447460685429, .975, .99, .999])
 NULL = stats.f(A, B)
 NULL_MEDIAN = float(NULL.ppf(.5))
+NULL_SD = float(NULL.std())
 NOISE_LOWER = {"001": float(NULL.ppf(.001)), "01": float(NULL.ppf(.01))}
 BLUE, ORANGE, DARK = "#147f95", "#b85b24", "#173347"
-ZOOM_MODEL_SD = 20.0      # half-width cap of the central zoom, in model standard deviations
+ZOOM_MODEL_SD = 20.0      # half-width of the model-only zoom, in model standard deviations
+ZOOM_TAIL_SD = 8.0        # each reference model is shown to this many of its own standard deviations
+ZOOM_MAX_SPAN_SD = 150.0  # widest two-model window, in matched-model standard deviations
+ZOOM_MARGIN = 0.10        # margin added on each side of the two-model window, as a fraction of its width
+ZOOM_BIN_SD = 0.5         # widest zoom bin, in matched-model standard deviations
 
 
 def sha(path):
@@ -236,14 +241,20 @@ def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
     fig.subplots_adjust(left=.085, right=.975, top=.785, bottom=.12, hspace=.47, wspace=.24)
     for ax in axes.flat:
         style_axis(ax)
-    # Model-centered zoom: the robust +-2 IQR window, narrowed to at most ZOOM_MODEL_SD model standard
-    # deviations so the model curves are resolved; histogram normalization still uses ALL frames.
-    median, iqr = current["median"], current["iqr"]
-    span = max(6*current["model_std"], min(2*iqr, ZOOM_MODEL_SD*current["model_std"]))
-    low, high = max(float(q.min()), median-span), min(float(q.max()), median+span)
-    if high <= low:
-        low, high = median-span, median+span
-    edges = np.linspace(low, high, 81)
+    # Model-centered zoom: the smallest window that holds both reference models to ZOOM_TAIL_SD of their own
+    # standard deviations, with a margin; where the two lie too far apart to be resolved on one linear axis,
+    # the matched model alone to ZOOM_MODEL_SD. Histogram normalization still uses ALL frames.
+    median, sd = current["median"], current["model_std"]
+    lo_m, hi_m = median - ZOOM_TAIL_SD*sd, median + ZOOM_TAIL_SD*sd
+    lo_n, hi_n = NULL_MEDIAN - ZOOM_TAIL_SD*NULL_SD, NULL_MEDIAN + ZOOM_TAIL_SD*NULL_SD
+    low, high = min(lo_m, lo_n), max(hi_m, hi_n)
+    if high - low <= ZOOM_MAX_SPAN_SD*sd:
+        pad = ZOOM_MARGIN*(high - low)
+        low, high = low - pad, high + pad
+    else:
+        low, high = median - ZOOM_MODEL_SD*sd, median + ZOOM_MODEL_SD*sd
+    bins = int(np.clip(np.ceil((high - low)/(ZOOM_BIN_SD*sd)), 80, 400))
+    edges = np.linspace(low, high, bins + 1)
     counts, _ = np.histogram(q, edges)
     density = counts/(q.size*np.diff(edges))
     matched = bin_masses(law, edges)/np.diff(edges)
