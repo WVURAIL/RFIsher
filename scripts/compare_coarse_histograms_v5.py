@@ -236,7 +236,7 @@ def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
     fig.subplots_adjust(left=.085, right=.975, top=.785, bottom=.12, hspace=.47, wspace=.24)
     for ax in axes.flat:
         style_axis(ax)
-    # Model-centred zoom: the robust +-2 IQR window, narrowed to at most ZOOM_MODEL_SD model standard
+    # Model-centered zoom: the robust +-2 IQR window, narrowed to at most ZOOM_MODEL_SD model standard
     # deviations so the model curves are resolved; histogram normalization still uses ALL frames.
     median, iqr = current["median"], current["iqr"]
     span = max(6*current["model_std"], min(2*iqr, ZOOM_MODEL_SD*current["model_std"]))
@@ -256,7 +256,7 @@ def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
     positive = np.r_[density[density > 0], matched[matched > 0], noise[noise > 0]]
     axes[0,0].set_ylim(.4/(q.size*np.diff(edges).max()), max(positive.max()*1.5, 1/(q.size*np.diff(edges).min())))
     axes[0,0].set_xlim(low, high)
-    axes[0,0].set_title(f"Model-centred zoom: {counts.sum()/q.size:.1%} of frames shown", loc="left", fontsize=11, weight="bold")
+    axes[0,0].set_title(f"Model-centered zoom: {counts.sum()/q.size:.1%} of frames shown", loc="left", fontsize=11, weight="bold")
     axes[0,0].set_xlabel(r"$Q=F/\mu_0$")
     axes[0,0].set_ylabel("Probability density per Q (log)")
     # The full-range panel includes noise even when it is outside the central zoom.
