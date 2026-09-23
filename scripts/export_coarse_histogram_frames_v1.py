@@ -17,8 +17,9 @@ import zipfile
 
 import numpy as np
 
-RAIL=Path(__file__).resolve().parents[2]
-for root in (RAIL/"RFIsher/src",RAIL/"pilot-proxy/src"):
+REPO=Path(__file__).resolve().parents[1]      # this RFIsher checkout, which may be a worktree
+RAIL=REPO.parent
+for root in (REPO/"src",RAIL/"pilot-proxy/src"):
     if str(root) not in sys.path:sys.path.insert(0,str(root))
 from rfisher_results.archive.products import Product,HEALTH_GATE_SCHEMA,NFFT
 from rfisher_results.archive.blocks import month_index
@@ -203,7 +204,7 @@ def run(products,release,output):
     preflight={item["filename"]:item for item in json.loads(preflight_path.read_text())["products"]}
     ledger_paths=sorted((release/"ledger/channels").glob("ch*_fid*.json"))
     if len(ledger_paths)!=23 or len(preflight)!=23:raise ValueError("corrected cohort must contain23 channels")
-    source_paths=[Path(__file__).resolve(),RAIL/"RFIsher/src/rfisher_results/archive/products.py",RAIL/"RFIsher/src/rfisher_results/archive/blocks.py",RAIL/"RFIsher/src/rfisher_results/archive/eras.py",RAIL/"RFIsher/src/rfisher/pilotproxy.py",RAIL/"pilot-proxy/src/pilot_proxy/archive_health.py",RAIL/"pilot-proxy/src/pilot_proxy/archived_product_keys.py"]
+    source_paths=[Path(__file__).resolve(),REPO/"src/rfisher_results/archive/products.py",REPO/"src/rfisher_results/archive/blocks.py",REPO/"src/rfisher_results/archive/eras.py",REPO/"src/rfisher/pilotproxy.py",RAIL/"pilot-proxy/src/pilot_proxy/archive_health.py",RAIL/"pilot-proxy/src/pilot_proxy/archived_product_keys.py"]
     inputs={str(path):sha(path) for path in source_paths+[preflight_path,release/"ledger/run.json"]}
     for path in ledger_paths:
         ledger=json.loads(path.read_text());era_path=release/f"channels/ch{ledger['channel']}/eras.json"
