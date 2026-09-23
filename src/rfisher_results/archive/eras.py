@@ -156,13 +156,17 @@ EVIDENCE_STATION = "station change"
 EVIDENCE_INSTRUMENT = "instrument change"
 EVIDENCE_SIGN_ON = "transmitter sign-on"
 EVIDENCE_SIGN_OFF = "transmitter sign-off"
+EVIDENCE_POWER = "power transition"
+
+SOURCE_RULE = "section 8.1 rule"
+SOURCE_AUTHOR = "author-dated"
 
 ERA_COLUMNS = (
     "channel", "freq_id", "era", "n_eras", "first_month", "last_month", "state", "evidence",
     "record_agreement", "boundary_uncertainty_months", "boundary_gap_months", "boundary_ambiguous_months",
     "units", "frames", "frames_without_time", "populated_months", "months_spanned", "coverage",
     "level_median_db", "peak_offset_bins", "peak_drift_bins_per_month", "peak_range_bins", "peak_months",
-    "is_current", "stale_latest", "fallback",
+    "is_current", "stale_latest", "fallback", "boundary_source",
     "config_version", "config_digest",
 )
 CHANNEL_COLUMNS = (
@@ -175,7 +179,8 @@ CHANNEL_COLUMNS = (
     "instrument_excursions", "unconfirmed_instrument_change_last_month",
     "current_peak_drift_bins_per_month", "current_peak_range_bins", "software_tags", "software_tag_changes", "frames_selected", "frames_without_time",
     "peak_cohort_fallback_months", "sensitivity_units", "sensitivity_units_moves",
-    "sensitivity_thresholds", "sensitivity_thresholds_moves", "config_version", "config_digest",
+    "sensitivity_thresholds", "sensitivity_thresholds_moves", "boundary_source", "rule_current_era",
+    "config_version", "config_digest",
 )
 
 
@@ -738,6 +743,8 @@ class EraTable:
     peak_cohort_fallback_months: tuple[int, ...]
     sensitivity: tuple[SensitivityOutcome, ...]
     unmatched_station_records: tuple[str, ...]
+    boundary_source: str = SOURCE_RULE      # who placed the eras: the rule, or an author-dated list (impose_eras)
+    rule_current_era: str = ""              # the rule's own current era, kept beside an imposed one
 
     @property
     def current_era(self) -> Era | None:
@@ -841,6 +848,76 @@ def era_table(product: Product, mask=None, config: EraConfig = DEFAULT_CONFIG, *
     )
 
 
+def _span_label(era: Era | None) -> str:
+    return f"{era.first_label}..{era.last_label}" if era else ""
+
+
+def impose_eras(table: EraTable, product: Product, spec: Sequence[Sequence[str]], mask=None, *,
+                source: str = SOURCE_AUTHOR) -> EraTable:
+    """Replace the rule's eras with an externally dated list, keeping the rule's month record.
+
+    ``spec`` is the channel's whole era list in calendar order, each entry
+    ``(first_month, last_month, evidence)`` with months as ``YYYY-MM``. An era is
+    the populated months inside its span, bounded by the first and last of them;
+    a populated month inside no span belongs to no era and is reported as a
+    transition-zone month, so the placement convention is the rule's. The state
+    of an era is the section 8.1 state of its frame-median level. Everything the
+    rule recorded per month (states, excursions, instrument changes, peak
+    locations) is kept as it is; the rule's sensitivity outcomes are dropped,
+    because its thresholds no longer place the eras, and its own current era is
+    kept in ``rule_current_era``.
+    """
+    mask = product.selected if mask is None else np.asarray(mask, dtype=bool)
+    config = table.config
+    populated = [r for r in table.months if r.populated]
+    raw = {r.month: state_of(r.level_db, config) for r in populated}
+    record = {r.month: r for r in populated}
+    spans = [(_month_of_label(a), _month_of_label(b), str(evidence)) for a, b, evidence in spec]
+    if not spans:
+        raise ValueError("an era list needs at least one era")
+    for (a, b, _), (c, _, _) in zip(spans, spans[1:] + [(None, None, None)]):
+        if b < a or (c is not None and c <= b):
+            raise ValueError("era spans must be ordered and must not overlap")
+    months_all = frame_months(product)
+    timed = np.isfinite(product.frame_time)
+    level = product.level_db
+    eras: list[Era] = []
+    for index, (a, b, evidence) in enumerate(spans):
+        months = [m for m in sorted(record) if a <= m <= b]
+        if not months:
+            raise ValueError(f"era {blocks.month_label(a)}..{blocks.month_label(b)} holds no populated month")
+        first, last = months[0], months[-1]
+        prev_last = eras[-1].last_month if eras else None
+        uncertainty = 0 if prev_last is None else first - prev_last - 1
+        between = 0 if prev_last is None else sum(1 for m in record if prev_last < m < first)
+        located = [(m, record[m].peak_offset_bins) for m in months
+                   if raw[m] == PROXY_HIGH and math.isfinite(record[m].peak_offset_bins)]
+        peaks = [v for _, v in located]
+        drift = float("nan")
+        if len(located) >= 3:
+            xs = np.array([m for m, _ in located], dtype=float)
+            drift = float(np.polyfit(xs - xs.mean(), np.array(peaks, dtype=float), 1)[0])
+        here = mask & (months_all >= first) & (months_all <= last)
+        levels = level[here]
+        levels = levels[np.isfinite(levels)]
+        median = float(np.median(levels)) if levels.size else float("nan")
+        eras.append(Era(index, first, last, state_of(median, config), evidence, uncertainty, uncertainty - between,
+                        between, tuple(months), float(np.median(peaks)) if peaks else float("nan"), "",
+                        units=int(np.unique(product.frame_unit_index[here]).size), frames=int(here.sum()),
+                        frames_without_time=int((here & ~timed).sum()), level_median_db=median,
+                        peak_drift_bins_per_month=drift,
+                        peak_range_bins=float(max(peaks) - min(peaks)) if peaks else float("nan"),
+                        peak_months=len(peaks)))
+    covered = {m for e in eras for m in e.months}
+    zone = tuple(m for m in sorted(record) if m not in covered and eras[0].first_month < m < eras[-1].last_month)
+    lag = table.campaign_last_month - eras[-1].last_month
+    return dataclasses.replace(
+        table, eras=tuple(eras), current_index=len(eras) - 1,
+        stale_latest=lag > config.stale_grace_months, stale_lag_months=lag,
+        transition_zone_months=zone, indeterminate="", sensitivity=(),
+        boundary_source=source, rule_current_era=_span_label(table.current_era))
+
+
 def campaign_last_populated_month(products: Sequence[Product], config: EraConfig = DEFAULT_CONFIG,
                                   masks: Sequence[np.ndarray] | None = None) -> int:
     """The last populated month over every product (the campaign snapshot); -1 if none."""
@@ -875,7 +952,7 @@ def era_rows(table: EraTable) -> list[dict]:
             "peak_offset_bins": float(era.peak_offset_bins), "peak_drift_bins_per_month": float(era.peak_drift_bins_per_month),
             "peak_range_bins": float(era.peak_range_bins), "peak_months": era.peak_months,
             "is_current": era.index == table.current_index,
-            "stale_latest": table.stale_latest, "fallback": table.fallback,
+            "stale_latest": table.stale_latest, "fallback": table.fallback, "boundary_source": table.boundary_source,
             "config_version": table.config.version, "config_digest": table.config.digest,
         })
     return rows
@@ -919,6 +996,7 @@ def channel_row(table: EraTable) -> dict:
         "sensitivity_units_moves": ";".join(o.value for o in units if o.moves),
         "sensitivity_thresholds": ";".join(f"{o.value}:{o.span}" for o in thresholds),
         "sensitivity_thresholds_moves": ";".join(o.value for o in thresholds if o.moves),
+        "boundary_source": table.boundary_source, "rule_current_era": table.rule_current_era or _span_label(current),
         "config_version": table.config.version, "config_digest": table.config.digest,
     }
 
@@ -976,6 +1054,8 @@ def era_table_dict(table: EraTable) -> dict:
         "frames_selected": table.frames_selected, "frames_without_time": table.frames_without_time,
         "peak_cohort_fallback_months": [blocks.month_label(m) for m in table.peak_cohort_fallback_months],
         "unmatched_station_records": list(table.unmatched_station_records),
+        "boundary_source": table.boundary_source,
+        "rule_current_era": table.rule_current_era or _span_label(table.current_era),
         "eras": [{
             "era": e.index + 1, "first_month": e.first_label, "last_month": e.last_label, "state": e.state,
             "evidence": e.evidence, "record_agreement": e.record_agreement,
