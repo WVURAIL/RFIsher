@@ -32,6 +32,7 @@ NULL = stats.f(A, B)
 NULL_MEDIAN = float(NULL.ppf(.5))
 NOISE_LOWER = {"001": float(NULL.ppf(.001)), "01": float(NULL.ppf(.01))}
 BLUE, ORANGE, DARK = "#147f95", "#b85b24", "#173347"
+ZOOM_MODEL_SD = 20.0      # half-width cap of the central zoom, in model standard deviations
 
 
 def sha(path):
@@ -235,9 +236,10 @@ def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
     fig.subplots_adjust(left=.085, right=.975, top=.785, bottom=.12, hspace=.47, wspace=.24)
     for ax in axes.flat:
         style_axis(ax)
-    # Robust zoom; histogram normalization still uses ALL frames.
+    # Model-centred zoom: the robust +-2 IQR window, narrowed to at most ZOOM_MODEL_SD model standard
+    # deviations so the model curves are resolved; histogram normalization still uses ALL frames.
     median, iqr = current["median"], current["iqr"]
-    span = max(2*iqr, 6*current["model_std"])
+    span = max(6*current["model_std"], min(2*iqr, ZOOM_MODEL_SD*current["model_std"]))
     low, high = max(float(q.min()), median-span), min(float(q.max()), median+span)
     if high <= low:
         low, high = median-span, median+span
@@ -254,7 +256,7 @@ def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
     positive = np.r_[density[density > 0], matched[matched > 0], noise[noise > 0]]
     axes[0,0].set_ylim(.4/(q.size*np.diff(edges).max()), max(positive.max()*1.5, 1/(q.size*np.diff(edges).min())))
     axes[0,0].set_xlim(low, high)
-    axes[0,0].set_title(f"Central zoom: {counts.sum()/q.size:.1%} of frames shown", loc="left", fontsize=11, weight="bold")
+    axes[0,0].set_title(f"Model-centred zoom: {counts.sum()/q.size:.1%} of frames shown", loc="left", fontsize=11, weight="bold")
     axes[0,0].set_xlabel(r"$Q=F/\mu_0$")
     axes[0,0].set_ylabel("Probability density per Q (log)")
     # The full-range panel includes noise even when it is outside the central zoom.
