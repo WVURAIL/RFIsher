@@ -23,6 +23,7 @@ spectra) under ``<out>/channels/chNN/``. The parent aggregates the tables
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import datetime as dt
 import json
 import math
@@ -30,7 +31,7 @@ import time
 import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import numpy as np
 
@@ -196,7 +197,8 @@ def _label(era: eras.Era | None) -> str:
 
 
 def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replicates: int, seed: int,
-                    era_config: eras.EraConfig | None = None, tolerance_row: dict | None = None) -> dict:
+                    era_config: eras.EraConfig | None = None, tolerance_row: dict | None = None,
+                    era_spec: Sequence[Sequence[str]] | None = None) -> dict:
     """The whole pipeline for one product; returns small rows, writes large files."""
     t0 = time.time()
     out = Path(out_dir)
@@ -239,6 +241,9 @@ def process_channel(path: str, out_dir: str, *, campaign_last_month: int, replic
     # Dates inferred from this archive are diagnostics, not an independent
     # vote supporting a detected transition.
     table = eras.era_table(p, config=config, campaign_last_month=campaign_last_month, station_record={})
+    if era_spec:
+        # an author-dated era list replaces the rule's eras; the rule's month record is kept beside it
+        table = eras.impose_eras(table, p, era_spec)
     record.add("archive_inferred_events", {"events": station_records(ch), "independently_verified": False})
     eras.write_era_json(table, ch_dir / "eras.json")
     era = table.current_era
@@ -658,7 +663,8 @@ def _worker(args):
 
 def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int = 6, replicates: int = blocks.DEFAULT_REPLICATES,
                 seed: int = blocks.DEFAULT_SEED, channels: Sequence[int] | None = None,
-                era_config: eras.EraConfig | None = None, generated: str | None = None) -> dict:
+                era_config: eras.EraConfig | None = None, generated: str | None = None,
+                era_overrides: Mapping[int, Sequence[Sequence[str]]] | None = None) -> dict:
     products_dir, out = Path(products_dir), Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     producer = _producer()                     # read once, before any work: the code that runs is the code named
@@ -672,7 +678,8 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
     tol_rows = {r.channel: r.as_row() for r in tolerances.channel_tolerances()}
     tolerances.write_channel_tolerances(tolerances.channel_tolerances(), out / "tables" / "channel_tolerances.csv")
     jobs = [(str(p.path), str(out), dict(campaign_last_month=campaign_last, replicates=replicates, seed=seed,
-                                         era_config=config, tolerance_row=tol_rows.get(c)))
+                                         era_config=config, tolerance_row=tol_rows.get(c),
+                                         era_spec=(era_overrides or {}).get(c)))
             for c, p in sorted(by_channel.items())]
     for p in opened:
         p.close()
@@ -722,6 +729,10 @@ def run_archive(products_dir: Path | str, out_dir: Path | str, *, workers: int =
         "products_dir": str(products_dir), "products": {p.name: sha256_of(p) for p in paths},
         "channels": sorted(by_channel), "campaign_last_month": blocks.month_label(campaign_last),
         "era_config": json.loads(config.canonical_json()), "era_config_digest": config.digest,
+        "era_overrides": {str(c): [list(e) for e in v] for c, v in sorted((era_overrides or {}).items())},
+        "era_overrides_sha256": hashlib.sha256(json.dumps(
+            {str(c): [list(e) for e in v] for c, v in sorted((era_overrides or {}).items())},
+            sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
         "bootstrap": {"replicates": replicates, "seed": seed},
         "worlds_contract": {"time_rule": "target_only", "target_years": worlds.TARGET_YEARS,
                             "bin_rule": "every overlapping bin; both dilations required",

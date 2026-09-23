@@ -77,6 +77,25 @@ def test_driver_runs_every_stage_and_writes_the_tree(tmp_path, monkeypatch, synt
     assert ch35["sections"]["screening"]["off_through"] == "2021-10"
 
 
+def test_driver_passes_an_author_dated_era_list_to_its_channel_and_records_it(tmp_path, monkeypatch, synthetic_archive_health):
+    def unavailable():
+        raise ValueError("test: no authenticated bank")
+    monkeypatch.setattr(archive_run.worlds, "tolerances", unavailable)
+    monkeypatch.setattr(archive_run, "ProcessPoolExecutor", partial(
+        archive_run.ProcessPoolExecutor, mp_context=multiprocessing.get_context("spawn")))
+    products = _products(tmp_path)
+    out = tmp_path / "out"
+    spec = {33: [("2020-01", "2020-06", "archive start")]}
+    summary = archive_run.run_archive(products, out, workers=1, replicates=5, seed=3,
+                                      generated="2026-09-23T00:00:00+00:00", era_overrides=spec)
+    # the small fixture has no populated month, so the imposed list is refused on its own channel only
+    assert summary["channels"] == [35]
+    assert len(summary["errors"]) == 1 and "holds no populated month" in summary["errors"][0]["error"]
+    run = json.loads((out / "ledger" / "run.json").read_text())
+    assert run["era_overrides"] == {"33": [["2020-01", "2020-06", "archive start"]]}
+    assert len(run["era_overrides_sha256"]) == 64
+
+
 @pytest.mark.parametrize("point,evaluation,expected", [
     (0.02, 0.04, False), (0.04, 0.02, True), (0.02, float("nan"), False), (0.02, 0.02, True),
 ])

@@ -393,3 +393,45 @@ def test_month_records_reject_a_mask_of_the_wrong_shape(product_path):
             eras.month_records(p, np.ones(3, dtype=bool))
         assert eras.month_records(p, np.zeros(p.n_frames, dtype=bool)) == ()
         assert np.isnan(eras.frame_peak_offsets(p, np.zeros(p.n_frames, dtype=bool))).all()
+
+
+def test_an_author_dated_era_list_replaces_the_rule_eras_and_keeps_its_month_record(product_path, tmp_path):
+    with Product(product_path) as p:
+        rule = eras.era_table(p, p.selected, campaign_last_month=M0 + 23)
+        spec = [("2020-01", "2020-06", EVIDENCE_START), ("2020-09", "2021-10", eras.EVIDENCE_POWER)]
+        table = eras.impose_eras(rule, p, spec)
+        assert [(e.first_month - M0, e.last_month - M0) for e in table.eras] == [(0, 5), (8, 21)]
+        first, current = table.eras
+        assert first.state == PROXY_HIGH and first.frames == 600 and first.units == 60
+        assert first.frames_without_time == 10 and first.peak_offset_bins == PEAK_OFFSET
+        # the current era runs across the rule's instrument era, its zone month and its low era
+        assert current.state == PROXY_LOW and current.evidence == eras.EVIDENCE_POWER
+        assert current.frames == 1300 and current.units == 130 and current.populated_months == 13
+        assert current.months_spanned == 14 and current.peak_offset_bins == PEAK_OFFSET and current.peak_months == 2
+        # months 6 and 7 are populated and in no span: the boundary interval, reported as zone months
+        assert current.boundary_uncertainty_months == 2 and current.boundary_ambiguous_months == 2
+        assert current.boundary_gap_months == 0 and table.transition_zone_months == (M0 + 6, M0 + 7)
+        assert table.current_index == 1 and table.stale_latest and table.stale_lag_months == 2
+        assert table.boundary_source == eras.SOURCE_AUTHOR and table.rule_current_era == "2021-01..2021-10"
+        assert table.sensitivity == () and table.indeterminate == ""
+        # the rule's month record, excursions and instrument changes are kept as recorded
+        assert table.months == rule.months and table.excursions == rule.excursions
+        assert table.instrument_change_months == rule.instrument_change_months
+        mask = table.current_era_mask(p)
+        months = eras.frame_months(p)
+        assert mask.sum() == 1300 and months[mask].min() == M0 + 8 and months[mask].max() == M0 + 21
+        crow = eras.channel_row(table)
+        assert crow["boundary_source"] == eras.SOURCE_AUTHOR and crow["rule_current_era"] == "2021-01..2021-10"
+        assert crow["current_first_month"] == "2020-09" and crow["sensitivity_thresholds_moves"] == ""
+        assert eras.channel_row(rule)["boundary_source"] == eras.SOURCE_RULE
+        js = json.loads(eras.write_era_json(table, tmp_path / "author.json").read_text())
+        assert [m["era"] for m in js["months"]][5:10] == [1, "zone", "zone", 2, 2]
+        assert js["boundary_source"] == eras.SOURCE_AUTHOR
+        rows = eras.era_rows(table)
+        assert [r["boundary_source"] for r in rows] == [eras.SOURCE_AUTHOR] * 2
+        # spans must be ordered, disjoint and hold a populated month
+        for bad in ([("2020-05", "2020-01", EVIDENCE_START)],
+                    [("2020-01", "2020-08", EVIDENCE_START), ("2020-08", "2021-10", eras.EVIDENCE_POWER)],
+                    [("2019-01", "2019-06", EVIDENCE_START)], []):
+            with pytest.raises(ValueError):
+                eras.impose_eras(rule, p, bad)
