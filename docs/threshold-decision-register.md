@@ -1,5 +1,7 @@
 # Threshold decision register
 
+Current scientific decisions are maintained in the dissertation's `DECISION_CONTRACT.md` and `figure_src/data/channel_decisions/decisions.json`. All 23 channels remain undetermined at the masked 10-second visibility endpoint. This register documents the frozen scalar archive screen and its assumptions; it is not a physical channel ruling. Filter-credit scenarios are exploratory and do not enter the primary endpoint. See `visibility_response.md` for the explicit mean/covariance interface and its remaining physical inputs.
+
 The threshold calculation itself still has only two scientific inputs:
 
 1. a prepared residual-score histogram family; and
