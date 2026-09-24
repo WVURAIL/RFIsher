@@ -132,8 +132,24 @@ def test_render_unmatched_current_era_uses_boundary_label_and_all_frame_normaliz
     assert result["full_log_nonpositive_frames"]==1
     assert result["full_log_counts"].sum()==60
     assert result["zoom_excluded_frames"]==1
-    area=np.sum(result["zoom_observed_density"]*np.diff(result["zoom_edges"]))
+    assert len(result["zoom_segments"])==1 and result["zoom_eta"] is None
+    seg=result["zoom_segments"][0]
+    area=np.sum(seg["observed_density"]*np.diff(seg["edges"]))
     assert area==pytest.approx(60/61)
     assert row["median_equivalent_gamma"] is None
     # Boundary curves are the same central law; labels retain their different roles.
-    np.testing.assert_array_equal(result["zoom_model_bin_mass"],result["zoom_noise_bin_mass"])
+    np.testing.assert_array_equal(seg["model_bin_mass"],seg["noise_bin_mass"])
+
+
+def test_zoom_hugs_both_models_and_eta_and_splits_only_distant_features():
+    sd=m.NULL_SD
+    # near: one segment holding the noise model, the matched model and eta, bins at most half a model sd wide
+    (edges,)=m.zoom_segments(1.03,sd,eta=1.015)
+    assert edges[0]<m.NULL_MEDIAN-8*m.NULL_SD and edges[-1]>1.03+8*sd and edges[0]<1.015<edges[-1]
+    assert np.diff(edges).max()<=.5*sd+1e-15
+    # far: the noise model gets its own segment; eta beside the matched model shares the matched segment
+    null_seg,model_seg=m.zoom_segments(100.,.14,eta=110.)
+    assert null_seg[0]<m.NULL_MEDIAN<null_seg[-1] and null_seg[-1]<2
+    assert model_seg[0]<100-8*.14 and model_seg[-1]>110 and model_seg[0]>50
+    # without eta the rule still holds both models
+    assert len(m.zoom_segments(1.2,.003))==1 and len(m.zoom_segments(25.,.04))==2

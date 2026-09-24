@@ -19,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullFormatter
 from matplotlib.lines import Line2D
 import numpy as np
 import scipy
@@ -33,10 +33,10 @@ NULL_MEDIAN = float(NULL.ppf(.5))
 NULL_SD = float(NULL.std())
 NOISE_LOWER = {"001": float(NULL.ppf(.001)), "01": float(NULL.ppf(.01))}
 BLUE, ORANGE, DARK = "#147f95", "#b85b24", "#173347"
-ZOOM_MODEL_SD = 20.0      # half-width of the model-only zoom, in model standard deviations
-ZOOM_TAIL_SD = 8.0        # each reference model is shown to this many of its own standard deviations
-ZOOM_MAX_SPAN_SD = 150.0  # widest two-model window, in matched-model standard deviations
-ZOOM_MARGIN = 0.10        # margin added on each side of the two-model window, as a fraction of its width
+ZOOM_TAIL_SD = 8.0        # each reference model is held to this many of its own standard deviations
+ZOOM_ETA_SD = 2.0         # the policy threshold eta is held with this many matched-model standard deviations beside it
+ZOOM_MAX_GAP_SD = 120.0   # features farther apart than this, in matched-model standard deviations, get separate segments
+ZOOM_MARGIN = 0.10        # margin on each side of a segment, as a fraction of its width
 ZOOM_BIN_SD = 0.5         # widest zoom bin, in matched-model standard deviations
 
 
@@ -232,7 +232,34 @@ def overview(current, output):
     plt.close(fig)
 
 
-def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
+def zoom_segments(median, sd, eta=None):
+    """Edges of the zoom segments that hug the matched model, the noise model and eta.
+
+    Each model is held to ZOOM_TAIL_SD of its own standard deviations and eta to ZOOM_ETA_SD matched-model
+    standard deviations; features that lie within ZOOM_MAX_GAP_SD matched-model standard deviations of each
+    other share one segment, and a segment is widened by ZOOM_MARGIN of its width on each side. A linear axis
+    cannot resolve features hundreds of model widths apart, so those go to separate segments (a split axis).
+    """
+    features = [(median - ZOOM_TAIL_SD*sd, median + ZOOM_TAIL_SD*sd),
+                (NULL_MEDIAN - ZOOM_TAIL_SD*NULL_SD, NULL_MEDIAN + ZOOM_TAIL_SD*NULL_SD)]
+    if eta is not None and np.isfinite(eta):
+        features.append((eta - ZOOM_ETA_SD*sd, eta + ZOOM_ETA_SD*sd))
+    features.sort()
+    groups = [list(features[0])]
+    for lo, hi in features[1:]:
+        if lo - groups[-1][1] <= ZOOM_MAX_GAP_SD*sd:
+            groups[-1][1] = max(groups[-1][1], hi)
+        else:
+            groups.append([lo, hi])
+    out = []
+    for lo, hi in groups:
+        pad = ZOOM_MARGIN*(hi - lo)
+        lo, hi = lo - pad, hi + pad
+        out.append(np.linspace(lo, hi, int(np.clip(np.ceil((hi - lo)/(ZOOM_BIN_SD*sd)), 40, 400)) + 1))
+    return out
+
+
+def channel_page(channel, metadata, arrays, eras, monthly, output, atlas, eta=None):
     current = next(r for r in eras if r["is_current"])
     q = arrays["Q"][arrays["current_histogram_eligible"]]
     law = NULL if current["model_gamma_for_reference"] == 0 else stats.ncf(A, B, current["model_lambda_for_reference"])
@@ -241,35 +268,51 @@ def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
     fig.subplots_adjust(left=.085, right=.975, top=.785, bottom=.12, hspace=.47, wspace=.24)
     for ax in axes.flat:
         style_axis(ax)
-    # Model-centered zoom: the smallest window that holds both reference models to ZOOM_TAIL_SD of their own
-    # standard deviations, with a margin; where the two lie too far apart to be resolved on one linear axis,
-    # the matched model alone to ZOOM_MODEL_SD. Histogram normalization still uses ALL frames.
+    # Zoom: segments that hug both reference models and eta (a split axis where they lie too far apart
+    # for one linear window). Histogram normalization still uses ALL frames.
     median, sd = current["median"], current["model_std"]
-    lo_m, hi_m = median - ZOOM_TAIL_SD*sd, median + ZOOM_TAIL_SD*sd
-    lo_n, hi_n = NULL_MEDIAN - ZOOM_TAIL_SD*NULL_SD, NULL_MEDIAN + ZOOM_TAIL_SD*NULL_SD
-    low, high = min(lo_m, lo_n), max(hi_m, hi_n)
-    if high - low <= ZOOM_MAX_SPAN_SD*sd:
-        pad = ZOOM_MARGIN*(high - low)
-        low, high = low - pad, high + pad
-    else:
-        low, high = median - ZOOM_MODEL_SD*sd, median + ZOOM_MODEL_SD*sd
-    bins = int(np.clip(np.ceil((high - low)/(ZOOM_BIN_SD*sd)), 80, 400))
-    edges = np.linspace(low, high, bins + 1)
-    counts, _ = np.histogram(q, edges)
-    density = counts/(q.size*np.diff(edges))
-    matched = bin_masses(law, edges)/np.diff(edges)
-    noise = bin_masses(NULL, edges)/np.diff(edges)
-    axes[0,0].stairs(np.where(density > 0, density, np.nan), edges, color=BLUE, lw=1.25, label="CANFAR frames")
-    axes[0,0].stairs(np.where(matched > 0, matched, np.nan), edges, color=ORANGE, lw=1.4, label=model_label)
-    if noise.max() > 0:
-        axes[0,0].stairs(np.where(noise > 0, noise, np.nan), edges, color="#657888", lw=1, ls="--", label="Noise-only model")
-    axes[0,0].set_yscale("log")
-    positive = np.r_[density[density > 0], matched[matched > 0], noise[noise > 0]]
-    axes[0,0].set_ylim(.4/(q.size*np.diff(edges).max()), max(positive.max()*1.5, 1/(q.size*np.diff(edges).min())))
-    axes[0,0].set_xlim(low, high)
-    axes[0,0].set_title(f"Model-centered zoom: {counts.sum()/q.size:.1%} of frames shown", loc="left", fontsize=11, weight="bold")
-    axes[0,0].set_xlabel(r"$Q=F/\mu_0$")
-    axes[0,0].set_ylabel("Probability density per Q (log)")
+    segments = []
+    for edges in zoom_segments(median, sd, eta):
+        counts, _ = np.histogram(q, edges)
+        segments.append({"edges": edges, "counts": counts, "observed_density": counts/(q.size*np.diff(edges)),
+                         "model_bin_mass": bin_masses(law, edges), "noise_bin_mass": bin_masses(NULL, edges)})
+    shown = int(sum(seg["counts"].sum() for seg in segments))
+    positive = np.concatenate([np.r_[seg["observed_density"][seg["observed_density"] > 0],
+                                     (seg["model_bin_mass"]/np.diff(seg["edges"]))[seg["model_bin_mass"] > 0],
+                                     (seg["noise_bin_mass"]/np.diff(seg["edges"]))[seg["noise_bin_mass"] > 0]] for seg in segments])
+    widths = np.concatenate([np.diff(seg["edges"]) for seg in segments])
+    ylim = (.4/(q.size*widths.max()), max(positive.max()*1.5, 1/(q.size*widths.min())))
+    zoom_spec = axes[0,0].get_subplotspec()
+    axes[0,0].remove()
+    grid = zoom_spec.subgridspec(1, len(segments), wspace=.06, width_ratios=[len(seg["counts"]) for seg in segments])
+    zoom_axes = [fig.add_subplot(grid[0, i]) for i in range(len(segments))]
+    for i, (ax, seg) in enumerate(zip(zoom_axes, segments)):
+        style_axis(ax)
+        edges = seg["edges"]
+        matched = seg["model_bin_mass"]/np.diff(edges)
+        noise = seg["noise_bin_mass"]/np.diff(edges)
+        ax.stairs(np.where(seg["observed_density"] > 0, seg["observed_density"], np.nan), edges, color=BLUE, lw=1.25)
+        ax.stairs(np.where(matched > 0, matched, np.nan), edges, color=ORANGE, lw=1.4)
+        if noise.max() > 0:
+            ax.stairs(np.where(noise > 0, noise, np.nan), edges, color="#657888", lw=1, ls="--")
+        if eta is not None and edges[0] <= eta <= edges[-1]:
+            ax.axvline(eta, color=DARK, ls=":", lw=1.1)
+        ax.set_yscale("log")
+        ax.set_ylim(*ylim)
+        ax.set_xlim(edges[0], edges[-1])
+        ax.xaxis.set_major_locator(MaxNLocator(3))
+        if i:
+            ax.tick_params(which="both", left=False, labelleft=False)
+            ax.spines["left"].set_visible(False)
+        if i < len(segments) - 1:
+            ax.spines["right"].set_visible(False)
+        # break marks between segments
+        for x in ((1,) if i < len(segments) - 1 else ()) + ((0,) if i else ()):
+            ax.plot([x - .015, x + .015], [-.02, .02], transform=ax.transAxes, color=DARK, lw=.8, clip_on=False)
+    zoom_axes[0].set_ylabel("Probability density per Q (log)")
+    zoom_axes[0].set_title(f"Zoom on the models and eta: {shown/q.size:.1%} of frames shown", loc="left", fontsize=11, weight="bold")
+    fig.text(np.mean([a.get_position().x0 for a in zoom_axes[:1]] + [zoom_axes[-1].get_position().x1]), zoom_axes[0].get_position().y0 - .045,
+             r"$Q=F/\mu_0$", ha="center", va="top", fontsize=10)
     # The full-range panel includes noise even when it is outside the central zoom.
     fig.legend(handles=[
         Line2D([], [], color=BLUE, lw=1.25, label="CANFAR frames"),
@@ -344,9 +387,8 @@ def channel_page(channel, metadata, arrays, eras, monthly, output, atlas):
         fig.savefig(output.with_suffix("."+ext),facecolor="white")
     atlas.savefig(fig,facecolor="white")
     plt.close(fig)
-    return {"channel":channel,"zoom_edges":edges,"zoom_counts":counts,"zoom_observed_density":density,
-            "zoom_model_bin_mass":bin_masses(law,edges),"zoom_noise_bin_mass":bin_masses(NULL,edges),
-            "zoom_excluded_frames":int(q.size-counts.sum()),"full_log_edges":logedges,"full_log_counts":full_counts,
+    return {"channel":channel,"zoom_eta":eta,"zoom_segments":segments,
+            "zoom_excluded_frames":int(q.size-shown),"full_log_edges":logedges,"full_log_counts":full_counts,
             "full_log_nonpositive_frames":int(np.sum(q<=0)),"full_model_bin_mass":bin_masses(law,logedges)}
 
 
@@ -356,7 +398,13 @@ def main():
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--plan",type=Path,required=True)
     parser.add_argument("--exploratory-addendum",type=Path,required=True)
+    parser.add_argument("--thresholds",type=Path,help="coarse policy table (tradeoffs.csv) whose cal_q0.5 eta the zoom holds")
     args=parser.parse_args()
+    etas={}
+    if args.thresholds:
+        with args.thresholds.open(newline="") as fh:
+            etas={int(r["channel"]):float(r["eta"]) for r in csv.DictReader(fh) if r["policy"]=="cal_q0.5"}
+        if sorted(etas)!=list(range(14,37)):raise ValueError("Thresholds must give cal_q0.5 eta for all 23 channels")
     plan=json.loads(args.plan.read_text())
     if (plan.get("schema")!="canfar-coarse-histogram-comparison-plan-v1"
         or plan.get("degrees_of_freedom")!=[A,B]
@@ -375,6 +423,7 @@ def main():
     args.output.mkdir(parents=True,exist_ok=False)
     (args.output/"channels").mkdir()
     inputs={str(Path(__file__).absolute()):sha(__file__),str(args.plan.absolute()):sha(args.plan),str(manifest_path.absolute()):sha(manifest_path),str(args.exploratory_addendum.absolute()):sha(args.exploratory_addendum)}
+    if args.thresholds:inputs[str(args.thresholds.absolute())]=sha(args.thresholds)
     all_eras=[];all_months=[];all_acquisitions=[];channel_records=[];sources={}
     for channel in range(14,37):
         file=args.frames/f"ch{channel:02d}.npz"
@@ -440,7 +489,7 @@ def main():
     overview(current,args.output/"current-era-comparison")
     with PdfPages(args.output/"channel-atlas.pdf") as atlas:
         for channel,(metadata,arrays,eras,monthly) in sources.items():
-            bins=channel_page(channel,metadata,arrays,eras,monthly,args.output/"channels"/f"ch{channel:02d}",atlas)
+            bins=channel_page(channel,metadata,arrays,eras,monthly,args.output/"channels"/f"ch{channel:02d}",atlas,eta=etas.get(channel))
             dump(args.output/"channels"/f"ch{channel:02d}-histogram-bins.json",bins)
             print(f"Rendered channel {channel}",flush=True)
     report={"schema":"canfar-coarse-histogram-comparison-v5","created_utc":datetime.now(timezone.utc).isoformat(),
