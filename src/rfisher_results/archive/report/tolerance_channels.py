@@ -20,12 +20,14 @@ reaches the target on its own, and both fragments are single tabulars.
 ``tolerance_channels_ledger`` (``tab:archive:tolerance_channels``) is the
 companion the stub sends to Appendix~C beside the channel's plate --- "the
 term-by-term evidence ledger behind each row ... rather than into a 23-column
-table". Same one-row-per-channel shape, seven columns: the monitored bin and
-the chain terms behind the residual (on-air shelf, null frames, intra-day
-share, ground filter) with the keep-everything residual the mask is measured
-against. Natural width 349pt: it sets upright inside the 469.8pt text block
-unscaled. Every number keeps its ``ch09.channels.*`` key; only which fragment
-prints it moved.
+table". Same one-row-per-channel shape, five columns: the monitored bin and
+the chain terms behind the residual (on-air shelf, null frames) with the
+keep-everything residual the mask is measured against. The intra-day share
+and ground-filter columns were removed with the variance-split credit (no
+table carries a credit column). It sets upright inside the 469.8pt text
+block unscaled (the seven-column form measured 349pt). Every number it
+emits keeps its ``ch09.channels.*`` key; only which fragment prints it
+moved.
 
 Range and label cells are text mode; single numbers are math mode (minus
 signs, ``{,}`` thousands groups). An absent or undefined value prints as
@@ -55,9 +57,7 @@ Chapter columns (ledger ``section.key``):
                 figures) when ``measured``, ``<= chain.tau_c_high_minutes``
                 when ``bounded_above``, and the word ``cap`` when ``refused``
                 (the chain is then booked at the sidereal-day cap,
-                chain.chain_gain, and takes no ground-filter credit; the
-                intra-day share and filter columns of the ledger are
-                description there)
+                chain.chain_gain; no band takes a ground-filter credit)
     r_proxy     the kept-frame residual at the point:
                 selection.r_sys_calibration | selection.diagnostic_r_sys
     R_dil       R = r_proxy / r_tol on the stable dilation tier of the
@@ -77,8 +77,6 @@ Ledger columns (Appendix C):
     shelf (dB)  chain.on_shelf_db, the on-air shelf of the era chain
     N_null      null.coarse_frames, frames in the coarse null population of
                 the calibration block (the off population where one exists)
-    rho_intra   chain.intraday_share
-    filter (dB) chain.ground_filter_db
     r_keep      selection.keep_everything_r_sys_calibration, the
                 keep-everything residual on the calibration block (the block
                 the point was chosen on; selection.r_sys_unmasked_calibration
@@ -97,26 +95,27 @@ frames without a shelf estimate and no floor) the point, r_keep, r_proxy and
 both R cells are dashes. Every channel of the 2026-09-07 run is diagnostic or
 refused; none is selected.
 
-The chain. Shelf, intra-day share, filter and tau_c are the era chain
+The chain. Shelf and tau_c are the era chain
 (section ``chain``, evaluated on the current era, or on the previous on era
 where the current era is a transmitter-off era: chain.chain_population says
 which); the archive-wide chain is recorded beside it in ``chain_archive`` and
 is not printed. selection.gain_basis says which chain priced the residual
 (``era chain`` on every channel of the run); a row priced on the archive-wide
 chain is named in the notes. Only the tau_c outcome stays in the chapter
-table, because it is the column that turns a residual into a bound; the three
-terms behind it are the ledger's.
+table, because it is the column that turns a residual into a bound; the shelf
+behind it is the ledger's.
 
 Numbers. ``ch09.channels.<column>.chNN`` per cell, unchanged by the split:
 the chapter fragment carries allocation_low_mhz, allocation_high_mhz, z_low,
 z_high, era_first_month, era_last_month, flag_rate, point_basis,
 masked_fraction, floor_db, floor_evidence, tau_quality, tau_c_minutes,
 r_proxy, R_dilation, R_fs8 and screening_class, and the ledger fragment
-pilot_mhz, on_shelf_db, chain_basis, null_frames, intraday_share,
-ground_filter_db and r_keep. The band-level counts ``ch09.channels.<name>``
-(n_channels, n_point_selected, n_point_diagnostic, n_floor_measured,
-n_floor_stated, n_floor_refused, n_tau_measured, n_tau_bounded,
-n_tau_refused, n_fs8_priced, n_off_era) stay with the chapter fragment.
+pilot_mhz, on_shelf_db, chain_basis, null_frames and r_keep (the
+intraday_share and ground_filter_db keys are no longer emitted). The
+band-level counts ``ch09.channels.<name>`` (n_channels, n_point_selected,
+n_point_diagnostic, n_floor_measured, n_floor_stated, n_floor_refused,
+n_tau_measured, n_tau_bounded, n_tau_refused, n_fs8_priced, n_off_era) stay
+with the chapter fragment.
 Residuals and ratios print to three significant figures, in
 ``a.bc\\times10^{n}`` form outside [0.01, 1000); their renderings carry the
 printed form. r_keep, r_proxy and both R values carry status ``bounded``
@@ -144,9 +143,8 @@ HEADER = ("ch", "alloc.\\ (MHz)", "$z$", "era", "flag", "$f$", "floor (dB)", "$\
           "$R_{\\rm dil}$", "$R_{f\\sigma_8}$", "class")
 ALIGN = "lccc" + "r" * 7 + "l"
 
-LEDGER_HEADER = ("ch", "bin (MHz)", "shelf (dB)", "$N_{\\rm null}$", "$\\rho_{\\rm intra}$", "filter (dB)",
-                 "$r_{\\rm keep}$")
-LEDGER_ALIGN = "l" + "r" * 6
+LEDGER_HEADER = ("ch", "bin (MHz)", "shelf (dB)", "$N_{\\rm null}$", "$r_{\\rm keep}$")
+LEDGER_ALIGN = "l" + "r" * 4
 
 CLASS_ABBREV = {"recovery candidate": "recovery candidate", "measurement-bound on floor": "bound: floor",
                 "measurement-bound on tau_c": "bound: $\\tau_c$", "occupancy-wall excision candidate": "occupancy wall",
@@ -438,7 +436,7 @@ def _ledger_row(c: Channel, frag: Fragment, absent: list[str]) -> list[str]:
         cells.append(DASH)
         gap("pilot_mhz", "geometry.pilot_hz absent")
 
-    # the era chain: shelf, null population, share, filter
+    # the era chain: shelf and null population (no variance-split share or ground-filter credit is booked)
     shelf = chain.get("on_shelf_db")
     cells.append(_math(core.fmt(shelf, 1)))
     if _finite(shelf):
@@ -457,20 +455,6 @@ def _ledger_row(c: Channel, frag: Fragment, absent: list[str]) -> list[str]:
         add("null_frames", int(round(float(frames))), kind="int")
     else:
         gap("null_frames", "null.coarse_frames absent" + ("" if c.has("null") else " (no null section)"))
-
-    share = chain.get("intraday_share")
-    cells.append(_math(core.fmt(share, 3)))
-    if _finite(share):
-        add("intraday_share", share, precision=3)
-    else:
-        gap("intraday_share", "chain.intraday_share absent")
-
-    gfilter = chain.get("ground_filter_db")
-    cells.append(_math(core.fmt(gfilter, 1)))
-    if _finite(gfilter):
-        add("ground_filter_db", gfilter, precision=1)
-    else:
-        gap("ground_filter_db", "chain.ground_filter_db absent")
 
     # the keep-everything residual the mask is measured against
     r_keep = sel.get("keep_everything_r_sys_calibration", sel.get("r_sys_unmasked_calibration"))
@@ -530,7 +514,7 @@ def build(run: Run) -> Fragment:
                       "the half-band break; one tabular, no panel split needed")
     frag.notes.append(f"the term-by-term evidence ledger behind each row is the companion fragment {LEDGER_NAME} "
                       f"({LEDGER_LABEL}, Appendix C, beside the channel's plate): the monitored bin, the on-air shelf, the "
-                      "null frames, the intra-day share, the ground filter and r_keep, one row per channel, same keys")
+                      "null frames and r_keep, one row per channel, same keys")
     frag.notes.append(f"point: f, r_proxy, R_dil and R_fs8 are on the calibration block; {len(selected)} of {n} channels "
                       f"carry a selected operating point ({_channel_list(selected)}); {len(diagnostic)} print the "
                       "least-residual diagnostic point of the calibration surface (selection.diagnostic_*: the within-era "
@@ -554,8 +538,8 @@ def build(run: Run) -> Fragment:
                           "where a frame without a shelf estimate would need the floor)")
     frag.notes.append(f"tau_c: measured on {len(taus['measured'])} ({_channel_list(taus['measured'])}), bounded above on "
                       f"{len(taus['bounded_above'])} ({_channel_list(taus['bounded_above'])}: one-sided bound printed), refused "
-                      f"on {len(taus['refused'])} (printed cap: chain booked at the sidereal-day cap, no ground-filter credit; "
-                      "the ledger's intra-day share and filter are description on those rows); r_keep, r_proxy and R are upper "
+                      f"on {len(taus['refused'])} (printed cap: chain booked at the sidereal-day cap); every band books all "
+                      "surviving power at one coherence time, with no ground-filter credit; r_keep, r_proxy and R are upper "
                       "bounds wherever tau_c is not measured")
     frag.notes.append(f"R_fs8: priced on {len(fs8)} channels ({_channel_list(fs8)}); unpriced where no published f sigma_8 "
                       "constant exists for the bin")
@@ -574,21 +558,22 @@ def build_ledger(run: Run) -> Fragment:
     capped = [c.channel for c in channels if str(c.chain.get("tau_quality", "") or "") == "refused"]
 
     frag.notes.append(f"layout: one {len(LEDGER_HEADER)}-column tabular, one row per channel, keyed to "
-                      f"{LABEL} row for row; natural width 349pt at 11pt, upright inside the 469.8pt text block "
-                      f"unscaled; the midrule after channel {HALF_BAND_BREAK} is the half-band break; one tabular, no "
-                      "panel split needed")
+                      f"{LABEL} row for row; upright inside the 469.8pt text block unscaled (the seven-column form "
+                      f"measured 349pt at 11pt); the midrule after channel {HALF_BAND_BREAK} is the half-band break; one "
+                      "tabular, no panel split needed")
     frag.notes.append(f"the term-by-term evidence behind {LABEL} (chapter 9): the columns the chapter's stub sends to "
                       "Appendix C beside the channel's plate rather than into a 23-column table; the verdict columns "
                       "(masked fraction, floor, tau_c outcome, residual and its two ratios, screening class) stay in the "
                       "chapter table and are not repeated here")
-    frag.notes.append("chain: shelf, intra-day share and filter are the era chain (chain.*), evaluated on the current era, or "
+    frag.notes.append("chain: the shelf is the era chain (chain.*), evaluated on the current era, or "
                       f"on the previous on era where the current era is a transmitter-off era ({_channel_list(off_era)}: "
                       "chain.chain_population, recorded as chain_basis); the archive-wide chain (chain_archive) is recorded "
                       "beside it and not printed")
+    frag.notes.append("no credit column: the chain books all surviving power at one coherence time on every band, so "
+                      "the variance split's intra-day share and ground filter are neither booked nor printed")
     if capped:
-        frag.notes.append(f"intra-day share and ground filter are measured description, not applied credit, on the cap "
-                          f"channels ({_channel_list(capped)}): where tau_c is refused the chain is booked at the "
-                          "sidereal-day cap and takes no ground-filter credit")
+        frag.notes.append(f"cap channels ({_channel_list(capped)}): where tau_c is refused the chain is booked at the "
+                          "sidereal-day cap")
     frag.notes.append("N_null is the coarse null population of the calibration block (the off population where one exists); "
                       "r_keep is the keep-everything residual on the same block (selection.keep_everything_r_sys_calibration), "
                       f"an upper bound wherever tau_c is not measured ({LABEL} carries the outcome)")

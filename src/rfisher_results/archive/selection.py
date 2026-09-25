@@ -199,9 +199,10 @@ def systematic_residuals(product: Product, rows: np.ndarray, floor: Floor, gain:
     frame without one carries the floor. The floor is the level the mask can
     be held to, so no frame's residual falls below it (a flagged frame whose
     excess is not resolved above the floor is booked at the floor, not below
-    an unflagged one). ``gain`` is ``G = sum_k phi_k n_coh,k`` from
-    :mod:`.chain` (1.0 gives the frame-stage residual); with it the
-    kept-frame mean is ``r_proxy``.
+    an unflagged one). ``gain`` is ``G = n_coh(tau)`` from :mod:`.chain`,
+    all surviving power at one coherence time with no variance-split credit
+    (1.0 gives the frame-stage residual); with it the kept-frame mean is
+    ``r_proxy``.
     """
     shelf = product.shelf_db[rows]
     finite = np.isfinite(shelf)
