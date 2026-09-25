@@ -2,5 +2,5 @@
 pytest-cov>=6,<8
 h5py>=3.11,<4
 
-# Exercise the original health gate used by the coarse-frame exporter.
-pilot-proxy @ git+https://github.com/WVURAIL/pilot-proxy.git@79d5480f1c8b539e1633d95ba832f53208f9afa6
+# Exercise the health gate and profile config used by the coarse-frame exporter.
+pilot-proxy @ git+https://github.com/WVURAIL/pilot-proxy.git@ca18b13a578163ad85191c8a1c157e0bece9021d
