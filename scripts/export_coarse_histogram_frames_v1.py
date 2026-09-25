@@ -3,6 +3,11 @@
 
 No era refitting; no PSD/fine payload decoding; no hardware access. Histograms
 retain every finite Q on timed health-selected frames, including zero if present.
+
+``--control-product`` exports one control band instead: a band the project
+profile's frequency plan gives role ``control``, read at its declared
+``target_freq_id``. It has no ledger, no dated era, no threshold, no tolerance
+and no verdict; its archive is one period (``CONTROL_PERIOD_RULE``).
 """
 from __future__ import annotations
 import argparse
@@ -22,7 +27,7 @@ RAIL=REPO.parent
 for root in (REPO/"src",RAIL/"pilot-proxy/src"):
     if str(root) not in sys.path:sys.path.insert(0,str(root))
 from rfisher_results.archive.products import Product,HEALTH_GATE_SCHEMA,NFFT
-from rfisher_results.archive.blocks import month_index
+from rfisher_results.archive.blocks import month_index,month_label
 from pilot_proxy.archive_health import evaluate_frame_health
 
 
@@ -196,6 +201,132 @@ def process_channel(product_path,ledger_path,eras_path,output,preflight):
     return metadata
 
 
+CONTROL_PERIOD_RULE=("A control band has no emitter, so no era is dated: its archive is one period, era 1, from the first "
+    "to the last membership month of its health-selected frames, with evidence 'archive start'.")
+
+
+def control_band(project,channel,freq_id,pilot_hz):
+    """The profile's control band for a product; ValueError for any other band.
+
+    The frequency plan decides, not a channel list here: the band must have role control, the product must be
+    read at the band's declared target_freq_id, and the product's nominal marker must lie inside the band."""
+    try:band=project.frequency_plan.band(str(channel))
+    except KeyError as error:raise ValueError(f"channel {channel} is not a band of the frequency plan") from error
+    if band.role!="control":raise ValueError(f"channel {channel} has role {band.role!r} in the frequency plan, not control")
+    target=int(project.target_freq_id(band))
+    if int(freq_id)!=target:raise ValueError(f"control band {channel} is read at freq_id {target}, the product is at {freq_id}")
+    if not band.contains_hz(pilot_hz):raise ValueError(f"marker position {pilot_hz} Hz lies outside band {channel}")
+    return band
+
+
+def control_period(member_month,selected,finite_time,unit_index):
+    """The one period of a control band, as a saved-era record (CONTROL_PERIOD_RULE)."""
+    months=member_month[selected&(member_month>=0)]
+    if not months.size:raise ValueError("control product has no health-selected frame with a time")
+    member=selected&(member_month>=0)
+    populated=[month_label(int(value)) for value in np.unique(months)]
+    return {"era":1,"first_month":populated[0],"last_month":populated[-1],"evidence":"archive start","state":"control",
+        "months":populated,"populated_months":len(populated),"frames":int(member.sum()),
+        "frames_without_time":int((member&~finite_time).sum()),"units":int(np.unique(unit_index[member]).size)}
+
+
+def process_control(product_path,project,output):
+    """Export a control band's frames with the screened fields and rules, but no ledger and one period."""
+    initial_stat=product_path.stat();digest=sha(product_path)
+    with Product(product_path,require_health=True) as product:
+        proxy=HeaderFineArchive(product.archive,product_path);product._z=proxy
+        view=product.view
+        channel=int(view.physical_channel);fid=int(view.freq_id)
+        band=control_band(project,channel,fid,float(product.scalar("pilot_frequency_hz")))
+        if int(product.scalar("nfft"))!=NFFT:raise ValueError("unexpected frame geometry")
+        health=evaluate_frame_health(proxy)
+        valid=np.asarray(view.valid,dtype=bool);health_include=np.asarray(health.include,dtype=bool)
+        selected=valid&health_include;Q=np.asarray(view.statistic,dtype=np.float64)
+        frame_time=product.frame_time;unit_time=product.unit_time
+        finite_time=np.isfinite(frame_time);finite_Q=np.isfinite(Q)
+        hist=selected&finite_time&finite_Q
+        unit_index=product.frame_unit_index
+        member_month=memberships(frame_time,unit_time,[],1)[1]
+        period=control_period(member_month,selected,finite_time,unit_index)
+        timed_month,member_month,era_id,current=memberships(frame_time,unit_time,[period],period["era"])
+        unit_event_id=product.unit_event_id
+        if unit_event_id.dtype.kind not in "iu":raise ValueError("acquisition IDs must preserve their integer type")
+        counts={"total":len(Q),"valid":int(valid.sum()),"health_include":int(health_include.sum()),
+            "selected":int(selected.sum()),"finite_time_selected":int((selected&finite_time).sum()),
+            "histogram_eligible":int(hist.sum()),"nonpositive_histogram":int((hist&(Q<=0)).sum()),
+            "current_selected":int((selected&current).sum()),"current_histogram_eligible":int((hist&current).sum()),
+            "current_untimed_selected":int((selected&current&~finite_time).sum()),
+            "unassigned_selected":int((selected&(era_id<0)).sum()),
+            "unassigned_histogram_eligible":int((hist&(era_id<0)).sum()),
+            "untimed_selected":int((selected&~finite_time).sum()),"nonfinite_Q_selected":int((selected&~finite_Q).sum())}
+        assert_count("period frames",counts["current_selected"],period["frames"])
+        reasons={key:int(value) for key,value in health.reason_counts.items()}
+        definitions=[{**period,"is_current":True,"exported_count_selected":counts["current_selected"],
+            "exported_count_histogram_eligible":counts["current_histogram_eligible"],
+            "exported_count_untimed_selected":counts["current_untimed_selected"]}]
+        arrays={"Q":Q,"valid":valid,"health_include":health_include,"selected":selected,
+            "finite_time":finite_time,"finite_Q":finite_Q,"positive_Q":finite_Q&(Q>0),
+            "histogram_eligible":hist,"era_id":era_id,"is_current":current,"current_histogram_eligible":hist&current,
+            "frame_index":product.frame_column("frame_index"),"frame_unit_index":unit_index,
+            "frame_in_unit":product.frame_in_unit,"frame_time":frame_time,"unit_time":unit_time,
+            "frame_month":timed_month,"membership_month":member_month,
+            "acquisition_id":unit_event_id[unit_index],"unit_event_id":unit_event_id,
+            "unit_keys":np.asarray(proxy["unit_keys"]),"source_event_keys":np.asarray(proxy["source_event_keys"]),
+            "unit_time0_ctime":product.unit_time0,"unit_delta_time":product.unit_delta_time}
+        geometry={name:int(product.scalar(name)) for name in ("nfft","detector_window_samples","num_input_streams","target_norm_sq","reference_norm_sum_sq")}
+        geometry.update(mu0=product.mu0,sample_rate_hz=float(product.scalar("sample_rate_hz")),
+                        pilot_frequency_hz=float(product.scalar("pilot_frequency_hz")),chime_frequency_hz=float(product.scalar("chime_frequency_hz")))
+        final_stat=product_path.stat()
+        if (initial_stat.st_size,initial_stat.st_mtime_ns)!=(final_stat.st_size,final_stat.st_mtime_ns):raise ValueError("product changed during extraction")
+        output_path=output/f"ch{channel:02d}.npz"
+        with output_path.open("xb") as stream:np.savez_compressed(stream,**arrays)
+        plan_file=project.files["frequency_plan"]
+        metadata={"schema":"coarse-histogram-frame-export-v1","role":"control","channel":channel,"freq_id":fid,
+            "band":{"label":band.label,"low_mhz":band.low_mhz,"high_mhz":band.high_mhz,"role":band.role,"target_freq_id":band.target_freq_id},
+            "product":{"path":str(product_path),"sha256":digest,"bytes":initial_stat.st_size},
+            "source_records":{"frequency_plan":{"path":str(plan_file),"sha256":sha(plan_file)}},
+            "current_era":period["era"],"era_definitions":definitions,"counts":counts,
+            "era_scope":CONTROL_PERIOD_RULE,
+            "membership_rule":"Inclusive first_month..last_month using frame UTC month, acquisition-start month when frame time is nonfinite. A frame with neither time retains era_id=-1. Health status does not change temporal labels.",
+            "histogram_rule":"selected & finite_time & finite_Q; Q<=0 is retained and separately flagged, no statistical trimming",
+            "timestamp_rule":"unit_time0_ctime[frame_unit_index]+frame_in_unit*nfft*unit_delta_time[frame_unit_index]; no fabricated frame interval",
+            "acquisition_rule":"acquisition_id is stored unit_event_id mapped by frame_unit_index; original unit_keys/source_event_keys also retained to disambiguate units",
+            "health":{"schema":HEALTH_GATE_SCHEMA,"reason_counts":reasons,
+                "member_header_optimization":"Original v1 gate invoked. Its unsigned fine terms branch inspects only shape/dtype; header and full member byte length validated, then a read-only zero-stride metadata view is supplied. No fine numerical values or PSD are read or exported.",
+                "fine_member_header":proxy.fine_header},
+            "geometry":geometry,"decoded_npz_members":proxy.read_fields,"export_sha256":sha(output_path)}
+        write_json(output/f"ch{channel:02d}.json",metadata)
+    return metadata
+
+
+def run_control(product,output,profile=None):
+    """Export one control band into a new frames directory that compare_coarse_histograms_v5 reads."""
+    from pilot_proxy.config.project import default_project_dir,load_project
+    product=Path(product).resolve();output=Path(output).resolve()
+    project=load_project(Path(profile).resolve() if profile else default_project_dir())
+    output.mkdir(parents=True,exist_ok=True)
+    if any(output.iterdir()):raise FileExistsError("use a new empty frames directory")
+    source_paths=[Path(__file__).resolve(),REPO/"src/rfisher_results/archive/products.py",REPO/"src/rfisher_results/archive/blocks.py",REPO/"src/rfisher/pilotproxy.py",RAIL/"pilot-proxy/src/pilot_proxy/archive_health.py",RAIL/"pilot-proxy/src/pilot_proxy/archived_product_keys.py"]
+    inputs={str(path):sha(path) for path in source_paths if path.exists()}
+    inputs[str(project.files["frequency_plan"])]=sha(project.files["frequency_plan"])
+    plan={"schema":"coarse-histogram-export-plan-v1","role":"control","created_utc":datetime.now(timezone.utc).isoformat(),"control_product":str(product),
+        "profile":str(project.directory),"profile_sha256":project.file_sha256(),"inputs":inputs,"numpy_version":np.__version__,"python":sys.version,
+        "scope":"Read-only extraction of a control band's small per-frame coordinates; no ledger, no era dating, no threshold, no tolerance, no verdict"}
+    write_json(output/"extraction-plan.json",plan)
+    record=process_control(product,project,output)
+    print(json.dumps({"channel":record["channel"],"role":"control","counts":record["counts"]}),flush=True)
+    for path,digest in inputs.items():
+        if sha(path)!=digest:raise ValueError(f"source record changed during extraction:{path}")
+    manifest={"schema":"coarse-histogram-frames-manifest-v1","role":"control","completed_utc":datetime.now(timezone.utc).isoformat(),"passed":True,
+        "extraction_plan_sha256":sha(output/"extraction-plan.json"),"totals":dict(record["counts"]),
+        "channels":[{"channel":record["channel"],"freq_id":record["freq_id"],"role":"control","npz":f"ch{record['channel']:02d}.npz","metadata":f"ch{record['channel']:02d}.json","counts":record["counts"]}],
+        "files":{path.name:sha(path) for path in output.iterdir() if path.is_file()},
+        "era_denominator_note":"The period count includes acquisition-month assignments of untimed frames. Histogram eligibility requires actual finite frame time; both counts are retained.",
+        "fine_and_psd_payloads_decoded":False}
+    write_json(output/"manifest.json",manifest)
+    return manifest
+
+
 def run(products,release,output):
     products=Path(products).resolve();release=Path(release).resolve();output=Path(output).resolve()
     output.mkdir(parents=True,exist_ok=True)
@@ -230,5 +361,12 @@ def run(products,release,output):
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--products",type=Path,required=True);parser.add_argument("--corrected-release",type=Path,required=True);parser.add_argument("--output",type=Path,required=True)
-    args=parser.parse_args();run(args.products,args.corrected_release,args.output)
+    parser.add_argument("--products",type=Path);parser.add_argument("--corrected-release",type=Path);parser.add_argument("--output",type=Path,required=True)
+    parser.add_argument("--control-product",type=Path,help="export this control band's product alone, checked against the project profile")
+    parser.add_argument("--profile",type=Path,help="project profile directory for --control-product (default: the pilot-proxy checkout's)")
+    args=parser.parse_args()
+    if args.control_product:
+        if args.products or args.corrected_release:parser.error("--control-product takes no --products or --corrected-release")
+        run_control(args.control_product,args.output,args.profile)
+    elif args.products and args.corrected_release and not args.profile:run(args.products,args.corrected_release,args.output)
+    else:parser.error("give --products and --corrected-release, or --control-product")

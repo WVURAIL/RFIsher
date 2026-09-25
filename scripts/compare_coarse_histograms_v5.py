@@ -3,6 +3,8 @@
 
 Uses independently exported health/era/time-qualified full-frame Q values.
 No policy is selected and no fitted model is claimed as physical calibration.
+A control-band frame export (export_coarse_histogram_frames_v1 --control-product)
+is compared the same way, with no threshold drawn.
 """
 from __future__ import annotations
 
@@ -417,6 +419,9 @@ def main():
     manifest=json.loads(manifest_path.read_text())
     if manifest.get("schema")!="coarse-histogram-frames-manifest-v1" or manifest.get("passed") is not True:
         raise ValueError("Successful authenticated frame export is required")
+    control=manifest.get("role")=="control"
+    if control and args.thresholds:raise ValueError("A control band takes no threshold")
+    channels=[int(item["channel"]) for item in manifest["channels"]] if control else range(14,37)
     for name,digest in manifest["files"].items():
         if Path(name).is_absolute() or ".." in Path(name).parts or sha(args.frames/name)!=digest:
             raise ValueError(f"Frame export artifact identity differs: {name}")
@@ -425,7 +430,7 @@ def main():
     inputs={str(Path(__file__).absolute()):sha(__file__),str(args.plan.absolute()):sha(args.plan),str(manifest_path.absolute()):sha(manifest_path),str(args.exploratory_addendum.absolute()):sha(args.exploratory_addendum)}
     if args.thresholds:inputs[str(args.thresholds.absolute())]=sha(args.thresholds)
     all_eras=[];all_months=[];all_acquisitions=[];channel_records=[];sources={}
-    for channel in range(14,37):
+    for channel in channels:
         file=args.frames/f"ch{channel:02d}.npz"
         metafile=file.with_suffix(".json")
         metadata=json.loads(metafile.read_text())
@@ -433,6 +438,7 @@ def main():
         with np.load(file,allow_pickle=False) as z:
             arrays={k:z[k] for k in ("Q","histogram_eligible","era_id","current_histogram_eligible","frame_time","frame_month","acquisition_id")}
         if metadata["channel"]!=channel:raise ValueError("Channel identity differs")
+        if control and metadata.get("role")!="control":raise ValueError("A control run holds only control-band exports")
         if not np.array_equal(arrays["current_histogram_eligible"], arrays["histogram_eligible"] & (arrays["era_id"]==int(metadata["current_era"]))):
             raise ValueError("Current mask differs from exact saved era membership")
         q_all=arrays["Q"]
@@ -498,6 +504,7 @@ def main():
             "totals":{"channels":len(current),"eras":len(all_eras),"monthly_groups":len(all_months),"acquisition_era_groups":len(all_acquisitions),"current_frames":sum(r["n_frames"] for r in current),"all_era_frames":sum(r["n_frames"] for r in all_eras),"histogram_eligible_all":sum(r["counts"]["histogram_eligible"] for r in channel_records),"selected_untimed":sum(r["counts"]["untimed_selected"] for r in channel_records),"timed_unassigned_era":sum(r["counts"]["unassigned_histogram_eligible"] for r in channel_records),"health_selected":sum(r["counts"]["selected"] for r in channel_records)},
             "resolved_settings":{"quantile_probabilities":PROBS.tolist(),"monthly_min_frames":30,"monthly_min_acquisitions":5,"monthly_min_utc_days":3,"sample_std_ddof":1,"fit_scope":"same-sample descriptive median match","unmatched_equivalent_parameters":"null; central boundary model parameters retained separately"},
             "inputs":inputs,"runtime":{"python":sys.version,"numpy":np.__version__,"scipy":scipy.__version__,"matplotlib":matplotlib.__version__}}
+    if control:report["role"]="control"
     report["artifacts"]={str(p.relative_to(args.output)):sha(p) for p in sorted(args.output.rglob('*')) if p.is_file()}
     dump(args.output/"report.json",report)
     print(json.dumps(report["totals"],indent=2))
