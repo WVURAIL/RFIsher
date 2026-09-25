@@ -25,8 +25,8 @@ The two walls (``fig_bao_two_walls.pdf``, one panel)
     at its least-residual rank, coloured by ``screening.screening_class``, with the coarse frontier
     (``R`` against ``masked_fraction``) as a dotted curve beside it in the same colour. A curve is
     dashed when the floor is not measured (``selection.floor_evidence`` ``stated`` or ``refused``)
-    or ``tau_c`` is not measured (``chain.tau_quality`` ``bounded_above`` or ``refused``: no
-    ground-filter credit, so the curve is an upper bound). Marked per channel: the diagnostic
+    or ``tau_c`` is not measured (``chain.tau_quality`` ``bounded_above`` or ``refused``: the gain
+    is booked at the bound or at the sidereal-day cap, so the curve is an upper bound). Marked per channel: the diagnostic
     point (``selection.diagnostic_rho, diagnostic_eta_q16, diagnostic_eta,
     diagnostic_masked_fraction, diagnostic_r_sys, diagnostic_R, diagnostic_cost``: the least-residual
     point of the calibration surface, ``diagnostic_basis``; read back from ``min_r_sys_rho,

@@ -1,24 +1,29 @@
 """The residual chain of chapter 9 for one channel: shelf statistics, the
-sidereal decomposition, the correlation time, and the coherence gain that
-turns a frame-stage residual into ``r_proxy``.
+correlation time, and the coherence gain that turns a frame-stage residual
+into ``r_proxy``.
 
 eq:tolerance:chain: ``p_kept = 10^((S_kept - S_delay)/10)``,
-``r_proxy = p_kept (phi_intra n_coh,intra + phi_fast n_coh,fast)``,
-``n_coh,intra = min(tau_c, T_sid) / T_frame``, ``n_coh,fast = 1``. Under the
-unity-transfer closure ``r_var = r_sys = r_proxy``. The chapter books the
-delay-filter credit ``S_delay`` at zero everywhere except the worlds table.
+``r_proxy = p_kept n_coh``, ``n_coh = min(tau_c, T_sid) / T_frame``, with
+``tau_c`` the measured value or its upper bound where it is usable and the
+sidereal-day cap where it is refused. Under the unity-transfer closure
+``r_var = r_sys = r_proxy``. The chapter books the delay-filter credit
+``S_delay`` at zero everywhere except the worlds table.
+
+No post-processing credit is taken. All surviving shelf power is booked at
+one coherence time on every band, ``((1.0, n_coh(tau)),)``
+(:func:`booked_components`). The day / acquisition / frame variance split of
+:func:`rfisher.residual.shelf_statistics` is not booked and not reported:
+booking its intra-day and fast shares separately would be a ground-filter
+credit (author decision 2026-09-23, design addendum section 5, milestone
+M6b). What was ``r_sys_no_split`` is therefore ``r_sys`` itself.
 
 Everything here is :mod:`rfisher.residual`'s: ``shelf_statistics`` (the
-on-air shelf, the kept-frame floor where a verified off epoch exists, the
-day / acquisition / frame variance split of the trimmed transmitter-on
-population, the ground-filter credit), ``correlation_time`` (the same-day
-structure function with its measured / bounded-above / refused outcome and
-its day-block bootstrap), and ``surviving_components`` (the booking rule: a
-refused or unusable correlation time books every surviving share at the
-sidereal-day cap and takes no ground-filter credit). This module only
-assembles them and exposes the gain
+on-air shelf and the kept-frame floor where a verified off epoch exists) and
+``correlation_time`` (the same-day structure function with its measured /
+bounded-above / refused outcome and its day-block bootstrap). This module
+only assembles them and exposes the gain
 
-    G = sum_k phi_k n_coh,k
+    G = n_coh(tau)
 
 so that the selector's per-frame systematic residual can be
 ``p_i * G`` (``selection.systematic_residuals(..., gain=G)``): ``r_sys`` at a
@@ -65,17 +70,14 @@ class ChainResult:
     on_shelf_db: float                 # on-air shelf level
     floor_db: float                    # kept-frame / off-era floor (NaN when none)
     floor_percentile: float
-    intraday_share: float              # phi_intra
-    fast_share: float                  # phi_fast
-    ground_filter_db: float            # removed share in dB (description only when tau_c refused)
     tau_c_seconds: float
     tau_c_low: float
     tau_c_high: float
     tau_quality: str                   # 'measured' | 'bounded_above' | 'refused'
     tau_reason: str
     n_coh_intraday: float              # min(tau_c, T_sid) / T_frame at the booked tau
-    components: tuple[tuple[float, float], ...]   # (share, n_coh) pairs as booked
-    gain: float                        # G = sum share * n_coh
+    components: tuple[tuple[float, float], ...]   # ((1.0, n_coh),): all surviving power at one coherence time
+    gain: float                        # G = n_coh at the booked tau
     delay_key: str
     delay_suppression_db: float
 
@@ -93,8 +95,6 @@ class ChainResult:
             "channel": self.channel, "freq_id": self.freq_id, "chain_population": self.population,
             "n_valid": self.n_valid, "n_kept_flag": self.n_kept, "n_off_frames": self.n_off_frames,
             "on_shelf_db": self.on_shelf_db, "chain_floor_db": self.floor_db,
-            "intraday_share": self.intraday_share, "fast_share": self.fast_share,
-            "ground_filter_db": self.ground_filter_db,
             "tau_c_minutes": self.tau_c_minutes, "tau_c_low_minutes": self.tau_c_low / 60.0 if math.isfinite(self.tau_c_low) else math.nan,
             "tau_c_high_minutes": self.tau_c_high / 60.0 if math.isfinite(self.tau_c_high) else math.nan,
             "tau_quality": self.tau_quality, "tau_outcome": self.tau_outcome, "tau_reason": self.tau_reason,
@@ -103,13 +103,25 @@ class ChainResult:
         }
 
 
+def booked_components(corr: residual.CorrelationTime) -> tuple[tuple[float, float], ...]:
+    """All surviving shelf power at one coherence time: ``((1.0, n_coh(tau)),)``.
+
+    ``tau`` is ``corr.tau_for_budget``: the measured correlation time or its
+    upper bound where it is usable, the sidereal-day cap where it is refused.
+    The variance split is not booked on any band, so no ground-filter credit
+    is taken. On a refused channel this is what
+    :func:`rfisher.residual.surviving_components` books.
+    """
+    return ((1.0, float(residual.n_coh_from_correlation_time(corr.tau_for_budget))),)
+
+
 def residual_chain(product_path: Path | str, *, off_through: str | None = None, off_from: str | None = None,
                    delay_key: str = residual.DEFAULT_DELAY_KEY) -> ChainResult:
     """Shelf statistics, correlation time and the booked coherence gain of one channel."""
     path = str(product_path)
     stats = residual.shelf_statistics(path, off_through=off_through, off_from=off_from)
     corr = residual.correlation_time(path, off_through=off_through, off_from=off_from)
-    components = tuple((float(share), float(n_coh)) for share, n_coh in residual.surviving_components(stats, corr))
+    components = booked_components(corr)
     gain = float(sum(share * n_coh for share, n_coh in components))
     tau = float(corr.tau_c) if corr.tau_c is not None else math.nan
     if off_through and off_from:
@@ -124,8 +136,6 @@ def residual_chain(product_path: Path | str, *, off_through: str | None = None, 
         channel=int(stats.channel), freq_id=int(stats.freq_id), population=population,
         n_valid=int(stats.n_valid), n_kept=int(stats.n_kept), n_off_frames=int(stats.n_off_frames),
         on_shelf_db=float(stats.on_shelf_db), floor_db=float(stats.floor_db), floor_percentile=float(stats.floor_percentile),
-        intraday_share=float(stats.intraday_fraction), fast_share=float(stats.fast_fraction),
-        ground_filter_db=float(stats.ground_filter_db),
         tau_c_seconds=tau, tau_c_low=float(corr.tau_lo) if corr.tau_lo is not None else math.nan,
         tau_c_high=float(corr.tau_hi) if corr.tau_hi is not None else math.nan,
         tau_quality=str(corr.quality), tau_reason=str(corr.reason or ""),

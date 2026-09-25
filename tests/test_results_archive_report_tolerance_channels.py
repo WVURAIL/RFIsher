@@ -18,16 +18,18 @@ RESULTS = Path(os.environ.get("RFISHER_ARCHIVE_RESULTS", Path.home() / "rail" / 
 CHAPTER_COLUMNS = ("allocation_low_mhz", "allocation_high_mhz", "z_low", "z_high", "era_first_month", "era_last_month",
                    "flag_rate", "point_basis", "masked_fraction", "floor_db", "floor_evidence", "tau_quality",
                    "tau_c_minutes", "r_proxy", "R_dilation", "R_fs8", "screening_class")
-LEDGER_COLUMNS = ("pilot_mhz", "on_shelf_db", "chain_basis", "null_frames", "intraday_share", "ground_filter_db", "r_keep")
-# every key the fragment emitted before the split: none may be dropped, whatever fragment prints it
+LEDGER_COLUMNS = ("pilot_mhz", "on_shelf_db", "chain_basis", "null_frames", "r_keep")
+# the variance split's share and ground-filter credit are neither booked nor printed (no table carries a credit column)
+CREDIT_COLUMNS = ("intraday_share", "ground_filter_db")
+# every key the fragment emitted before the panel split, less the credit columns: none may be dropped
 ALL_COLUMNS = ("allocation_low_mhz", "allocation_high_mhz", "z_low", "z_high", "pilot_mhz", "era_first_month",
                "era_last_month", "flag_rate", "point_basis", "masked_fraction", "on_shelf_db", "chain_basis",
-               "null_frames", "floor_db", "floor_evidence", "intraday_share", "ground_filter_db", "tau_quality",
+               "null_frames", "floor_db", "floor_evidence", "tau_quality",
                "tau_c_minutes", "r_keep", "r_proxy", "R_dilation", "R_fs8", "screening_class")
 BAND_COLUMNS = ("n_channels", "n_point_selected", "n_point_diagnostic", "n_floor_measured", "n_floor_stated",
                 "n_floor_refused", "n_tau_measured", "n_tau_bounded", "n_tau_refused", "n_fs8_priced", "n_off_era")
 PER_CHANNEL = len(CHAPTER_COLUMNS)          # 17 in the chapter table
-LEDGER_PER_CHANNEL = len(LEDGER_COLUMNS)    # 7 in the companion
+LEDGER_PER_CHANNEL = len(LEDGER_COLUMNS)    # 5 in the companion
 BAND = len(BAND_COLUMNS)
 
 
@@ -107,11 +109,10 @@ def test_the_two_fragments_are_registered_and_carry_the_stubs_columns():
     """The chapter table prints the stub's short columns; the chain terms are the companion's."""
     assert tc.BUILDERS == (tc.build, tc.build_ledger)
     assert tc.build_ledger in rb.table_builders()                 # the registry picks the companion up
-    assert len(tc.HEADER) == 12 and len(tc.ALIGN) == 12 and len(tc.LEDGER_HEADER) == 7 and len(tc.LEDGER_ALIGN) == 7
+    assert len(tc.HEADER) == 12 and len(tc.ALIGN) == 12 and len(tc.LEDGER_HEADER) == 5 and len(tc.LEDGER_ALIGN) == 5
     assert tc.HEADER[:6] == ("ch", "alloc.\\ (MHz)", "$z$", "era", "flag", "$f$")
     assert tc.HEADER[6:] == ("floor (dB)", "$\\tau_c$ (min)", "$r_{\\rm proxy}$", "$R_{\\rm dil}$", "$R_{f\\sigma_8}$", "class")
-    assert tc.LEDGER_HEADER == ("ch", "bin (MHz)", "shelf (dB)", "$N_{\\rm null}$", "$\\rho_{\\rm intra}$", "filter (dB)",
-                                "$r_{\\rm keep}$")
+    assert tc.LEDGER_HEADER == ("ch", "bin (MHz)", "shelf (dB)", "$N_{\\rm null}$", "$r_{\\rm keep}$")   # no credit column
     assert tc.LEDGER_NAME == "tolerance_channels_ledger" and tc.LEDGER_LABEL == "tab:archive:tolerance_channels"
     # the split moves no key out of existence and duplicates none
     assert set(CHAPTER_COLUMNS) | set(LEDGER_COLUMNS) == set(ALL_COLUMNS)
@@ -189,28 +190,30 @@ def test_the_ledger_companion_prints_the_chain_terms_with_the_same_keys(tmp_path
     assert list(rows) == [14, 33] and all(len(r) == len(tc.LEDGER_HEADER) for r in rows.values())
     assert frag.tex.count("\\midrule") == 2          # header rule and the same half-band break
 
-    assert rows[33] == ["33", "$584.309$", "$-34.0$", "$11{,}853$", "$0.085$", "$8.1$", "$1.16$"]
+    assert rows[33] == ["33", "$584.309$", "$-34.0$", "$11{,}853$", "$1.16$"]
     n33 = _numbers(frag, 33)
     assert set(n33) == set(LEDGER_COLUMNS) and len(n33) == LEDGER_PER_CHANNEL
     assert n33["pilot_mhz"].value == pytest.approx(584.309441) and n33["pilot_mhz"].precision == 3
     assert n33["on_shelf_db"].value == -34.001 and n33["on_shelf_db"].precision == 1
     assert n33["null_frames"].kind == "int" and n33["null_frames"].value == 11853
-    assert n33["intraday_share"].value == 0.08497 and n33["ground_filter_db"].value == 8.1491
+    assert not set(CREDIT_COLUMNS) & set(n33)                  # the ledger carries them; the table does not
     assert n33["chain_basis"].value == "current era" and n33["chain_basis"].renderings[1].startswith("current era 2023-12")
     assert n33["r_keep"].value == 1.1581 and n33["r_keep"].status == "measured" and n33["r_keep"].renderings == ("1.16",)
     assert n33["r_keep"].source == {"table": "tolerance_channels_ledger.tex", "row": {"channel": 33}, "column": "r_keep"}
 
     # the channel with no chain section: the chain terms dash, the null population and r_keep still print
-    assert rows[14] == ["14", "$470.309$", "--", "$18{,}032$", "--", "--", "$1.28\\times10^{4}$"]
+    assert rows[14] == ["14", "$470.309$", "--", "$18{,}032$", "$1.28\\times10^{4}$"]
     n14 = _numbers(frag, 14)
     assert set(n14) == set(LEDGER_COLUMNS)
     assert n14["r_keep"].value == 12849.898 and n14["r_keep"].status == "bounded" and n14["r_keep"].renderings == ("1.28x10^{4}",)
-    for col in ("on_shelf_db", "intraday_share", "ground_filter_db", "chain_basis"):
+    for col in ("on_shelf_db", "chain_basis"):
         assert n14[col].value is None and n14[col].renderings == ("--",), col
     keys = [n.key for n in frag.numbers]
     assert len(keys) == len(set(keys)) == 2 * LEDGER_PER_CHANNEL and all(k.startswith("ch09.channels.") for k in keys)
     assert any("ch14 on_shelf_db: chain.on_shelf_db absent (no chain section)" in note for note in frag.notes)
-    assert any(note.startswith("layout: one 7-column tabular") and "no panel split needed" in note for note in frag.notes)
+    assert any(note.startswith("layout: one 5-column tabular") and "no panel split needed" in note for note in frag.notes)
+    assert any(note.startswith("no credit column:") for note in frag.notes)
+    assert "rho" not in frag.tex and "filter" not in frag.tex
     assert any("the term-by-term evidence behind tab:tolerance:channels" in note for note in frag.notes)
     # the verdict columns are not repeated in the appendix table
     assert "dagger" not in frag.tex and "unpriced" not in frag.tex and "occupancy wall" not in frag.tex
@@ -252,7 +255,7 @@ def test_refused_selector_bounded_tau_and_refused_floor():
 
     # the same channel's ledger row: the chain is measured description, r_keep is the refusal's dash
     led_cells = tc._ledger_row(refused, led, absent)
-    assert led_cells == ["15", "--", "$-27.0$", "$7{,}748$", "$0.090$", "$10.3$", "--"]
+    assert led_cells == ["15", "--", "$-27.0$", "$7{,}748$", "--"]
     nl = _numbers(led, 15)
     assert set(nl) == set(LEDGER_COLUMNS) and nl["on_shelf_db"].value == -26.98 and nl["null_frames"].value == 7748
     assert nl["r_keep"].value is None and nl["r_keep"].status == "refused" and nl["r_keep"].renderings == ("--",)
@@ -274,7 +277,7 @@ def test_refused_selector_bounded_tau_and_refused_floor():
     assert n["screening_class"].renderings == ("measurement-bound on tau_c", "bound: tau_c")
     assert not any(a.startswith("ch29 r_") for a in absent)
     # r_keep is the ledger's, read from the older key, and bounded because tau_c is not measured
-    assert tc._ledger_row(bounded, led, absent)[6] == "$2.83$"
+    assert tc._ledger_row(bounded, led, absent)[4] == "$2.83$"
     assert _numbers(led, 29)["r_keep"].value == 2.83 and _numbers(led, 29)["r_keep"].status == "bounded"
 
     # a bounded tau whose bound carries no minutes; no selection section at all
@@ -283,7 +286,7 @@ def test_refused_selector_bounded_tau_and_refused_floor():
     n = _numbers(frag, 23)
     assert n["tau_c_minutes"].value is None and n["tau_c_minutes"].status == "bounded" and n["point_basis"].value == "absent"
     assert any("ch23 R_fs8: tolerance.fs8_status absent" in a for a in absent)
-    assert tc._ledger_row(_channel(23, {"chain": {"tau_quality": "bounded_above"}}), led, absent)[6] == "--"
+    assert tc._ledger_row(_channel(23, {"chain": {"tau_quality": "bounded_above"}}), led, absent)[4] == "--"
     assert _numbers(led, 23)["r_keep"].value is None
     assert any("ch23 r_keep: selection.keep_everything_r_sys_calibration absent (no selection section)" in a for a in absent)
     assert tc.point(_channel(1, {})).basis == "absent" and tc.point(_channel(1, {})).why == "no selection section"
@@ -317,9 +320,9 @@ def test_off_era_channel_prints_the_previous_era_chain_and_the_note():
     assert list(rows) == [17, 19] and list(led_rows) == [17, 19]
     assert rows[19] == ["19", "500--506", "1.807--1.841", "2024-12--2026-04", "$0.866$", "${0.868}^{\\dagger}$", "$-32.6$",
                         "cap", "$1.12\\times10^{3}$", "$9.36\\times10^{4}$", "unpriced", "off-era"]
-    assert led_rows[19] == ["19", "$500.309$", "$-6.8$", "$6{,}453$", "$0.004$", "$23.5$", "$1.47\\times10^{3}$"]
+    assert led_rows[19] == ["19", "$500.309$", "$-6.8$", "$6{,}453$", "$1.47\\times10^{3}$"]
     assert rows[17][6] == "--" and rows[17][8] == "$5.71\\times10^{5}$" and rows[17][10] == "--"
-    assert led_rows[17][6] == "$6.04\\times10^{5}$"
+    assert led_rows[17][4] == "$6.04\\times10^{5}$"
     n19 = _numbers(led, 19)
     assert n19["chain_basis"].value == "previous era" and n19["chain_basis"].renderings[1].startswith("previous era 2024-09")
     assert _numbers(frag, 19)["floor_db"].status == "measured"
@@ -332,10 +335,11 @@ def test_off_era_channel_prints_the_previous_era_chain_and_the_note():
     assert any(note == "gain basis: every residual is priced on the era chain (selection.gain_basis)" for note in frag.notes)
     assert frag.tex.count("\\midrule") == 1        # no half-band break: both channels are below 26
     assert led.tex.count("\\midrule") == 1
-    # the companion's own notes: the off era it was evaluated on, and the cap channels whose filter is description
+    # the companion's own notes: the off era it was evaluated on, the cap channels, and no credit column
     assert any("transmitter-off era (ch19: chain.chain_population" in note for note in led.notes)
-    assert any(note.startswith("intra-day share and ground filter are measured description") and "ch17, ch19" in note
-               for note in led.notes)
+    assert any(note.startswith("cap channels (ch17, ch19)") for note in led.notes)
+    assert any(note.startswith("no credit column:") for note in led.notes)
+    assert not any(k.split(".")[2] in CREDIT_COLUMNS for k in [n.key for n in led.numbers])
 
 
 def test_write_report_carries_both_fragments(tmp_path):
@@ -361,7 +365,7 @@ def test_real_run_renders_23_rows_with_unique_keys(tmp_path):
     rows = _rows((tmp_path / "tables" / "tolerance_channels.tex").read_text())
     led_rows = _rows((tmp_path / "tables" / "tolerance_channels_ledger.tex").read_text())
     assert list(rows) == list(range(14, 37)) and all(len(r) == 12 for r in rows.values())
-    assert list(led_rows) == list(range(14, 37)) and all(len(r) == 7 for r in led_rows.values())
+    assert list(led_rows) == list(range(14, 37)) and all(len(r) == 5 for r in led_rows.values())
     doc = json.loads((tmp_path / "numbers" / "tolerance_channels.numbers.json").read_text())
     led = json.loads((tmp_path / "numbers" / "tolerance_channels_ledger.numbers.json").read_text())
     keys = [n["key"] for n in doc["numbers"]]
@@ -392,8 +396,8 @@ def test_real_run_renders_23_rows_with_unique_keys(tmp_path):
     assert rows[15][5:7] == ["--"] * 2 and rows[15][8:10] == ["--"] * 2 and rows[28][8:11] == ["--"] * 3
     assert rows[17][6] == "--" and rows[17][8] != "--"
     # the companion: every chain term the chapter table dropped, one row per channel
-    assert led_rows[33] == ["33", "$584.309$", "$-34.0$", "$11{,}853$", "$0.085$", "$8.1$", "$2.05\\times10^{3}$"]
-    assert led_rows[15][6] == "--" and led_rows[17][6] == "$6.04\\times10^{5}$"
+    assert led_rows[33] == ["33", "$584.309$", "$-34.0$", "$11{,}853$", "$2.05\\times10^{3}$"]
+    assert led_rows[15][4] == "--" and led_rows[17][4] == "$6.04\\times10^{5}$"
     band = {k.split(".")[2]: n["value"] for k, n in by_key.items() if k.count(".") == 2}
     assert band == {"n_channels": 23, "n_point_selected": 0, "n_point_diagnostic": 19, "n_floor_measured": 6, "n_floor_stated": 9,
                     "n_floor_refused": 8, "n_tau_measured": 6, "n_tau_bounded": 3, "n_tau_refused": 14, "n_fs8_priced": 10,
