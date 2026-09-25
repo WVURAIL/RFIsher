@@ -2,6 +2,7 @@
 power at one coherence time on every band, with no variance-split credit."""
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import math
 from pathlib import Path
@@ -18,7 +19,8 @@ _SPEC = importlib.util.spec_from_file_location("v5_fixture_chain", ROOT / "tests
 v5_fixture = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(v5_fixture)
 
-SPLIT_FIELDS = ("intraday_share", "fast_share", "ground_filter_db")    # the variance split, no longer written
+# the variance split, no longer written, and n_coh_intraday, which named it and only duplicated chain_gain
+SPLIT_FIELDS = ("intraday_share", "fast_share", "ground_filter_db", "n_coh_intraday")
 
 # The frozen chain of the author-dated release (results/archive_author_eras_2026-09-23, manifest cc36de4a,
 # tables/chain.csv) on the nine bands where tau_c is usable: quality, tau_c (min), the split's intra-day and fast
@@ -70,7 +72,8 @@ def test_chain_assembles_rfisher_results_and_books_the_gain(tmp_path):
     row = result.as_row()
     assert not set(SPLIT_FIELDS) & set(row)
     assert row["chain_gain"] == result.gain and row["tau_outcome"] in ("measured", "bound", "refused (cap)")
-    assert math.isfinite(row["n_coh_intraday"]) and row["n_coh_intraday"] >= 1.0
+    assert math.isfinite(row["chain_gain"]) and row["chain_gain"] >= 1.0
+    assert "n_coh_intraday" not in {f.name for f in dataclasses.fields(chain.ChainResult)}
     # an off epoch changes the recorded population
     off = chain.residual_chain(path, off_through="2020-01")
     assert "through 2020-01" in off.population

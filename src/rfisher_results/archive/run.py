@@ -40,7 +40,7 @@ from rfisher import residual, selection_policy
 from rfisher.channels import channel_edges
 
 from . import (anchors, blocks, chain, eras, flaggers, ledger, masked_spectra, nulls, operating, psd,
-               screening, selection, tolerances, worlds)
+               screening, selection, ties, tolerances, worlds)
 from .numbers import git_commit
 from .products import COARSE_BIN_HZ, FINE_BIN_HZ, Product, sha256_of
 
@@ -177,10 +177,17 @@ def _coarse_frontier(product: Product, block, floor: selection.Floor, gain: floa
 
 
 def _frontier_summary(frontier: list[dict]) -> dict:
+    """The coarse frontier's least ``R`` and where it lies.
+
+    On a plateau (every kept frame at the floor, so ``R`` is the same over a
+    range of ``eta_c`` up to rounding) the rows within :data:`ties.TIE_REL_TOL`
+    of the least are tied, and the one masking least (then the lowest
+    ``eta_c``) is reported, as the selector breaks its own ties.
+    """
     ok = [f for f in frontier if f["evaluable"] and math.isfinite(f["R"])]
     if not ok:
         return {"coarse_min_R": math.nan, "coarse_min_R_eta": math.nan, "coarse_min_R_masked_fraction": math.nan, "coarse_R_at_flag": math.nan}
-    best = min(ok, key=lambda f: f["R"])
+    best = ties.least(ok, lambda f: f["R"], lambda f: (f["masked_fraction"], f["eta_c"]))
     at_flag = next((f for f in frontier if f["eta_c"] == 1.0), None)
     return {"coarse_min_R": best["R"], "coarse_min_R_eta": best["eta_c"], "coarse_min_R_masked_fraction": best["masked_fraction"],
             "coarse_R_at_flag": at_flag["R"] if at_flag else math.nan}

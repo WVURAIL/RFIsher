@@ -107,6 +107,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
+from .. import ties
 from .core import DASH, Channel, Fragment, Run, booktabs, fmt, fmt_int, tex, write_report
 
 NAME = "figures_two_walls"
@@ -255,7 +256,7 @@ class ChannelCurve:
     keep_index: int | None               # index into ``curve`` of the f = 0 row
     selected_index: int | None           # index into ``curve`` of the selected point when it lies on this rank
     coarse: np.ndarray                   # coarse frontier rows (COARSE_DTYPE; empty when absent)
-    coarse_index: int | None             # index into ``coarse`` of the frontier's least-R row
+    coarse_index: int | None             # index into ``coarse`` of the frontier's least-R row (ties: least mask)
     least: Mapping                       # diagnostic point: rho, eta_q16, eta, masked_fraction, r_sys, R, cost, kept
     least_kind: str                      # 'diagnostic' | 'least residual' | ''
     least_basis: str                     # selection.diagnostic_basis
@@ -456,7 +457,9 @@ def channel_curve(run: Run, ch: Channel, *, n_points: int = CURVE_POINTS) -> Cha
         ok = np.isfinite(coarse["R"]) & coarse["evaluable"]
         if ok.any():
             cand = np.flatnonzero(ok)
-            coarse_index = int(cand[np.argmin(coarse["R"][cand])])
+            # the ledger's rule (run._frontier_summary): ties within ties.TIE_REL_TOL go to the least mask
+            coarse_index = int(ties.least(cand, lambda i: float(coarse["R"][i]),
+                                          lambda i: (float(coarse["masked_fraction"][i]), float(coarse["eta_c"][i]))))
             file_min = float(coarse["R"][coarse_index])
             if not _finite(coarse_min["R"]):
                 coarse_min.update(R=file_min, eta=float(coarse["eta_c"][coarse_index]),

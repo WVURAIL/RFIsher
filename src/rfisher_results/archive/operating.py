@@ -29,6 +29,16 @@ percent of data, so even a fifty-percent margin lands far out in the tail
 where a few dozen frames survive. That is a fact about the frontier and it is
 recorded, but a point keeping forty frames is not a mask to run.
 
+Ties. Candidates that keep the same frames (one kept set reached at several
+ranks, or a plateau where every kept frame sits at the floor) have residuals
+equal up to summation-order rounding. The frontier treats residuals within
+:data:`.ties.TIE_REL_TOL` as equal and breaks the tie as the selector does:
+at one masked fraction the lowest rank, then the lowest multiplier, stands for
+the fraction; a larger fraction joins the frontier only when its residual is
+lower by more than the tolerance, so a flat stretch is represented by its
+least-masking point. The operating point, the knee and every margin point are
+therefore fixed by the data, not by the last digit.
+
 What it is not. The point is not a claim that the channel passes: ``R`` at the
 operating point is reported and on this archive exceeds one everywhere. It is
 the value to run, and the evaluation block is where it is scored.
@@ -41,6 +51,8 @@ from pathlib import Path
 from typing import Sequence
 
 import numpy as np
+
+from . import ties
 
 MARGIN = 0.10
 MARGIN_SENSITIVITY = (0.05, 0.10, 0.25, 0.50)
@@ -112,15 +124,24 @@ def pareto_frontier(points: Sequence[dict], *, min_kept: int = MIN_KEPT) -> list
     A point keeping fewer than ``min_kept`` frames is not on the frontier: the
     selector will not choose one, and its residual is an average over too few
     frames to mean anything.
+
+    Residuals within :data:`.ties.TIE_REL_TOL` are equal (see the module
+    docstring): each masked fraction is represented by its least residual,
+    ties to the lowest ``(rho, eta_q16)``, and a fraction joins the frontier
+    only when that residual is below every smaller fraction's by more than
+    the tolerance.
     """
     rows = [p for p in points if p.get("kept", 0) >= min_kept and math.isfinite(p.get("r_sys", math.nan))]
     if not rows:
         return []
-    rows.sort(key=lambda p: (p["masked_fraction"], p["r_sys"]))
+    by_fraction: dict[float, list[dict]] = {}
+    for p in rows:
+        by_fraction.setdefault(float(p["masked_fraction"]), []).append(p)
     out: list[FrontierPoint] = []
     best = math.inf
-    for p in rows:
-        if p["r_sys"] < best:
+    for fraction in sorted(by_fraction):
+        p = ties.least(by_fraction[fraction], lambda q: q["r_sys"], lambda q: (int(q["rho"]), int(q["eta_q16"])))
+        if p["r_sys"] < best and not ties.tied(p["r_sys"], best):
             best = p["r_sys"]
             out.append(FrontierPoint(int(p["rho"]), int(p["eta_q16"]), float(p["eta"]), float(p["masked_fraction"]),
                                      int(p["kept"]), float(p["r_sys"]), float(p.get("cost", math.nan))))

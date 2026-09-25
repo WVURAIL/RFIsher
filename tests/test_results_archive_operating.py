@@ -55,3 +55,31 @@ def test_rows_round_trip(tmp_path):
     row = o.as_row()
     assert row["suppression_db"] == pytest.approx(10 * math.log10(o.suppression))
     assert set(row) >= set(operating.OPERATING_COLUMNS)
+
+
+def _below(x, ulps):
+    for _ in range(ulps):
+        x = math.nextafter(x, -math.inf)
+    return x
+
+
+def test_rounding_ties_go_to_the_selector_order_not_the_last_digit():
+    """The 2026-09-24 release's channel 33: f = 0 is reached at every rank with residuals equal up to rounding,
+    and the floor plateau descends only in the last digit. Neither may choose a rank or a frontier point."""
+    keep_all = {1: 14.550659032281358, 10: 14.550659032281365, 18: 14.550659032281343, 100: 14.550659032281427}
+    points = [_point(rho, 5_000_000 + rho, 0.0, 1000, r) for rho, r in keep_all.items()]
+    points.append(_point(1, 4_000_000, 0.0, 1000, 14.550659032281466))       # rank 1 again, a lower multiplier
+    points.append(_point(3, 90_000, 0.3, 700, 12.5))
+    floor = 10.933749754233736
+    points += [_point(2, 70_000 + i, f, int(1000 * (1 - f)) + 40, _below(floor, 2 * i))
+               for i, f in enumerate((0.6, 0.8, 0.95))]
+    frontier = operating.pareto_frontier(points)
+    assert [(p.masked_fraction, p.rho, p.eta_q16) for p in frontier] == [(0.0, 1, 4_000_000), (0.3, 3, 90_000), (0.6, 2, 70_000)]
+    o = operating.choose(33, points)
+    # margin 0.5: f = 0 lies inside, and it is rank 1 at its lowest multiplier, not rank 18 by the last digit
+    assert o.sensitivity[0.5][0] == 0.0 and o.sensitivity[0.5][2:] == (1, 4_000_000)
+    assert o.sensitivity[0.05][0] == 0.6 and o.sensitivity[0.05][2] == 2
+    assert o.knee in frontier and o.as_row()["sensitivity_0p5_rho"] == 1
+    # the exact comparison (the old rule) would have taken rank 18 and the two last-digit plateau points
+    exact = min((p for p in points if p["masked_fraction"] == 0.0), key=lambda p: p["r_sys"])
+    assert exact["rho"] == 18

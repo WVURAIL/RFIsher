@@ -178,3 +178,18 @@ def test_the_real_run_draws_every_channel():
     keys = [n.key for n in frag.numbers]
     assert len(keys) == len(set(keys))
     assert np.isfinite([c.flag_rate for c in cs]).all()
+
+
+def test_the_coarse_marker_on_a_rounding_plateau_is_the_least_mask(tmp_path):
+    """Channel 18 of the 2026-09-24 release: R equal to 1e-15 over masked fractions 0.648 to 0.972. The marker
+    goes where the ledger's rule puts it (the least mask), not to the row that is least by the last digit."""
+    frontier = [(1.0, 286, 0.971702780251311, 2.5, 163.4505217626282, True),
+                (1.015, 2281, 0.774314, 2.5, 163.4505217626282, True),
+                (1.03, 3560, 0.647768, 2.5, 163.45052176262826, True),
+                (1.035, 3838, 0.620263, 2.51, 163.87742218003282, True)]
+    sections = _sections()
+    sections["selection"].update(coarse_min_R=163.45052176262826, coarse_min_R_eta=1.03, coarse_min_R_masked_fraction=0.647768)
+    run = _ledger(tmp_path, {18: (sections, [(1, 66000, 900, 0.1, 1900.0, 121000.0, False, False)], frontier)})
+    c = m.channel_curve(run, run.by_channel()[18])
+    assert c.coarse["eta_c"][c.coarse_index] == pytest.approx(1.03)
+    assert c.coarse_min["r_sys"] == pytest.approx(2.5) and not any("differs from selection.coarse_min_R" in n for n in c.notes)

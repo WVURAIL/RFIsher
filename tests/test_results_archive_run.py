@@ -5,6 +5,7 @@ import csv
 from functools import partial
 import importlib.util
 import json
+import math
 import multiprocessing
 from pathlib import Path
 
@@ -115,3 +116,22 @@ def test_world_floor_flag_belongs_to_evaluation_policy(monkeypatch, point, evalu
         "null_row": {"floor_db": -20.0}, "chain_row": {"chain_gain": 2.0},
     }])[0]
     assert result.floor_bound is expected
+
+
+def test_coarse_frontier_minimum_on_a_rounding_plateau_is_its_least_mask():
+    """Channel 18 of the 2026-09-24 release: R is the same to 1e-15 from eta_c 1.0 to 1.03 (every kept frame
+    at the floor). The exact minimum sat at eta_c 1.0 by the last digit; the reported point is the least mask."""
+    from rfisher_results.archive.run import _frontier_summary
+    plateau = [(1.0, 0.971702780251311, 163.4505217626282), (1.005, 0.9047, 163.45052176262828),
+               (1.01, 0.8310, 163.45052176262826), (1.015, 0.7743, 163.4505217626282),
+               (1.02, 0.7242, 163.45052176262823), (1.025, 0.6833, 163.45052176262826),
+               (1.03, 0.6477688, 163.45052176262826), (1.035, 0.6203, 163.87742218003282), (1.5, 0.1429, 506.6)]
+    frontier = [{"eta_c": e, "masked_fraction": f, "R": R, "evaluable": True} for e, f, R in plateau]
+    frontier.append({"eta_c": 0.99, "masked_fraction": 0.999, "R": 1.0, "evaluable": False})   # not evaluable: ignored
+    s = _frontier_summary(frontier)
+    assert s["coarse_min_R_eta"] == 1.03 and s["coarse_min_R_masked_fraction"] == 0.6477688
+    assert s["coarse_min_R"] == 163.45052176262826 and s["coarse_R_at_flag"] == 163.4505217626282
+    assert math.isnan(_frontier_summary([])["coarse_min_R_eta"])
+    # a real minimum is not a tie
+    frontier[3]["R"] = 163.0
+    assert _frontier_summary(frontier)["coarse_min_R_eta"] == 1.015
