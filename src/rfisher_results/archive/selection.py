@@ -62,7 +62,7 @@ from rfisher.preparation import (
 from rfisher.residual_scores import ResidualScoreRefused, build_residual_score_bundle
 from rfisher.thresholds import ALWAYS_MASKED_Q16, Q16_SCALE, optimize_threshold
 
-from . import blocks
+from . import blocks, ties
 from .products import Product, sha256_of
 
 DESIGNATED_HALF_WIDTH = 2               # D = {(f_a + k) mod 256 : |k| <= 2}
@@ -319,8 +319,7 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
         # no feasible point: the least-residual point of the surface is replayed on the evaluation block as a
         # declared diagnostic (an off era's false-alarm rate needs a point), never as a selection
         status = {"no_feasible_threshold": "no feasible point", "no_evaluable_threshold": "no evaluable point"}.get(opt.status, opt.status)
-        evaluable = [pt for pt in opt.points if math.isfinite(pt.systematic_residual)]
-        diag_point = min(evaluable, key=lambda pt: pt.systematic_residual) if evaluable else None
+        diag_point = least_residual_point(opt.points)
         diagnostic, replay = {}, None
         if diag_point is not None:
             diagnostic = {"basis": "least residual on the calibration surface (no feasible point)", **_point_row(diag_point)}
@@ -347,6 +346,16 @@ def select_operating_point(product: Product, calibration: np.ndarray, evaluation
         tolerance_fraction=float(sel.tolerance_fraction), cost=float(sel.cost),
         plateau=_plateau(opt.points, sel), evaluation=replay, stability=stability, points=points, diagnostic=diagnostic,
         source_id=bundle.source_id, policy_sha256=family.policy_sha256, **{**base, "provisional": provisional})
+
+
+def least_residual_point(points):
+    """The least-residual point of a threshold surface (``None`` when no residual is finite).
+
+    Residuals within :data:`ties.TIE_REL_TOL` of the least (one kept set reached at several ranks) are
+    tied and go to the selector's order: the smallest masked fraction, the lowest rho, the lowest multiplier.
+    """
+    evaluable = [pt for pt in points if math.isfinite(pt.systematic_residual)]
+    return ties.least(evaluable, lambda pt: pt.systematic_residual, lambda pt: (pt.masked_fraction, pt.rho, pt.multiplier_q16))
 
 
 POINT_COLUMNS = ("rho", "rank_fraction", "eta_q16", "eta", "frames", "kept", "masked_fraction", "r_sys",
@@ -456,7 +465,8 @@ def thin_points(points: Sequence[dict], selected: tuple | None = None, *, max_pe
             keep.update(int(round(i * (n - 1) / (max_per_rho - 1))) for i in range(max_per_rho))
         finite = [i for i, r in enumerate(rows) if math.isfinite(r["r_sys"])]
         if finite:
-            keep.add(min(finite, key=lambda i: rows[i]["r_sys"]))
+            keep.add(ties.least(finite, lambda i: rows[i]["r_sys"],
+                                lambda i: (rows[i].get("masked_fraction", 0.0), rows[i]["eta_q16"])))
         if selected is not None:
             keep.update(i for i, r in enumerate(rows) if (r["rho"], r["eta_q16"]) == tuple(selected))
         out.extend(rows[i] for i in sorted(keep))
@@ -479,12 +489,16 @@ def write_operating_points(result: SelectionResult, path: Path | str, *, max_per
 
 
 def surface_summary(result: SelectionResult) -> dict:
-    """The least residual and the least cost on the evaluated surface, and how far the residual is from tolerance."""
+    """The least residual and the least cost on the evaluated surface, and how far the residual is from tolerance.
+
+    Residuals within :data:`ties.TIE_REL_TOL` of the least are tied and go to the selector's order: the
+    smallest masked fraction, then the lowest rho, then the lowest multiplier.
+    """
     pts = [p for p in result.points if math.isfinite(p["r_sys"])]
     if not pts:
         return {"surface_points": len(result.points), "min_r_sys": math.nan, "min_r_sys_rho": None, "min_r_sys_eta": math.nan,
                 "min_r_sys_masked_fraction": math.nan, "min_R": math.nan, "feasible_points": 0}
-    best = min(pts, key=lambda p: p["r_sys"])
+    best = ties.least(pts, lambda p: p["r_sys"], lambda p: (p["masked_fraction"], p["rho"], p["eta_q16"]))
     return {"surface_points": len(result.points), "min_r_sys": best["r_sys"], "min_r_sys_rho": best["rho"], "min_r_sys_eta": best["eta"],
             "min_r_sys_masked_fraction": best["masked_fraction"], "min_R": best["r_sys"] / result.r_tol if result.r_tol else math.nan,
             "feasible_points": sum(1 for p in pts if p["feasible"])}

@@ -186,3 +186,25 @@ def test_drift_diagnostic_names_the_refusing_candidate_and_the_drift_a_point_wou
         assert d["drift_max_cost_ratio_at_0"] >= 1.0 and d["drift_max_systematic_ratio_at_0"] >= 1.0
     # an empty or untimed block is reported, not raised
     assert sel_mod.drift_diagnostic(bundle, residuals, np.full(bundle.frame_count, np.nan))["drift_status"] == "no timed frames"
+
+
+def test_least_residual_ties_go_to_the_selector_order():
+    """One kept set reached at several ranks: residuals equal up to rounding pick the least mask, the lowest rank
+    and the lowest multiplier, for the diagnostic point, the surface summary and the thinned file alike."""
+    from types import SimpleNamespace
+    r = 10.933749754233736
+    tie = [(18, 400_000, 0.9, r), (4, 500_000, 0.9, r + 2e-15), (4, 450_000, 0.9, r + 5e-15), (7, 300_000, 0.95, r - 2e-15),
+           (2, 200_000, 0.5, 11.2), (9, 100_000, 0.99, math.nan)]
+    pts = [SimpleNamespace(rho=rho, multiplier_q16=q, masked_fraction=f, systematic_residual=v) for rho, q, f, v in tie]
+    best = selection.least_residual_point(pts)
+    assert (best.rho, best.multiplier_q16) == (4, 450_000)       # not rank 7 (exact minimum) nor rank 18
+    assert selection.least_residual_point([pts[-1]]) is None
+    rows = [{"rho": rho, "eta_q16": q, "eta": q / 65536, "masked_fraction": f, "r_sys": v, "feasible": False} for rho, q, f, v in tie]
+    s = selection.surface_summary(SimpleNamespace(points=rows, r_tol=0.5))
+    assert (s["min_r_sys_rho"], s["min_r_sys_eta"], s["min_r_sys_masked_fraction"]) == (4, 450_000 / 65536, 0.9)
+    assert s["min_R"] == pytest.approx(r / 0.5) and s["surface_points"] == 6
+    # within one rank the thinned file keeps the least-mask tied point
+    rank = [{"rho": 3, "eta_q16": q, "masked_fraction": f, "r_sys": v} for q, f, v in
+            [(1, 0.99, r - 1e-15), (2, 0.9, r), (3, 0.5, 11.2), (4, 0.2, 12.0), (5, 0.0, 13.0)]]
+    kept = selection.thin_points(rank, max_per_rho=2)
+    assert [p["eta_q16"] for p in kept] == [1, 2, 5]          # the ends, and eta_q16 2 as the least residual (not only 1)

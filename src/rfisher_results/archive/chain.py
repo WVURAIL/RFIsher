@@ -75,7 +75,6 @@ class ChainResult:
     tau_c_high: float
     tau_quality: str                   # 'measured' | 'bounded_above' | 'refused'
     tau_reason: str
-    n_coh_intraday: float              # min(tau_c, T_sid) / T_frame at the booked tau
     components: tuple[tuple[float, float], ...]   # ((1.0, n_coh),): all surviving power at one coherence time
     gain: float                        # G = n_coh at the booked tau
     delay_key: str
@@ -98,7 +97,7 @@ class ChainResult:
             "tau_c_minutes": self.tau_c_minutes, "tau_c_low_minutes": self.tau_c_low / 60.0 if math.isfinite(self.tau_c_low) else math.nan,
             "tau_c_high_minutes": self.tau_c_high / 60.0 if math.isfinite(self.tau_c_high) else math.nan,
             "tau_quality": self.tau_quality, "tau_outcome": self.tau_outcome, "tau_reason": self.tau_reason,
-            "n_coh_intraday": self.n_coh_intraday, "chain_gain": self.gain,
+            "chain_gain": self.gain,
             "delay_key": self.delay_key, "delay_suppression_db": self.delay_suppression_db,
         }
 
@@ -139,7 +138,6 @@ def residual_chain(product_path: Path | str, *, off_through: str | None = None, 
         tau_c_seconds=tau, tau_c_low=float(corr.tau_lo) if corr.tau_lo is not None else math.nan,
         tau_c_high=float(corr.tau_hi) if corr.tau_hi is not None else math.nan,
         tau_quality=str(corr.quality), tau_reason=str(corr.reason or ""),
-        n_coh_intraday=float(residual.n_coh_from_correlation_time(tau if math.isfinite(tau) else residual.MAX_TAU_C_SECONDS)),
         components=components, gain=gain, delay_key=delay_key,
         delay_suppression_db=float(residual.DELAY_SUPPRESSION_DB[delay_key]),
     )
