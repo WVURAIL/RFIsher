@@ -128,6 +128,11 @@
    10.0
   ]
  },
+ "numerics": {
+  "numpy": "2.5.2",
+  "scipy": "1.18.1",
+  "threads": 1
+ },
  "record_sha256": "3177ba332ecf6b6b0e5774f5883669f37989cab7705a7652fff1f0c5ff69e1c1",
  "results": {
   "bull2015_planck2013_epsfg1e-6": {
@@ -3571,6 +3576,6 @@
    }
   }
  },
- "source": "The forecast goldens of RFIsher e041d5e (M0, F.1 step 3), recorded with RadioFisher 12a1616 bound and unbound: the results, the forecast command's stdout, and the bound/unbound agreement. A bank path in an argv is relative to the repository.",
+ "source": "The forecast goldens of RFIsher e041d5e (M0, F.1 step 3), recorded with RadioFisher 12a1616 bound and unbound: the results, the forecast command's stdout, and the bound/unbound agreement. A bank path in an argv is relative to the repository. Exact floats hold under numpy 2.5 and scipy 1.18, the numerics they were recorded with; other numpy or scipy series agree to a relative 1e-12.",
  "values_sha256": "d42e46bebf7c259e0fa0c6dab143ea5a3543eeb4d5a12b5af6dc66ed7718da72"
 }

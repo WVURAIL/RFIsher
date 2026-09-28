@@ -6,6 +6,12 @@ the masking-cost curve), the output of ``rfisher forecast``, and one Bull-2015
 bank on the shared-amplitude path through RadioFisher. The packaged banks
 evaluate without RadioFisher: bound and unbound loads agreed exactly when the
 goldens were recorded.
+
+The floats are exact under the numpy and scipy series the goldens were
+recorded with (numpy 2.5, scipy 1.18: the release interpreter, and CI on
+Python 3.12 and 3.14). An older series, such as the newest numpy that still
+supports Python 3.10, differs in the last bit of some values, so there every
+float is held to a relative 1e-12 instead.
 """
 from __future__ import annotations
 
@@ -16,7 +22,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
+import scipy
 
 from rfisher.forecast.radiofisher_bao import api
 from rfisher.forecast.radiofisher_bao import scenarios as sc
@@ -29,6 +37,32 @@ YEARS = tuple(GOLDENS["grid"]["years"])
 MASK = {int(k): v for k, v in GOLDENS["grid"]["mask"].items()}
 RESIDUALS = {int(k): v for k, v in GOLDENS["grid"]["residuals"].items()}
 BULL = "bull2015_planck2013_epsfg1e-6"
+
+
+def _series(version):
+    return version.split(".")[:2]
+
+
+EXACT = (_series(np.__version__) == _series(GOLDENS["numerics"]["numpy"])
+         and _series(scipy.__version__) == _series(GOLDENS["numerics"]["scipy"]))
+
+
+def same(got, recorded):
+    """Equal as recorded: exact floats, or floats within 1e-12 off the series."""
+    if EXACT:
+        return got == recorded
+    if isinstance(recorded, dict) and set(recorded) == {"repr", "hex"}:
+        if not isinstance(got, dict) or set(got) != {"repr", "hex"}:
+            return False
+        a, b = float(got["repr"]), float(recorded["repr"])
+        return a == b or math.isclose(a, b, rel_tol=1e-12, abs_tol=0.0)
+    if isinstance(recorded, dict):
+        return (isinstance(got, dict) and set(got) == set(recorded)
+                and all(same(got[k], recorded[k]) for k in recorded))
+    if isinstance(recorded, list):
+        return (isinstance(got, list) and len(got) == len(recorded)
+                and all(same(a, b) for a, b in zip(got, recorded)))
+    return got == recorded
 
 
 def fx(x):
@@ -73,6 +107,14 @@ def evaluate(fc, nbins):
     return out
 
 
+def _floats(stdout):
+    """The command's JSON with every float as an exact record, and its text."""
+    decoded = json.loads(stdout)
+    return {"text": stdout if EXACT else None,
+            "values": {k: (fx(v) if isinstance(v, float) else v)
+                       for k, v in decoded.items()}}
+
+
 def run_command(argv):
     code = ("import sys; from rfisher.cli import forecast_main as m; "
             f"sys.exit(m({argv!r}))")
@@ -88,13 +130,16 @@ def test_packaged_bank_forecasts_are_the_recorded_floats(cosmology):
     assert GOLDENS["binding"][cosmology] == "identical"
     fc = api.load(cosmology=cosmology)
     assert fc.style == "perbin_A"
-    assert evaluate(fc, len(fc.bank.zc)) == GOLDENS["results"][cosmology]
+    assert same(evaluate(fc, len(fc.bank.zc)), GOLDENS["results"][cosmology])
 
 
 @pytest.mark.parametrize("key", sorted(key for key in GOLDENS["cli"]
                                        if not key.startswith("bull")))
 def test_the_forecast_command_prints_the_recorded_json(key):
-    assert run_command(GOLDENS["cli"][key]["argv"]) == GOLDENS["cli"][key]
+    got = run_command(GOLDENS["cli"][key]["argv"])
+    recorded = GOLDENS["cli"][key]
+    assert got["returncode"] == recorded["returncode"] == 0
+    assert same(_floats(got["stdout"]), _floats(recorded["stdout"]))
 
 
 def test_the_shared_amplitude_path_is_the_recorded_floats():
@@ -104,6 +149,8 @@ def test_the_shared_amplitude_path_is_the_recorded_floats():
         pytest.skip("the Bull-2015 path needs RadioFisher; set RADIOFISHER_DIR")
     fc = api.load(bank=ROOT / "data" / "fisher_bank_bull2015_planck2013_epsfg1e-6.npz")
     assert fc.style == "shared_A"
-    assert evaluate(fc, len(fc.bank.zc)) == GOLDENS["results"][BULL]
+    assert same(evaluate(fc, len(fc.bank.zc)), GOLDENS["results"][BULL])
     recorded = GOLDENS["cli"]["bull2015_bank_uniform0.3"]
-    assert run_command(recorded["argv"]) == recorded
+    got = run_command(recorded["argv"])
+    assert got["returncode"] == recorded["returncode"] == 0
+    assert same(_floats(got["stdout"]), _floats(recorded["stdout"]))
