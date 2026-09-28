@@ -11,10 +11,10 @@ MIN_TOTAL = 85.0
 MIN_COMPONENT = 70.0
 # These boundaries must retain their stronger coverage even if reports grow.
 CRITICAL = {
-    "src/rfisher/_validation.py": 100.0,
+    "src/rfisher/forecast/radiofisher_bao/bank/_validation.py": 100.0,
     "src/rfisher/npzio.py": 95.0,
     "src/rfisher/thresholds.py": 95.0,
-    "src/rfisher/forecast.py": 90.0,
+    "src/rfisher/forecast/radiofisher_bao/significance.py": 90.0,
     "src/rfisher/archive_acceptance.py": 85.0,
     "src/rfisher_results/archive/blocks.py": 90.0,
 }

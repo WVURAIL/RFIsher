@@ -4,7 +4,7 @@
 Uses the CHIME Fisher bank and quarterly rates shipped inside the package.
 Runs in seconds without a RadioFisher checkout or a bank build.
 """
-from rfisher import api
+from rfisher.forecast.radiofisher_bao import api
 
 fc = api.load()  # shipped CHIME bank; RadioFisher is not required
 

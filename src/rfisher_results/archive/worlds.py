@@ -22,7 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-from rfisher import residual, selection_policy, survey
+from rfisher import residual, selection_policy
+from rfisher.forecast.radiofisher_bao.bank import experiments as survey
 
 ROOT = Path(__file__).resolve().parents[3]
 BANK_DIR = ROOT / "data"
@@ -125,7 +126,7 @@ def _cache_identity(cache: Path, bank_dir: Path) -> dict:
     identity = {"schema": 2, "target_years": TARGET_YEARS,
                 "policy": selection_policy.sha256(), "sources": {}, "banks": {},
                 "csv_sha256": hashlib.sha256(cache.read_bytes()).hexdigest()}
-    for path in (Path(__file__), ROOT / "scripts/bias_tolerance.py", ROOT / "src/rfisher/fisherbank.py"):
+    for path in (Path(__file__), ROOT / "scripts/bias_tolerance.py", ROOT / "src/rfisher/forecast/radiofisher_bao/bank/banks.py"):
         identity["sources"][path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
     for _, filename, kfg, _ in WORLDS:
         path = bank_dir / filename

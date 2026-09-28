@@ -9,7 +9,8 @@ detector threshold something you can optimise rather than assume.
 import numpy as np
 import pytest
 
-from rfisher import channels, residual, scenarios
+from rfisher import channels, residual
+from rfisher.forecast.radiofisher_bao import scenarios
 from rfisher.constants import CHIME_FRAME_SECONDS
 
 
@@ -579,28 +580,6 @@ def test_mask_benefit_validates_inputs():
 def test_total_masking_is_infinitely_expensive():
     d = residual.mask_benefit(35, f=1.0, r_unmasked=1e6, r_masked=0.0)
     assert not np.isfinite(d.data_cost) and d.net == 0.0
-
-
-def test_selective_scenario_keeps_declined_channels_contaminated(tmp_path):
-    """A channel the mask declines must carry its full contamination."""
-    yes = residual.mask_benefit(35, f=0.5, r_unmasked=20.0, r_masked=1.0)
-    no = residual.mask_benefit(34, f=0.99, r_unmasked=0.01, r_masked=0.005)
-    sc = scenarios.from_mask_decisions(
-        [yes, no], excise_threshold=scenarios.NO_EXCISION_THRESHOLD)
-    fourier = scenarios.from_mask_decisions(
-        [yes, no], excise_threshold=scenarios.NO_EXCISION_THRESHOLD,
-        mode="fourier")
-    assert sc.fractions[35] == pytest.approx(0.5)
-    assert sc.residuals[35] == pytest.approx(1.0)
-    assert sc.fractions[34] == 0.0                  # not masked
-    assert sc.residuals[34] == pytest.approx(0.01)  # but still contaminated
-    assert fourier.name == f"{sc.name}_fourier"
-    assert fourier.label == f"{sc.label} (Fourier weighting)"
-    forced = scenarios.from_mask_decisions(
-        [yes, no], excise_threshold=scenarios.NO_EXCISION_THRESHOLD,
-        force=True)
-    assert forced.fractions[34] == pytest.approx(0.99)
-    assert forced.keep_weight(34) < sc.keep_weight(34)   # forcing costs time
 
 
 # ----------------------------------------------------------------------

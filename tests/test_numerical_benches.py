@@ -4,8 +4,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from rfisher import scenarios, thresholds
-from rfisher.forecast import Forecast
+from rfisher.forecast.radiofisher_bao import scenarios
+from rfisher import thresholds
+from rfisher.forecast.radiofisher_bao.significance import Forecast
 
 
 @pytest.mark.parametrize("seed", range(16))

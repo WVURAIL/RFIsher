@@ -14,7 +14,7 @@ import subprocess
 
 import numpy as np
 
-from rfisher.residual_templates import FAMILIES
+from rfisher.forecast.radiofisher_bao.bank.templates import FAMILIES
 
 
 COMPARISON_SCHEMA = "baonoise-forecast-template-comparison-csv-v1"

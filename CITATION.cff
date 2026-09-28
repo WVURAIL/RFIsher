@@ -5,7 +5,7 @@ authors:
   - family-names: "Gormley"
     given-names: "Dylan"
     affiliation: "WVU Radio Astronomy Instrumentation Lab"
-version: "3.0.0"
+version: "4.0.0"
 date-released: "2026-08-26"
 repository-code: "https://github.com/WVURAIL/RFIsher"
 license: "MIT"

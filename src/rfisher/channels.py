@@ -47,12 +47,14 @@ from pathlib import Path
 
 import numpy as np
 
-from ._validation import positive_scalar
+from .forecast.radiofisher_bao.bank._validation import positive_scalar
+from .forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
+from .forecast.radiofisher_bao.bank.resources import data_file
 from .npzio import load_npz
 from .pilotproxy import coarse_reject_mask, is_current_product
-from .constants import HI_REST_FREQUENCY_MHZ
 
-from .resources import DEFAULT_RATES_CSV
+DEFAULT_RATES_NAME = "survey_quarterly_rates_all23.csv"
+DEFAULT_RATES_CSV = data_file(DEFAULT_RATES_NAME)
 
 ATSC_CH14_LOWER_EDGE = 470.0  # MHz
 ATSC_WIDTH = 6.0              # MHz

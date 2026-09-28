@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 import bias_tolerance
-from rfisher import survey
+from rfisher.forecast.radiofisher_bao.bank import experiments
 
 
 def _file_sha256(path: Path) -> str:
@@ -132,7 +132,7 @@ def _time_family_scaling_checks(noise_report: dict, fixed_report: dict,
                     multiplier = (
                         noise["t_hours"]
                         / (reference_years
-                           * survey.OVERVIEW_ONSKY_YEAR_HOURS))
+                           * experiments.OVERVIEW_ONSKY_YEAR_HOURS))
                     comparisons[str(ibin)][str(year)][parameter][label] = {
                         "validity_equal": noise["valid"] == fixed["valid"],
                         "point_acceptance_equal": (
@@ -210,9 +210,9 @@ def main(argv=None) -> int:
             or any(ibin < 0 or ibin >= bank.nbins for ibin in bins)):
         parser.error("evidence bins must be unique valid bank-bin indices")
     grid_low = min(args.years) * (1.0 - 0.10) \
-        * survey.OVERVIEW_ONSKY_YEAR_HOURS
+        * experiments.OVERVIEW_ONSKY_YEAR_HOURS
     grid_high = max(args.years) * (1.0 + 0.10) \
-        * survey.OVERVIEW_ONSKY_YEAR_HOURS
+        * experiments.OVERVIEW_ONSKY_YEAR_HOURS
     if grid_low < bank.t_grid[0] or grid_high > bank.t_grid[-1]:
         parser.error(
             "bank time grid must bracket every +/-10% evidence evaluation: "
@@ -223,7 +223,7 @@ def main(argv=None) -> int:
     combined = bias_tolerance.OverviewCombinedMultibinEstimator(
         bank, rf_dir=args.radiofisher_dir)
     reference_hours = (
-        args.reference_years * survey.OVERVIEW_ONSKY_YEAR_HOURS)
+        args.reference_years * experiments.OVERVIEW_ONSKY_YEAR_HOURS)
     common = dict(
         bank=bank, bank_path=args.bank, bins=bins, zeta=args.zeta,
         stability_fraction=0.10, max_drift=1.2)

@@ -4,7 +4,7 @@ import warnings
 import pytest
 
 from rfisher import channels
-from rfisher import scenarios
+from rfisher.forecast.radiofisher_bao import scenarios
 
 
 # ---------------------------------------------------------------- channels

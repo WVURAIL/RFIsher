@@ -1,4 +1,4 @@
-"""Supported console-command argument routing."""
+"""Supported console-command argument routing: the one ``rfisher`` command."""
 from __future__ import annotations
 
 import json
@@ -7,19 +7,41 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from rfisher import cli, scenarios, survey
+from rfisher import cli
+from rfisher.forecast.radiofisher_bao import scenarios
+from rfisher.forecast.radiofisher_bao.bank import build
+from rfisher.forecast.radiofisher_bao.bank import experiments as survey
 
 
 @pytest.mark.parametrize(
-    "entrypoint,program",
-    [(cli.forecast_main, "rfisher-forecast"),
-     (cli.build_bank_main, "rfisher-build-bank")],
+    "argv,program",
+    [(["--version"], "rfisher"),
+     (["forecast", "--version"], "rfisher forecast")],
 )
-def test_cli_version_matches_the_release(entrypoint, program, capsys):
+def test_cli_version_matches_the_release(argv, program, capsys):
     with pytest.raises(SystemExit) as excinfo:
-        entrypoint(["--version"])
+        cli.main(argv)
     assert excinfo.value.code == 0
-    assert capsys.readouterr().out == f"{program} 3.0.0\n"
+    assert capsys.readouterr().out == f"{program} 4.0.0\n"
+
+
+def test_cli_lists_its_commands_and_refuses_an_unknown_one(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["--help"])
+    assert excinfo.value.code == 0
+    listing = capsys.readouterr().out
+    assert "forecast" in listing and "build-bank" in listing
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["rfisher-forecast"])
+    assert excinfo.value.code == 2
+
+
+def test_cli_routes_each_command_to_its_own_parser(monkeypatch):
+    seen = []
+    monkeypatch.setitem(cli.COMMANDS, "forecast", (
+        lambda argv, prog: seen.append((argv, prog)) or 0, "text"))
+    assert cli.main(["forecast", "--uniform", "0.5", "--help"]) == 0
+    assert seen == [(["--uniform", "0.5", "--help"], "rfisher forecast")]
 
 
 @pytest.mark.parametrize("config,cosmology", [
@@ -34,15 +56,17 @@ def test_build_cli_routes_supported_config_cosmology_pairs(
         monkeypatch, tmp_path, config, cosmology):
     seen = {}
     monkeypatch.setattr(
-        cli, "build_bank", lambda output, **kwargs: seen.update(
+        build, "build_bank", lambda output, **kwargs: seen.update(
             output=output, **kwargs))
     argv = ["--out", str(tmp_path / "bank.npz"), "--config", config,
             "--nt", "2"]
     if cosmology is not None:
         argv += ["--cosmology", cosmology]
-    assert cli.build_bank_main(argv) == 0
+    assert cli.main(["build-bank"] + argv) == 0
     assert seen["config"] == config
-    assert seen["cosmology"] == cosmology
+    # The command resolves the configuration's default cosmology itself.
+    assert seen["cosmology"] == cosmology or {
+        "bull2015": "planck2013", "chime2022": "cmbspa2026"}[config]
 
 
 @pytest.mark.parametrize("config,cosmology", [
@@ -52,7 +76,7 @@ def test_build_cli_routes_supported_config_cosmology_pairs(
 ])
 def test_build_cli_rejects_mislabeled_pairs(tmp_path, config, cosmology):
     with pytest.raises(SystemExit):
-        cli.build_bank_main([
+        cli.main(["build-bank"] + [
             "--out", str(tmp_path / "bank.npz"), "--config", config,
             "--cosmology", cosmology])
 
@@ -60,25 +84,25 @@ def test_build_cli_rejects_mislabeled_pairs(tmp_path, config, cosmology):
 def test_build_cli_defaults_to_current_chime_configuration(monkeypatch, tmp_path):
     seen = {}
     monkeypatch.setattr(
-        cli, "build_bank", lambda output, **kwargs: seen.update(
+        build, "build_bank", lambda output, **kwargs: seen.update(
             output=output, **kwargs))
 
-    assert cli.build_bank_main([
+    assert cli.main(["build-bank"] + [
         "--out", str(tmp_path / "bank.npz"), "--nt", "2"]) == 0
 
     assert seen["config"] == "chime2022"
-    assert seen["cosmology"] is None
+    assert seen["cosmology"] == "cmbspa2026"
 
 
 def test_build_cli_adds_bull_knee_without_moving_base_grid(monkeypatch,
                                                            tmp_path):
     seen = {}
     monkeypatch.setattr(
-        cli, "build_bank", lambda output, **kwargs: seen.update(
+        build, "build_bank", lambda output, **kwargs: seen.update(
             output=output, **kwargs))
     knee = 10.0 ** 3.5
 
-    assert cli.build_bank_main([
+    assert cli.main(["build-bank"] + [
         "--out", str(tmp_path / "bank.npz"),
         "--config", "bull2015", "--cosmology", "planck2013",
         "--nt", "27", "--extra-time-hours", repr(knee),
@@ -93,7 +117,7 @@ def test_build_cli_adds_bull_knee_without_moving_base_grid(monkeypatch,
 @pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "1e7"])
 def test_build_cli_rejects_invalid_extra_time(tmp_path, value):
     with pytest.raises(SystemExit):
-        cli.build_bank_main([
+        cli.main(["build-bank"] + [
             "--out", str(tmp_path / "bank.npz"),
             "--extra-time-hours", value,
         ])

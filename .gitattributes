@@ -15,6 +15,9 @@ src/rfisher/data/*.csv text eol=lf
 src/rfisher/data/*.json text eol=lf
 src/rfisher/data/*.npz binary
 src/rfisher/data/*.dat text eol=lf
+src/rfisher/data/response_banks/*.npz binary
+src/rfisher/data/tolerances/* text eol=lf
+projects/**/*.yaml text eol=lf
 
 # Release evidence hashes identify the checked-in bytes, independent of a
 # contributor's core.autocrlf setting.

@@ -189,7 +189,7 @@ def fig_per_bin_significance(zc: np.ndarray, curves: dict[str, np.ndarray],
     fig, ax = plt.subplots(figsize=(7.2, 4.4))
     # shade the redshift range where ATSC DTV can contaminate (470-608 MHz)
     from .channels import ATSC_CH14_LOWER_EDGE, ATSC_DTV_UPPER_EDGE
-    from .constants import HI_REST_FREQUENCY_MHZ
+    from .forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
     z_dtv = (HI_REST_FREQUENCY_MHZ / ATSC_DTV_UPPER_EDGE - 1.0,
              HI_REST_FREQUENCY_MHZ / ATSC_CH14_LOWER_EDGE - 1.0)
     ax.axvspan(z_dtv[0], z_dtv[1], color=GRID, alpha=0.45, zorder=0, lw=0)

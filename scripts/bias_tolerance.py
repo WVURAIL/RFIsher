@@ -55,18 +55,21 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import (__version__, channels, cosmologies, pkcache,
-                     selection_policy, survey)
-from rfisher.backend import (import_radiofisher,
-                             require_backend_capabilities)
-from rfisher.constants import HI_REST_FREQUENCY_MHZ
-from rfisher.fisherbank import (
-    ARTIFACT_BIAS_RESPONSE, RFISHER_SOURCE_MANIFEST, FOREGROUND_KEYS,
-    RADIOFISHER_SOURCE_MANIFEST, FisherBank, _git_state,
+from rfisher import __version__, channels, selection_policy
+from rfisher.forecast.radiofisher_bao.bank import cosmologies
+from rfisher.forecast.radiofisher_bao.bank import experiments as survey
+from rfisher.forecast.radiofisher_bao.bank import pk_cache as pkcache
+from rfisher.forecast.radiofisher_bao.bank.backend import (
+    import_radiofisher, require_backend_capabilities)
+from rfisher.forecast.radiofisher_bao.bank.banks import (
+    ARTIFACT_BIAS_RESPONSE, BANK_SOURCE_MANIFEST as RFISHER_SOURCE_MANIFEST,
+    FOREGROUND_KEYS, RADIOFISHER_SOURCE_MANIFEST, FisherBank, _git_state,
     experiment_settings_payload,
 )
-from rfisher.residual_templates import validate_template_metadata
-from rfisher.resources import filesystem_data_file
+from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
+from rfisher.forecast.radiofisher_bao.bank.resources import filesystem_data_file
+from rfisher.forecast.radiofisher_bao.bank.templates import (
+    validate_template_metadata)
 
 PRES = "_Pres"
 DEFAULT_BIAS_BANK = ROOT / "data" / "fisher_bank_chime2022_pres_dense.npz"
@@ -538,8 +541,11 @@ class OverviewCombinedMultibinEstimator:
                 "RadioFisher lacks the combined-estimator API(s): "
                 + ", ".join(missing))
         if cosmo is None or cosmo_fns is None:
-            from rfisher import cosmologies, pkcache
-            from rfisher.resources import filesystem_data_file
+            from rfisher.forecast.radiofisher_bao.bank import cosmologies
+            from rfisher.forecast.radiofisher_bao.bank import (
+                pk_cache as pkcache)
+            from rfisher.forecast.radiofisher_bao.bank.resources import (
+                filesystem_data_file)
 
             cosmology_name = bank.meta["cosmology"]
             cache_tag = ("" if cosmology_name == "planck2018"

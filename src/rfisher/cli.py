@@ -1,20 +1,24 @@
-"""RFIsher commands for forecasts and bank generation."""
+"""The ``rfisher`` command.
+
+    rfisher forecast     evaluate one uniform masking scenario from a Fisher bank
+    rfisher build-bank   build a Fisher bank (slow; needs RadioFisher)
+"""
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-import numpy as np
+from . import __version__
+from .forecast.radiofisher_bao import api, scenarios
+from .forecast.radiofisher_bao.bank import build, experiments, resources
 
-from . import __version__, api, resources, scenarios, survey
-from .fisherbank import build_bank
 
-
-def forecast_main(argv=None) -> int:
+def forecast_main(argv=None, prog: str = "rfisher forecast") -> int:
     """Evaluate one uniform masking scenario and print machine-readable JSON."""
     parser = argparse.ArgumentParser(
-        prog="rfisher-forecast",
+        prog=prog,
         description="Evaluate a uniform RFI-masking scenario from a Fisher bank.")
     parser.add_argument("--version", action="version",
                         version=f"%(prog)s {__version__}")
@@ -32,7 +36,7 @@ def forecast_main(argv=None) -> int:
     parser.add_argument("--duty", type=float, default=1.0)
     parser.add_argument(
         "--hours-per-year", type=float,
-        default=survey.OVERVIEW_ONSKY_YEAR_HOURS,
+        default=experiments.OVERVIEW_ONSKY_YEAR_HOURS,
         help="8760 for Overview on-sky years (default, the convention every "
              "quoted time in this repository uses); 8766 for mean calendar "
              "years")
@@ -49,64 +53,39 @@ def forecast_main(argv=None) -> int:
     return 0
 
 
-def build_bank_main(argv=None) -> int:
-    """Generate a v2 bank without exposing the historical research scripts."""
+def build_bank_main(argv=None, prog: str = "rfisher build-bank") -> int:
+    """Build a provenance-complete Fisher bank (see ``bank.build``)."""
+    return build.main(argv, prog=prog)
+
+
+COMMANDS = {
+    "forecast": (forecast_main,
+                 "evaluate one uniform masking scenario from a Fisher bank"),
+    "build-bank": (build_bank_main,
+                   "build a Fisher bank (slow; needs RadioFisher)"),
+}
+
+
+def main(argv=None) -> int:
+    """Dispatch ``rfisher <command> ...`` to the command's own parser."""
+    argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
-        prog="rfisher-build-bank",
-        description="Generate a provenance-complete Fisher bank (slow).")
+        prog="rfisher",
+        description="RFIsher: science tolerances of RFI residuals.",
+        epilog="commands:\n" + "\n".join(
+            f"  {name:<12} {text}" for name, (_, text) in COMMANDS.items()),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version",
-                        version=f"%(prog)s {__version__}")
-    parser.add_argument("--out", type=Path, required=True,
-                        help="new output path; no implicit canonical overwrite")
-    parser.add_argument("--radiofisher-dir", type=Path)
-    parser.add_argument("--config", choices=("bull2015", "chime2022"),
-                        default="chime2022")
-    parser.add_argument(
-        "--cosmology", choices=("planck2013", "planck2018", "pact2025", "cmbspa2026"),
-        default=None,
-        help="named fiducial (default: planck2013 for bull2015, "
-             "cmbspa2026 for chime2022)")
-    parser.add_argument("--tmin", type=float, default=1.0)
-    parser.add_argument("--tmax", type=float, default=1e6)
-    parser.add_argument("--nt", type=int, default=19)
-    parser.add_argument(
-        "--extra-time-hours", action="append", type=float, default=[],
-        metavar="HOURS",
-        help="insert an additional interpolation-grid time without moving the "
-             "base log grid; repeat for multiple points")
-    parser.add_argument("--nproc", type=int)
-    parser.add_argument("--epsilon-fg", type=float, default=1e-6)
-    parser.add_argument("--k-nl0", type=float, default=0.14)
-    parser.add_argument("--kfg-fac", type=float)
-    parser.add_argument("--p-res", type=float)
+                        version=f"rfisher {__version__}")
+    parser.add_argument("command", choices=tuple(COMMANDS),
+                        metavar="command")
+    parser.add_argument("arguments", nargs=argparse.REMAINDER,
+                        help="the command's own arguments (see "
+                             "'rfisher <command> --help')")
     args = parser.parse_args(argv)
-    if args.nt < 2:
-        parser.error("--nt must be at least 2")
-    valid_cosmologies = {
-        "bull2015": {None, "planck2013"},
-        "chime2022": {None, "planck2018", "pact2025", "cmbspa2026"},
-    }
-    if args.cosmology not in valid_cosmologies[args.config]:
-        parser.error(
-            f"--config {args.config} does not support --cosmology "
-            f"{args.cosmology}")
-    overrides = {}
-    if args.kfg_fac is not None:
-        overrides["kfg_fac"] = args.kfg_fac
-    if args.p_res is not None:
-        overrides["P_res"] = args.p_res
-    t_grid = np.logspace(np.log10(args.tmin), np.log10(args.tmax), args.nt)
-    if args.extra_time_hours:
-        extra = np.asarray(args.extra_time_hours, dtype=float)
-        if (not np.all(np.isfinite(extra)) or np.any(extra <= 0.0)
-                or np.any(extra < args.tmin) or np.any(extra > args.tmax)):
-            parser.error(
-                "--extra-time-hours must be finite, positive, and within "
-                "[--tmin, --tmax]")
-        t_grid = np.unique(np.concatenate([t_grid, extra]))
-    build_bank(
-        args.out, rf_dir=args.radiofisher_dir, t_grid_hours=t_grid,
-        nproc=args.nproc, epsilon_fg=args.epsilon_fg, k_nl0=args.k_nl0,
-        config=args.config, cosmology=args.cosmology,
-        expt_overrides=overrides or None)
-    return 0
+    command, _ = COMMANDS[args.command]
+    return command(args.arguments, prog=f"rfisher {args.command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

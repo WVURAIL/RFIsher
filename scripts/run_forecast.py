@@ -11,17 +11,19 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import channels, forecast, plots, scenarios, survey
-from rfisher.backend import import_radiofisher
-from rfisher.fisherbank import FisherBank
-from rfisher.resources import DEFAULT_BANK, bank_file
+from rfisher import channels, plots
+from rfisher.forecast.radiofisher_bao import scenarios, significance
+from rfisher.forecast.radiofisher_bao.bank import experiments
+from rfisher.forecast.radiofisher_bao.bank.backend import import_radiofisher
+from rfisher.forecast.radiofisher_bao.bank.banks import FisherBank
+from rfisher.forecast.radiofisher_bao.bank.resources import DEFAULT_BANK, bank_file
 
 DUTY = 1.0  # on-sky years at the Overview normalization (8,760 hr)
 
 
 def yrs(hours: float) -> float:
     """On-sky years at the Overview normalization (1 yr = 8,760 hr)."""
-    return float(hours) / survey.OVERVIEW_ONSKY_YEAR_HOURS
+    return float(hours) / experiments.OVERVIEW_ONSKY_YEAR_HOURS
 
 
 def fmt_t(hours: float) -> str:
@@ -39,7 +41,7 @@ def _load_forecast(bank_path=DEFAULT_BANK):
     rf_dir = None
     if style == "shared_A":
         rf, rf_dir = import_radiofisher()
-    fc = forecast.Forecast(bank, rf, style=style, rf_dir=rf_dir)
+    fc = significance.Forecast(bank, rf, style=style, rf_dir=rf_dir)
     return bank, fc, style
 
 
@@ -133,9 +135,9 @@ def main() -> None:
         h5 = fc.required_hours(sc, 5.0)
         h3 = fc.required_hours(sc, 3.0)
         s1sky = fc.significance(
-            sc, survey.OVERVIEW_ONSKY_YEAR_HOURS)  # 1 on-sky yr
+            sc, experiments.OVERVIEW_ONSKY_YEAR_HOURS)  # 1 on-sky yr
         s2yr = fc.significance(
-            sc, 2.0 * survey.OVERVIEW_ONSKY_YEAR_HOURS)
+            sc, 2.0 * experiments.OVERVIEW_ONSKY_YEAR_HOURS)
         rows.append(dict(
             scenario=key, label=sc.label, sig_at_2yr=round(s2yr, 2),
             sig_at_1yr_onsky=round(s1sky, 2),
@@ -193,7 +195,7 @@ def main() -> None:
             raise ValueError(
                 "Planck-2018 and P-ACT-LB banks must use matched grids and "
                 "parameter schemas")
-        pact_forecast = forecast.Forecast(pact_bank, style="perbin_A")
+        pact_forecast = significance.Forecast(pact_bank, style="perbin_A")
         fiducial_rows = _fiducial_comparison_rows(
             fc, pact_forecast, table_scens)
         with open(outdir / "fiducial_comparison.csv", "w", newline="") as fh:
@@ -204,7 +206,7 @@ def main() -> None:
 
     # ------------------------------------------------------- fig 1: S(t)
     years_grid = np.logspace(np.log10(0.02), np.log10(20.0), 40)
-    hours_grid = survey.years_to_hours(years_grid, DUTY)
+    hours_grid = experiments.years_to_hours(years_grid, DUTY)
     curves = {k: (years_grid, fc.significance_curve(s, hours_grid))
               for k, s in scen_main.items()}
     plots.fig_significance_vs_time(curves, labels,
@@ -255,7 +257,7 @@ def main() -> None:
 
     # --------------------------- Fig-31-style validation: sigma_DV per bin
     if style == "perbin_A":
-        t1yr = survey.OVERVIEW_ONSKY_YEAR_HOURS
+        t1yr = experiments.OVERVIEW_ONSKY_YEAR_HOURS
         with open(outdir / "fig31_validation.csv", "w", newline="") as fh:
             w = csv.writer(fh, lineterminator="\n")
             w.writerow(["z_center", "sigma_dv_clean_pct",
@@ -278,7 +280,7 @@ def main() -> None:
                               outdir / "fig3_channel_masking.png")
 
     # ------------------------------------------ fig 4: per-bin profile
-    t2 = survey.OVERVIEW_ONSKY_YEAR_HOURS
+    t2 = experiments.OVERVIEW_ONSKY_YEAR_HOURS
     perbin = {}
     for k in ["clean", "legacy_rate_table", "uniform50_dtv"]:
         S = fc.per_bin_significance(scen_main[k], t2)

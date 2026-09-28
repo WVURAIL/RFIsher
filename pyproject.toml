@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rfisher"
-version = "3.0.0"
+version = "4.0.0"
 description = "RFIsher maps masking and contamination residuals to Fisher-forecast science costs."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,8 +24,7 @@ pk = ["camb"]
 test = ["jsonschema", "pytest", "ruff"]
 
 [project.scripts]
-rfisher-forecast = "rfisher.cli:forecast_main"
-rfisher-build-bank = "rfisher.cli:build_bank_main"
+rfisher = "rfisher.cli:main"
 rfisher-check-archive = "rfisher.archive_acceptance:main"
 
 [project.urls]
@@ -38,7 +37,8 @@ where = ["src"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat"]
+"rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat", "response_banks/*.npz",
+                  "tolerances/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

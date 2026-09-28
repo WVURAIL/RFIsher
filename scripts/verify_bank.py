@@ -21,10 +21,11 @@ import time
 
 import numpy as np
 
-from rfisher import cosmologies, forecast, pkcache, scenarios, survey
-from rfisher.backend import import_radiofisher
-from rfisher.fisherbank import FisherBank
-from rfisher.resources import DEFAULT_BANK, filesystem_data_file
+from rfisher.forecast.radiofisher_bao import scenarios, significance
+from rfisher.forecast.radiofisher_bao.bank import cosmologies, experiments, pk_cache
+from rfisher.forecast.radiofisher_bao.bank.backend import import_radiofisher
+from rfisher.forecast.radiofisher_bao.bank.banks import FisherBank
+from rfisher.forecast.radiofisher_bao.bank.resources import DEFAULT_BANK, filesystem_data_file
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--bank", default=DEFAULT_BANK)
@@ -34,13 +35,13 @@ rf, rf_dir = import_radiofisher()
 bank = FisherBank(args.bank)
 config = bank.meta["config"]
 style = "perbin_A" if config == "chime2022" else "shared_A"
-fc = forecast.Forecast(bank, rf, style=style, rf_dir=rf_dir)
+fc = significance.Forecast(bank, rf, style=style, rf_dir=rf_dir)
 print(f"bank config={config} style={style}; RadioFisher={rf_dir}")
 
 # matching cosmology
 if config == "chime2022":
     cosmology_name = bank.meta["cosmology"]
-    cosmo = pkcache.load_fiducial_cosmology(
+    cosmo = pk_cache.load_fiducial_cosmology(
         rf, filesystem_data_file(
             "cache_pk_chime2022.dat" if cosmology_name == "planck2018"
             else f"cache_pk_chime2022_{cosmology_name}.dat"),
@@ -48,9 +49,9 @@ if config == "chime2022":
 else:
     base = cosmologies.with_astrophysical_profile(
         rf.experiments.cosmo, "bull2015", rf=rf)
-    cosmo = pkcache.load_fiducial_cosmology(
+    cosmo = pk_cache.load_fiducial_cosmology(
         rf, filesystem_data_file("cache_pk.dat"), cosmo=base)
-make_expt = lambda t: survey.experiment_from_bank_metadata(
+make_expt = lambda t: experiments.experiment_from_bank_metadata(
     rf, rf_dir, bank.meta, ttot_hours=t)
 cosmo_fns = rf.background_evolution_splines(cosmo)
 ok = True
@@ -61,7 +62,7 @@ def sigma_A_bin_from(F):
         return fc._sigma_A_from_bin_matrix(np.asarray(F))
     Ftot, nn = rf.combined_fisher_matrix(
         [np.asarray(F)], names=list(bank.paramnames),
-        exclude=list(forecast.EXCLUDE), expand=list(forecast.EXPAND))
+        exclude=list(significance.EXCLUDE), expand=list(significance.EXPAND))
     return float(np.sqrt(np.linalg.inv(Ftot)[nn.index("A"), nn.index("A")]))
 
 
@@ -107,7 +108,7 @@ print(f"  [{flag}] (expect percent-level distance errors, tens-of-sigma BAO)")
 
 # ------------------------------------------------------------ 4. ordering
 print("== 4. scenario ordering ==")
-t2 = survey.years_to_hours(2.0, 0.75)
+t2 = experiments.years_to_hours(2.0, 0.75)
 s_clean = fc.significance(scenarios.clean(), t2)
 s_exc = fc.significance(scenarios.single_channel(30, 0.97, keep=False), t2)
 s_kept_f = fc.significance(

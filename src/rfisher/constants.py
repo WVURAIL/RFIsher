@@ -1,6 +1,3 @@
-"""Shared physical constants and unit conventions."""
+"""Shared unit conventions."""
 
-HI_REST_FREQUENCY_MHZ = 1420.406
 CHIME_FRAME_SECONDS = 16384 * 2.56e-6
-CHIME_FREQUENCY_MIN_MHZ = 400.0
-CHIME_FREQUENCY_MAX_MHZ = 800.0

@@ -24,15 +24,16 @@ from pathlib import Path
 
 import numpy as np
 
-from rfisher import channels, residual_templates
-from rfisher.constants import HI_REST_FREQUENCY_MHZ
+from rfisher import channels
+from rfisher.forecast.radiofisher_bao.bank import templates
+from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
 
 
 EVIDENCE_SCHEMA = "baonoise-forecast-completion-evidence-v2"
 COMPARISON_SCHEMA = "baonoise-forecast-template-comparison-csv-v1"
 CHANNEL_SCHEMA = "baonoise-forecast-channel-mapping-csv-v1"
 STATUS_SCHEMA = "baonoise-forecast-template-status-csv-v1"
-FAMILIES = residual_templates.FAMILIES
+FAMILIES = templates.FAMILIES
 
 EMPIRICAL_REFUSALS = (
     (
@@ -129,7 +130,7 @@ def _parse_evidence_assignment(value: str) -> tuple[str, Path]:
 def _template_identity(payload: dict, requested_family: str) -> tuple[str, str]:
     p_res = payload["bank"]["P_res"]
     if isinstance(p_res, (int, float)) and not isinstance(p_res, bool):
-        if requested_family != residual_templates.NOISE_SHAPED \
+        if requested_family != templates.NOISE_SHAPED \
                 or not np.isclose(float(p_res), 1.0, rtol=0.0, atol=0.0):
             raise ValueError(
                 "only a scalar unit P_res may stand for noise_shaped")
@@ -139,7 +140,7 @@ def _template_identity(payload: dict, requested_family: str) -> tuple[str, str]:
     if not isinstance(p_res, dict):
         raise ValueError("evidence bank P_res must be a scalar or object")
     try:
-        authenticated = residual_templates.validate_template_metadata(p_res)
+        authenticated = templates.validate_template_metadata(p_res)
     except (TypeError, ValueError) as exc:
         raise ValueError(
             f"{requested_family} template authentication failed: {exc}") \

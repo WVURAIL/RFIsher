@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from rfisher import forecast, residual, selection_policy, thresholds
+from rfisher.forecast.radiofisher_bao import significance as forecast
+from rfisher import residual, selection_policy, thresholds
 
 
 def test_registry_has_unique_valid_decisions():

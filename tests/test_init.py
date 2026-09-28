@@ -1,33 +1,31 @@
-"""Release identity and intentionally supported top-level imports."""
+"""Release identity and a package that imports nothing on its own."""
 from __future__ import annotations
 
+import ast
 from importlib import import_module, metadata
 from pathlib import Path
 
 import rfisher
 
 
-RELEASE_VERSION = "3.0.0"
+RELEASE_VERSION = "4.0.0"
 PUBLIC_MODULES = (
-    "api",
-    "backend",
-    "channels",
-    "constants",
-    "cosmologies",
-    "fisherbank",
-    "forecast",
-    "incumbent",
-    "layout",
-    "pkcache",
-    "preparation",
-    "products",
-    "residual",
-    "residual_scores",
-    "resources",
-    "scenarios",
-    "selection_policy",
-    "survey",
-    "thresholds",
+    "rfisher.channels",
+    "rfisher.cli",
+    "rfisher.constants",
+    "rfisher.forecast.radiofisher_bao.api",
+    "rfisher.forecast.radiofisher_bao.bank.banks",
+    "rfisher.forecast.radiofisher_bao.bank.build",
+    "rfisher.forecast.radiofisher_bao.layout",
+    "rfisher.forecast.radiofisher_bao.scenarios",
+    "rfisher.forecast.radiofisher_bao.significance",
+    "rfisher.incumbent",
+    "rfisher.preparation",
+    "rfisher.products",
+    "rfisher.residual",
+    "rfisher.residual_scores",
+    "rfisher.selection_policy",
+    "rfisher.thresholds",
 )
 
 
@@ -51,8 +49,15 @@ def test_installed_distribution_matches_public_version_when_available():
     assert installed == RELEASE_VERSION
 
 
-def test_public_module_exports_are_exact_and_importable():
-    assert tuple(rfisher.__all__) == PUBLIC_MODULES
+def test_package_holds_the_version_and_imports_nothing():
+    tree = ast.parse(Path(rfisher.__file__).read_text(encoding="utf-8"))
+    assert not [node for node in ast.walk(tree)
+                if isinstance(node, (ast.Import, ast.ImportFrom))]
+    assigned = [target.id for node in tree.body if isinstance(node, ast.Assign)
+                for target in node.targets]
+    assert assigned == ["__version__"]
+
+
+def test_public_modules_are_importable():
     for name in PUBLIC_MODULES:
-        exported = getattr(rfisher, name)
-        assert import_module(f"rfisher.{name}") is exported
+        assert import_module(name).__name__ == name

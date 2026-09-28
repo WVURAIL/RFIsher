@@ -20,7 +20,10 @@ import json
 import os
 from pathlib import Path
 
-from .resources import PRODUCTS_MANIFEST
+from .forecast.radiofisher_bao.bank.resources import data_file
+
+PRODUCTS_MANIFEST_NAME = "products.json"
+PRODUCTS_MANIFEST = data_file(PRODUCTS_MANIFEST_NAME)
 
 _ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = PRODUCTS_MANIFEST
