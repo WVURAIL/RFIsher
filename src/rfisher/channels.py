@@ -5,7 +5,8 @@ This module is the ATSC / pilot-proxy ingestion adapter, not the package's
 model of frequency bands: its constants encode the one channel plan the
 vendored survey products and rate tables were recorded against, so those
 inputs can be mapped onto frequency and redshift. A forecast over arbitrary
-bands should build :class:`rfisher.scenarios.FrequencyBand` intervals
+bands should build
+:class:`rfisher.forecast.radiofisher_bao.scenarios.FrequencyBand` intervals
 directly rather than press these channel numbers into service.
 
 A masking fraction is only meaningful next to the rule that produced it, and
