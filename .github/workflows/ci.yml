@@ -10,6 +10,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The float goldens are exact under this OpenBLAS kernel.
+    env:
+      OPENBLAS_CORETYPE: Haswell
     strategy:
       fail-fast: false
       matrix:
@@ -77,6 +80,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RADIOFISHER_DIR: ${{ github.workspace }}/RadioFisher
+      # The float goldens and the table rebuild are exact under this OpenBLAS kernel.
+      OPENBLAS_CORETYPE: Haswell
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

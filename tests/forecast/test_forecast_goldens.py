@@ -11,7 +11,9 @@ The floats are exact under the numpy and scipy series the goldens were
 recorded with (numpy 2.5, scipy 1.18: the release interpreter, and CI on
 Python 3.12 and 3.14). An older series, such as the newest numpy that still
 supports Python 3.10, differs in the last bit of some values, so there every
-float is held to a relative 1e-12 instead.
+float is held to a relative 1e-12 instead. Exact floats also need an OpenBLAS
+kernel that reproduces them: Haswell and Zen do, while Sandybridge and Nehalem
+change the last bit of some values, so CI pins OPENBLAS_CORETYPE=Haswell.
 """
 from __future__ import annotations
 
