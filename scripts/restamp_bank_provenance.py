@@ -10,7 +10,7 @@ built the bank. It claims that the new bank code computes the same arrays,
 which the equivalence gate proves separately; the ``restamp`` block records
 where the bank came from.
 
-Three modes:
+Four modes:
 
 ``restamp BANK=OUT ...``
     For each bank: authenticate it at the baseline commit in a subprocess
@@ -21,16 +21,24 @@ Three modes:
     bank manifest and its digest; add the ``restamp`` block; write the file
     twice and require the two writes to be byte-identical; and re-pin
     ``tests/forecast/test_resources.py``. The tree must be clean, and the
-    commit recorded is its HEAD.
+    commit recorded is its HEAD. The pairs must cover every pinned bank;
+    with ``--subset`` they may cover some of them, and only those are
+    re-pinned (``--check`` still covers all).
 
 ``--check``
     Every pin equals its file, and every bank records the current bank-source
     digest, the current manifest, and the RadioFisher digest of the checkout.
     Any edit under ``bank/`` fails it.
 
-``--repin``
-    After ``scripts/rebuild_shipped_banks.sh``: refuse unless every bank
-    records the current source digests, then rewrite the pins.
+``--repin BANK ...``
+    After ``scripts/rebuild_shipped_banks.sh``: refuse unless each named bank
+    records the current source digests, then rewrite the pins of those banks
+    alone and the RadioFisher pin.
+
+``--same-arrays COMMITTED REBUILT``
+    Exit non-zero unless the two banks hold byte-identical numerical members.
+    The rebuild fallback runs it on every bank it rebuilds, against the bank
+    it replaces.
 
     python scripts/restamp_bank_provenance.py --check
     python scripts/restamp_bank_provenance.py --from-commit e041d5e \\
@@ -268,10 +276,11 @@ def restamp(args) -> int:
         pairs.append((Path(source).resolve(), (ROOT / target).resolve()
                       if not Path(target).is_absolute() else Path(target)))
     targets = {str(target.relative_to(ROOT)) for _, target in pairs}
-    if targets != set(BANKS.values()):
+    missing = set(BANKS.values()) - targets
+    unexpected = targets - set(BANKS.values())
+    if unexpected or (missing and not args.subset):
         sys.exit("the re-stamp covers exactly the pinned banks: missing "
-                 f"{sorted(set(BANKS.values()) - targets)}, unexpected "
-                 f"{sorted(targets - set(BANKS.values()))}")
+                 f"{sorted(missing)}, unexpected {sorted(unexpected)}")
 
     rf_dir = find_radiofisher_dir(args.radiofisher_dir)
     base = authenticate_at_baseline(baseline, args.baseline_python, rf_dir,
@@ -326,7 +335,7 @@ def restamp(args) -> int:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(payload)
     pins = {anchor: record["banks"][relative]["sha256"]
-            for anchor, relative in BANKS.items()}
+            for anchor, relative in BANKS.items() if relative in targets}
     text, changes = repin((ROOT / PINS).read_text(encoding="utf-8"), pins)
     (ROOT / PINS).write_text(text, encoding="utf-8")
     record["pins_changed"] = changes
@@ -351,13 +360,14 @@ def current_radiofisher_digest(explicit=None) -> str:
         rf_dir, **banks.RADIOFISHER_SOURCE_MANIFEST)["working_tree_sha256"]
 
 
-def provenance_problems(radiofisher_digest: str) -> list[str]:
+def provenance_problems(radiofisher_digest: str,
+                        relatives=None) -> list[str]:
     state = banks.bank_source_state()
     problems = []
     if state["working_tree_sha256"] is None:
         problems.append("the bank source digest is unavailable outside a "
                         "git checkout")
-    for relative in BANKS.values():
+    for relative in (BANKS.values() if relatives is None else relatives):
         path = ROOT / relative
         if not path.is_file():
             problems.append(f"{relative}: missing")
@@ -418,15 +428,21 @@ def check(args) -> int:
 def repin_after_rebuild(args) -> int:
     if ROOT is None:
         sys.exit("run from a git checkout of RFIsher")
+    rebuilt = list(dict.fromkeys(args.banks))
+    if not rebuilt:
+        sys.exit("--repin takes the paths of the rebuilt banks")
+    unknown = sorted(set(rebuilt) - set(BANKS.values()))
+    if unknown:
+        sys.exit(f"--repin: not a pinned bank: {', '.join(unknown)}")
     radiofisher_digest = current_radiofisher_digest(args.radiofisher_dir)
-    problems = provenance_problems(radiofisher_digest)
+    problems = provenance_problems(radiofisher_digest, rebuilt)
     if problems:
         for problem in problems:
             print(problem)
         sys.exit("refusing to re-pin banks whose recorded source trees do not "
                  "match the current checkouts")
     pins = {anchor: sha256_file(ROOT / relative)
-            for anchor, relative in BANKS.items()}
+            for anchor, relative in BANKS.items() if relative in rebuilt}
     text, changes = repin((ROOT / PINS).read_text(encoding="utf-8"), pins)
     text = RADIOFISHER_PIN.sub(
         lambda m: m.group(1) + radiofisher_digest + m.group(3), text, count=1)
@@ -434,6 +450,20 @@ def repin_after_rebuild(args) -> int:
     for change in changes:
         print("re-pinned", change)
     print("pins current")
+    return 0
+
+
+def same_arrays(args) -> int:
+    committed, rebuilt = (Path(path) for path in args.banks)
+    _, old = read_members(committed)
+    _, new = read_members(rebuilt)
+    differ = [name for name in NUMERICAL
+              if old[f"{name}.npy"] != new[f"{name}.npy"]]
+    if differ:
+        print(f"{rebuilt}: members differ from {committed}: "
+              + ", ".join(differ))
+        return 1
+    print(f"{rebuilt}: the numerical members equal {committed}")
     return 0
 
 
@@ -445,7 +475,12 @@ def main(argv=None) -> int:
                       help="verify the pins and the recorded provenance; "
                            "write nothing")
     mode.add_argument("--repin", action="store_true",
-                      help="re-pin banks rebuilt from the current source")
+                      help="re-pin the named banks, rebuilt from the current "
+                           "source")
+    mode.add_argument("--same-arrays", action="store_true",
+                      help="compare the numerical members of two banks")
+    ap.add_argument("--subset", action="store_true",
+                    help="let a re-stamp cover only some of the pinned banks")
     ap.add_argument("--radiofisher-dir", type=Path)
     ap.add_argument("--from-commit", help="the commit that built the banks")
     ap.add_argument("--baseline", type=Path,
@@ -454,12 +489,18 @@ def main(argv=None) -> int:
                     help="the interpreter of the baseline authentication")
     ap.add_argument("--record", type=Path,
                     help="write a JSON record of the re-stamp here")
-    ap.add_argument("banks", nargs="*", metavar="BANK=OUT")
+    ap.add_argument("banks", nargs="*", metavar="BANK=OUT",
+                    help="re-stamp pairs; with --repin, the rebuilt bank "
+                         "paths; with --same-arrays, the two banks")
     args = ap.parse_args(argv)
     if args.check:
         return check(args)
     if args.repin:
         return repin_after_rebuild(args)
+    if args.same_arrays:
+        if len(args.banks) != 2:
+            ap.error("--same-arrays takes COMMITTED REBUILT")
+        return same_arrays(args)
     if not (args.from_commit and args.baseline and args.banks):
         ap.error("a re-stamp needs --from-commit, --baseline and BANK=OUT "
                  "pairs")

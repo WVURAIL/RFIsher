@@ -88,7 +88,8 @@ def checkout(tmp_path, monkeypatch):
     args = SimpleNamespace(
         from_commit=_git(baseline, "rev-parse", "HEAD"), baseline=baseline,
         baseline_python="python", radiofisher_dir=radiofisher,
-        record=tmp_path / "record.json", banks=[f"{root / BANK}={BANK}"])
+        record=tmp_path / "record.json", banks=[f"{root / BANK}={BANK}"],
+        subset=False)
     return SimpleNamespace(root=root, bank=root / BANK, pins=pins, args=args,
                            original=bank.read_bytes())
 
@@ -192,3 +193,74 @@ def test_the_live_pins_name_the_nine_banks():
         assert anchor in text
     assert len(restamp.BANKS) == 9
     assert restamp.RADIOFISHER_PIN.search(text)
+
+
+OTHER_ANCHOR = '"other.npz":'
+OTHER = "data/other.npz"
+
+
+def _add_other_bank(checkout, monkeypatch):
+    """A second pinned bank, still carrying its original provenance."""
+    _compressed_bank(checkout.root / OTHER)
+    with checkout.pins.open("a") as fh:
+        fh.write(f"OTHER = {{\n    {OTHER_ANCHOR}\n        \"{'0' * 64}\",\n}}\n")
+    _git(checkout.root, "add", ".")
+    _git(checkout.root, "commit", "-q", "-m", "another bank")
+    monkeypatch.setattr(restamp, "BANKS", {ANCHOR: BANK, OTHER_ANCHOR: OTHER})
+    return SimpleNamespace(**{**vars(checkout.args), "subset": True})
+
+
+def test_a_subset_restamp_repins_only_its_banks(checkout, monkeypatch):
+    args = _add_other_bank(checkout, monkeypatch)
+    with pytest.raises(SystemExit, match="exactly the pinned banks"):
+        restamp.restamp(SimpleNamespace(**{**vars(args), "subset": False}))
+    assert restamp.restamp(args) == 0
+    text = checkout.pins.read_text()
+    assert f'"{restamp.sha256_file(checkout.bank)}"' in text
+    assert f"{OTHER_ANCHOR}\n        \"{'0' * 64}\"" in text
+    # the check still covers every pinned bank
+    assert restamp.check(SimpleNamespace(radiofisher_dir=None)) == 1
+    problems = restamp.provenance_problems("a" * 64)
+    assert problems and all(p.startswith(OTHER) for p in problems)
+
+
+def test_repin_after_a_rebuild_covers_only_the_rebuilt_banks(checkout,
+                                                            monkeypatch):
+    assert restamp.restamp(checkout.args) == 0     # stands in for a rebuild
+    _git(checkout.root, "commit", "-q", "-am", "restamped")
+    _add_other_bank(checkout, monkeypatch)
+    text = checkout.pins.read_text()
+    checkout.pins.write_text(text.replace(
+        restamp.sha256_file(checkout.bank), "1" * 64))
+
+    def repin(*banks_named):
+        return restamp.repin_after_rebuild(SimpleNamespace(
+            radiofisher_dir=None, banks=list(banks_named)))
+
+    with pytest.raises(SystemExit, match="rebuilt banks"):
+        repin()
+    with pytest.raises(SystemExit, match="not a pinned bank"):
+        repin("data/unknown.npz")
+    with pytest.raises(SystemExit, match="refusing to re-pin"):
+        repin(BANK, OTHER)
+    assert repin(BANK) == 0
+    text = checkout.pins.read_text()
+    assert f'"{restamp.sha256_file(checkout.bank)}"' in text
+    assert f"{OTHER_ANCHOR}\n        \"{'0' * 64}\"" in text
+
+
+def test_same_arrays_compares_the_numerical_members_only(checkout, tmp_path):
+    original = tmp_path / "original.npz"
+    original.write_bytes(checkout.original)
+    assert restamp.restamp(checkout.args) == 0
+    # a re-stamped bank differs in its metadata alone
+    assert restamp.main(["--same-arrays", str(original),
+                         str(checkout.bank)]) == 0
+    with np.load(original, allow_pickle=False) as archive:
+        arrays = {name: np.array(archive[name]) for name in restamp.MEMBERS}
+    arrays["F"].flat[0] += 1.0
+    changed = tmp_path / "changed.npz"
+    np.savez_compressed(changed, **arrays)
+    assert restamp.main(["--same-arrays", str(original), str(changed)]) == 1
+    with pytest.raises(SystemExit):
+        restamp.main(["--same-arrays", str(original)])
