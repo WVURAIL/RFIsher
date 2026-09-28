@@ -23,7 +23,8 @@ def test_the_sibling_candidate_sits_beside_the_git_work_tree():
         check=True, capture_output=True, text=True).stdout.strip()
     sibling = Path(top).resolve().parent / "RadioFisher"
     assert backend._checkout_sibling() == (sibling,)
-    assert backend._DEFAULT_RF_CANDIDATES[0] == sibling
+    # the sibling is the only fallback after RADIOFISHER_DIR
+    assert backend._DEFAULT_RF_CANDIDATES == (sibling,)
 
 
 def test_the_environment_wins_over_the_sibling(tmp_path, monkeypatch):

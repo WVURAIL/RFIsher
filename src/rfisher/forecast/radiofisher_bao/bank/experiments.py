@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from ._validation import nonnegative_scalar, positive_scalar
+from .cosmologies import DEFAULT_COSMOLOGY
 from .physics import HI_REST_FREQUENCY_MHZ
 
 SUPPORTED_CONFIGS = frozenset({"bull2015", "chime2022"})
@@ -42,6 +43,16 @@ OVERVIEW_ONSKY_YEAR_HOURS = 8760.0  # 365 days, Overview normalization
 #   mechanism behind the day-retention factor; the 102-night dataset of the
 #   2023 detection (ApJ 947, 16) corroborates the ~100-night/year scale.
 DUTY_2019_PRACTICE = 0.152
+
+
+def resolve_cosmology(config: str, cosmology: str | None) -> str:
+    """The named fiducial of a build: ``cosmology``, else the config's default.
+
+    ``None`` in ``SUPPORTED_COSMOLOGIES`` stands for this default.
+    """
+    if cosmology:
+        return cosmology
+    return DEFAULT_COSMOLOGY if config == "chime2022" else "planck2013"
 
 
 def chime_experiment(rf, rf_dir: str | Path, ttot_hours: float = 1e4,

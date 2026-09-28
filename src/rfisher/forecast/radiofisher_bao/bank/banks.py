@@ -42,7 +42,8 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 from . import experiments, pk_cache
-from .experiments import SUPPORTED_CONFIGS, SUPPORTED_COSMOLOGIES
+from .experiments import (SUPPORTED_CONFIGS, SUPPORTED_COSMOLOGIES,
+                          resolve_cosmology)
 
 BANK_SCHEMA_VERSION = 2
 ARTIFACT_FORECAST = "forecast"
@@ -221,8 +222,12 @@ SOURCE_TEXT_SUFFIXES = frozenset({".py", ".toml"})
 
 
 def _run_git(path: Path, *args) -> bytes | None:
-    result = subprocess.run(
-        ["git", "-C", str(path), *args], capture_output=True, check=False)
+    """The output of a git command in ``path``; None if it fails or git is absent."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), *args], capture_output=True, check=False)
+    except OSError:
+        return None
     return result.stdout if result.returncode == 0 else None
 
 
@@ -324,18 +329,17 @@ def _git_state(path: Path, *, include: tuple[str, ...] = (),
 def source_root() -> Path | None:
     """The git work tree that holds this bank code, or None outside one.
 
-    The root is asked of git, never inferred from this file's depth. It must
+    The root is asked of git, never inferred from this file's depth; without
+    git on PATH there is no root, as outside a work tree. It must
     also place this subpackage at ``BANK_SOURCE_DIRECTORY``: a copy installed
     inside some unrelated repository has no bank source to hash, so its
     digest is None and a bank built or authenticated there is refused.
     """
     here = Path(__file__).resolve().parent
-    result = subprocess.run(
-        ["git", "-C", str(here), "rev-parse", "--show-toplevel"],
-        capture_output=True, check=False)
-    if result.returncode != 0:
+    top = _run_git(here, "rev-parse", "--show-toplevel")
+    if top is None:
         return None
-    root = Path(os.fsdecode(result.stdout.strip())).resolve()
+    root = Path(os.fsdecode(top.strip())).resolve()
     if (root / BANK_SOURCE_DIRECTORY).resolve() != here:
         return None
     return root
@@ -430,9 +434,8 @@ def _build_provenance() -> dict:
                 **RADIOFISHER_SOURCE_MANIFEST),
         },
         "cosmology": {
-            "name": (_CTX.get("cosmology_name")
-                     or ("cmbspa2026" if _CTX["config"] == "chime2022"
-                         else "planck2013")),
+            "name": resolve_cosmology(_CTX["config"],
+                                      _CTX.get("cosmology_name")),
             "sha256": pk_cache.cosmology_fingerprint(cosmo),
             "parameters": pk_cache.cosmology_payload(cosmo),
             "reference": copy.deepcopy(cosmo.get("fiducial_source", {})),
@@ -502,7 +505,7 @@ def build_bank(outfile: str | Path, rf_dir=None,
     filters away."""
     _validate_configuration(config, cosmology)
     outfile = Path(outfile)
-    cosmology = cosmology or ("cmbspa2026" if config == "chime2022" else "planck2013")
+    cosmology = resolve_cosmology(config, cosmology)
     ctag = f"_{cosmology}" if cosmology not in ("planck2013", "planck2018") else ""
     default_cache = (f"cache_pk_chime2022{ctag}.dat" if config == "chime2022"
                      else "cache_pk.dat")
@@ -563,9 +566,7 @@ def build_bank(outfile: str | Path, rf_dir=None,
                 artifact_kind=artifact_kind,
                 expt_overrides=dict(expt_overrides or {}),
                 config=config,
-                cosmology=(cosmology or
-                           ("cmbspa2026" if config == "chime2022"
-                            else "planck2013")),
+                cosmology=cosmology,
                 experiment="CHIME (RadioFisher 'yCHIME', mode icyl)",
                 astrophysical_model_profile=
                     _CTX["astrophysical_model_profile"],

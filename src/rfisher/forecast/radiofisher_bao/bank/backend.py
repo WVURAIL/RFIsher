@@ -8,22 +8,25 @@ from pathlib import Path
 
 
 def _checkout_sibling() -> tuple[Path, ...]:
-    """``RadioFisher`` beside the git work tree that holds this code, if any."""
-    result = subprocess.run(
-        ["git", "-C", str(Path(__file__).resolve().parent),
-         "rev-parse", "--show-toplevel"],
-        capture_output=True, check=False)
+    """``RadioFisher`` beside the git work tree that holds this code, if any.
+
+    Without git, or outside a work tree, there is no sibling to offer.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(Path(__file__).resolve().parent),
+             "rev-parse", "--show-toplevel"],
+            capture_output=True, check=False)
+    except OSError:
+        return ()
     if result.returncode != 0:
         return ()
     root = Path(os.fsdecode(result.stdout.strip())).resolve()
     return (root.parent / "RadioFisher",)
 
 
-_DEFAULT_RF_CANDIDATES = (
-    *_checkout_sibling(),
-    Path.home() / "work" / "RadioFisher",
-    Path.cwd() / "RadioFisher",
-)
+# RADIOFISHER_DIR comes first; this is the only fallback.
+_DEFAULT_RF_CANDIDATES = _checkout_sibling()
 
 SUPPORTED_BACKEND_API_VERSION = 1
 DIRECT_MASK_CAPABILITIES = frozenset(

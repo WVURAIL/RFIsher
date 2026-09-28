@@ -15,8 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from .banks import build_bank
-from .cosmologies import DEFAULT_COSMOLOGY
-from .experiments import SUPPORTED_COSMOLOGIES
+from .experiments import SUPPORTED_COSMOLOGIES, resolve_cosmology
 from .templates import FAMILIES, make_template, parse_parameter_assignments
 
 # The dense-knee span, in log10(hours). The default reproduces every bank
@@ -88,8 +87,7 @@ def default_bank_name(*, config: str, cosmology: str | None,
     A ``_Pres`` bank carries an extra parameter row and is not
     interchangeable with a plain one, so it never takes a plain name.
     """
-    cosmology = cosmology or (
-        DEFAULT_COSMOLOGY if config == "chime2022" else "planck2013")
+    cosmology = resolve_cosmology(config, cosmology)
     ctag = (f"_{cosmology}" if cosmology
             and cosmology != "planck2018" else "")
     if residual_template is not None:
@@ -120,7 +118,7 @@ def build_parser(prog: str = "rfisher build-bank") -> argparse.ArgumentParser:
                     default="chime2022")
     ap.add_argument(
         "--cosmology",
-        choices=("planck2013", "planck2018", "pact2025", "cmbspa2026"),
+        choices=sorted(set().union(*SUPPORTED_COSMOLOGIES.values()) - {None}),
         default=None,
         help="named fiducial (default: planck2013 for bull2015, "
              "cmbspa2026 for chime2022)")
@@ -188,8 +186,7 @@ def main(argv=None, prog: str = "rfisher build-bank") -> int:
             template_parameters=args.template_param, kfg_fac=args.kfg_fac)
     except (TypeError, ValueError) as exc:
         ap.error(str(exc))
-    cosmology = args.cosmology or (
-        DEFAULT_COSMOLOGY if args.config == "chime2022" else "planck2013")
+    cosmology = resolve_cosmology(args.config, args.cosmology)
     out = args.out
     if out.is_dir():
         out = out / default_bank_name(
