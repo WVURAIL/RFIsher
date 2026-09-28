@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from rfisher import residual
+from rfisher.forecast.radiofisher_bao.filter_scenarios import DEFAULT_DELAY_KEY
 from rfisher_results.archive import chain, selection
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,7 +66,7 @@ def test_chain_assembles_rfisher_results_and_books_the_gain(tmp_path):
     assert result.n_valid > 0 and result.tau_quality in ("measured", "bounded_above", "refused")
     assert result.components and all(share >= 0 and n_coh >= 1 for share, n_coh in result.components)
     assert result.gain == sum(s * n for s, n in result.components)
-    assert result.delay_key == residual.DEFAULT_DELAY_KEY and result.delay_suppression_db == 0.0
+    assert result.delay_key == DEFAULT_DELAY_KEY and result.delay_suppression_db == 0.0
     # one component on every outcome: all surviving power at the booked tau (the cap when refused), no split credit
     tau = result.tau_c_seconds if result.tau_quality != "refused" else residual.MAX_TAU_C_SECONDS
     assert result.components == ((1.0, residual.n_coh_from_correlation_time(tau)),)
@@ -108,12 +109,14 @@ def test_every_band_books_one_component_and_no_split(monkeypatch, quality):
         assert chain.booked_components(corr) == result.components
         row = result.as_row()
         assert row["chain_gain"] == n_coh and not set(SPLIT_FIELDS) & set(row)
-        split = residual.surviving_components(stats, corr)
         if corr.is_usable:
             # the split booking took a ground-filter credit; the chain no longer does
+            split = ((float(stats.intraday_fraction), n_coh), (float(stats.fast_fraction), 1.0))
             assert len(split) == 2 and sum(f * n for f, n in split) < result.gain
         else:
-            assert result.components == split          # a refusal already booked no split: unchanged
+            # a refusal already booked no split: all power at the cap, unchanged
+            split = ((1.0, residual.n_coh_from_correlation_time(residual.MAX_TAU_C_SECONDS)),)
+            assert result.components == split
 
 
 @pytest.mark.parametrize("channel", sorted(FROZEN_USABLE))

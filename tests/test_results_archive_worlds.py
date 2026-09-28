@@ -26,11 +26,11 @@ def _rows():
 
 
 def test_suppression_comes_from_the_chains_own_table():
-    from rfisher import residual
+    from rfisher.forecast.radiofisher_bao import filter_scenarios
     assert worlds.suppression_db("none") == 0.0
-    assert worlds.suppression_db("deployed") == residual.DELAY_SUPPRESSION_DB["aggressive_200ns"]
-    assert worlds.suppression_db("peak1") == residual.DELAY_SUPPRESSION_DB["bao_peak1"]
-    assert worlds.suppression_db("peak2") == residual.DELAY_SUPPRESSION_DB["bao_peak2"]
+    assert worlds.suppression_db("deployed") == filter_scenarios.DELAY_SUPPRESSION_DB["aggressive_200ns"]
+    assert worlds.suppression_db("peak1") == filter_scenarios.DELAY_SUPPRESSION_DB["bao_peak1"]
+    assert worlds.suppression_db("peak2") == filter_scenarios.DELAY_SUPPRESSION_DB["bao_peak2"]
     # the cuts are ordered: a harder cut removes more shelf
     assert (worlds.suppression_db("none") < worlds.suppression_db("peak1")
             < worlds.suppression_db("peak2") < worlds.suppression_db("deployed"))

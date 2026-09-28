@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from rfisher.forecast.radiofisher_bao import filter_scenarios
 from rfisher.forecast.radiofisher_bao import significance as forecast
 from rfisher import residual, selection_policy, thresholds
 
@@ -60,7 +61,7 @@ def test_public_constants_come_from_the_registry():
         "correlation.trim_probes"))
     assert residual.CORRELATION_BOOTSTRAP_SEED == selection_policy.value(
         "correlation.bootstrap_seed")
-    assert residual.DEFAULT_DELAY_KEY == selection_policy.value(
+    assert filter_scenarios.DEFAULT_DELAY_KEY == selection_policy.value(
         "transfer.delay_suppression.default_key")
     assert forecast.FISHER_CONDITION_LIMIT == selection_policy.value(
         "science.response_solver.maximum_condition_number")

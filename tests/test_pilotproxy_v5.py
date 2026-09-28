@@ -16,7 +16,7 @@ from rfisher.pilotproxy import (MASK_RULE, PilotProxyContractError,
 from rfisher.preparation import (CalibrationEvidence,
                                  select_prepared_threshold)
 from rfisher.residual import (correlation_time, floor_provenance,
-                              shelf_statistics, threshold_sweep)
+                              shelf_statistics)
 from rfisher.residual_scores import build_residual_score_bundle
 from rfisher import products
 
@@ -316,8 +316,6 @@ def test_v5_adapter_drives_residual_measurements_and_exact_threshold(tmp_path):
     stats = shelf_statistics(path)
     provenance = floor_provenance(path)
     correlation = correlation_time(path)
-    sweep = threshold_sweep(
-        path, etas=[1.0, 1.05, 1.2], floor_db=-55.0, min_kept=30)
     table = mask_table_from_products(
         [path], refused_channels=(), eta=1.05)
     assert stats.n_valid == 120
@@ -326,7 +324,6 @@ def test_v5_adapter_drives_residual_measurements_and_exact_threshold(tmp_path):
     assert provenance.n_sliver == 0
     assert "v5 shelf values" in provenance.verdict
     assert correlation.channel == 14
-    assert len(sweep) >= 2
     assert table.n_frames[14] == 120
     assert table.rule.startswith("Q > 1.05")
 

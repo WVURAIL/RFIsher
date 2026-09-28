@@ -132,98 +132,8 @@ def test_at_threshold_constructor():
 
 
 # ----------------------------------------------------------------------
-# The budget
+# The coherence factor
 # ----------------------------------------------------------------------
-
-def test_budget_chain_is_additive_in_db():
-    b = residual.ResidualBudget(shelf_floor_db=-26.0, ground_filter_db=14.3,
-                                delay_filter_db=3.6)
-    assert b.suppressed_db == pytest.approx(-43.9)
-    assert b.ratio == pytest.approx(10 ** (-4.39))
-    assert b.ratio_db == pytest.approx(-43.9)
-
-
-def test_coherence_amplifies_but_does_not_change_the_chain():
-    base = residual.ResidualBudget(shelf_floor_db=-40.0, ground_filter_db=14.3,
-                                   delay_filter_db=3.6)
-    amp = residual.ResidualBudget(shelf_floor_db=-40.0, ground_filter_db=14.3,
-                                  delay_filter_db=3.6, n_coh=1000.0)
-    assert amp.suppressed_db == base.suppressed_db
-    assert amp.ratio_db == pytest.approx(base.ratio_db + 30.0)
-    assert amp.ratio == pytest.approx(base.ratio * 1000.0)
-
-
-def test_n_coh_must_be_positive():
-    with pytest.raises(ValueError):
-        residual.ResidualBudget(shelf_floor_db=-40.0, n_coh=0.0).ratio
-
-
-def _ch35_stats(**kw):
-    """The measured 521.npz split, as ShelfStatistics."""
-    base = dict(channel=35, freq_id=521, nu_mhz=596.48, n_valid=39775,
-                n_kept=6484, on_shelf_db=-10.54, floor_db=-26.18,
-                floor_percentile=90.0, dc_fraction=0.944396,
-                interday_fraction=0.045157, intraday_fraction=0.008603,
-                fast_fraction=0.001844, n_off_frames=3167,
-                n_units=3852, n_days=1361)
-    base.update(kw)
-    return residual.ShelfStatistics(**base)
-
-
-def test_delay_key_is_validated_and_ordered():
-    d = residual.DELAY_SUPPRESSION_DB
-    # a shorter delay cutoff (larger protected scale) buys less suppression
-    assert d["bao_peak1"] < d["bao_peak2"] < d["aggressive_200ns"]
-    with pytest.raises(ValueError):
-        residual.budget_from_statistics(_ch35_stats(), delay_key="nope")
-
-
-def test_ground_filter_uses_the_sidereal_day_boundary():
-    """Inter-day drift is m = 0 too: the common-mode filter runs per day."""
-    stats = _ch35_stats()
-    assert stats.surviving_fraction == pytest.approx(0.010447, abs=1e-6)
-    assert stats.ground_filter_db == pytest.approx(19.81, abs=0.05)
-    # splitting at the acquisition instead lumps inter-day drift in with
-    # intra-day variation and understates the filter by ~7 dB
-    naive = 10 * np.log10(1.0 / stats.slow_fraction)
-    assert naive == pytest.approx(12.70, abs=0.05)
-    assert stats.ground_filter_db - naive == pytest.approx(7.11, abs=0.05)
-
-
-def test_components_do_not_double_count_ground_filtered_power():
-    """tau_c above a sidereal day is already priced as m = 0 suppression."""
-    stats = _ch35_stats()
-    capped = residual.budget_from_statistics(
-        stats, "bao_peak1", tau_intraday=residual.MAX_TAU_C_SECONDS)
-    beyond = residual.budget_from_statistics(
-        stats, "bao_peak1", tau_intraday=100 * residual.MAX_TAU_C_SECONDS)
-    assert beyond.ratio == pytest.approx(capped.ratio)
-
-
-def test_fast_component_keeps_its_own_coherence():
-    """One lumped n_coh would amplify the fast population by the slow factor."""
-    stats = _ch35_stats()
-    b = residual.budget_from_statistics(stats, "bao_peak1", tau_intraday=3600.0)
-    n_slow = residual.n_coh_from_correlation_time(3600.0)
-    lumped = (stats.intraday_fraction + stats.fast_fraction) * n_slow
-    assert b._gain < lumped
-    assert b._gain == pytest.approx(
-        stats.intraday_fraction * n_slow + stats.fast_fraction * 1.0)
-
-
-def test_budget_matches_the_measured_chain_at_one_hour():
-    b = residual.budget_from_statistics(_ch35_stats(), "bao_peak1",
-                                        tau_intraday=3600.0)
-    assert b.ratio_db == pytest.approx(-1.09, abs=0.05)
-    assert b.delay_filter_db == pytest.approx(3.6)
-
-
-def test_component_fractions_are_validated():
-    with pytest.raises(ValueError):
-        residual.ResidualBudget(shelf_floor_db=-26.0, components=((-0.1, 1.0),))
-    with pytest.raises(ValueError):
-        residual.ResidualBudget(shelf_floor_db=-26.0, components=((0.1, 0.0),))
-
 
 def test_n_coh_from_correlation_time():
     n = residual.n_coh_from_correlation_time(3600.0)
@@ -236,16 +146,6 @@ def test_n_coh_from_correlation_time():
         residual.MAX_TAU_C_SECONDS / CHIME_FRAME_SECONDS)
     with pytest.raises(ValueError):
         residual.n_coh_from_correlation_time(1.0, frame_seconds=0.0)
-
-
-def test_chain_and_summary_render():
-    stats = _ch35_stats()
-    txt = stats.summary()
-    assert "ch 35" in txt or "ch35" in txt
-    assert "ground filter" in txt and "inter-day" in txt and "intra-day" in txt
-    chain = residual.budget_from_statistics(stats, "bao_peak1",
-                                            tau_intraday=3600.0).chain()
-    assert "delay filter" in chain and "r = P_res/P_N" in chain
 
 
 # ----------------------------------------------------------------------
@@ -323,48 +223,6 @@ def test_off_epoch_specs_are_mutually_exclusive(tmp_path):
         residual.shelf_statistics(p, off_through="2020-12", off_from="2021-01")
     with pytest.raises(ValueError, match="at most one"):
         residual.correlation_time(p, off_through="2020-12", off_from="2021-01")
-
-
-def test_threshold_sweep_accepts_off_from(tmp_path):
-    import datetime as _dt
-    rng = np.random.default_rng(11)
-    units, fpu = 100, 3        # per epoch: 100 acquisitions x 3 frames
-    n = units * fpu
-    shelf = np.concatenate([-10.0 + 0.1 * rng.standard_normal(n),
-                            -40.0 + 0.1 * rng.standard_normal(n)])
-    # on epoch: 60 strong units (F=50) over 40 weak ones (F=2)
-    F = np.concatenate([np.full(60 * fpu, 50.0), np.full(40 * fpu, 2.0),
-                        np.full(n, 1.0)])
-    rejected = np.r_[np.ones(n), np.zeros(n)].astype(np.uint8)
-    uof = np.concatenate([np.repeat(np.arange(units), fpu),
-                          np.repeat(np.arange(units, 2 * units), fpu)])
-    t0 = np.concatenate([
-        _dt.datetime(2020, 6, 1, tzinfo=_dt.timezone.utc).timestamp()
-        + np.arange(units) * 3600.0,
-        _dt.datetime(2021, 6, 1, tzinfo=_dt.timezone.utc).timestamp()
-        + np.arange(units) * 3600.0])
-    np.savez(
-        tmp_path / "sweep_signoff.npz",
-        valid=np.ones((2 * n, 1), dtype=np.uint8),
-        reject_mask=rejected.reshape(-1, 1),
-        snr_shelf_db=shelf.reshape(-1, 1),
-        fstat_raw=F.reshape(-1, 1),
-        mu0=np.array([1.0]),
-        frame_unit_index=uof.astype(np.int32),
-        unit_time0_ctime=t0,
-        physical_channel=np.array([19], dtype=np.int32),
-        freq_id=np.array([767], dtype=np.int64),
-        chime_frequency_hz=np.array([500.39e6]),
-    )
-    sweep = residual.threshold_sweep(tmp_path / "sweep_signoff.npz",
-                                     off_from="2021-01")
-    assert sweep, "sweep must not be empty with an off_from epoch"
-    assert all(np.isfinite(row["net"]) for row in sweep)
-    # thresholds between the two on-epoch F populations mask the strong 60%
-    mid = [r for r in sweep if 2.5 <= r["eta"] <= 40.0]
-    assert mid and all(r["f"] == pytest.approx(0.6, abs=0.01) for r in mid)
-    # thresholds above every F keep everything
-    assert sweep[-1]["f"] == pytest.approx(0.0, abs=1e-6)
 
 
 def _stationary_product(tmp_path, tau_true, n_days=400, per_day=6,
@@ -449,25 +307,6 @@ def test_correlation_time_refuses_an_episodic_shelf(tmp_path):
     assert np.isnan(ct.tau_c)
 
 
-def test_refusal_takes_no_ground_filter_credit(tmp_path):
-    """Non-stationarity breaks the split as well as the timescale."""
-    b, _, ct = residual.budget_from_products(_episodic_product(tmp_path),
-                                             n_boot=40)
-    assert not ct.is_measured and not b.tau_measured
-    assert sum(f for f, _ in b.components) == pytest.approx(1.0)
-    assert "BOUND" in b.chain()
-
-
-def test_measured_path_sets_the_flag_and_uses_the_measurement(tmp_path):
-    path = _stationary_product(tmp_path, tau_true=2400.0)
-    b, st, ct = residual.budget_from_products(path, n_boot=60)
-    assert ct.is_measured and b.tau_measured
-    assert "BOUND" not in b.chain()
-    expected = residual.budget_from_statistics(
-        st, residual.DEFAULT_DELAY_KEY, tau_intraday=ct.tau_c)
-    assert b.ratio == pytest.approx(expected.ratio)
-
-
 def test_noise_correction_stops_sparse_units_faking_a_short_tau(tmp_path):
     """Unit-mean noise inflates D at every lag; uncorrected it looks fast."""
     path = _stationary_product(tmp_path, tau_true=2400.0, frames_per_unit=2,
@@ -517,18 +356,6 @@ def test_fast_stationary_shelf_is_bounded_not_refused(tmp_path):
     assert ct.tau_c == pytest.approx(residual.STRUCTURE_LAG_EDGES[1])
     # and the bound is worth using: far below the cap it would otherwise get
     assert ct.tau_for_budget < residual.MAX_TAU_C_SECONDS / 100
-
-
-def test_bounded_above_budget_uses_the_bound_and_flags_it(tmp_path):
-    b, _, ct = residual.budget_from_products(_fast_stationary_product(tmp_path),
-                                             n_boot=40)
-    assert ct.quality == "bounded_above"
-    assert not b.tau_measured and "BOUND" in b.chain()
-    # the ground-filter split is still trusted; the shelf is stationary
-    assert sum(f for f, _ in b.components) < 1.0
-    capped = residual.budget_from_statistics(
-        _, residual.DEFAULT_DELAY_KEY, tau_intraday=residual.MAX_TAU_C_SECONDS)
-    assert b.ratio < capped.ratio / 100
 
 
 def test_stationarity_is_checked_before_resolution(tmp_path):
@@ -680,159 +507,9 @@ def test_comparison_rejects_duplicate_names():
                                        residual.Policy("a", 0.5, 0.1)))
 
 
-def test_masked_residual_refuses_without_a_measured_floor():
-    """The bug that turned a failing channel into a passing one.
-
-    ch35 has no null population, so its kept-frame floor is unmeasured. The
-    code used to substitute the minimum *detected* shelf, the weakest
-    positive excess in 31,607 detections, -76 dB against measured floors of
-    -45 to -49 dB elsewhere. That is a sampling artefact that falls without
-    limit as the detection count grows, and it made the masked residual four
-    orders of magnitude too small.
-    """
-    stats = residual.ShelfStatistics(
-        channel=35, freq_id=521, nu_mhz=596.484, n_valid=39775, n_kept=6484,
-        on_shelf_db=-10.69, floor_db=float("nan"), floor_percentile=90.0,
-        dc_fraction=0.775, interday_fraction=0.215,
-        intraday_fraction=0.0099, fast_fraction=0.00018, n_off_frames=0)
-    with pytest.raises(residual.NoMeasuredFloor) as exc:
-        residual.masked_residual(stats, gain=636.4)
-    assert "ch35" in str(exc.value)
-    assert "0 frames" in str(exc.value) or "unmeasured" in str(exc.value)
-
-
-def test_masked_residual_computes_with_a_measured_floor():
-    stats = residual.ShelfStatistics(
-        channel=33, freq_id=552, nu_mhz=584.375, n_valid=34206, n_kept=6659,
-        on_shelf_db=-33.75, floor_db=-44.95, floor_percentile=90.0,
-        dc_fraction=0.405, interday_fraction=0.423,
-        intraday_fraction=0.157, fast_fraction=0.0152, n_off_frames=1388)
-    r = residual.masked_residual(stats, gain=1123.0)
-    assert r == pytest.approx(10 ** (-4.495) * 1123.0, rel=1e-9)
-
-
-def test_an_explicit_substituted_floor_is_allowed_but_must_be_passed():
-    """Substitution is permitted; it just cannot happen silently."""
-    stats = residual.ShelfStatistics(
-        channel=35, freq_id=521, nu_mhz=596.484, n_valid=1, n_kept=1,
-        on_shelf_db=-10.69, floor_db=float("nan"), floor_percentile=90.0,
-        dc_fraction=0.775, interday_fraction=0.215,
-        intraday_fraction=0.0099, fast_fraction=0.00018, n_off_frames=0)
-    r = residual.masked_residual(stats, gain=642.7, floor_db=-45.59)
-    assert r == pytest.approx(10 ** (-4.559) * 642.7, rel=1e-9)
-
-
-def test_threshold_sweep_refuses_without_floor_but_accepts_a_stated_one(tmp_path):
-    """A mu0 < 1 product yields no sweep unless the caller states the bound.
-
-    This is the same refusal discipline as masked_residual(): the sweep must
-    not invent a sensitivity floor, but it must accept one stated explicitly,
-    because the null-scatter bound of floor_provenance() is exactly the
-    defensible substitute on such channels.
-    """
-    rng = np.random.default_rng(21)
-    mu0 = 0.997
-    F = np.concatenate([mu0 + 0.004 * rng.standard_normal(3000),
-                        mu0 + 0.5 * rng.gamma(2.0, 1.0, 3000)])
-    n = F.size
-    with np.errstate(invalid="ignore", divide="ignore"):
-        shelf = 10.0 * np.log10(np.where(F > 1.0, F - 1.0, np.nan)) - 21.636
-    uof = np.repeat(np.arange(n // 6), 6)[:n]
-    t0 = 3000.0 + np.arange(n // 6 + 1) * 900.0
-    np.savez(tmp_path / "sub.npz",
-             valid=np.ones((n, 1), np.uint8),
-             reject_mask=(F > mu0).reshape(n, 1).astype(np.uint8),
-             fstat_raw=F.reshape(n, 1),
-             snr_shelf_db=shelf.reshape(n, 1),
-             mu0=np.array([mu0]),
-             frame_unit_index=uof.astype(np.int32),
-             unit_time0_ctime=t0,
-             physical_channel=np.array([35], np.int32),
-             freq_id=np.array([521], np.int64),
-             chime_frequency_hz=np.array([596.48e6]))
-    path = tmp_path / "sub.npz"
-
-    assert residual.threshold_sweep(path) == []          # no invented floor
-
-    sweep = residual.threshold_sweep(path, floor_db=-45.0)
-    assert len(sweep) > 3
-    rows = sorted(sweep, key=lambda r: r["eta"])
-    # raising the threshold keeps more frames, monotonically
-    fs = [row["f"] for row in rows]
-    assert all(a >= b - 1e-12 for a, b in zip(fs, fs[1:]))
-    # and across the full family the loosest threshold keeps far more
-    # contamination than the tightest. (r need not be locally monotone just
-    # above F = 1, where newly kept frames carry measured levels *below* the
-    # stated floor bound and briefly pull the kept-set mean down.)
-    assert rows[-1]["r_masked"] > 5 * rows[0]["r_masked"]
-
-
 # ----------------------------------------------------------------------
 # One booking, one floor discipline (the ch35/ch32 reconciliation)
 # ----------------------------------------------------------------------
-
-def test_surviving_components_refusal_removes_split_credit(tmp_path):
-    """A refused tau_c invalidates the variance split, not just the timescale."""
-    p = _episodic_product(tmp_path)
-    st = residual.shelf_statistics(p)
-    ct = residual.correlation_time(p, n_boot=40)
-    assert not ct.is_usable
-    cap_n = residual.n_coh_from_correlation_time(residual.MAX_TAU_C_SECONDS)
-    assert residual.surviving_components(st, ct) == ((1.0, cap_n),)
-    # an explicit timescale narrows the cap but cannot restore the credit
-    assert residual.surviving_components(st, ct, tau_intraday=3600.0) \
-        == ((1.0, residual.n_coh_from_correlation_time(3600.0)),)
-
-
-def test_surviving_components_usable_books_the_split(tmp_path):
-    p = _stationary_product(tmp_path, tau_true=2400.0)
-    st = residual.shelf_statistics(p)
-    ct = residual.correlation_time(p, n_boot=60)
-    assert ct.is_usable
-    comps = residual.surviving_components(st, ct)
-    assert len(comps) == 2
-    assert comps[0][0] == pytest.approx(st.intraday_fraction)
-    assert comps[0][1] == pytest.approx(
-        residual.n_coh_from_correlation_time(ct.tau_c))
-    assert comps[1] == (pytest.approx(st.fast_fraction), 1.0)
-
-
-def test_threshold_sweep_refusal_matches_budget_convention(tmp_path):
-    """The sweep books refused channels exactly as budget_from_products does."""
-    src = _episodic_product(tmp_path)
-    d = dict(np.load(src, allow_pickle=False))
-    n = d["valid"].shape[0]
-    d["fstat_raw"] = np.full((n, 1), 5.0)
-    d["mu0"] = np.array([1.0])
-    dst = tmp_path / "episodic_sweep.npz"
-    np.savez(dst, **d)
-
-    row = residual.threshold_sweep(dst, etas=np.array([10.0]),
-                                   floor_db=-60.0)[0]
-    st = residual.shelf_statistics(dst)
-    ct = residual.correlation_time(dst, n_boot=40)
-    assert not ct.is_usable
-
-    shelf = d["snr_shelf_db"][:, 0]
-    lin = np.where(np.isfinite(shelf), 10.0 ** (shelf / 10.0), 10.0 ** -6.0)
-    mean_db = 10.0 * np.log10(lin.mean())
-    expected = residual.ResidualBudget(
-        shelf_floor_db=mean_db,
-        delay_filter_db=residual.DELAY_SUPPRESSION_DB[
-            residual.DEFAULT_DELAY_KEY],
-        components=residual.surviving_components(st, ct)).ratio
-    assert row["r_unmasked"] == pytest.approx(expected, rel=1e-9)
-    assert row["r_masked"] == pytest.approx(expected, rel=1e-9)  # eta=10 keeps all
-    # and the retired split-credit booking took credit the refusal invalidated
-    cap_n = residual.n_coh_from_correlation_time(residual.MAX_TAU_C_SECONDS)
-    old_gain = (st.intraday_fraction
-                * residual.n_coh_from_correlation_time(ct.tau_for_budget)
-                + st.fast_fraction)
-    assert old_gain < cap_n
-    assert expected == pytest.approx(
-        10.0 ** ((mean_db - residual.DELAY_SUPPRESSION_DB[
-            residual.DEFAULT_DELAY_KEY]) / 10.0) * cap_n, rel=1e-9)
-
 
 def _floor_discipline_product(tmp_path, name, center, mu0=1.0, n=2000,
                               sigma=0.02, channel=21):
@@ -929,16 +606,3 @@ def test_kept_frame_floor_auto_applies_the_epoch_maps(tmp_path, monkeypatch):
     monkeypatch.setitem(residual.SIGN_ON_OFF_THROUGH, 21, "2020-05")
     assert residual.kept_frame_floor(p) == explicit
     assert explicit[1] == "measured"
-
-
-def test_threshold_sweep_internal_floor_refuses_thin_nulls(tmp_path):
-    """The internal floor obeys the same >=30-null bar as kept_frame_floor:
-    a handful of null frames must not masquerade as a measured floor."""
-    p = _floor_discipline_product(tmp_path, "thin_sweep.npz", center=0.95,
-                                  mu0=1.05)
-    st = residual.shelf_statistics(p)
-    assert 0 < st.n_off_frames < residual.MIN_MEASURED_NULLS
-    assert residual.threshold_sweep(p) == []
-    # an explicit substitute still sweeps
-    assert residual.threshold_sweep(
-        p, floor_db=-45.0, etas=np.array([10.0]))

@@ -72,8 +72,6 @@ from pathlib import Path
 import numpy as np
 
 from .constants import CHIME_FRAME_SECONDS
-from .forecast.radiofisher_bao.filter_scenarios import (DEFAULT_DELAY_KEY,
-                                                        DELAY_SUPPRESSION_DB)
 from .npzio import load_npz
 from .pilotproxy import residual_product_view
 from .selection_policy import value as _policy_value
@@ -163,30 +161,6 @@ class ShelfStatistics:
     def masked_fraction(self) -> float:
         return 1.0 - self.n_kept / self.n_valid if self.n_valid else 1.0
 
-    @property
-    def slow_fraction(self) -> float:
-        """All variation slower than an acquisition."""
-        return self.interday_fraction + self.intraday_fraction
-
-    @property
-    def surviving_fraction(self) -> float:
-        """Share of shelf power the ground filter cannot remove.
-
-        A residual constant *within* a sidereal day is m = 0 no matter how it
-        drifts from one day to the next, because the common-mode filter is
-        applied per day. So DC and inter-day both go; only variation on
-        timescales shorter than a day lands at m != 0.
-        """
-        return self.intraday_fraction + self.fast_fraction
-
-    @property
-    def ground_filter_db(self) -> float:
-        """Suppression from removing the m = 0 component."""
-        var = self.surviving_fraction
-        if var <= 0.0:
-            return np.inf
-        return float(10.0 * np.log10(1.0 / var))
-
     def summary(self) -> str:
         return (
             f"ch{self.channel:>3d} ({self.nu_mhz:7.2f} MHz, freq_id {self.freq_id})  "
@@ -201,8 +175,8 @@ class ShelfStatistics:
             f"(survives)\n"
             f"                      fast     {100 * self.fast_fraction:7.4f}%  "
             f"(averages as noise)\n"
-            f"    ground filter     {self.ground_filter_db:7.2f} dB "
-            f"({self.n_units} acquisitions over {self.n_days} sidereal days)"
+            f"    split over        {self.n_units} acquisitions, "
+            f"{self.n_days} sidereal days"
         )
 
 
@@ -700,138 +674,6 @@ def correlation_time(npz_path: str | Path, off_through: str | None = None,
 # ----------------------------------------------------------------------
 
 @dataclass
-class ResidualBudget:
-    """The dB chain from a kept-frame shelf bound to a residual/noise ratio.
-
-    Every term is either measured (``shelf_floor_db``, ``ground_filter_db``)
-    or an explicit modelling choice (``delay_filter_db``, ``n_coh``). There
-    are no hidden defaults: ``n_coh = 1.0`` asserts the residual averages
-    exactly like thermal noise, which is the optimistic end of the bracket.
-
-    ``components`` optionally replaces the single ``(ground_filter_db, n_coh)``
-    pair with per-timescale ``(power_fraction, n_coh)`` entries, which is what
-    :func:`budget_from_statistics` builds: the surviving power is not one
-    population but two (intra-day variation that carries a long coherence,
-    and sub-acquisition variation that averages like noise), and lumping them
-    applies the slow term's amplification to the fast term's power.
-    """
-    shelf_floor_db: float
-    ground_filter_db: float = 0.0
-    delay_filter_db: float = DELAY_SUPPRESSION_DB[DEFAULT_DELAY_KEY]
-    n_coh: float = 1.0
-    label: str = ""
-    components: tuple = ()      # ((power_fraction, n_coh), ...)
-    tau_measured: bool = False  # False => tau_c is the cap, i.e. a bound
-
-    def __post_init__(self):
-        for frac, n in self.components:
-            if frac < 0.0:
-                raise ValueError(f"component power fraction is negative: {frac}")
-            if n <= 0.0:
-                raise ValueError(f"component n_coh must be positive: {n}")
-
-    @property
-    def _gain(self) -> float:
-        """Total power gain applied to the shelf bound, linear."""
-        if self.components:
-            return float(sum(frac * n for frac, n in self.components))
-        if self.n_coh <= 0:
-            raise ValueError("n_coh must be positive")
-        return float(10.0 ** (-self.ground_filter_db / 10.0) * self.n_coh)
-
-    @property
-    def suppressed_db(self) -> float:
-        """Residual relative to per-frame system noise, before coherence."""
-        if self.components:
-            surviving = sum(frac for frac, _ in self.components)
-            gf = np.inf if surviving <= 0 else 10.0 * np.log10(1.0 / surviving)
-            return float(self.shelf_floor_db - gf - self.delay_filter_db)
-        return self.shelf_floor_db - self.ground_filter_db - self.delay_filter_db
-
-    @property
-    def ratio(self) -> float:
-        """r = P_res / P_thermal in the integrated estimate."""
-        return float(10.0 ** ((self.shelf_floor_db - self.delay_filter_db) / 10.0)
-                     * self._gain)
-
-    @property
-    def ratio_db(self) -> float:
-        return float(10.0 * np.log10(self.ratio)) if self.ratio > 0 else -np.inf
-
-    def chain(self) -> str:
-        head = (
-            f"{self.label or 'residual'}\n"
-            f"    kept-frame shelf bound   {self.shelf_floor_db:+7.2f} dB\n"
-        )
-        if self.components:
-            body = ""
-            for name, (frac, n) in zip(("intra-day", "fast", "extra"),
-                                       self.components):
-                body += (f"    {name:<12s} {100 * frac:8.4f}%  x n_coh {n:9.4g}"
-                         f"  -> {10 * np.log10(max(frac * n, 1e-300)):+7.2f} dB\n")
-            surviving = sum(f for f, _ in self.components)
-            body += (f"    ground / m=0 filter      "
-                     f"{-10 * np.log10(1.0 / max(surviving, 1e-300)):+7.2f} dB "
-                     f"(from the split above)\n")
-        else:
-            body = (f"    ground / m=0 filter      "
-                    f"{-self.ground_filter_db:+7.2f} dB\n"
-                    f"    coherence (n_coh={self.n_coh:g})"
-                    f"{10 * np.log10(self.n_coh):+9.2f} dB\n")
-        return (
-            head + body
-            + f"    delay filter             {-self.delay_filter_db:+7.2f} dB\n"
-            f"    ---------------------------------\n"
-            f"    => r = P_res/P_N         {self.ratio_db:+7.2f} dB "
-            f"({self.ratio:.4g})"
-            + ("" if self.tau_measured else
-               "   [BOUND: tau_c not measured, capped at one sidereal day]")
-        )
-
-
-class NoMeasuredFloor(ValueError):
-    """Raised when a masked-policy residual is asked for without a floor.
-
-    A masked frame is one the detector did not fire on, so its shelf was never
-    measured. What bounds it is the *sensitivity floor*: the shelf level the
-    estimator reports on frames where the transmitter is known quiet. That
-    requires a null population (valid frames with no detection that still
-    carry a finite shelf estimate), and some channels have none at all.
-
-    The tempting substitute is the smallest shelf among the frames that *were*
-    detected. It is not a floor. It is the weakest positive excess that
-    happened to occur in the sample, it falls without limit as the detection
-    count grows, and on ch35 it came out at -76 dB against measured floors of
-    -45 to -49 dB elsewhere: thirty decibels of pure sampling artifact,
-    which propagated into a masked residual four orders of magnitude too
-    small and turned a failing verdict into a passing one. Refusing is the
-    only safe behaviour: a channel with no null population has an unmeasured
-    masked residual, and that is a statement the analysis has to carry rather
-    than paper over.
-    """
-
-
-def masked_residual(stats: ShelfStatistics, gain: float,
-                    delay_key: str = DEFAULT_DELAY_KEY,
-                    floor_db: float | None = None) -> float:
-    """Residual left by a policy that masks every detected frame.
-
-    ``floor_db`` overrides the measured floor for an explicit what-if; pass it
-    only with the substitution stated in the caller, never to fill a gap
-    silently.
-    """
-    fl = stats.floor_db if floor_db is None else floor_db
-    if not np.isfinite(fl):
-        raise NoMeasuredFloor(
-            f"ch{stats.channel} has no null population "
-            f"({stats.n_off_frames} frames with a finite shelf among the "
-            f"non-detections), so its kept-frame floor is unmeasured and the "
-            f"masked residual cannot be computed. Supply floor_db explicitly "
-            f"if substituting a value from elsewhere, and say so.")
-    return float(10.0 ** ((fl - DELAY_SUPPRESSION_DB[delay_key]) / 10.0) * gain)
-
-
-@dataclass
 class FloorProvenance:
     """Where a channel's sensitivity floor actually comes from.
 
@@ -1055,48 +897,6 @@ def kept_frame_floor(npz_path: str | Path, off_through: str | None = None,
         npz_path, floor_percentile=floor_percentile).sigma_implied_db), "stated"
 
 
-def budget_from_statistics(stats: ShelfStatistics, delay_key: str = DEFAULT_DELAY_KEY,
-                           tau_intraday: float = MAX_TAU_C_SECONDS,
-                           tau_fast: float = CHIME_FRAME_SECONDS,
-                           frame_seconds: float = CHIME_FRAME_SECONDS,
-                           tau_measured: bool = False,
-                           corr: "CorrelationTime | None" = None) -> ResidualBudget:
-    """Assemble a :class:`ResidualBudget` from measured shelf statistics.
-
-    The two surviving populations get their own coherence. ``tau_intraday``
-    defaults to the sidereal-day cap: the pessimistic end, and the only value
-    that needs no assumption at all, since anything longer has already been
-    removed as m = 0. Narrow it if the acquisition cadence resolves the
-    intra-day structure.
-
-    Without ``corr`` this is the low-level explicit-split constructor: the
-    caller asserts the variance split is real. Pass the channel's
-    :class:`CorrelationTime` to route the components through
-    :func:`surviving_components` instead, so a refusal drops the split
-    credit the same way every other consumer does.
-    """
-    if delay_key not in DELAY_SUPPRESSION_DB:
-        raise ValueError(f"unknown delay_key {delay_key!r}; "
-                         f"choose from {sorted(DELAY_SUPPRESSION_DB)}")
-    if corr is not None:
-        comps = surviving_components(stats, corr, tau_intraday=tau_intraday)
-    else:
-        comps = (
-            (float(stats.intraday_fraction),
-             n_coh_from_correlation_time(tau_intraday, frame_seconds)),
-            (float(stats.fast_fraction),
-             n_coh_from_correlation_time(tau_fast, frame_seconds)),
-        )
-    return ResidualBudget(
-        shelf_floor_db=stats.floor_db,
-        delay_filter_db=DELAY_SUPPRESSION_DB[delay_key],
-        components=comps,
-        tau_measured=tau_measured,
-        label=(f"ch{stats.channel} ({delay_key}, "
-               f"tau_intraday={tau_intraday:g} s"
-               f"{'' if tau_measured else ', CAP'})"))
-
-
 def n_coh_from_correlation_time(tau_c_seconds: float,
                                 frame_seconds: float = CHIME_FRAME_SECONDS) -> float:
     """Rectangular coherent-block variance factor used by the screen.
@@ -1109,71 +909,6 @@ def n_coh_from_correlation_time(tau_c_seconds: float,
         raise ValueError("frame_seconds must be positive")
     tau = min(float(tau_c_seconds), MAX_TAU_C_SECONDS)
     return max(1.0, tau / float(frame_seconds))
-
-
-def surviving_components(stats: ShelfStatistics, corr: CorrelationTime,
-                         tau_intraday: float | None = None) -> tuple:
-    """The ``(power_fraction, n_coh)`` components the budget's own discipline
-    assigns to the surviving shelf power.
-
-    A usable correlation time books the measured variance split: intra-day
-    power at ``n_coh(tau)``, sub-acquisition power at 1. A refusal makes the
-    split itself unmeasurable --- the non-stationarity that defeats the
-    timescale estimator defeats the variance decomposition too, since both
-    are moments of the same process --- so the fallback takes no
-    ground-filter credit: all shelf power surviving, at the sidereal-day cap.
-    ``tau_intraday`` overrides the timescale only; it cannot restore credit
-    a refusal removed. Passing a sub-cap ``tau_intraday`` on a refused
-    channel is therefore a *what-if* -- all power at the assumed timescale
-    -- and any result built from one must be labelled as such. This is the
-    single home of that rule; every consumer (:func:`budget_from_products`,
-    :func:`threshold_sweep`, the scripts) books the same way.
-    """
-    if corr.is_usable:
-        tau = corr.tau_for_budget if tau_intraday is None else tau_intraday
-        return ((float(stats.intraday_fraction),
-                 n_coh_from_correlation_time(tau)),
-                (float(stats.fast_fraction), 1.0))
-    tau = MAX_TAU_C_SECONDS if tau_intraday is None else tau_intraday
-    return ((1.0, n_coh_from_correlation_time(tau)),)
-
-
-def budget_from_products(npz_path: str | Path, off_through: str | None = None,
-                         delay_key: str = DEFAULT_DELAY_KEY,
-                         floor_percentile: float = DEFAULT_FLOOR_PERCENTILE,
-                         trim_percentile: float = DEFAULT_TRIM_PERCENTILE,
-                         off_from: str | None = None,
-                         **ct_kwargs):
-    """One call: shelf statistics, correlation time, and the assembled budget.
-
-    Returns ``(budget, stats, corr)``. The correlation time is measured where
-    the data supports one and falls back to the sidereal-day cap where it does
-    not, so a refused channel yields a *bound* rather than a wrong number --
-    ``budget.tau_measured`` says which you got.
-    """
-    stats = shelf_statistics(npz_path, off_through=off_through,
-                             floor_percentile=floor_percentile,
-                             trim_percentile=trim_percentile,
-                             off_from=off_from)
-    corr = correlation_time(npz_path, off_through=off_through,
-                            trim_percentile=trim_percentile,
-                            off_from=off_from, **ct_kwargs)
-    if corr.is_usable:
-        budget = budget_from_statistics(stats, delay_key,
-                                        tau_intraday=corr.tau_c,
-                                        tau_measured=corr.is_measured)
-    else:
-        # The refusal convention lives in surviving_components: no
-        # ground-filter credit, all shelf power surviving at the sidereal-day
-        # cap. That is an actual bound rather than a cap applied to a split
-        # that is an artefact of the trim.
-        budget = ResidualBudget(
-            shelf_floor_db=stats.floor_db,
-            delay_filter_db=DELAY_SUPPRESSION_DB[delay_key],
-            components=surviving_components(stats, corr),
-            tau_measured=False,
-            label=f"ch{stats.channel} ({delay_key}, BOUND: no stationary split)")
-    return budget, stats, corr
 
 
 # ----------------------------------------------------------------------
@@ -1479,96 +1214,3 @@ def mask_benefit(channel, f, r_unmasked, r_masked) -> MaskDecision:
         raise ValueError("residual ratios must be non-negative")
     return MaskDecision(int(channel), float(f), float(r_unmasked), float(r_masked))
 
-
-def threshold_sweep(npz_path, off_through=None, etas=None,
-                    delay_key=DEFAULT_DELAY_KEY,
-                    floor_percentile=DEFAULT_FLOOR_PERCENTILE,
-                    tau_intraday=None, floor_db=None,
-                    min_kept: int = MIN_THRESHOLD_SWEEP_KEPT_FRAMES,
-                    off_from=None):
-    """(eta, f, kept-shelf dB, r, net) as the coarse threshold moves.
-
-    This is what the framework exists to compute: the detector's operating
-    point mapped onto a science decision. Frames with no pilot detection have
-    no shelf measurement, so they are bounded at the transmitter-off
-    sensitivity floor, an upper bound that makes the result conservative.
-    The off epoch is ``off_through`` for a sign-on channel or ``off_from``
-    for a sign-off channel (at most one).
-
-    ``floor_db`` supplies that bound explicitly when the product cannot. A v5
-    product reports a finite shelf only for rejected positive-excess frames,
-    so its kept frames cannot supply a floor unless an off epoch provides a
-    measured false-positive population. On a legacy
-    channel whose mu0 < 1 the interval 1 < F <= mu0 is empty and no kept frame
-    carries a level (see :func:`floor_provenance`), so there is nothing to
-    take a percentile of. The caller states the substitute (the natural one
-    is ``floor_provenance(...).sigma_implied_db``, the level a threshold at
-    the null center can actually resolve), and the substitution is theirs to
-    defend. Without it, such a product returns an empty sweep rather than a
-    fabricated one.
-    """
-    d = load_npz(npz_path)
-    view = residual_product_view(d)
-    valid = view.valid
-    shelf = view.shelf_db
-    t0 = view.unit_time0_ctime
-    month = _month_of(t0)[view.frame_unit_index]
-
-    if off_through is not None or off_from is not None:
-        on_t, off_t = _epoch_time_masks(month, off_through, off_from)
-        on = valid & on_t
-        off = valid & off_t
-    else:
-        on, off = valid, valid & ~view.rejected
-    fin_off = off & np.isfinite(shelf)
-    if on.sum() < MIN_REFERENCE_SWEEP_FRAMES:
-        return []
-    if floor_db is None:
-        # The internal floor obeys the same bar as kept_frame_floor: a null
-        # population thinner than MIN_MEASURED_NULLS samples the tail rather
-        # than characterises it, and a sweep on such a floor would look
-        # measured while standing on a handful of frames. Callers wanting a
-        # substitute state it explicitly.
-        if fin_off.sum() < MIN_MEASURED_NULLS:
-            return []
-        floor_db = float(np.percentile(shelf[fin_off], floor_percentile))
-    lin = np.where(np.isfinite(shelf), 10.0 ** (shelf / 10.0),
-                   10.0 ** (floor_db / 10.0))
-
-    stats = shelf_statistics(npz_path, off_through=off_through,
-                             floor_percentile=floor_percentile,
-                             off_from=off_from)
-    corr = correlation_time(npz_path, off_through=off_through,
-                            off_from=off_from)
-    # One booking for the whole package: a refused correlation time takes no
-    # ground-filter credit (see surviving_components). tau_intraday narrows
-    # the timescale where the cadence resolves it; it cannot restore credit.
-    comps = surviving_components(stats, corr, tau_intraday)
-
-    def r_of(mean_lin):
-        db = 10.0 * np.log10(max(mean_lin, 1e-30))
-        return ResidualBudget(shelf_floor_db=db,
-                              delay_filter_db=DELAY_SUPPRESSION_DB[delay_key],
-                              components=comps).ratio
-
-    r_un = r_of(float(lin[on].mean()))
-    if etas is None:
-        point, start, stop, count = _policy_value(
-            "archive_reference.raw_eta_grid")
-        etas = np.concatenate([
-            [float(point)],
-            np.geomspace(float(start), float(stop), int(count)),
-        ])
-    out = []
-    for eta in etas:
-        keep = on & ~view.rejected_at_multiplier(eta)
-        if keep.sum() < min_kept:
-            continue
-        f = 1.0 - keep.sum() / on.sum()
-        kept_lin = float(lin[keep].mean())
-        dec = mask_benefit(view.physical_channel, f, r_un, r_of(kept_lin))
-        out.append(dict(eta=float(eta), f=f,
-                        kept_shelf_db=10.0 * np.log10(max(kept_lin, 1e-30)),
-                        r_unmasked=r_un, r_masked=dec.r_masked,
-                        net=dec.net, should_mask=dec.should_mask))
-    return out
