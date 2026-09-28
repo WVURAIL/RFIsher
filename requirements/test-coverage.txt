@@ -1,4 +1,4 @@
-# Keep test-only tooling outside pyproject.toml: that file is bank provenance.
+# Test-only tooling for the coverage job.
 pytest-cov>=6,<8
 h5py>=3.11,<4
 

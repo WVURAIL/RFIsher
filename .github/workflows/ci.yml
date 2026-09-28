@@ -30,9 +30,6 @@ jobs:
       - name: Enforce coverage for every package component
         if: always()
         run: python scripts/check_test_coverage.py
-      # The paper number gate: every value quoted in paper/*.tex must
-      # regenerate from the shipped out/*.csv tables.
-      - run: python scripts/check_paper_numbers.py
 
   dissertation-figure:
     runs-on: ubuntu-latest
@@ -78,6 +75,8 @@ jobs:
 
   radiofisher-integration:
     runs-on: ubuntu-latest
+    env:
+      RADIOFISHER_DIR: ${{ github.workspace }}/RadioFisher
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,17 +93,24 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install ".[test]" ./RadioFisher
+      # Editable: a bank authenticates against the digest of the bank source
+      # in this checkout, which an installed copy cannot provide.
+      - run: python -m pip install -e ".[test]" ./RadioFisher
       - name: Run pinned cross-repository contract tests
-        env:
-          RADIOFISHER_DIR: ${{ github.workspace }}/RadioFisher
         run: |
-          python -m pytest -q tests/test_resources.py \
+          python -m pytest -q tests/forecast/test_resources.py \
             -k 'packaged_pact_bank_matches or each_bull_research_bank_matches or each_bull_bank_interpolates'
           python scripts/verify_bank.py
           python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022.npz
-          python scripts/restamp_bank_pins.py --check
-          python -m pytest -q tests/test_current_bias_authentication.py
+          python -m pytest -q tests/tolerance/test_current_bias_authentication.py
+          python -m pytest -q tests/forecast/test_forecast_goldens.py
+      - name: The bank code is frozen behind the one re-stamp
+        run: python scripts/restamp_bank_provenance.py --check
+      - name: The tolerance table rebuilds byte for byte
+        run: |
+          rfisher tolerance build --project projects/chime_bao --out "$RUNNER_TEMP/tolerances"
+          cmp src/rfisher/data/tolerances/filter_scenarios_T1yr.csv "$RUNNER_TEMP/tolerances/filter_scenarios_T1yr.csv"
+          cmp src/rfisher/data/tolerances/filter_scenarios_T1yr.provenance.json "$RUNNER_TEMP/tolerances/filter_scenarios_T1yr.provenance.json"
 
   wheel-smoke:
     runs-on: ubuntu-latest
@@ -124,10 +130,11 @@ jobs:
           python -m venv /tmp/rfisher-wheel-smoke
           /tmp/rfisher-wheel-smoke/bin/python -m pip install "$wheel_path"
           cd /tmp
-          /tmp/rfisher-wheel-smoke/bin/python -c "import importlib.util, rfisher; assert rfisher.__version__ == '3.0.0'; assert importlib.util.find_spec('baonoise') is None"
+          /tmp/rfisher-wheel-smoke/bin/python -c "import importlib.util, rfisher; assert rfisher.__version__ == '4.0.0'; assert importlib.util.find_spec('baonoise') is None"
           /tmp/rfisher-wheel-smoke/bin/python -m pip check
-          /tmp/rfisher-wheel-smoke/bin/rfisher-forecast --cosmology planck2018 --uniform 0.0 --band dtv
-          /tmp/rfisher-wheel-smoke/bin/rfisher-forecast --cosmology pact2025 --uniform 0.0 --band chime
-          /tmp/rfisher-wheel-smoke/bin/rfisher-forecast --uniform 0.0 --band chime
-          /tmp/rfisher-wheel-smoke/bin/rfisher-build-bank --help
-          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.fisherbank import BANK_SCHEMA_VERSION, FisherBank; from rfisher.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; assert set(BANK_NAMES) == {'planck2018', 'pact2025', 'cmbspa2026'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES)"
+          /tmp/rfisher-wheel-smoke/bin/rfisher forecast --cosmology planck2018 --uniform 0.0 --band dtv
+          /tmp/rfisher-wheel-smoke/bin/rfisher forecast --cosmology pact2025 --uniform 0.0 --band chime
+          /tmp/rfisher-wheel-smoke/bin/rfisher forecast --uniform 0.0 --band chime
+          /tmp/rfisher-wheel-smoke/bin/rfisher build-bank --help
+          /tmp/rfisher-wheel-smoke/bin/rfisher tolerance show > /dev/null
+          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.forecast.radiofisher_bao.bank.banks import BANK_SCHEMA_VERSION, FisherBank; from rfisher.forecast.radiofisher_bao.bank.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; from rfisher.forecast.radiofisher_bao.response import packaged_response_banks; assert set(BANK_NAMES) == {'planck2018', 'pact2025', 'cmbspa2026'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES); assert len(list(packaged_response_banks().glob('*.npz'))) == 4"

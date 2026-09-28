@@ -167,14 +167,12 @@ git clone https://github.com/WVURAIL/RFIsher
 cd RFIsher
 python -m pip install -e ".[test]"
 python -m pytest tests/ -q
-python scripts/check_paper_numbers.py
 ```
 
 Generated results, including the two forecast-completion release roots, live
 outside the repository. Point `RFISHER_OUT` at that results tree so the
-number gates and the release regression tests read the shipped copies;
-without it the tests skip and the gate reports the tables missing. See
-[releases](docs/releases.md).
+release regression tests read the shipped copies; without it those tests
+skip. See [releases](docs/releases.md).
 
 The command-line entry points are:
 
@@ -183,9 +181,10 @@ New forecasts default to the August 2026 combined cosmology. Bull's Planck
 see [cosmologies](docs/cosmologies.md) for the three primary roles.
 
 ```bash
-rfisher-forecast --uniform 0.25
-rfisher-forecast --cosmology cmbspa2026 --uniform 0.25
-rfisher-build-bank --help
+rfisher forecast --uniform 0.25
+rfisher forecast --cosmology cmbspa2026 --uniform 0.25
+rfisher build-bank --help
+rfisher tolerance show
 rfisher-check-archive --help
 ```
 

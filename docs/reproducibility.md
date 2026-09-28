@@ -18,9 +18,10 @@ RadioFisher checkout:
 
 ```bash
 python examples/minimal_example.py
-rfisher-forecast --uniform 0.25
-rfisher-forecast --cosmology pact2025 --uniform 0.25
-rfisher-forecast --cosmology planck2018 --uniform 0.25
+rfisher forecast --uniform 0.25
+rfisher forecast --cosmology pact2025 --uniform 0.25
+rfisher forecast --cosmology planck2018 --uniform 0.25
+rfisher tolerance show
 ```
 
 Matter-power caches are also packaged. Install the optional CAMB dependency
@@ -55,13 +56,16 @@ another.
 ```bash
 python -m pytest tests/ -q
 python scripts/verify_bank.py
-python scripts/check_paper_numbers.py
-python scripts/restamp_bank_pins.py --check
+python scripts/restamp_bank_provenance.py --check
+rfisher tolerance build --project projects/chime_bao --out /tmp/tolerances
+cmp src/rfisher/data/tolerances/filter_scenarios_T1yr.csv /tmp/tolerances/filter_scenarios_T1yr.csv
 ```
 
 `scripts/verify_bank.py` covers interpolation, physics checks, and agreement
-between bank evaluation and direct RadioFisher calls. The paper-number gate
-regenerates every quoted value from the tracked output tables.
+between bank evaluation and direct RadioFisher calls. The provenance check
+confirms that every bank records the current digest of the bank subpackage
+and matches its pin. The last two lines rebuild the tolerance table from the
+four packaged response banks; it must match the committed bytes.
 
 Byte-for-byte reproduction of the frozen forecast-completion figures uses the
 renderer recorded in the PNG metadata:
@@ -177,7 +181,7 @@ alongside the numerical result.
 The supported entry point displays the strict bank-builder surface:
 
 ```bash
-rfisher-build-bank --help
+rfisher build-bank --help
 ```
 
 The canonical five-bank recipe is:
@@ -195,14 +199,19 @@ It produces:
 - the Bull-2015 Planck-2013 `epsilon_fg = 1e-6` comparison bank; and
 - the matched Bull-2015 `epsilon_fg = 1e-5` comparison bank.
 
-The schema-v2 banks preserve their recorded compatibility source paths. The
-recipe updates the corresponding test hashes, regenerates
-`out/foreground_sensitivity.csv`, and runs the paper-number gate.
+The recipe verifies the rebuilt banks and updates the corresponding test
+hashes with `scripts/restamp_bank_provenance.py --repin`.
 
 Run a bank build only from clean, committed RFIsher and RadioFisher trees. Do
-not edit package source or packaging metadata during a build. A source-tree
-change must result in a new recorded identity rather than a restamped old
-calculation.
+not edit the bank subpackage during a build. A bank records the digest of
+`src/rfisher/forecast/radiofisher_bao/bank/`, and nothing outside it enters
+that digest.
+
+The nine banks were re-stamped once, when the bank code moved into that
+subpackage: `scripts/restamp_bank_provenance.py` rewrote only their
+`meta.npy` members, recording the new source digest and, in a `restamp`
+block, the commit and digest that built them. Their arrays are the ones that
+build computed.
 
 The Bull banks retain their released 27-point logarithmic grid over
 1--1,000,000 hours plus the exact `10**3.5`-hour point needed by the 3,300-hour
@@ -212,69 +221,59 @@ interpolation check.
 
 ```bash
 python scripts/run_forecast.py
-python scripts/fg_sensitivity.py
 ```
 
 The main driver regenerates the reference figures, CSV tables, and
 `out/results.md`. Interpretation and input limitations are documented in
 [chime-bao-application.md](chime-bao-application.md).
 
-## Dissertation number gate
+## Response banks and the tolerance table
 
-Run the gate against a LaTeX checkout and the matching pilot-proxy summary:
-
-```bash
-python scripts/check_dissertation_numbers.py \
-  --tex /path/to/dissertation \
-  --summary-json /path/to/pilot-proxy/data/provenance/dissertation_summary_v3.json
-```
-
-A text extraction can provide an advisory check, but the LaTeX source is
-authoritative because extracted table cells can be reordered. Gate failures
-name the expected source table and rounding convention. `--baseline <file>`
-can be used as a temporary ratchet while an existing failure list is reduced.
-
-## Optional bias-response banks
-
-The large `_Pres` banks are local research prerequisites and are not installed
-or committed. Build the four matched banks before running the associated
-workflows:
+The four filter-scenario response banks (`_Pres` banks) are packaged in
+`src/rfisher/data/response_banks/`. They were built with:
 
 ```bash
-python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
+rfisher build-bank --config chime2022 --cosmology planck2018 \
   --epsilon-fg 0 --p-res 1.0 --dense-knee \
-  --out data/fisher_bank_chime2022_pres_dense.npz
-python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
+  --out fisher_bank_chime2022_pres_dense.npz
+rfisher build-bank --config chime2022 --cosmology planck2018 \
   --epsilon-fg 0 --p-res 1.0 --kfg-fac 22 --dense-knee \
-  --out data/fisher_bank_chime2022_pres_kfg22_dense.npz
-python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
+  --out fisher_bank_chime2022_pres_kfg22_dense.npz
+rfisher build-bank --config chime2022 --cosmology planck2018 \
   --epsilon-fg 0 --p-res 1.0 --kfg-fac 44 --dense-knee \
-  --out data/fisher_bank_chime2022_pres_kfg44_dense.npz
-python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
+  --out fisher_bank_chime2022_pres_kfg44_dense.npz
+rfisher build-bank --config chime2022 --cosmology planck2018 \
   --epsilon-fg 0 --p-res 1.0 --kfg-fac 80 --dense-knee \
-  --out data/fisher_bank_chime2022_pres_kfg80_dense.npz
-
-python scripts/bias_tolerance.py --zeta 1.0
-python scripts/plot_convergence.py --out out/
-python scripts/three_worlds.py
+  --out fisher_bank_chime2022_pres_kfg80_dense.npz
 ```
 
-These workflows require strict-v2 `bias_response` artifacts with the CHIME
-Overview profile, Planck-2018, and unit normalization `P_res = 1.0`.
+These are strict-v2 `bias_response` artifacts with the CHIME Overview
+profile, Planck-2018, and unit normalization `P_res = 1.0`. The per-bin
+tolerance table `src/rfisher/data/tolerances/filter_scenarios_T1yr.csv` is
+computed from them by
 
-The four response banks are separate from the five shipped forecast banks.
-Keep the previous response-bank bytes and build replacements in a staging
-directory. Authenticate all four with `scripts/bias_tolerance.py`'s
-`load_bias_bank` before replacing the active prerequisites. A changed source
-digest requires a new calculation, not new metadata on old matrices. Preserve
-the exact integration-time grid and experiment settings in the release record.
+```bash
+rfisher tolerance build --project projects/chime_bao --out DIR
+rfisher tolerance bands --project projects/chime_bao --bands BANDS.csv --out DIR
+rfisher tolerance bias --zeta 1.0
+```
+
+`build` refuses to change the bytes of an existing table unless it is given
+`--accept-new`. `bands` reduces the table to one tolerance per band and
+scenario for the bands listed in `BANDS.csv` (columns `band_id`, `low_mhz`,
+`high_mhz`). `bias` prints the full response report of one bank. Build
+replacement banks in a staging directory, and authenticate them with
+`rfisher.forecast.radiofisher_bao.response.load_response_bank` before they
+replace the packaged ones. A changed source digest requires a new
+calculation, not new metadata on old matrices.
 
 ### Corrected retrospective archive analysis
 
 Use a Python environment containing `h5py` and the local `pilot-proxy` source;
-the official driver refuses missing health-audit support. After authenticating
-the response banks, regenerate `data/world_tolerances.csv` and its provenance
-sidecar with `rfisher_results.archive.worlds.tolerances(rebuild=True)`.
+the official driver refuses missing health-audit support. The archive reads
+the packaged tolerance table; `rfisher_results.archive.worlds.tolerances(
+rebuild=True)` rebuilds it into a new cache path and never replaces a table
+whose bytes would change.
 Every required bin/parameter must be accepted at the declared one-on-sky-year
 target; a refusal cannot borrow a different integration time.
 
