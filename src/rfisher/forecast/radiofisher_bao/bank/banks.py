@@ -79,6 +79,9 @@ RADIOFISHER_SOURCE_MANIFEST = {
     "exclude": (),
 }
 
+# The provenance of a schema-v2 bank. The RFIsher section keeps its frozen
+# key ``baonoise``, the package's former name, so that every bank written
+# before and after the rename loads through one reader.
 _V2_PROVENANCE_KEYS = frozenset(
     {"baonoise", "radiofisher", "cosmology", "pk_cache", "experiment"})
 _V2_PROVENANCE_FIELDS = {
