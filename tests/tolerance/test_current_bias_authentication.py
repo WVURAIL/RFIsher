@@ -1,22 +1,15 @@
 """Named fiducials and their citations remain authenticated in bias workflows."""
 from copy import deepcopy
 import hashlib
-import importlib.util
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from rfisher.forecast.radiofisher_bao import response as bt
 from rfisher.forecast.radiofisher_bao.bank import resources
 from rfisher.forecast.radiofisher_bao.bank.backend import find_radiofisher_dir
 from rfisher.forecast.radiofisher_bao.bank.banks import (
     ARTIFACT_BIAS_RESPONSE, FisherBank)
-
-ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location(
-    "rfisher_test_current_bias_authentication", ROOT / "scripts/bias_tolerance.py")
-bt = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(bt)
 
 
 def _backend():
@@ -30,7 +23,7 @@ def _backend():
 def test_named_cosmology_identity_reconstructs_its_reference(cosmology):
     rf_dir = _backend()
     bank = FisherBank(resources.bank_file(cosmology))
-    identity, _ = bt._evaluation_identity(bank, rf_dir=rf_dir)
+    identity, _ = bt.evaluation_identity(bank, rf_dir=rf_dir)
     assert identity["cosmology"] == bank.meta["provenance"]["cosmology"]
 
 
@@ -40,7 +33,7 @@ def test_forged_reference_is_rejected(cosmology):
     bank = FisherBank(resources.bank_file(cosmology))
     bank.meta["provenance"]["cosmology"]["reference"] = {"arxiv": "forged"}
     with pytest.raises(ValueError, match="cosmology build/evaluation identity differs"):
-        bt._evaluation_identity(bank, rf_dir=rf_dir)
+        bt.evaluation_identity(bank, rf_dir=rf_dir)
 
 
 def test_current_cosmology_cannot_drop_its_published_reference():
@@ -48,7 +41,7 @@ def test_current_cosmology_cannot_drop_its_published_reference():
     bank = FisherBank(resources.bank_file("cmbspa2026"))
     del bank.meta["provenance"]["cosmology"]["reference"]
     with pytest.raises(ValueError, match="cosmology build/evaluation identity differs"):
-        bt._evaluation_identity(bank, rf_dir=rf_dir)
+        bt.evaluation_identity(bank, rf_dir=rf_dir)
 
 
 @pytest.mark.parametrize("cosmology", ["planck2018", "pact2025"])
@@ -56,7 +49,7 @@ def test_legacy_optional_reference_can_be_absent(cosmology):
     rf_dir = _backend()
     bank = FisherBank(resources.bank_file(cosmology))
     del bank.meta["provenance"]["cosmology"]["reference"]
-    identity, _ = bt._evaluation_identity(bank, rf_dir=rf_dir)
+    identity, _ = bt.evaluation_identity(bank, rf_dir=rf_dir)
     assert "reference" not in identity["cosmology"]
 
 
@@ -72,12 +65,12 @@ def test_bias_loader_accepts_only_registered_chime_cosmologies(
     path = tmp_path / "response.npz"
     path.touch()
     monkeypatch.setattr(bt, "FisherBank", lambda _: bank)
-    monkeypatch.setattr(bt, "_evaluation_identity", lambda *a, **kw: ({}, {}))
+    monkeypatch.setattr(bt, "evaluation_identity", lambda *a, **kw: ({}, {}))
     if cosmology == "unknown":
         with pytest.raises(ValueError, match="supported named cosmology"):
-            bt.load_bias_bank(path)
+            bt.load_response_bank(path)
     else:
-        assert bt.load_bias_bank(path) is bank
+        assert bt.load_response_bank(path) is bank
 
 
 @pytest.mark.parametrize("recorded_newline", [b"\n", b"\r\n"])

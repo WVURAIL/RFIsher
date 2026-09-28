@@ -209,8 +209,10 @@ def authenticate_at_baseline(baseline: Path, python: str, rf_dir: Path,
                              paths: list[Path]) -> dict:
     env = {key: value for key, value in os.environ.items()
            if key != "PYTHONPATH"}
+    # The baseline is only read: no bytecode, and no index refresh by git.
     env.update(PYTHONPATH=str(baseline / "src"), PYTHONDONTWRITEBYTECODE="1",
-               RADIOFISHER_DIR=str(rf_dir), MPLBACKEND="Agg")
+               GIT_OPTIONAL_LOCKS="0", RADIOFISHER_DIR=str(rf_dir),
+               MPLBACKEND="Agg")
     completed = subprocess.run(
         [python, "-c", BASELINE_PROGRAM, str(baseline), str(rf_dir),
          *[str(path) for path in paths]],

@@ -8,35 +8,38 @@ through the actual mask-dependent visibility operator. Floor assignment is
 a screening allowance, not a physical lower bound or a confidence interval.
 
 All parameters are evaluated at TARGET_YEARS. Refused target-time cells stay
-unpriced; another year cannot supply the answer. Cached tables require their
-content identity, current policy/source identity, and authenticated banks.
+unpriced; another year cannot supply the answer. The per-bin table is built
+by ``rfisher.tolerance`` from the RadioFisher BAO science model and read back
+only against its recorded content digest.
 """
 from __future__ import annotations
 
 import csv
-import importlib.util
-import hashlib
-import json
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-from rfisher import residual, selection_policy
-from rfisher.forecast.radiofisher_bao.bank import experiments as survey
+from rfisher import selection_policy
+from rfisher.forecast.radiofisher_bao import filter_scenarios
+from rfisher.forecast.radiofisher_bao.model import (RadioFisherBAO,
+                                                    packaged_table)
+from rfisher.forecast.radiofisher_bao.response import packaged_response_banks
+from rfisher.tolerance import rule
+from rfisher.tolerance import table as tolerance_table
+from rfisher.tolerance.bands import tolerance_of
 
 ROOT = Path(__file__).resolve().parents[3]
-BANK_DIR = ROOT / "data"
-CACHE = BANK_DIR / "world_tolerances.csv"
-WORLDS = (("none", "fisher_bank_chime2022_pres_dense.npz", None, "none"),
-          ("peak1", "fisher_bank_chime2022_pres_kfg22_dense.npz", 22.0, "bao_peak1"),
-          ("peak2", "fisher_bank_chime2022_pres_kfg44_dense.npz", 44.0, "bao_peak2"),
-          ("deployed", "fisher_bank_chime2022_pres_kfg80_dense.npz", 80.0, "aggressive_200ns"))
+PROFILE = ROOT / "projects" / "chime_bao"
+BANK_DIR = packaged_response_banks()
+CACHE = packaged_table()
+WORLDS = tuple((item.name, item.bank, item.kfg_fac, item.suppression_key)
+               for item in filter_scenarios.SCENARIOS)
 WORLD_LABEL = {"none": "no filter", "peak1": r"$55$~ns", "peak2": r"$110$~ns", "deployed": r"$200$~ns"}
 PARAMETERS = tuple(selection_policy.value("archive_reference.three_worlds_parameters"))
-CACHE_COLUMNS = ("world", "bin_index", "z_lo", "z_hi", "parameter", "tolerance", "at_target",
-                 "years_used", "years_accepted", "years_refused")
+CACHE_COLUMNS = tolerance_table.COLUMNS
 TARGET_YEARS = 1.0     # T*, the declared target integration; chapter 9 quotes r_tol there
+suppression_db = filter_scenarios.suppression_db
 
 
 def _cell(value):
@@ -44,134 +47,27 @@ def _cell(value):
     return repr(float(value)) if isinstance(value, float) else value
 
 
-def suppression_db(world: str) -> float:
-    """Hypothetical suppression assigned to this scenario, not measured transfer."""
-    key = dict((w, k) for w, _, _, k in WORLDS)[world]
-    return 0.0 if key == "none" else float(residual.DELAY_SUPPRESSION_DB[key])
-
-
-def _bias_tolerance():
-    spec = importlib.util.spec_from_file_location("bias_tolerance", ROOT / "scripts" / "bias_tolerance.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def _model(bank_dir: Path | str) -> RadioFisherBAO:
+    return RadioFisherBAO(PROFILE, response_banks_dir=bank_dir)
 
 
 def compute_tolerances(bank_dir: Path | str = BANK_DIR) -> list[dict]:
     """Every world's stable tolerance per bin and parameter, read from the four banks."""
-    bt = _bias_tolerance()
-    frac = float(selection_policy.value("science.response_stability.time_fraction"))
-    limit = float(selection_policy.value("science.response_stability.maximum_tolerance_ratio"))
-    years = tuple(float(v) for v in selection_policy.value("archive_reference.forecast_year_grid"))
-    rows = []
-    if TARGET_YEARS not in years:                 # the declared target must be on the grid
-        years = tuple(sorted(set(years) | {TARGET_YEARS}))
-    for world, filename, kfg, _ in WORLDS:
-        bank = bt.load_bias_bank(Path(bank_dir) / filename, build_command="see scripts/three_worlds.py",
-                                 expected_kfg_fac=kfg, expected_epsilon_fg=0.0)
-        names = list(bank.paramnames)
-        zs = bank.zs
-        for ib in range(len(zs) - 1):
-            accepted = {p: [] for p in PARAMETERS}
-            refused = {p: 0 for p in PARAMETERS}
-            at_target = {p: math.nan for p in PARAMETERS}
-            for year in years:
-                t = year * survey.OVERVIEW_ONSKY_YEAR_HOURS
-                try:
-                    dth, sig = bt.bias_per_unit_r(bank.F(ib, t), names)
-                except Exception:
-                    for p in PARAMETERS:
-                        refused[p] += 1
-                    continue
-                for p in PARAMETERS:
-                    try:
-                        drift, nsign = bt.stability(bank, ib, t, names, p, frac=frac)
-                    except Exception:
-                        refused[p] += 1
-                        continue
-                    if drift <= limit and nsign == 1:
-                        value = sig[p] / abs(dth[p])
-                        accepted[p].append((year, value))
-                        if year == TARGET_YEARS:
-                            at_target[p] = value
-                    else:
-                        refused[p] += 1
-            for p in PARAMETERS:
-                # Only the declared target time may supply an operational tolerance.
-                if math.isfinite(at_target[p]):
-                    value, used, on_target = at_target[p], TARGET_YEARS, True
-                else:
-                    value, used, on_target = math.nan, math.nan, False
-                rows.append({"world": world, "bin_index": ib, "z_lo": round(float(zs[ib]), 4),
-                             "z_hi": round(float(zs[ib + 1]), 4), "parameter": p,
-                             "tolerance": float(value) if math.isfinite(value) else math.nan,
-                             "at_target": on_target, "years_used": used,
-                             "years_accepted": len(accepted[p]), "years_refused": refused[p]})
-    return rows
-
-
-def _cache_is_current(cache: Path, bank_dir: Path) -> bool:
-    """Require a content identity and authenticated banks, not modification times."""
-    sidecar = cache.with_suffix(".provenance.json")
-    if not cache.is_file() or not sidecar.is_file():
-        return False
-    try:
-        return json.loads(sidecar.read_text()) == _cache_identity(cache, bank_dir)
-    except (OSError, ValueError, KeyError):
-        return False
+    return rule.tolerance_rows(_model(bank_dir))
 
 
 def _cache_identity(cache: Path, bank_dir: Path) -> dict:
-    bt = _bias_tolerance()
-    identity = {"schema": 2, "target_years": TARGET_YEARS,
-                "policy": selection_policy.sha256(), "sources": {}, "banks": {},
-                "csv_sha256": hashlib.sha256(cache.read_bytes()).hexdigest()}
-    for path in (Path(__file__), ROOT / "scripts/bias_tolerance.py", ROOT / "src/rfisher/forecast/radiofisher_bao/bank/banks.py"):
-        identity["sources"][path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
-    for _, filename, kfg, _ in WORLDS:
-        path = bank_dir / filename
-        # Also authenticates the configured backend's current scientific identity.
-        bank = bt.load_bias_bank(path, expected_kfg_fac=kfg, expected_epsilon_fg=0.0)
-        identity["banks"][filename] = {"sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                                       "evaluation": bank.evaluation_identity}
-    return identity
+    return tolerance_table.identity(_model(bank_dir), cache)
 
 
 def tolerances(bank_dir: Path | str = BANK_DIR, cache: Path | str = CACHE, *, rebuild: bool = False) -> list[dict]:
-    """Tolerances authenticated against their CSV, policy, sources and banks."""
-    cache, bank_dir = Path(cache), Path(bank_dir)
-    if not rebuild and _cache_is_current(cache, bank_dir):
-        with cache.open(newline="", encoding="utf-8") as fh:
-            return [{**r, "bin_index": int(r["bin_index"]), "z_lo": float(r["z_lo"]), "z_hi": float(r["z_hi"]),
-                     "at_target": str(r.get("at_target", "")).lower() == "true",
-                     "years_used": float(r["years_used"]) if r.get("years_used") not in ("", "nan", None) else math.nan,
-                     "tolerance": float(r["tolerance"]) if r["tolerance"] not in ("", "nan") else math.nan,
-                     "years_accepted": int(r["years_accepted"]), "years_refused": int(r["years_refused"])}
-                    for r in csv.DictReader(fh)]
-    rows = compute_tolerances(bank_dir)
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    with cache.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(CACHE_COLUMNS), lineterminator="\n")
-        writer.writeheader()
-        for r in rows:
-            writer.writerow({k: _cell(v) for k, v in r.items()})
-    cache.with_suffix(".provenance.json").write_text(json.dumps(_cache_identity(cache, bank_dir), sort_keys=True))
-    return rows
+    """The per-bin table, read against its recorded digest, or rebuilt into ``cache``.
 
-
-def tolerance_of(rows: Sequence[dict], world: str, bins: Sequence[int], parameter: str) -> float:
-    """Minimum over every requested bin; any missing or refused target cell refuses."""
-    by_bin = {int(r["bin_index"]): r for r in rows if r["world"] == world and r["parameter"] == parameter}
-    values = []
-    for b in bins:
-        row = by_bin.get(int(b))
-        if row is None or not row.get("at_target", False):
-            return math.nan
-        value = float(row["tolerance"])
-        if not math.isfinite(value) or value <= 0:
-            return math.nan
-        values.append(value)
-    return min(values) if values else math.nan
+    A rebuild never replaces an existing table whose bytes would change.
+    """
+    if rebuild:
+        return tolerance_table.build(_model(bank_dir), cache)
+    return tolerance_table.load(cache)
 
 
 def bin_span(rows: Sequence[dict], bins: Sequence[int]) -> tuple[float, float]:

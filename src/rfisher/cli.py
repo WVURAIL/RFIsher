@@ -2,6 +2,7 @@
 
     rfisher forecast     evaluate one uniform masking scenario from a Fisher bank
     rfisher build-bank   build a Fisher bank (slow; needs RadioFisher)
+    rfisher tolerance    build, show and reduce the residual tolerance table
 """
 from __future__ import annotations
 
@@ -58,11 +59,101 @@ def build_bank_main(argv=None, prog: str = "rfisher build-bank") -> int:
     return build.main(argv, prog=prog)
 
 
+def _table_path(out: Path) -> Path:
+    from .forecast.radiofisher_bao.model import TABLE_NAME
+
+    return out / TABLE_NAME if out.is_dir() or not out.suffix else out
+
+
+def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
+    """``rfisher tolerance {build, bands, show, bias}``."""
+    from .forecast.radiofisher_bao import response
+    from .forecast.radiofisher_bao.model import RadioFisherBAO, packaged_table
+    from .tolerance import bands, table
+
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["bias"]:
+        return response.bias_main(argv[1:], prog=f"{prog} bias")
+    parser = argparse.ArgumentParser(
+        prog=prog, description="The residual tolerance table: "
+        "'build' prices every scenario, bin and parameter of the science "
+        "model; 'bands' reduces the table to one tolerance per band and "
+        "scenario; 'show' prints it; 'bias' reports the full response of one "
+        "bank (see 'rfisher tolerance bias --help').")
+    actions = parser.add_subparsers(dest="action", required=True,
+                                    metavar="{build,bands,show,bias}")
+    built = actions.add_parser(
+        "build", help="recompute the per-bin table and its provenance")
+    built.add_argument("--project", type=Path, required=True,
+                       help="the science profile directory")
+    built.add_argument("--banks", type=Path,
+                       help="response bank directory (default: packaged)")
+    built.add_argument("--out", type=Path, required=True,
+                       help="the table file, or a directory for it")
+    built.add_argument("--radiofisher-dir", type=Path)
+    built.add_argument("--accept-new", action="store_true",
+                       help="replace an existing table whose bytes change")
+    reduced = actions.add_parser(
+        "bands", help="write tolerances.csv and tolerance_components.csv")
+    reduced.add_argument("--project", type=Path, required=True)
+    reduced.add_argument("--bands", type=Path, required=True,
+                         help="CSV with band_id,low_mhz,high_mhz")
+    reduced.add_argument("--out", type=Path, required=True,
+                         help="output directory")
+    reduced.add_argument("--table", type=Path,
+                         help="the per-bin table (default: packaged)")
+    shown = actions.add_parser("show", help="print the per-bin table")
+    shown.add_argument("--table", type=Path,
+                       help="the per-bin table (default: packaged)")
+    actions.add_parser("bias", help="the full response report of one bank")
+    args = parser.parse_args(argv)
+
+    if args.action == "build":
+        model = RadioFisherBAO(args.project, response_banks_dir=args.banks,
+                               rf_dir=args.radiofisher_dir)
+        out = _table_path(args.out)
+        try:
+            rows = table.build(model, out, accept_new=args.accept_new)
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(f"wrote {out} ({len(rows)} rows) and {table.sidecar(out).name}")
+        return 0
+    source = args.table or packaged_table()
+    try:
+        rows = table.load(source)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if args.action == "show":
+        print(f"{source} (csv_sha256 authenticated)")
+        for row in rows:
+            value = (f"{row['tolerance']:.6g}" if row["at_target"]
+                     else "refused")
+            print(f"  {row['world']:<9} bin {row['bin_index']:>2} "
+                  f"z {row['z_lo']:.4g}-{row['z_hi']:.4g} "
+                  f"{row['parameter']:<6} {value}")
+        return 0
+    model = RadioFisherBAO(args.project)
+    band_list = bands.read_bands(args.bands)
+    tolerances, components = bands.band_tolerances(model, rows, band_list)
+    written = table.write_bands(tolerances, components, args.out, {
+        "schema": table.IDENTITY_SCHEMA,
+        "table": source.name,
+        "table_csv_sha256": table.sha256_file(source),
+        "bands_sha256": table.sha256_file(args.bands),
+        "profile_sha256": table.sha256_file(model.profile_path),
+    })
+    for path in written:
+        print(f"wrote {path}")
+    return 0
+
+
 COMMANDS = {
     "forecast": (forecast_main,
                  "evaluate one uniform masking scenario from a Fisher bank"),
     "build-bank": (build_bank_main,
                    "build a Fisher bank (slow; needs RadioFisher)"),
+    "tolerance": (tolerance_main,
+                  "build, show and reduce the residual tolerance table"),
 }
 
 

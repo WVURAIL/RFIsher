@@ -1,11 +1,17 @@
-"""The delay-filter options of the forecast: the delay-cut hooks."""
+"""The delay-filter scenarios, their assumed suppression, the profile, and the hooks."""
 from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 
-from rfisher.forecast.radiofisher_bao import filter_scenarios
+from rfisher import selection_policy
+from rfisher.forecast.radiofisher_bao import filter_scenarios, model
 from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
+
+PROJECT = Path(__file__).resolve().parents[2] / "projects" / "chime_bao"
 
 # The redshift at which the CHIME 2025 detection quotes its k_par floor.
 Z_REFERENCE = 1.16
@@ -98,3 +104,81 @@ def test_delay_transfer_binds_the_fig10_response_to_the_backend():
     assert transfer[2] == pytest.approx((0.756 / 0.870) ** 2, abs=0.05)
     assert transfer[3] > 0.9                     # 600 ns: near plateau
     assert transfer[4] == pytest.approx(1.0, abs=0.02)
+
+
+# ------------------------------------------------ scenarios and the profile
+
+def test_the_scenarios_are_the_four_worlds_in_their_order():
+    assert [(s.name, s.bank, s.kfg_fac, s.suppression_key)
+            for s in filter_scenarios.SCENARIOS] == [
+        ("none", "fisher_bank_chime2022_pres_dense.npz", None, "none"),
+        ("peak1", "fisher_bank_chime2022_pres_kfg22_dense.npz", 22.0,
+         "bao_peak1"),
+        ("peak2", "fisher_bank_chime2022_pres_kfg44_dense.npz", 44.0,
+         "bao_peak2"),
+        ("deployed", "fisher_bank_chime2022_pres_kfg80_dense.npz", 80.0,
+         "aggressive_200ns"),
+    ]
+
+
+def test_the_suppression_is_the_literal_table():
+    assert filter_scenarios.DELAY_SUPPRESSION_DB == {
+        "none": 0.0, "aggressive_200ns": 11.4, "bao_peak2": 8.2,
+        "bao_peak1": 3.6}
+    assert [filter_scenarios.suppression_db(s.name)
+            for s in filter_scenarios.SCENARIOS] == [0.0, 3.6, 8.2, 11.4]
+    assert filter_scenarios.DEFAULT_DELAY_KEY == "none" \
+        == selection_policy.value("transfer.delay_suppression.default_key")
+    with pytest.raises(KeyError, match="unknown filter scenario"):
+        filter_scenarios.suppression_db("wedge")
+
+
+def test_the_profile_states_the_register_values_it_replaces():
+    profile = model.load_profile(PROJECT)
+    parameters = profile["parameters"]
+    assert tuple(parameters["required"]) + tuple(parameters["reported"]) \
+        == selection_policy.value("archive_reference.three_worlds_parameters")
+    assert tuple(parameters["required"]) == ("aperp", "apar")
+    assert tuple(profile["year_grid"]) \
+        == selection_policy.value("archive_reference.forecast_year_grid")
+    assert profile["stability"] == {
+        "time_fraction": selection_policy.value(
+            "science.response_stability.time_fraction"),
+        "maximum_tolerance_ratio": selection_policy.value(
+            "science.response_stability.maximum_tolerance_ratio")}
+    assert profile["zeta"] == 1.0 == selection_policy.value(
+        "science.systematic_budget.primary_zeta")
+    assert profile["target_years"] == 1.0
+    for value in (profile["zeta"], profile["target_years"],
+                  *profile["year_grid"], *profile["stability"].values()):
+        assert type(value) is float
+
+
+def test_the_profile_gives_the_no_filter_scenario_the_rule_role():
+    built = model.RadioFisherBAO(PROJECT)
+    assert [(s.name, s.role, s.suppression_db, s.response_source)
+            for s in built.scenarios] == [
+        (s.name, "rule" if s.name == "none" else "sensitivity",
+         filter_scenarios.suppression_db(s.name), s.bank)
+        for s in filter_scenarios.SCENARIOS]
+
+
+@pytest.mark.parametrize("field,value,match", [
+    ("kfg_fac", 40.0, "the forecast defines"),
+    ("role", "rescue", "role must be one of"),
+])
+def test_a_profile_that_disagrees_with_the_forecast_is_refused(
+        tmp_path, field, value, match):
+    profile = yaml.safe_load((PROJECT / "science_model.yaml").read_text())
+    profile["scenarios"][1][field] = value
+    (tmp_path / "science_model.yaml").write_text(yaml.safe_dump(profile))
+    with pytest.raises(ValueError, match=match):
+        model.RadioFisherBAO(tmp_path)
+
+
+def test_a_profile_of_another_adapter_is_refused(tmp_path):
+    profile = yaml.safe_load((PROJECT / "science_model.yaml").read_text())
+    profile["adapter"] = "another"
+    (tmp_path / "science_model.yaml").write_text(yaml.safe_dump(profile))
+    with pytest.raises(ValueError, match="adapter"):
+        model.load_profile(tmp_path)

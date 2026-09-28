@@ -1,19 +1,15 @@
 """Combined-estimator, time-family, and refusal-ledger contracts."""
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from rfisher.forecast.radiofisher_bao import response as bt
+
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location(
-    "rfisher_test_bias_tolerance", ROOT / "scripts" / "bias_tolerance.py")
-assert SPEC is not None and SPEC.loader is not None
-bt = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(bt)
 
 
 PARAMETERS = [
@@ -67,7 +63,7 @@ class Bank:
                 "git_dirty": False, "working_tree_sha256": digest,
                 "source_manifest": {
                     key: list(value) for key, value in
-                    bt.RFISHER_SOURCE_MANIFEST.items()},
+                    bt.BANK_SOURCE_MANIFEST.items()},
             },
             "radiofisher": {
                 "backend_id": "radiofisher", "backend_version": "1.0.0",
@@ -167,7 +163,7 @@ COSMO_FNS = (
 def test_appendix_a_path_retains_legacy_numerical_result():
     bank = Bank()
     matrix = bank.F(0, 3.0)
-    old_derivative, old_sigma = bt.bias_per_unit_r(matrix, bank.paramnames)
+    old_derivative, old_sigma = bt.bias_per_unit_residual(matrix, bank.paramnames)
     estimator = bt.PerBinAppendixAEstimator(bank)
     result = bt.evaluate_raw(
         estimator, 0, 3.0, "aperp", zeta=1.0,
@@ -392,7 +388,7 @@ def test_report_provenance_distinguishes_no_delay_filter_from_kfg_80(
 
 def test_fixed_physical_cli_requires_reference_before_loading_bank():
     with pytest.raises(SystemExit):
-        bt.main(["--time-scaling", bt.FIXED_PHYSICAL_AT_REFERENCE_TIME])
+        bt.bias_main(["--time-scaling", bt.FIXED_PHYSICAL_AT_REFERENCE_TIME])
 
 
 def test_cli_json_uses_the_complete_versioned_schema(
@@ -402,9 +398,9 @@ def test_cli_json_uses_the_complete_versioned_schema(
     output = tmp_path / "complete.json"
     bank = Bank()
     monkeypatch.setattr(
-        bt, "load_bias_bank", lambda _path, **_kwargs: bank)
+        bt, "load_response_bank", lambda _path, **_kwargs: bank)
 
-    assert bt.main([
+    assert bt.bias_main([
         "--bank", str(bank_path), "--bins", "0", "--years", "1",
         "--params", "aperp", "--json", str(output),
     ]) == 0
@@ -426,9 +422,9 @@ def test_complete_v1_cli_refuses_outside_grid_with_explicit_position(
     bank = Bank()
     bank.t_grid = np.array([8000.0, 10000.0])
     monkeypatch.setattr(
-        bt, "load_bias_bank", lambda _path, **_kwargs: bank)
+        bt, "load_response_bank", lambda _path, **_kwargs: bank)
 
-    assert bt.main([
+    assert bt.bias_main([
         "--bank", str(bank_path), "--bins", "0", "--years", str(year),
         "--params", "aperp", "--json", str(output),
     ]) == 0
@@ -446,4 +442,4 @@ def test_bank_build_source_manifest_mismatch_fails_before_backend_import():
         "include": ["one-file.py"], "exclude": []}
 
     with pytest.raises(ValueError, match="RFIsher source manifest"):
-        bt._evaluation_identity(bank)
+        bt.evaluation_identity(bank)

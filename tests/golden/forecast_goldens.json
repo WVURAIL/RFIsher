@@ -1,0 +1,3576 @@
+{
+ "binding": {
+  "cmbspa2026": "identical",
+  "pact2025": "identical",
+  "planck2018": "identical"
+ },
+ "cli": {
+  "bull2015_bank_uniform0.3": {
+   "argv": [
+    "--bank",
+    "data/fisher_bank_bull2015_planck2013_epsfg1e-6.npz",
+    "--uniform",
+    "0.3"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 393.0800142181864, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.1371379025894994, \"target_sigma\": 5.0, \"years\": 0.0448721477418021, \"zbin\": \"survey\"}\n"
+  },
+  "cmbspa2026_uniform0.0": {
+   "argv": [
+    "--cosmology",
+    "cmbspa2026",
+    "--uniform",
+    "0.0"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 185.93367330410427, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.0, \"target_sigma\": 5.0, \"years\": 0.021225305171701403, \"zbin\": \"survey\"}\n"
+  },
+  "cmbspa2026_uniform0.3": {
+   "argv": [
+    "--cosmology",
+    "cmbspa2026",
+    "--uniform",
+    "0.3"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 202.8194861425348, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.0908163246514948, \"target_sigma\": 5.0, \"years\": 0.02315290937700169, \"zbin\": \"survey\"}\n"
+  },
+  "cmbspa2026_uniform0.97": {
+   "argv": [
+    "--cosmology",
+    "cmbspa2026",
+    "--uniform",
+    "0.97"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 233.20378744529515, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.2542310561674224, \"target_sigma\": 5.0, \"years\": 0.026621436922978896, \"zbin\": \"survey\"}\n"
+  },
+  "pact2025_uniform0.0": {
+   "argv": [
+    "--cosmology",
+    "pact2025",
+    "--uniform",
+    "0.0"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 186.92137282188037, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.0, \"target_sigma\": 5.0, \"years\": 0.02133805625820552, \"zbin\": \"survey\"}\n"
+  },
+  "pact2025_uniform0.3": {
+   "argv": [
+    "--cosmology",
+    "pact2025",
+    "--uniform",
+    "0.3"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 203.86190881269192, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.0906292080732491, \"target_sigma\": 5.0, \"years\": 0.023271907398709123, \"zbin\": \"survey\"}\n"
+  },
+  "pact2025_uniform0.97": {
+   "argv": [
+    "--cosmology",
+    "pact2025",
+    "--uniform",
+    "0.97"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 234.330391099516, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.2536308050915732, \"target_sigma\": 5.0, \"years\": 0.02675004464606347, \"zbin\": \"survey\"}\n"
+  },
+  "planck2018_uniform0.0": {
+   "argv": [
+    "--cosmology",
+    "planck2018",
+    "--uniform",
+    "0.0"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 208.7825226550341, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.0, \"target_sigma\": 5.0, \"years\": 0.023833621307652292, \"zbin\": \"survey\"}\n"
+  },
+  "planck2018_uniform0.3": {
+   "argv": [
+    "--cosmology",
+    "planck2018",
+    "--uniform",
+    "0.3"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 227.79714273378664, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.0910738113370242, \"target_sigma\": 5.0, \"years\": 0.026004240038103497, \"zbin\": \"survey\"}\n"
+  },
+  "planck2018_uniform0.97": {
+   "argv": [
+    "--cosmology",
+    "planck2018",
+    "--uniform",
+    "0.97"
+   ],
+   "returncode": 0,
+   "stdout": "{\"duty\": 1.0, \"hours\": 262.18096696585974, \"hours_per_year\": 8760.0, \"penalty_vs_clean\": 1.255761083982372, \"target_sigma\": 5.0, \"years\": 0.029929334128522802, \"zbin\": \"survey\"}\n"
+  }
+ },
+ "grid": {
+  "cosmologies": [
+   "planck2018",
+   "pact2025",
+   "cmbspa2026"
+  ],
+  "mask": {
+   "17": 0.33,
+   "30": 0.97,
+   "31": 0.24
+  },
+  "residuals": {
+   "17": 0.01,
+   "30": 0.02,
+   "31": 0.005
+  },
+  "years": [
+   1.0,
+   3.0,
+   10.0
+  ]
+ },
+ "record_sha256": "3177ba332ecf6b6b0e5774f5883669f37989cab7705a7652fff1f0c5ff69e1c1",
+ "results": {
+  "bull2015_planck2013_epsfg1e-6": {
+   "S1_clean": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.ac799af9da8fep-8",
+      "repr": "0.006538009963927614"
+     },
+     {
+      "hex": "0x1.6b71f56b41a1bp-8",
+      "repr": "0.005545732895603918"
+     },
+     {
+      "hex": "0x1.63febe387258ap-8",
+      "repr": "0.005432053986120686"
+     },
+     {
+      "hex": "0x1.4fd118a582903p-8",
+      "repr": "0.005124157445161484"
+     },
+     {
+      "hex": "0x1.4f24eef28b74ap-8",
+      "repr": "0.005113895737435767"
+     },
+     {
+      "hex": "0x1.5a4dfd8e8d032p-8",
+      "repr": "0.005284189609074773"
+     },
+     {
+      "hex": "0x1.774bd4da3b205p-8",
+      "repr": "0.0057265658053720124"
+     },
+     {
+      "hex": "0x1.91cd6c279348dp-8",
+      "repr": "0.0061310185479445225"
+     },
+     {
+      "hex": "0x1.a82cc3588d76dp-8",
+      "repr": "0.006472394649383745"
+     },
+     {
+      "hex": "0x1.c8d3a248a6137p-8",
+      "repr": "0.006970622177185518"
+     },
+     {
+      "hex": "0x1.e1dc26ad07de1p-8",
+      "repr": "0.007352599565848079"
+     },
+     {
+      "hex": "0x1.009ceba60e0aap-7",
+      "repr": "0.007831206381624451"
+     },
+     {
+      "hex": "0x1.10ae9a86646d1p-7",
+      "repr": "0.008321595622678231"
+     },
+     {
+      "hex": "0x1.1f531b8072c8bp-7",
+      "repr": "0.008768452099408705"
+     },
+     {
+      "hex": "0x1.33b44ab80e1b8p-7",
+      "repr": "0.009390388950223691"
+     },
+     {
+      "hex": "0x1.4e2431024da8ep-7",
+      "repr": "0.01019718544976669"
+     },
+     {
+      "hex": "0x1.6d0a852981d5ap-7",
+      "repr": "0.011140170116972815"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.59acc54af7317p+8",
+      "repr": "345.67488544974316"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.4342e21d6ce49p-5",
+      "repr": "0.03946060336184282"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.3bf7c7c580b50p+5",
+      "repr": "39.495986502638175"
+     },
+     "10.0": {
+      "hex": "0x1.37d3999508573p+6",
+      "repr": "77.95664055694014"
+     },
+     "3.0": {
+      "hex": "0x1.d51945315dd28p+5",
+      "repr": "58.6373390061147"
+     }
+    }
+   },
+   "S2_uniform_dtv_0.3": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.ac799af9da8fep-8",
+      "repr": "0.006538009963927614"
+     },
+     {
+      "hex": "0x1.6b71f56b41a1bp-8",
+      "repr": "0.005545732895603918"
+     },
+     {
+      "hex": "0x1.63febe387258ap-8",
+      "repr": "0.005432053986120686"
+     },
+     {
+      "hex": "0x1.4fd118a582903p-8",
+      "repr": "0.005124157445161484"
+     },
+     {
+      "hex": "0x1.4f24eef28b74ap-8",
+      "repr": "0.005113895737435767"
+     },
+     {
+      "hex": "0x1.7cb2c15516956p-8",
+      "repr": "0.005808994484221527"
+     },
+     {
+      "hex": "0x1.c2f1eb2011430p-8",
+      "repr": "0.006880874541882284"
+     },
+     {
+      "hex": "0x1.e603d3b4930f8p-8",
+      "repr": "0.0074159995898066475"
+     },
+     {
+      "hex": "0x1.018fc74fbb945p-7",
+      "repr": "0.00786015731815993"
+     },
+     {
+      "hex": "0x1.164dc4073be36p-7",
+      "repr": "0.00849315711681618"
+     },
+     {
+      "hex": "0x1.1e2becc951134p-7",
+      "repr": "0.008733263605457432"
+     },
+     {
+      "hex": "0x1.2d3af6b6e687cp-7",
+      "repr": "0.00919282003978971"
+     },
+     {
+      "hex": "0x1.10ae9a86646d1p-7",
+      "repr": "0.008321595622678231"
+     },
+     {
+      "hex": "0x1.1f531b8072c8bp-7",
+      "repr": "0.008768452099408705"
+     },
+     {
+      "hex": "0x1.33b44ab80e1b8p-7",
+      "repr": "0.009390388950223691"
+     },
+     {
+      "hex": "0x1.4e2431024da8ep-7",
+      "repr": "0.01019718544976669"
+     },
+     {
+      "hex": "0x1.6d0a852981d5ap-7",
+      "repr": "0.011140170116972815"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.89147bcfd2536p+8",
+      "repr": "393.0800142181864"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.231b7836a9f79p+0",
+      "repr": "1.1371379025894994"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.6f97b6e1ac9b9p-5",
+      "repr": "0.0448721477418021"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.27cf22f66ab78p+5",
+      "repr": "36.97614090455221"
+     },
+     "10.0": {
+      "hex": "0x1.2da99c6ce73b8p+6",
+      "repr": "75.41563577805834"
+     },
+     "3.0": {
+      "hex": "0x1.be414bbfae9f7p+5",
+      "repr": "55.78188276054055"
+     }
+    }
+   },
+   "S3_mask_default_excision": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.ac799af9da8fep-8",
+      "repr": "0.006538009963927614"
+     },
+     {
+      "hex": "0x1.6b71f56b41a1bp-8",
+      "repr": "0.005545732895603918"
+     },
+     {
+      "hex": "0x1.63febe387258ap-8",
+      "repr": "0.005432053986120686"
+     },
+     {
+      "hex": "0x1.4fd118a582903p-8",
+      "repr": "0.005124157445161484"
+     },
+     {
+      "hex": "0x1.4f24eef28b74ap-8",
+      "repr": "0.005113895737435767"
+     },
+     {
+      "hex": "0x1.5a4dfd8e8d032p-8",
+      "repr": "0.005284189609074773"
+     },
+     {
+      "hex": "0x1.b78cc15db744cp-8",
+      "repr": "0.006706998070254388"
+     },
+     {
+      "hex": "0x1.97d84c2eb16a7p-8",
+      "repr": "0.006223219489304966"
+     },
+     {
+      "hex": "0x1.a82cc3588d76dp-8",
+      "repr": "0.006472394649383745"
+     },
+     {
+      "hex": "0x1.c8d3a248a6137p-8",
+      "repr": "0.006970622177185518"
+     },
+     {
+      "hex": "0x1.f8afce69c6614p-8",
+      "repr": "0.007700908559650017"
+     },
+     {
+      "hex": "0x1.009ceba60e0aap-7",
+      "repr": "0.007831206381624451"
+     },
+     {
+      "hex": "0x1.10ae9a86646d1p-7",
+      "repr": "0.008321595622678231"
+     },
+     {
+      "hex": "0x1.1f531b8072c8bp-7",
+      "repr": "0.008768452099408705"
+     },
+     {
+      "hex": "0x1.33b44ab80e1b8p-7",
+      "repr": "0.009390388950223691"
+     },
+     {
+      "hex": "0x1.4e2431024da8ep-7",
+      "repr": "0.01019718544976669"
+     },
+     {
+      "hex": "0x1.6d0a852981d5ap-7",
+      "repr": "0.011140170116972815"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.618027706676ep+8",
+      "repr": "353.5006017923505"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.05cbaa8c8e8fap+0",
+      "repr": "1.022638949695248"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.4a945ded341a1p-5",
+      "repr": "0.04035394997629572"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.37529517360c6p+5",
+      "repr": "38.91532343038266"
+     },
+     "10.0": {
+      "hex": "0x1.344b14ce5b036p+6",
+      "repr": "77.07332155638218"
+     },
+     "3.0": {
+      "hex": "0x1.ced89dc876d40p+5",
+      "repr": "57.855769697309825"
+     }
+    }
+   },
+   "S4_mask_with_residuals": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.ac799af9da8fep-8",
+      "repr": "0.006538009963927614"
+     },
+     {
+      "hex": "0x1.6b71f56b41a1bp-8",
+      "repr": "0.005545732895603918"
+     },
+     {
+      "hex": "0x1.63febe387258ap-8",
+      "repr": "0.005432053986120686"
+     },
+     {
+      "hex": "0x1.4fd118a582903p-8",
+      "repr": "0.005124157445161484"
+     },
+     {
+      "hex": "0x1.4f24eef28b74ap-8",
+      "repr": "0.005113895737435767"
+     },
+     {
+      "hex": "0x1.5a4dfd8e8d032p-8",
+      "repr": "0.005284189609074773"
+     },
+     {
+      "hex": "0x1.b7d1599774ff6p-8",
+      "repr": "0.006711086628872201"
+     },
+     {
+      "hex": "0x1.97d84c2eb16a7p-8",
+      "repr": "0.006223219489304966"
+     },
+     {
+      "hex": "0x1.a82cc3588d76dp-8",
+      "repr": "0.006472394649383745"
+     },
+     {
+      "hex": "0x1.c8d3a248a6137p-8",
+      "repr": "0.006970622177185518"
+     },
+     {
+      "hex": "0x1.f93c9c4f4fc0ap-8",
+      "repr": "0.0077093011489628525"
+     },
+     {
+      "hex": "0x1.009ceba60e0aap-7",
+      "repr": "0.007831206381624451"
+     },
+     {
+      "hex": "0x1.10ae9a86646d1p-7",
+      "repr": "0.008321595622678231"
+     },
+     {
+      "hex": "0x1.1f531b8072c8bp-7",
+      "repr": "0.008768452099408705"
+     },
+     {
+      "hex": "0x1.33b44ab80e1b8p-7",
+      "repr": "0.009390388950223691"
+     },
+     {
+      "hex": "0x1.4e2431024da8ep-7",
+      "repr": "0.01019718544976669"
+     },
+     {
+      "hex": "0x1.6d0a852981d5ap-7",
+      "repr": "0.011140170116972815"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     },
+     {
+      "message": "'fs8' is not in list",
+      "raises": "ValueError"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.619036c6317b2p+8",
+      "repr": "353.5633357878497"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.05d78f529e732p+0",
+      "repr": "1.0228204323488623"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.4aa362ae968b0p-5",
+      "repr": "0.04036111139130705"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.374aec3e8e5ddp+5",
+      "repr": "38.91158341285675"
+     },
+     "10.0": {
+      "hex": "0x1.344728eddcc72p+6",
+      "repr": "77.06949206981679"
+     },
+     "3.0": {
+      "hex": "0x1.cecf7bd655c08p+5",
+      "repr": "57.851310419551794"
+     }
+    }
+   },
+   "masking_cost_curve_dtv": {
+    "fracs": [
+     {
+      "hex": "0x0.0p+0",
+      "repr": "0.0"
+     },
+     {
+      "hex": "0x1.999999999999ap-5",
+      "repr": "0.05"
+     },
+     {
+      "hex": "0x1.999999999999ap-4",
+      "repr": "0.1"
+     },
+     {
+      "hex": "0x1.3333333333334p-3",
+      "repr": "0.15000000000000002"
+     },
+     {
+      "hex": "0x1.999999999999ap-3",
+      "repr": "0.2"
+     },
+     {
+      "hex": "0x1.0000000000000p-2",
+      "repr": "0.25"
+     },
+     {
+      "hex": "0x1.3333333333334p-2",
+      "repr": "0.30000000000000004"
+     },
+     {
+      "hex": "0x1.6666666666667p-2",
+      "repr": "0.35000000000000003"
+     },
+     {
+      "hex": "0x1.999999999999ap-2",
+      "repr": "0.4"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-2",
+      "repr": "0.45"
+     },
+     {
+      "hex": "0x1.0000000000000p-1",
+      "repr": "0.5"
+     },
+     {
+      "hex": "0x1.199999999999ap-1",
+      "repr": "0.55"
+     },
+     {
+      "hex": "0x1.3333333333334p-1",
+      "repr": "0.6000000000000001"
+     },
+     {
+      "hex": "0x1.4cccccccccccdp-1",
+      "repr": "0.65"
+     },
+     {
+      "hex": "0x1.6666666666667p-1",
+      "repr": "0.7000000000000001"
+     },
+     {
+      "hex": "0x1.8000000000000p-1",
+      "repr": "0.75"
+     },
+     {
+      "hex": "0x1.999999999999ap-1",
+      "repr": "0.8"
+     },
+     {
+      "hex": "0x1.b333333333334p-1",
+      "repr": "0.8500000000000001"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-1",
+      "repr": "0.9"
+     },
+     {
+      "hex": "0x1.e666666666667p-1",
+      "repr": "0.9500000000000001"
+     },
+     {
+      "hex": "0x1.f0a3d70a3d70ap-1",
+      "repr": "0.97"
+     }
+    ],
+    "years": [
+     {
+      "hex": "0x1.4342e21d6ce49p-5",
+      "repr": "0.03946060336184282"
+     },
+     {
+      "hex": "0x1.4a36c4ba55678p-5",
+      "repr": "0.04030931876574767"
+     },
+     {
+      "hex": "0x1.5159bd6f5b476p-5",
+      "repr": "0.04118048666973888"
+     },
+     {
+      "hex": "0x1.58aa8a226e2a9p-5",
+      "repr": "0.0420735071124388"
+     },
+     {
+      "hex": "0x1.602733eb0651ep-5",
+      "repr": "0.04298744335410219"
+     },
+     {
+      "hex": "0x1.67cce5263c3b0p-5",
+      "repr": "0.043920943791710854"
+     },
+     {
+      "hex": "0x1.6f97b6e1ac9b9p-5",
+      "repr": "0.0448721477418021"
+     },
+     {
+      "hex": "0x1.778273bcefb00p-5",
+      "repr": "0.04583857159695093"
+     },
+     {
+      "hex": "0x1.7f864e2b489eep-5",
+      "repr": "0.04681697146795104"
+     },
+     {
+      "hex": "0x1.879a8799d9feap-5",
+      "repr": "0.04780317768637572"
+     },
+     {
+      "hex": "0x1.8fb405a580f01p-5",
+      "repr": "0.048791895893399946"
+     },
+     {
+      "hex": "0x1.97c460b04d869p-5",
+      "repr": "0.04977625736721409"
+     },
+     {
+      "hex": "0x1.9fb5b9f556d0dp-5",
+      "repr": "0.05074583358756444"
+     },
+     {
+      "hex": "0x1.a7712f72ec2acp-5",
+      "repr": "0.051689713166870405"
+     },
+     {
+      "hex": "0x1.aedd15a6385ccp-5",
+      "repr": "0.0525956557119219"
+     },
+     {
+      "hex": "0x1.b5dae9fbafc00p-5",
+      "repr": "0.05344911289056853"
+     },
+     {
+      "hex": "0x1.bc42c9aeadebfp-5",
+      "repr": "0.05423106566507618"
+     },
+     {
+      "hex": "0x1.c1e959b571a87p-5",
+      "repr": "0.05492084046595829"
+     },
+     {
+      "hex": "0x1.c69f017bb3169p-5",
+      "repr": "0.055495741745832224"
+     },
+     {
+      "hex": "0x1.ca2fcd266eeadp-5",
+      "repr": "0.055930996593329986"
+     },
+     {
+      "hex": "0x1.cb3eda6df17e5p-5",
+      "repr": "0.05606024419789416"
+     }
+    ]
+   }
+  },
+  "cmbspa2026": {
+   "S1_clean": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1ec951fcf29cap-8",
+      "repr": "0.004376013294811585"
+     },
+     {
+      "hex": "0x1.27adecba96a91p-8",
+      "repr": "0.004511709494716813"
+     },
+     {
+      "hex": "0x1.2e9ab823968bbp-8",
+      "repr": "0.004617376285376003"
+     },
+     {
+      "hex": "0x1.3a4e8f154ccc4p-8",
+      "repr": "0.0047959422420717525"
+     },
+     {
+      "hex": "0x1.4ab263e32625cp-8",
+      "repr": "0.005046033274219566"
+     },
+     {
+      "hex": "0x1.60e3e4684c502p-8",
+      "repr": "0.005384677184609334"
+     },
+     {
+      "hex": "0x1.7681e4ffeca69p-8",
+      "repr": "0.005714529426699679"
+     },
+     {
+      "hex": "0x1.8e1159d166836p-8",
+      "repr": "0.0060740322382120595"
+     },
+     {
+      "hex": "0x1.ad7611906e9d4p-8",
+      "repr": "0.006553057945377156"
+     },
+     {
+      "hex": "0x1.cbb79911d8e8cp-8",
+      "repr": "0.007014727469001902"
+     },
+     {
+      "hex": "0x1.fecb9a353004dp-8",
+      "repr": "0.007794118069057343"
+     },
+     {
+      "hex": "0x1.d44db0ea664f3p-8",
+      "repr": "0.007145744030276224"
+     },
+     {
+      "hex": "0x1.d89a1ff709d72p-8",
+      "repr": "0.007211334995225515"
+     },
+     {
+      "hex": "0x1.1a6f7fa08a725p-7",
+      "repr": "0.008619248693395651"
+     },
+     {
+      "hex": "0x1.34bda97001ff5p-7",
+      "repr": "0.009422023518723658"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.133b78a5b2ee8p-8",
+      "repr": "0.004199711756608805"
+     },
+     {
+      "hex": "0x1.0c0a5fd0c431fp-8",
+      "repr": "0.004089973823980824"
+     },
+     {
+      "hex": "0x1.0a28cc7fa1566p-8",
+      "repr": "0.004061269689946334"
+     },
+     {
+      "hex": "0x1.0ccab45061b8bp-8",
+      "repr": "0.004101437589617239"
+     },
+     {
+      "hex": "0x1.10bf5dc085941p-8",
+      "repr": "0.004161796940499508"
+     },
+     {
+      "hex": "0x1.1756ae029f81ep-8",
+      "repr": "0.004262368662805853"
+     },
+     {
+      "hex": "0x1.1f3a873d3564bp-8",
+      "repr": "0.004382761018140234"
+     },
+     {
+      "hex": "0x1.285524e04ec62p-8",
+      "repr": "0.004521676543215754"
+     },
+     {
+      "hex": "0x1.31f227aa585bep-8",
+      "repr": "0.00466836422342126"
+     },
+     {
+      "hex": "0x1.3d526553f98c1p-8",
+      "repr": "0.004841947305953721"
+     },
+     {
+      "hex": "0x1.487777ceb5cc6p-8",
+      "repr": "0.005012003660076652"
+     },
+     {
+      "hex": "0x1.1d9bf02a82e2bp-8",
+      "repr": "0.004358049520770939"
+     },
+     {
+      "hex": "0x1.1b691a8347dc3p-8",
+      "repr": "0.004324501965384755"
+     },
+     {
+      "hex": "0x1.2e8b369b1fd61p-8",
+      "repr": "0.00461645205643832"
+     },
+     {
+      "hex": "0x1.38f6c625c1877p-8",
+      "repr": "0.004775451064921047"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.73de0a6d648d6p+7",
+      "repr": "185.93367330410427"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.5bc161e3d84e0p-6",
+      "repr": "0.021225305171701403"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.9f320aa3f3e58p+5",
+      "repr": "51.89943435752929"
+     },
+     "10.0": {
+      "hex": "0x1.92e78c4721795p+6",
+      "repr": "100.72612105504807"
+     },
+     "3.0": {
+      "hex": "0x1.3117a2d21ce5ap+6",
+      "repr": "76.27308204938291"
+     }
+    }
+   },
+   "S2_uniform_dtv_0.3": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1ec951fcf29cap-8",
+      "repr": "0.004376013294811585"
+     },
+     {
+      "hex": "0x1.27adecba96a91p-8",
+      "repr": "0.004511709494716813"
+     },
+     {
+      "hex": "0x1.2e9ab823968bbp-8",
+      "repr": "0.004617376285376003"
+     },
+     {
+      "hex": "0x1.3a4e8f154ccc4p-8",
+      "repr": "0.0047959422420717525"
+     },
+     {
+      "hex": "0x1.4ab263e32625cp-8",
+      "repr": "0.005046033274219566"
+     },
+     {
+      "hex": "0x1.8acc922cb448cp-8",
+      "repr": "0.006024156272091418"
+     },
+     {
+      "hex": "0x1.c80eeb4d7a72ap-8",
+      "repr": "0.006958897063194228"
+     },
+     {
+      "hex": "0x1.e4432d605f478p-8",
+      "repr": "0.007389257982478907"
+     },
+     {
+      "hex": "0x1.0753bc722b889p-7",
+      "repr": "0.008036105169903844"
+     },
+     {
+      "hex": "0x1.1c372b0c0e4aap-7",
+      "repr": "0.008673568743790067"
+     },
+     {
+      "hex": "0x1.3e7d5f18a7c1dp-7",
+      "repr": "0.009719535287613873"
+     },
+     {
+      "hex": "0x1.19f043f361379p-7",
+      "repr": "0.00860408132462863"
+     },
+     {
+      "hex": "0x1.d89a1ff709d72p-8",
+      "repr": "0.007211334995225515"
+     },
+     {
+      "hex": "0x1.1a6f7fa08a725p-7",
+      "repr": "0.008619248693395651"
+     },
+     {
+      "hex": "0x1.34bda97001ff5p-7",
+      "repr": "0.009422023518723658"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.133b78a5b2ee8p-8",
+      "repr": "0.004199711756608805"
+     },
+     {
+      "hex": "0x1.0c0a5fd0c431fp-8",
+      "repr": "0.004089973823980824"
+     },
+     {
+      "hex": "0x1.0a28cc7fa1566p-8",
+      "repr": "0.004061269689946334"
+     },
+     {
+      "hex": "0x1.0ccab45061b8bp-8",
+      "repr": "0.004101437589617239"
+     },
+     {
+      "hex": "0x1.10bf5dc085941p-8",
+      "repr": "0.004161796940499508"
+     },
+     {
+      "hex": "0x1.2fd7de01124a9p-8",
+      "repr": "0.0046362797739415785"
+     },
+     {
+      "hex": "0x1.4d3e61afdd961p-8",
+      "repr": "0.005084894990309814"
+     },
+     {
+      "hex": "0x1.58bf1bc7ac20cp-8",
+      "repr": "0.005260414392680445"
+     },
+     {
+      "hex": "0x1.656a83669050fp-8",
+      "repr": "0.005453736381754184"
+     },
+     {
+      "hex": "0x1.74140c0e3cda4p-8",
+      "repr": "0.005677464431062349"
+     },
+     {
+      "hex": "0x1.816f5976d8452p-8",
+      "repr": "0.005881270734648574"
+     },
+     {
+      "hex": "0x1.4858d4200a78ap-8",
+      "repr": "0.005010177410477721"
+     },
+     {
+      "hex": "0x1.1b691a8347dc3p-8",
+      "repr": "0.004324501965384755"
+     },
+     {
+      "hex": "0x1.2e8b369b1fd61p-8",
+      "repr": "0.00461645205643832"
+     },
+     {
+      "hex": "0x1.38f6c625c1877p-8",
+      "repr": "0.004775451064921047"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.95a393b00b6cap+7",
+      "repr": "202.8194861425348"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.173fbd185232ep+0",
+      "repr": "1.0908163246514948"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.7b56572536debp-6",
+      "repr": "0.02315290937700169"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.87c66570d633fp+5",
+      "repr": "48.971873170411065"
+     },
+     "10.0": {
+      "hex": "0x1.8695668ccd103p+6",
+      "repr": "97.64589900971991"
+     },
+     "3.0": {
+      "hex": "0x1.23a66b6616b48p+6",
+      "repr": "72.91251906884747"
+     }
+    }
+   },
+   "S3_mask_default_excision": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1ec951fcf29cap-8",
+      "repr": "0.004376013294811585"
+     },
+     {
+      "hex": "0x1.27adecba96a91p-8",
+      "repr": "0.004511709494716813"
+     },
+     {
+      "hex": "0x1.2e9ab823968bbp-8",
+      "repr": "0.004617376285376003"
+     },
+     {
+      "hex": "0x1.3a4e8f154ccc4p-8",
+      "repr": "0.0047959422420717525"
+     },
+     {
+      "hex": "0x1.4ab263e32625cp-8",
+      "repr": "0.005046033274219566"
+     },
+     {
+      "hex": "0x1.60e3e4684c502p-8",
+      "repr": "0.005384677184609334"
+     },
+     {
+      "hex": "0x1.aa3e1b26a1023p-8",
+      "repr": "0.006503945950161269"
+     },
+     {
+      "hex": "0x1.a35b5a2cdee8bp-8",
+      "repr": "0.006398877635429688"
+     },
+     {
+      "hex": "0x1.ad7611906e9d4p-8",
+      "repr": "0.006553057945377156"
+     },
+     {
+      "hex": "0x1.cbb79911d8e8cp-8",
+      "repr": "0.007014727469001902"
+     },
+     {
+      "hex": "0x1.0c8b144dcb491p-7",
+      "repr": "0.008195290483479918"
+     },
+     {
+      "hex": "0x1.dbc86689b13d9p-8",
+      "repr": "0.00725986960759869"
+     },
+     {
+      "hex": "0x1.d89a1ff709d72p-8",
+      "repr": "0.007211334995225515"
+     },
+     {
+      "hex": "0x1.1a6f7fa08a725p-7",
+      "repr": "0.008619248693395651"
+     },
+     {
+      "hex": "0x1.34bda97001ff5p-7",
+      "repr": "0.009422023518723658"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.133b78a5b2ee8p-8",
+      "repr": "0.004199711756608805"
+     },
+     {
+      "hex": "0x1.0c0a5fd0c431fp-8",
+      "repr": "0.004089973823980824"
+     },
+     {
+      "hex": "0x1.0a28cc7fa1566p-8",
+      "repr": "0.004061269689946334"
+     },
+     {
+      "hex": "0x1.0ccab45061b8bp-8",
+      "repr": "0.004101437589617239"
+     },
+     {
+      "hex": "0x1.10bf5dc085941p-8",
+      "repr": "0.004161796940499508"
+     },
+     {
+      "hex": "0x1.1756ae029f81ep-8",
+      "repr": "0.004262368662805853"
+     },
+     {
+      "hex": "0x1.43f544c507a1fp-8",
+      "repr": "0.004943208016838812"
+     },
+     {
+      "hex": "0x1.382e465e8cb59p-8",
+      "repr": "0.004763500385297125"
+     },
+     {
+      "hex": "0x1.31f227aa585bep-8",
+      "repr": "0.00466836422342126"
+     },
+     {
+      "hex": "0x1.3d526553f98c1p-8",
+      "repr": "0.004841947305953721"
+     },
+     {
+      "hex": "0x1.54f6ad371147bp-8",
+      "repr": "0.005202691353649698"
+     },
+     {
+      "hex": "0x1.2119419f75572p-8",
+      "repr": "0.0044112954342002565"
+     },
+     {
+      "hex": "0x1.1b691a8347dc3p-8",
+      "repr": "0.004324501965384755"
+     },
+     {
+      "hex": "0x1.2e8b369b1fd61p-8",
+      "repr": "0.00461645205643832"
+     },
+     {
+      "hex": "0x1.38f6c625c1877p-8",
+      "repr": "0.004775451064921047"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.79a81dcde92fap+7",
+      "repr": "188.82835238906392"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.03fc49715a097p+0",
+      "repr": "1.0155683423745694"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.612b5c29ffb4dp-6",
+      "repr": "0.021555747989619168"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.99b36f7e163c7p+5",
+      "repr": "51.21261499886855"
+     },
+     "10.0": {
+      "hex": "0x1.8e89e67930a1fp+6",
+      "repr": "99.63466824874239"
+     },
+     "3.0": {
+      "hex": "0x1.2d58a83478e8ep+6",
+      "repr": "75.33657915103888"
+     }
+    }
+   },
+   "S4_mask_with_residuals": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1ec951fcf29cap-8",
+      "repr": "0.004376013294811585"
+     },
+     {
+      "hex": "0x1.27adecba96a91p-8",
+      "repr": "0.004511709494716813"
+     },
+     {
+      "hex": "0x1.2e9ab823968bbp-8",
+      "repr": "0.004617376285376003"
+     },
+     {
+      "hex": "0x1.3a4e8f154ccc4p-8",
+      "repr": "0.0047959422420717525"
+     },
+     {
+      "hex": "0x1.4ab263e32625cp-8",
+      "repr": "0.005046033274219566"
+     },
+     {
+      "hex": "0x1.60e3e4684c502p-8",
+      "repr": "0.005384677184609334"
+     },
+     {
+      "hex": "0x1.aa87aa3d29056p-8",
+      "repr": "0.0065083304045040116"
+     },
+     {
+      "hex": "0x1.a35b5a2cdee8bp-8",
+      "repr": "0.006398877635429688"
+     },
+     {
+      "hex": "0x1.ad7611906e9d4p-8",
+      "repr": "0.006553057945377156"
+     },
+     {
+      "hex": "0x1.cbb79911d8e8cp-8",
+      "repr": "0.007014727469001902"
+     },
+     {
+      "hex": "0x1.0cd3e9b62b715p-7",
+      "repr": "0.008203972928039907"
+     },
+     {
+      "hex": "0x1.dbefe6e66dc94p-8",
+      "repr": "0.007262224075410679"
+     },
+     {
+      "hex": "0x1.d89a1ff709d72p-8",
+      "repr": "0.007211334995225515"
+     },
+     {
+      "hex": "0x1.1a6f7fa08a725p-7",
+      "repr": "0.008619248693395651"
+     },
+     {
+      "hex": "0x1.34bda97001ff5p-7",
+      "repr": "0.009422023518723658"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.133b78a5b2ee8p-8",
+      "repr": "0.004199711756608805"
+     },
+     {
+      "hex": "0x1.0c0a5fd0c431fp-8",
+      "repr": "0.004089973823980824"
+     },
+     {
+      "hex": "0x1.0a28cc7fa1566p-8",
+      "repr": "0.004061269689946334"
+     },
+     {
+      "hex": "0x1.0ccab45061b8bp-8",
+      "repr": "0.004101437589617239"
+     },
+     {
+      "hex": "0x1.10bf5dc085941p-8",
+      "repr": "0.004161796940499508"
+     },
+     {
+      "hex": "0x1.1756ae029f81ep-8",
+      "repr": "0.004262368662805853"
+     },
+     {
+      "hex": "0x1.4420610e84811p-8",
+      "repr": "0.004945777602658922"
+     },
+     {
+      "hex": "0x1.382e465e8cb59p-8",
+      "repr": "0.004763500385297125"
+     },
+     {
+      "hex": "0x1.31f227aa585bep-8",
+      "repr": "0.00466836422342126"
+     },
+     {
+      "hex": "0x1.3d526553f98c1p-8",
+      "repr": "0.004841947305953721"
+     },
+     {
+      "hex": "0x1.553abdca2d57ep-8",
+      "repr": "0.005206748328580145"
+     },
+     {
+      "hex": "0x1.212bb23823e76p-8",
+      "repr": "0.0044123945337016714"
+     },
+     {
+      "hex": "0x1.1b691a8347dc3p-8",
+      "repr": "0.004324501965384755"
+     },
+     {
+      "hex": "0x1.2e8b369b1fd61p-8",
+      "repr": "0.00461645205643832"
+     },
+     {
+      "hex": "0x1.38f6c625c1877p-8",
+      "repr": "0.004775451064921047"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.79b4314433ccep+7",
+      "repr": "188.8519383729203"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.040499a8d2abbp+0",
+      "repr": "1.0156951939740526"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.6136a72cd7d5dp-6",
+      "repr": "0.021558440453529715"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.99aa808c2ae27p+5",
+      "repr": "51.20825299745439"
+     },
+     "10.0": {
+      "hex": "0x1.8e8599fd7a453p+6",
+      "repr": "99.63047023829249"
+     },
+     "3.0": {
+      "hex": "0x1.2d535e018ca35p+6",
+      "repr": "75.33141329213034"
+     }
+    }
+   },
+   "masking_cost_curve_dtv": {
+    "fracs": [
+     {
+      "hex": "0x0.0p+0",
+      "repr": "0.0"
+     },
+     {
+      "hex": "0x1.999999999999ap-5",
+      "repr": "0.05"
+     },
+     {
+      "hex": "0x1.999999999999ap-4",
+      "repr": "0.1"
+     },
+     {
+      "hex": "0x1.3333333333334p-3",
+      "repr": "0.15000000000000002"
+     },
+     {
+      "hex": "0x1.999999999999ap-3",
+      "repr": "0.2"
+     },
+     {
+      "hex": "0x1.0000000000000p-2",
+      "repr": "0.25"
+     },
+     {
+      "hex": "0x1.3333333333334p-2",
+      "repr": "0.30000000000000004"
+     },
+     {
+      "hex": "0x1.6666666666667p-2",
+      "repr": "0.35000000000000003"
+     },
+     {
+      "hex": "0x1.999999999999ap-2",
+      "repr": "0.4"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-2",
+      "repr": "0.45"
+     },
+     {
+      "hex": "0x1.0000000000000p-1",
+      "repr": "0.5"
+     },
+     {
+      "hex": "0x1.199999999999ap-1",
+      "repr": "0.55"
+     },
+     {
+      "hex": "0x1.3333333333334p-1",
+      "repr": "0.6000000000000001"
+     },
+     {
+      "hex": "0x1.4cccccccccccdp-1",
+      "repr": "0.65"
+     },
+     {
+      "hex": "0x1.6666666666667p-1",
+      "repr": "0.7000000000000001"
+     },
+     {
+      "hex": "0x1.8000000000000p-1",
+      "repr": "0.75"
+     },
+     {
+      "hex": "0x1.999999999999ap-1",
+      "repr": "0.8"
+     },
+     {
+      "hex": "0x1.b333333333334p-1",
+      "repr": "0.8500000000000001"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-1",
+      "repr": "0.9"
+     },
+     {
+      "hex": "0x1.e666666666667p-1",
+      "repr": "0.9500000000000001"
+     },
+     {
+      "hex": "0x1.f0a3d70a3d70ap-1",
+      "repr": "0.97"
+     }
+    ],
+    "years": [
+     {
+      "hex": "0x1.5bc161e3d84e0p-6",
+      "repr": "0.021225305171701403"
+     },
+     {
+      "hex": "0x1.60ebee0debc32p-6",
+      "repr": "0.021540625071505733"
+     },
+     {
+      "hex": "0x1.662415b2c5890p-6",
+      "repr": "0.021859189214489094"
+     },
+     {
+      "hex": "0x1.6b677af4a7451p-6",
+      "repr": "0.02218043334379544"
+     },
+     {
+      "hex": "0x1.70b34d53ef520p-6",
+      "repr": "0.022503686442850612"
+     },
+     {
+      "hex": "0x1.76043983ae579p-6",
+      "repr": "0.022828155676255932"
+     },
+     {
+      "hex": "0x1.7b56572536debp-6",
+      "repr": "0.02315290937700169"
+     },
+     {
+      "hex": "0x1.80a5c1cdc974bp-6",
+      "repr": "0.023477019559457173"
+     },
+     {
+      "hex": "0x1.85ee34f590c6ep-6",
+      "repr": "0.023799468725212262"
+     },
+     {
+      "hex": "0x1.8b297b3e39c89p-6",
+      "repr": "0.02411877665954568"
+     },
+     {
+      "hex": "0x1.904ed50d5e1dep-6",
+      "repr": "0.024432857569509518"
+     },
+     {
+      "hex": "0x1.9555e2c7050bbp-6",
+      "repr": "0.02473971506340498"
+     },
+     {
+      "hex": "0x1.9a359e0fb91cbp-6",
+      "repr": "0.025037197453359455"
+     },
+     {
+      "hex": "0x1.9ee3925ec2886p-6",
+      "repr": "0.025322812022786433"
+     },
+     {
+      "hex": "0x1.a353831a8064dp-6",
+      "repr": "0.02559364131048474"
+     },
+     {
+      "hex": "0x1.a774bedf0151dp-6",
+      "repr": "0.025845705411502985"
+     },
+     {
+      "hex": "0x1.ab372238570a1p-6",
+      "repr": "0.02607515661053184"
+     },
+     {
+      "hex": "0x1.ae88b700c3657p-6",
+      "repr": "0.026277712549065715"
+     },
+     {
+      "hex": "0x1.b153546c0b701p-6",
+      "repr": "0.02644809002247595"
+     },
+     {
+      "hex": "0x1.b37ef56823f8bp-6",
+      "repr": "0.02658056226260856"
+     },
+     {
+      "hex": "0x1.b42a663d3aebbp-6",
+      "repr": "0.026621436922978896"
+     }
+    ]
+   }
+  },
+  "pact2025": {
+   "S1_clean": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1eb707f47c00ep-8",
+      "repr": "0.004374923174040658"
+     },
+     {
+      "hex": "0x1.274e6f7ec8d83p-8",
+      "repr": "0.004506017895241301"
+     },
+     {
+      "hex": "0x1.2e9658c48ae2dp-8",
+      "repr": "0.004617115661442334"
+     },
+     {
+      "hex": "0x1.3ae4e74262f32p-8",
+      "repr": "0.004804903468890663"
+     },
+     {
+      "hex": "0x1.4ce780c14920fp-8",
+      "repr": "0.005079716619807786"
+     },
+     {
+      "hex": "0x1.63c86c88d1e9ep-8",
+      "repr": "0.005428816316289135"
+     },
+     {
+      "hex": "0x1.78af30e5136f4p-8",
+      "repr": "0.005747746884549921"
+     },
+     {
+      "hex": "0x1.8fd9d0cc5897cp-8",
+      "repr": "0.006101239658479304"
+     },
+     {
+      "hex": "0x1.b00fd8fda441ep-8",
+      "repr": "0.006592741466776379"
+     },
+     {
+      "hex": "0x1.cf7089a4de8e1p-8",
+      "repr": "0.007071527103898329"
+     },
+     {
+      "hex": "0x1.01a8a0b077489p-7",
+      "repr": "0.007863119565565195"
+     },
+     {
+      "hex": "0x1.d9fe1ffe90835p-8",
+      "repr": "0.00723255425561047"
+     },
+     {
+      "hex": "0x1.dd5244c192e21p-8",
+      "repr": "0.007283345972222161"
+     },
+     {
+      "hex": "0x1.1e5098b5394dap-7",
+      "repr": "0.00873763519707398"
+     },
+     {
+      "hex": "0x1.3855569271ae4p-7",
+      "repr": "0.009531657477862727"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.13d6cfd8ee2fcp-8",
+      "repr": "0.004208970779409734"
+     },
+     {
+      "hex": "0x1.0cac41ec95cbfp-8",
+      "repr": "0.004099622816816139"
+     },
+     {
+      "hex": "0x1.0aa7fac7b501fp-8",
+      "repr": "0.004068850255595917"
+     },
+     {
+      "hex": "0x1.0d775200de7fep-8",
+      "repr": "0.004111726303444028"
+     },
+     {
+      "hex": "0x1.117c577527912p-8",
+      "repr": "0.004173060752832096"
+     },
+     {
+      "hex": "0x1.181370d5c2886p-8",
+      "repr": "0.004273619697196312"
+     },
+     {
+      "hex": "0x1.20118bcf2da74p-8",
+      "repr": "0.004395577080848246"
+     },
+     {
+      "hex": "0x1.2948cec36c154p-8",
+      "repr": "0.004536200026834376"
+     },
+     {
+      "hex": "0x1.32d82429a6454p-8",
+      "repr": "0.00468207247617965"
+     },
+     {
+      "hex": "0x1.3e34d8b06db2dp-8",
+      "repr": "0.004855444815283144"
+     },
+     {
+      "hex": "0x1.4948677c748edp-8",
+      "repr": "0.005024457230734064"
+     },
+     {
+      "hex": "0x1.1e7e56377f770p-8",
+      "repr": "0.004371543931027108"
+     },
+     {
+      "hex": "0x1.1c800d9c2c9d2p-8",
+      "repr": "0.004341128657119291"
+     },
+     {
+      "hex": "0x1.2fab07820960ep-8",
+      "repr": "0.0046336072282762274"
+     },
+     {
+      "hex": "0x1.3a0d340d34523p-8",
+      "repr": "0.004792046745209863"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.75d7be2db2cc8p+7",
+      "repr": "186.92137282188037"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.5d9a4b7282444p-6",
+      "repr": "0.02133805625820552"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.9e4ada5bae9b1p+5",
+      "repr": "51.78654929758648"
+     },
+     "10.0": {
+      "hex": "0x1.92c15dc4f1f8ap+6",
+      "repr": "100.68883426405787"
+     },
+     "3.0": {
+      "hex": "0x1.30af59d3e2a86p+6",
+      "repr": "76.17124110289487"
+     }
+    }
+   },
+   "S2_uniform_dtv_0.3": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1eb707f47c00ep-8",
+      "repr": "0.004374923174040658"
+     },
+     {
+      "hex": "0x1.274e6f7ec8d83p-8",
+      "repr": "0.004506017895241301"
+     },
+     {
+      "hex": "0x1.2e9658c48ae2dp-8",
+      "repr": "0.004617115661442334"
+     },
+     {
+      "hex": "0x1.3ae4e74262f32p-8",
+      "repr": "0.004804903468890663"
+     },
+     {
+      "hex": "0x1.4ce780c14920fp-8",
+      "repr": "0.005079716619807786"
+     },
+     {
+      "hex": "0x1.8e67c2618f744p-8",
+      "repr": "0.0060791825831623715"
+     },
+     {
+      "hex": "0x1.cb1239b90ff5bp-8",
+      "repr": "0.0070048705029533654"
+     },
+     {
+      "hex": "0x1.e6bd3a976e0d1p-8",
+      "repr": "0.0074270504041395605"
+     },
+     {
+      "hex": "0x1.092bddec371cep-7",
+      "repr": "0.008092387543393278"
+     },
+     {
+      "hex": "0x1.1ecbc7f47b7cep-7",
+      "repr": "0.00875231994083583"
+     },
+     {
+      "hex": "0x1.418745e9f10d8p-7",
+      "repr": "0.009812268388380493"
+     },
+     {
+      "hex": "0x1.1dac02228639fp-7",
+      "repr": "0.008718014757549684"
+     },
+     {
+      "hex": "0x1.dd5244c192e21p-8",
+      "repr": "0.007283345972222161"
+     },
+     {
+      "hex": "0x1.1e5098b5394dap-7",
+      "repr": "0.00873763519707398"
+     },
+     {
+      "hex": "0x1.3855569271ae4p-7",
+      "repr": "0.009531657477862727"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.13d6cfd8ee2fcp-8",
+      "repr": "0.004208970779409734"
+     },
+     {
+      "hex": "0x1.0cac41ec95cbfp-8",
+      "repr": "0.004099622816816139"
+     },
+     {
+      "hex": "0x1.0aa7fac7b501fp-8",
+      "repr": "0.004068850255595917"
+     },
+     {
+      "hex": "0x1.0d775200de7fep-8",
+      "repr": "0.004111726303444028"
+     },
+     {
+      "hex": "0x1.117c577527912p-8",
+      "repr": "0.004173060752832096"
+     },
+     {
+      "hex": "0x1.30afca78994b8p-8",
+      "repr": "0.004649149829309689"
+     },
+     {
+      "hex": "0x1.4e46f6cef339fp-8",
+      "repr": "0.005100665336567638"
+     },
+     {
+      "hex": "0x1.59def170bb44ep-8",
+      "repr": "0.005277570672416477"
+     },
+     {
+      "hex": "0x1.6681ae2b3e706p-8",
+      "repr": "0.005470376035413121"
+     },
+     {
+      "hex": "0x1.7528a4972c776p-8",
+      "repr": "0.005693950827820751"
+     },
+     {
+      "hex": "0x1.82719de3e2cfep-8",
+      "repr": "0.005896664664656768"
+     },
+     {
+      "hex": "0x1.4969761f013ffp-8",
+      "repr": "0.005026427591478643"
+     },
+     {
+      "hex": "0x1.1c800d9c2c9d2p-8",
+      "repr": "0.004341128657119291"
+     },
+     {
+      "hex": "0x1.2fab07820960ep-8",
+      "repr": "0.0046336072282762274"
+     },
+     {
+      "hex": "0x1.3a0d340d34523p-8",
+      "repr": "0.004792046745209863"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.97b94c1ca54acp+7",
+      "repr": "203.86190881269192"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.173379ccbcab0p+0",
+      "repr": "1.0906292080732491"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.7d49744c5a0c6p-6",
+      "repr": "0.023271907398709123"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.86e9efe87b242p+5",
+      "repr": "48.86422711969182"
+     },
+     "10.0": {
+      "hex": "0x1.8665deabe188ap+6",
+      "repr": "97.59948223651932"
+     },
+     "3.0": {
+      "hex": "0x1.233d80d8aef1cp+6",
+      "repr": "72.81006182258392"
+     }
+    }
+   },
+   "S3_mask_default_excision": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1eb707f47c00ep-8",
+      "repr": "0.004374923174040658"
+     },
+     {
+      "hex": "0x1.274e6f7ec8d83p-8",
+      "repr": "0.004506017895241301"
+     },
+     {
+      "hex": "0x1.2e9658c48ae2dp-8",
+      "repr": "0.004617115661442334"
+     },
+     {
+      "hex": "0x1.3ae4e74262f32p-8",
+      "repr": "0.004804903468890663"
+     },
+     {
+      "hex": "0x1.4ce780c14920fp-8",
+      "repr": "0.005079716619807786"
+     },
+     {
+      "hex": "0x1.63c86c88d1e9ep-8",
+      "repr": "0.005428816316289135"
+     },
+     {
+      "hex": "0x1.accae353878b9p-8",
+      "repr": "0.006542854785520352"
+     },
+     {
+      "hex": "0x1.a53c3aada2014p-8",
+      "repr": "0.006427540136094496"
+     },
+     {
+      "hex": "0x1.b00fd8fda441ep-8",
+      "repr": "0.006592741466776379"
+     },
+     {
+      "hex": "0x1.cf7089a4de8e1p-8",
+      "repr": "0.007071527103898329"
+     },
+     {
+      "hex": "0x1.0ef74f60671b9p-7",
+      "repr": "0.008269227750866347"
+     },
+     {
+      "hex": "0x1.e19b9049327ffp-8",
+      "repr": "0.007348749853187896"
+     },
+     {
+      "hex": "0x1.dd5244c192e21p-8",
+      "repr": "0.007283345972222161"
+     },
+     {
+      "hex": "0x1.1e5098b5394dap-7",
+      "repr": "0.00873763519707398"
+     },
+     {
+      "hex": "0x1.3855569271ae4p-7",
+      "repr": "0.009531657477862727"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.13d6cfd8ee2fcp-8",
+      "repr": "0.004208970779409734"
+     },
+     {
+      "hex": "0x1.0cac41ec95cbfp-8",
+      "repr": "0.004099622816816139"
+     },
+     {
+      "hex": "0x1.0aa7fac7b501fp-8",
+      "repr": "0.004068850255595917"
+     },
+     {
+      "hex": "0x1.0d775200de7fep-8",
+      "repr": "0.004111726303444028"
+     },
+     {
+      "hex": "0x1.117c577527912p-8",
+      "repr": "0.004173060752832096"
+     },
+     {
+      "hex": "0x1.181370d5c2886p-8",
+      "repr": "0.004273619697196312"
+     },
+     {
+      "hex": "0x1.44ead231f8764p-8",
+      "repr": "0.004957844083010563"
+     },
+     {
+      "hex": "0x1.392ef84a0235cp-8",
+      "repr": "0.004778800599532253"
+     },
+     {
+      "hex": "0x1.32d82429a6454p-8",
+      "repr": "0.00468207247617965"
+     },
+     {
+      "hex": "0x1.3e34d8b06db2dp-8",
+      "repr": "0.004855444815283144"
+     },
+     {
+      "hex": "0x1.55d1ccfd8ea70p-8",
+      "repr": "0.0052157521691308245"
+     },
+     {
+      "hex": "0x1.21fefe26767f1p-8",
+      "repr": "0.0044249887928007195"
+     },
+     {
+      "hex": "0x1.1c800d9c2c9d2p-8",
+      "repr": "0.004341128657119291"
+     },
+     {
+      "hex": "0x1.2fab07820960ep-8",
+      "repr": "0.0046336072282762274"
+     },
+     {
+      "hex": "0x1.3a0d340d34523p-8",
+      "repr": "0.004792046745209863"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.7ba4a9d84efb9p+7",
+      "repr": "189.8216083141722"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.03f8d8013c9c9p+0",
+      "repr": "1.015515804578728"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.6306eec9d0c22p-6",
+      "repr": "0.021669133369197742"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.98d0ab381be5cp+5",
+      "repr": "51.10188907466065"
+     },
+     "10.0": {
+      "hex": "0x1.8e630fd04372cp+6",
+      "repr": "99.59674001132652"
+     },
+     "3.0": {
+      "hex": "0x1.2cf1ad1e83da2p+6",
+      "repr": "75.23601195983659"
+     }
+    }
+   },
+   "S4_mask_with_residuals": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.1eb707f47c00ep-8",
+      "repr": "0.004374923174040658"
+     },
+     {
+      "hex": "0x1.274e6f7ec8d83p-8",
+      "repr": "0.004506017895241301"
+     },
+     {
+      "hex": "0x1.2e9658c48ae2dp-8",
+      "repr": "0.004617115661442334"
+     },
+     {
+      "hex": "0x1.3ae4e74262f32p-8",
+      "repr": "0.004804903468890663"
+     },
+     {
+      "hex": "0x1.4ce780c14920fp-8",
+      "repr": "0.005079716619807786"
+     },
+     {
+      "hex": "0x1.63c86c88d1e9ep-8",
+      "repr": "0.005428816316289135"
+     },
+     {
+      "hex": "0x1.ad1530f925d93p-8",
+      "repr": "0.006547283607822324"
+     },
+     {
+      "hex": "0x1.a53c3aada2014p-8",
+      "repr": "0.006427540136094496"
+     },
+     {
+      "hex": "0x1.b00fd8fda441ep-8",
+      "repr": "0.006592741466776379"
+     },
+     {
+      "hex": "0x1.cf7089a4de8e1p-8",
+      "repr": "0.007071527103898329"
+     },
+     {
+      "hex": "0x1.0f410a777663cp-7",
+      "repr": "0.008278017149609622"
+     },
+     {
+      "hex": "0x1.e1c3c7b1e7866p-8",
+      "repr": "0.007351146939894892"
+     },
+     {
+      "hex": "0x1.dd5244c192e21p-8",
+      "repr": "0.007283345972222161"
+     },
+     {
+      "hex": "0x1.1e5098b5394dap-7",
+      "repr": "0.00873763519707398"
+     },
+     {
+      "hex": "0x1.3855569271ae4p-7",
+      "repr": "0.009531657477862727"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.13d6cfd8ee2fcp-8",
+      "repr": "0.004208970779409734"
+     },
+     {
+      "hex": "0x1.0cac41ec95cbfp-8",
+      "repr": "0.004099622816816139"
+     },
+     {
+      "hex": "0x1.0aa7fac7b501fp-8",
+      "repr": "0.004068850255595917"
+     },
+     {
+      "hex": "0x1.0d775200de7fep-8",
+      "repr": "0.004111726303444028"
+     },
+     {
+      "hex": "0x1.117c577527912p-8",
+      "repr": "0.004173060752832096"
+     },
+     {
+      "hex": "0x1.181370d5c2886p-8",
+      "repr": "0.004273619697196312"
+     },
+     {
+      "hex": "0x1.45161bf530440p-8",
+      "repr": "0.004960424256922613"
+     },
+     {
+      "hex": "0x1.392ef84a0235cp-8",
+      "repr": "0.004778800599532253"
+     },
+     {
+      "hex": "0x1.32d82429a6454p-8",
+      "repr": "0.00468207247617965"
+     },
+     {
+      "hex": "0x1.3e34d8b06db2dp-8",
+      "repr": "0.004855444815283144"
+     },
+     {
+      "hex": "0x1.56161684e0f60p-8",
+      "repr": "0.005219822404686741"
+     },
+     {
+      "hex": "0x1.22118071d1fe9p-8",
+      "repr": "0.0044260920129275206"
+     },
+     {
+      "hex": "0x1.1c800d9c2c9d2p-8",
+      "repr": "0.004341128657119291"
+     },
+     {
+      "hex": "0x1.2fab07820960ep-8",
+      "repr": "0.0046336072282762274"
+     },
+     {
+      "hex": "0x1.3a0d340d34523p-8",
+      "repr": "0.004792046745209863"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.7bb0c2c7bae8fp+7",
+      "repr": "189.8452360549604"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.040120b94e610p+0",
+      "repr": "1.0156422092826496"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.63123eeaf0b83p-6",
+      "repr": "0.021671830599881325"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.98c7c08853061p+5",
+      "repr": "51.09753519538277"
+     },
+     "10.0": {
+      "hex": "0x1.8e5ebfcf874cbp+6",
+      "repr": "99.59252857459357"
+     },
+     "3.0": {
+      "hex": "0x1.2cec63709b6cap+6",
+      "repr": "75.23084808300624"
+     }
+    }
+   },
+   "masking_cost_curve_dtv": {
+    "fracs": [
+     {
+      "hex": "0x0.0p+0",
+      "repr": "0.0"
+     },
+     {
+      "hex": "0x1.999999999999ap-5",
+      "repr": "0.05"
+     },
+     {
+      "hex": "0x1.999999999999ap-4",
+      "repr": "0.1"
+     },
+     {
+      "hex": "0x1.3333333333334p-3",
+      "repr": "0.15000000000000002"
+     },
+     {
+      "hex": "0x1.999999999999ap-3",
+      "repr": "0.2"
+     },
+     {
+      "hex": "0x1.0000000000000p-2",
+      "repr": "0.25"
+     },
+     {
+      "hex": "0x1.3333333333334p-2",
+      "repr": "0.30000000000000004"
+     },
+     {
+      "hex": "0x1.6666666666667p-2",
+      "repr": "0.35000000000000003"
+     },
+     {
+      "hex": "0x1.999999999999ap-2",
+      "repr": "0.4"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-2",
+      "repr": "0.45"
+     },
+     {
+      "hex": "0x1.0000000000000p-1",
+      "repr": "0.5"
+     },
+     {
+      "hex": "0x1.199999999999ap-1",
+      "repr": "0.55"
+     },
+     {
+      "hex": "0x1.3333333333334p-1",
+      "repr": "0.6000000000000001"
+     },
+     {
+      "hex": "0x1.4cccccccccccdp-1",
+      "repr": "0.65"
+     },
+     {
+      "hex": "0x1.6666666666667p-1",
+      "repr": "0.7000000000000001"
+     },
+     {
+      "hex": "0x1.8000000000000p-1",
+      "repr": "0.75"
+     },
+     {
+      "hex": "0x1.999999999999ap-1",
+      "repr": "0.8"
+     },
+     {
+      "hex": "0x1.b333333333334p-1",
+      "repr": "0.8500000000000001"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-1",
+      "repr": "0.9"
+     },
+     {
+      "hex": "0x1.e666666666667p-1",
+      "repr": "0.9500000000000001"
+     },
+     {
+      "hex": "0x1.f0a3d70a3d70ap-1",
+      "repr": "0.97"
+     }
+    ],
+    "years": [
+     {
+      "hex": "0x1.5d9a4b7282444p-6",
+      "repr": "0.02133805625820552"
+     },
+     {
+      "hex": "0x1.62c976d453fcep-6",
+      "repr": "0.021654478115408264"
+     },
+     {
+      "hex": "0x1.6806287131190p-6",
+      "repr": "0.02197412442616692"
+     },
+     {
+      "hex": "0x1.6d4dfe2ed8e2ep-6",
+      "repr": "0.022296426988203936"
+     },
+     {
+      "hex": "0x1.729e231320c12p-6",
+      "repr": "0.022620710613875224"
+     },
+     {
+      "hex": "0x1.77f33f200b3bap-6",
+      "repr": "0.02294617809836883"
+     },
+     {
+      "hex": "0x1.7d49744c5a0c6p-6",
+      "repr": "0.023271907398709123"
+     },
+     {
+      "hex": "0x1.829d590252f45p-6",
+      "repr": "0.023597084925582896"
+     },
+     {
+      "hex": "0x1.87ea256e2d477p-6",
+      "repr": "0.02392057090101615"
+     },
+     {
+      "hex": "0x1.8d29a8d96d1a9p-6",
+      "repr": "0.02424088944617756"
+     },
+     {
+      "hex": "0x1.92531ade907e1p-6",
+      "repr": "0.024555946578637026"
+     },
+     {
+      "hex": "0x1.975df249b4e2dp-6",
+      "repr": "0.0248637071698125"
+     },
+     {
+      "hex": "0x1.9c41269d41fd8p-6",
+      "repr": "0.025162017544999887"
+     },
+     {
+      "hex": "0x1.a0f241f398907p-6",
+      "repr": "0.025448383718306846"
+     },
+     {
+      "hex": "0x1.a565115e058edp-6",
+      "repr": "0.025719897232272016"
+     },
+     {
+      "hex": "0x1.a988f0dba0022p-6",
+      "repr": "0.025972590649416934"
+     },
+     {
+      "hex": "0x1.ad4da239afc93p-6",
+      "repr": "0.026202591345960768"
+     },
+     {
+      "hex": "0x1.b0a12419f6508p-6",
+      "repr": "0.026405606513297847"
+     },
+     {
+      "hex": "0x1.b36d457840c7bp-6",
+      "repr": "0.026576345292607755"
+     },
+     {
+      "hex": "0x1.b59a06ee32a3ep-6",
+      "repr": "0.026709086196925684"
+     },
+     {
+      "hex": "0x1.b645d1baf7ee5p-6",
+      "repr": "0.02675004464606347"
+     }
+    ]
+   }
+  },
+  "planck2018": {
+   "S1_clean": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.31949a2d2f47dp-8",
+      "repr": "0.004662788048503616"
+     },
+     {
+      "hex": "0x1.3b4a2d392b575p-8",
+      "repr": "0.00481093982777502"
+     },
+     {
+      "hex": "0x1.4601576f587c8p-8",
+      "repr": "0.004974445196554052"
+     },
+     {
+      "hex": "0x1.4fc3e5ebbf612p-8",
+      "repr": "0.005123370774297269"
+     },
+     {
+      "hex": "0x1.64a354da6a033p-8",
+      "repr": "0.0054418642197689325"
+     },
+     {
+      "hex": "0x1.7dcd50211b885p-8",
+      "repr": "0.0058258362415540875"
+     },
+     {
+      "hex": "0x1.92cf794fb56bep-8",
+      "repr": "0.006146399609596008"
+     },
+     {
+      "hex": "0x1.afb15914770d8p-8",
+      "repr": "0.006587108848602884"
+     },
+     {
+      "hex": "0x1.ce9393ae7f781p-8",
+      "repr": "0.0070583568144665385"
+     },
+     {
+      "hex": "0x1.f29a1e987c582p-8",
+      "repr": "0.007608063192024674"
+     },
+     {
+      "hex": "0x1.16c628cdcd2fep-7",
+      "repr": "0.008507509158883316"
+     },
+     {
+      "hex": "0x1.fbc33c1422bd4p-8",
+      "repr": "0.007747842948570633"
+     },
+     {
+      "hex": "0x1.011daa8271f2bp-7",
+      "repr": "0.007846554047219087"
+     },
+     {
+      "hex": "0x1.3579a3b83adf6p-7",
+      "repr": "0.00944443220256284"
+     },
+     {
+      "hex": "0x1.51344f4076149p-7",
+      "repr": "0.010290659615677671"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.158f4fa11e667p-8",
+      "repr": "0.0042352265746728795"
+     },
+     {
+      "hex": "0x1.0e9a0a1cd5daep-8",
+      "repr": "0.004129054516702464"
+     },
+     {
+      "hex": "0x1.0da17256d2471p-8",
+      "repr": "0.004114237227278315"
+     },
+     {
+      "hex": "0x1.107c6a2a64c4ap-8",
+      "repr": "0.004157806319557153"
+     },
+     {
+      "hex": "0x1.15685d17e3416p-8",
+      "repr": "0.004232905128344752"
+     },
+     {
+      "hex": "0x1.1c72d59b6b539p-8",
+      "repr": "0.004340340757534472"
+     },
+     {
+      "hex": "0x1.24d1b2fe3f18ep-8",
+      "repr": "0.0044680654520984475"
+     },
+     {
+      "hex": "0x1.2eaed24d5f1dap-8",
+      "repr": "0.004618574469870096"
+     },
+     {
+      "hex": "0x1.3892e3f6da83fp-8",
+      "repr": "0.004769497542705336"
+     },
+     {
+      "hex": "0x1.448e0c6b179b0p-8",
+      "repr": "0.004952314407175626"
+     },
+     {
+      "hex": "0x1.4fe1528c09b18p-8",
+      "repr": "0.0051251246004884385"
+     },
+     {
+      "hex": "0x1.247830c7132a8p-8",
+      "repr": "0.004462730320551479"
+     },
+     {
+      "hex": "0x1.22270445a3930p-8",
+      "repr": "0.004427374403930082"
+     },
+     {
+      "hex": "0x1.35d45a61a6641p-8",
+      "repr": "0.004727623048574937"
+     },
+     {
+      "hex": "0x1.4118d76893fb7p-8",
+      "repr": "0.004899551954238682"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.a190a6cf37804p+7",
+      "repr": "208.7825226550341"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.867d7403f1818p-6",
+      "repr": "0.023833621307652292"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.86b7035b69f3cp+5",
+      "repr": "48.839361871882346"
+     },
+     "10.0": {
+      "hex": "0x1.80f56ebe657efp+6",
+      "repr": "96.23968026632768"
+     },
+     "3.0": {
+      "hex": "0x1.216631ea9c21bp+6",
+      "repr": "72.34979979112579"
+     }
+    }
+   },
+   "S2_uniform_dtv_0.3": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.31949a2d2f47dp-8",
+      "repr": "0.004662788048503616"
+     },
+     {
+      "hex": "0x1.3b4a2d392b575p-8",
+      "repr": "0.00481093982777502"
+     },
+     {
+      "hex": "0x1.4601576f587c8p-8",
+      "repr": "0.004974445196554052"
+     },
+     {
+      "hex": "0x1.4fc3e5ebbf612p-8",
+      "repr": "0.005123370774297269"
+     },
+     {
+      "hex": "0x1.64a354da6a033p-8",
+      "repr": "0.0054418642197689325"
+     },
+     {
+      "hex": "0x1.abe65484bf76cp-8",
+      "repr": "0.006529231676493424"
+     },
+     {
+      "hex": "0x1.ebbb42839d02fp-8",
+      "repr": "0.007503226984784602"
+     },
+     {
+      "hex": "0x1.0765106b9f43dp-7",
+      "repr": "0.008038170831463737"
+     },
+     {
+      "hex": "0x1.1c7fda3979a15p-7",
+      "repr": "0.008682233385980212"
+     },
+     {
+      "hex": "0x1.3570aa38776cap-7",
+      "repr": "0.009443362346185497"
+     },
+     {
+      "hex": "0x1.5c9297d99e430p-7",
+      "repr": "0.010637592454474015"
+     },
+     {
+      "hex": "0x1.328ade9bff4b7p-7",
+      "repr": "0.009354933448771125"
+     },
+     {
+      "hex": "0x1.011daa8271f2bp-7",
+      "repr": "0.007846554047219087"
+     },
+     {
+      "hex": "0x1.3579a3b83adf6p-7",
+      "repr": "0.00944443220256284"
+     },
+     {
+      "hex": "0x1.51344f4076149p-7",
+      "repr": "0.010290659615677671"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.158f4fa11e667p-8",
+      "repr": "0.0042352265746728795"
+     },
+     {
+      "hex": "0x1.0e9a0a1cd5daep-8",
+      "repr": "0.004129054516702464"
+     },
+     {
+      "hex": "0x1.0da17256d2471p-8",
+      "repr": "0.004114237227278315"
+     },
+     {
+      "hex": "0x1.107c6a2a64c4ap-8",
+      "repr": "0.004157806319557153"
+     },
+     {
+      "hex": "0x1.15685d17e3416p-8",
+      "repr": "0.004232905128344752"
+     },
+     {
+      "hex": "0x1.35bd87e574c2ep-8",
+      "repr": "0.004726262739001048"
+     },
+     {
+      "hex": "0x1.54637634ee6fbp-8",
+      "repr": "0.005193916663239535"
+     },
+     {
+      "hex": "0x1.60fa9d2aa49afp-8",
+      "repr": "0.005386031504388474"
+     },
+     {
+      "hex": "0x1.6e100032a2290p-8",
+      "repr": "0.00558567051724225"
+     },
+     {
+      "hex": "0x1.7d4f46a7ecf51p-8",
+      "repr": "0.005818323850622268"
+     },
+     {
+      "hex": "0x1.8ae5fd57fe9d7p-8",
+      "repr": "0.006025671340462022"
+     },
+     {
+      "hex": "0x1.50f12cfe52c3fp-8",
+      "repr": "0.005141328320244886"
+     },
+     {
+      "hex": "0x1.22270445a3930p-8",
+      "repr": "0.004427374403930082"
+     },
+     {
+      "hex": "0x1.35d45a61a6641p-8",
+      "repr": "0.004727623048574937"
+     },
+     {
+      "hex": "0x1.4118d76893fb7p-8",
+      "repr": "0.004899551954238682"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.c7982317a7b72p+7",
+      "repr": "227.79714273378664"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.17509d0136ef9p+0",
+      "repr": "1.0910738113370242"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.aa0db02157df6p-6",
+      "repr": "0.026004240038103497"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.7079ea6b40941p+5",
+      "repr": "46.05952914992168"
+     },
+     "10.0": {
+      "hex": "0x1.74f11787401ecp+6",
+      "repr": "93.23544131592615"
+     },
+     "3.0": {
+      "hex": "0x1.1475ecfb318f0p+6",
+      "repr": "69.11516182413084"
+     }
+    }
+   },
+   "S3_mask_default_excision": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.31949a2d2f47dp-8",
+      "repr": "0.004662788048503616"
+     },
+     {
+      "hex": "0x1.3b4a2d392b575p-8",
+      "repr": "0.00481093982777502"
+     },
+     {
+      "hex": "0x1.4601576f587c8p-8",
+      "repr": "0.004974445196554052"
+     },
+     {
+      "hex": "0x1.4fc3e5ebbf612p-8",
+      "repr": "0.005123370774297269"
+     },
+     {
+      "hex": "0x1.64a354da6a033p-8",
+      "repr": "0.0054418642197689325"
+     },
+     {
+      "hex": "0x1.7dcd50211b885p-8",
+      "repr": "0.0058258362415540875"
+     },
+     {
+      "hex": "0x1.caaedac382531p-8",
+      "repr": "0.006998947533710707"
+     },
+     {
+      "hex": "0x1.c6c7b6b9a3e56p-8",
+      "repr": "0.006939394102701243"
+     },
+     {
+      "hex": "0x1.ce9393ae7f781p-8",
+      "repr": "0.0070583568144665385"
+     },
+     {
+      "hex": "0x1.f29a1e987c582p-8",
+      "repr": "0.007608063192024674"
+     },
+     {
+      "hex": "0x1.254fc90e8e5d4p-7",
+      "repr": "0.008951161548895671"
+     },
+     {
+      "hex": "0x1.01ff452a37037p-7",
+      "repr": "0.007873448154377722"
+     },
+     {
+      "hex": "0x1.011daa8271f2bp-7",
+      "repr": "0.007846554047219087"
+     },
+     {
+      "hex": "0x1.3579a3b83adf6p-7",
+      "repr": "0.00944443220256284"
+     },
+     {
+      "hex": "0x1.51344f4076149p-7",
+      "repr": "0.010290659615677671"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.158f4fa11e667p-8",
+      "repr": "0.0042352265746728795"
+     },
+     {
+      "hex": "0x1.0e9a0a1cd5daep-8",
+      "repr": "0.004129054516702464"
+     },
+     {
+      "hex": "0x1.0da17256d2471p-8",
+      "repr": "0.004114237227278315"
+     },
+     {
+      "hex": "0x1.107c6a2a64c4ap-8",
+      "repr": "0.004157806319557153"
+     },
+     {
+      "hex": "0x1.15685d17e3416p-8",
+      "repr": "0.004232905128344752"
+     },
+     {
+      "hex": "0x1.1c72d59b6b539p-8",
+      "repr": "0.004340340757534472"
+     },
+     {
+      "hex": "0x1.4a62d42389ee5p-8",
+      "repr": "0.0050412910382317865"
+     },
+     {
+      "hex": "0x1.3edee52bf9dd9p-8",
+      "repr": "0.004865580511228506"
+     },
+     {
+      "hex": "0x1.3892e3f6da83fp-8",
+      "repr": "0.004769497542705336"
+     },
+     {
+      "hex": "0x1.448e0c6b179b0p-8",
+      "repr": "0.004952314407175626"
+     },
+     {
+      "hex": "0x1.5ccdb0aaf70a0p-8",
+      "repr": "0.0053223186796139965"
+     },
+     {
+      "hex": "0x1.28175452e4cf5p-8",
+      "repr": "0.004517992102495362"
+     },
+     {
+      "hex": "0x1.22270445a3930p-8",
+      "repr": "0.004427374403930082"
+     },
+     {
+      "hex": "0x1.35d45a61a6641p-8",
+      "repr": "0.004727623048574937"
+     },
+     {
+      "hex": "0x1.4118d76893fb7p-8",
+      "repr": "0.004899551954238682"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.a80bb8cd6f774p+7",
+      "repr": "212.02289430604617"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.03f923c4a77f9p+0",
+      "repr": "1.0155203204262746"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.8c8cf2f4f393cp-6",
+      "repr": "0.024203526747265544"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.818bcad4feff6p+5",
+      "repr": "48.19325796511832"
+     },
+     "10.0": {
+      "hex": "0x1.7cc4c7d39a584p+6",
+      "repr": "95.19216852788492"
+     },
+     "3.0": {
+      "hex": "0x1.1dd693d69e088p+6",
+      "repr": "71.45954833354529"
+     }
+    }
+   },
+   "S4_mask_with_residuals": {
+    "per_bin_error_dv_1yr": [
+     {
+      "hex": "0x1.31949a2d2f47dp-8",
+      "repr": "0.004662788048503616"
+     },
+     {
+      "hex": "0x1.3b4a2d392b575p-8",
+      "repr": "0.00481093982777502"
+     },
+     {
+      "hex": "0x1.4601576f587c8p-8",
+      "repr": "0.004974445196554052"
+     },
+     {
+      "hex": "0x1.4fc3e5ebbf612p-8",
+      "repr": "0.005123370774297269"
+     },
+     {
+      "hex": "0x1.64a354da6a033p-8",
+      "repr": "0.0054418642197689325"
+     },
+     {
+      "hex": "0x1.7dcd50211b885p-8",
+      "repr": "0.0058258362415540875"
+     },
+     {
+      "hex": "0x1.cafefb2122688p-8",
+      "repr": "0.007003723441025074"
+     },
+     {
+      "hex": "0x1.c6c7b6b9a3e56p-8",
+      "repr": "0.006939394102701243"
+     },
+     {
+      "hex": "0x1.ce9393ae7f781p-8",
+      "repr": "0.0070583568144665385"
+     },
+     {
+      "hex": "0x1.f29a1e987c582p-8",
+      "repr": "0.007608063192024674"
+     },
+     {
+      "hex": "0x1.25a0588a1d7d7p-7",
+      "repr": "0.008960765106376485"
+     },
+     {
+      "hex": "0x1.021501921c9f4p-7",
+      "repr": "0.007876039282767679"
+     },
+     {
+      "hex": "0x1.011daa8271f2bp-7",
+      "repr": "0.007846554047219087"
+     },
+     {
+      "hex": "0x1.3579a3b83adf6p-7",
+      "repr": "0.00944443220256284"
+     },
+     {
+      "hex": "0x1.51344f4076149p-7",
+      "repr": "0.010290659615677671"
+     }
+    ],
+    "per_bin_error_fs8_1yr": [
+     {
+      "hex": "0x1.158f4fa11e667p-8",
+      "repr": "0.0042352265746728795"
+     },
+     {
+      "hex": "0x1.0e9a0a1cd5daep-8",
+      "repr": "0.004129054516702464"
+     },
+     {
+      "hex": "0x1.0da17256d2471p-8",
+      "repr": "0.004114237227278315"
+     },
+     {
+      "hex": "0x1.107c6a2a64c4ap-8",
+      "repr": "0.004157806319557153"
+     },
+     {
+      "hex": "0x1.15685d17e3416p-8",
+      "repr": "0.004232905128344752"
+     },
+     {
+      "hex": "0x1.1c72d59b6b539p-8",
+      "repr": "0.004340340757534472"
+     },
+     {
+      "hex": "0x1.4a8f5367d0530p-8",
+      "repr": "0.005043943274189375"
+     },
+     {
+      "hex": "0x1.3edee52bf9dd9p-8",
+      "repr": "0.004865580511228506"
+     },
+     {
+      "hex": "0x1.3892e3f6da83fp-8",
+      "repr": "0.004769497542705336"
+     },
+     {
+      "hex": "0x1.448e0c6b179b0p-8",
+      "repr": "0.004952314407175626"
+     },
+     {
+      "hex": "0x1.5d14208dd6053p-8",
+      "repr": "0.00532651705528771"
+     },
+     {
+      "hex": "0x1.282a770304811p-8",
+      "repr": "0.004519132667171647"
+     },
+     {
+      "hex": "0x1.22270445a3930p-8",
+      "repr": "0.004427374403930082"
+     },
+     {
+      "hex": "0x1.35d45a61a6641p-8",
+      "repr": "0.004727623048574937"
+     },
+     {
+      "hex": "0x1.4118d76893fb7p-8",
+      "repr": "0.004899551954238682"
+     }
+    ],
+    "required_time": {
+     "duty": {
+      "hex": "0x1.0000000000000p+0",
+      "repr": "1.0"
+     },
+     "hours": {
+      "hex": "0x1.a8194132d8760p+7",
+      "repr": "212.04932555096002"
+     },
+     "hours_per_year": {
+      "hex": "0x1.11c0000000000p+13",
+      "repr": "8760.0"
+     },
+     "penalty_vs_clean": {
+      "hex": "0x1.04016fb6b58b1p+0",
+      "repr": "1.0156469174449223"
+     },
+     "target_sigma": {
+      "hex": "0x1.4000000000000p+2",
+      "repr": "5.0"
+     },
+     "years": {
+      "hex": "0x1.8c999ab88cb48p-6",
+      "repr": "0.02420654401266667"
+     },
+     "zbin": "survey"
+    },
+    "significance": {
+     "1.0": {
+      "hex": "0x1.81834e0df6895p+5",
+      "repr": "48.18911372097606"
+     },
+     "10.0": {
+      "hex": "0x1.7cc0950f65156p+6",
+      "repr": "95.18806861929383"
+     },
+     "3.0": {
+      "hex": "0x1.1dd18089c0f4ap+6",
+      "repr": "71.45459189644058"
+     }
+    }
+   },
+   "masking_cost_curve_dtv": {
+    "fracs": [
+     {
+      "hex": "0x0.0p+0",
+      "repr": "0.0"
+     },
+     {
+      "hex": "0x1.999999999999ap-5",
+      "repr": "0.05"
+     },
+     {
+      "hex": "0x1.999999999999ap-4",
+      "repr": "0.1"
+     },
+     {
+      "hex": "0x1.3333333333334p-3",
+      "repr": "0.15000000000000002"
+     },
+     {
+      "hex": "0x1.999999999999ap-3",
+      "repr": "0.2"
+     },
+     {
+      "hex": "0x1.0000000000000p-2",
+      "repr": "0.25"
+     },
+     {
+      "hex": "0x1.3333333333334p-2",
+      "repr": "0.30000000000000004"
+     },
+     {
+      "hex": "0x1.6666666666667p-2",
+      "repr": "0.35000000000000003"
+     },
+     {
+      "hex": "0x1.999999999999ap-2",
+      "repr": "0.4"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-2",
+      "repr": "0.45"
+     },
+     {
+      "hex": "0x1.0000000000000p-1",
+      "repr": "0.5"
+     },
+     {
+      "hex": "0x1.199999999999ap-1",
+      "repr": "0.55"
+     },
+     {
+      "hex": "0x1.3333333333334p-1",
+      "repr": "0.6000000000000001"
+     },
+     {
+      "hex": "0x1.4cccccccccccdp-1",
+      "repr": "0.65"
+     },
+     {
+      "hex": "0x1.6666666666667p-1",
+      "repr": "0.7000000000000001"
+     },
+     {
+      "hex": "0x1.8000000000000p-1",
+      "repr": "0.75"
+     },
+     {
+      "hex": "0x1.999999999999ap-1",
+      "repr": "0.8"
+     },
+     {
+      "hex": "0x1.b333333333334p-1",
+      "repr": "0.8500000000000001"
+     },
+     {
+      "hex": "0x1.ccccccccccccdp-1",
+      "repr": "0.9"
+     },
+     {
+      "hex": "0x1.e666666666667p-1",
+      "repr": "0.9500000000000001"
+     },
+     {
+      "hex": "0x1.f0a3d70a3d70ap-1",
+      "repr": "0.97"
+     }
+    ],
+    "years": [
+     {
+      "hex": "0x1.867d7403f1818p-6",
+      "repr": "0.023833621307652292"
+     },
+     {
+      "hex": "0x1.8c4b4eb9d9503p-6",
+      "repr": "0.024187876587707723"
+     },
+     {
+      "hex": "0x1.9229e969f4f11p-6",
+      "repr": "0.024546125357871654"
+     },
+     {
+      "hex": "0x1.98165ac488325p-6",
+      "repr": "0.024907673492751265"
+     },
+     {
+      "hex": "0x1.9e0d9d9f07945p-6",
+      "repr": "0.025271800925218874"
+     },
+     {
+      "hex": "0x1.a40c21f36b604p-6",
+      "repr": "0.025637658267148936"
+     },
+     {
+      "hex": "0x1.aa0db02157df6p-6",
+      "repr": "0.026004240038103497"
+     },
+     {
+      "hex": "0x1.b00d4ff89ee09p-6",
+      "repr": "0.02637036142048824"
+     },
+     {
+      "hex": "0x1.b6052c2649ac4p-6",
+      "repr": "0.02673463164787894"
+     },
+     {
+      "hex": "0x1.bbee717845519p-6",
+      "repr": "0.027095423517569637"
+     },
+     {
+      "hex": "0x1.c1c1294c9727fp-6",
+      "repr": "0.027450838404876606"
+     },
+     {
+      "hex": "0x1.c772bf2bf37bfp-6",
+      "repr": "0.027798353854272536"
+     },
+     {
+      "hex": "0x1.ccf6fe771363fp-6",
+      "repr": "0.02813505983458797"
+     },
+     {
+      "hex": "0x1.d2422ebedcd32p-6",
+      "repr": "0.028458161973913217"
+     },
+     {
+      "hex": "0x1.d746d4004c35ap-6",
+      "repr": "0.02876444533575593"
+     },
+     {
+      "hex": "0x1.dbf4abfbc6b10p-6",
+      "repr": "0.029050033524167296"
+     },
+     {
+      "hex": "0x1.e036ea760cfbbp-6",
+      "repr": "0.029309967962219945"
+     },
+     {
+      "hex": "0x1.e3f9dbaee9f99p-6",
+      "repr": "0.029539551290923425"
+     },
+     {
+      "hex": "0x1.e72449df244e5p-6",
+      "repr": "0.029732772960930815"
+     },
+     {
+      "hex": "0x1.e99a590468838p-6",
+      "repr": "0.029882990771177925"
+     },
+     {
+      "hex": "0x1.ea5cb9d179d97p-6",
+      "repr": "0.029929334128522802"
+     }
+    ]
+   }
+  }
+ },
+ "source": "The forecast goldens of RFIsher e041d5e (M0, F.1 step 3), recorded with RadioFisher 12a1616 bound and unbound: the results, the forecast command's stdout, and the bound/unbound agreement. A bank path in an argv is relative to the repository.",
+ "values_sha256": "d42e46bebf7c259e0fa0c6dab143ea5a3543eeb4d5a12b5af6dc66ed7718da72"
+}

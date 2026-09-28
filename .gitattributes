@@ -18,12 +18,9 @@ src/rfisher/data/*.dat text eol=lf
 src/rfisher/data/response_banks/*.npz binary
 src/rfisher/data/tolerances/* text eol=lf
 projects/**/*.yaml text eol=lf
+tests/golden/*.json text eol=lf
 
 # Release evidence hashes identify the checked-in bytes, independent of a
 # contributor's core.autocrlf setting.
 docs/*.schema.json text eol=lf
 docs/releases/*.json text eol=lf
-
-# Authenticate the local archive tolerance cache with stable line endings.
-data/world_tolerances.csv text eol=lf
-data/world_tolerances.provenance.json text eol=lf

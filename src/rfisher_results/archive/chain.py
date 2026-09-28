@@ -53,6 +53,7 @@ from pathlib import Path
 import numpy as np
 
 from rfisher import residual
+from rfisher.forecast.radiofisher_bao.filter_scenarios import DEFAULT_DELAY_KEY, DELAY_SUPPRESSION_DB
 
 from .products import Product
 
@@ -115,7 +116,7 @@ def booked_components(corr: residual.CorrelationTime) -> tuple[tuple[float, floa
 
 
 def residual_chain(product_path: Path | str, *, off_through: str | None = None, off_from: str | None = None,
-                   delay_key: str = residual.DEFAULT_DELAY_KEY) -> ChainResult:
+                   delay_key: str = DEFAULT_DELAY_KEY) -> ChainResult:
     """Shelf statistics, correlation time and the booked coherence gain of one channel."""
     path = str(product_path)
     stats = residual.shelf_statistics(path, off_through=off_through, off_from=off_from)
@@ -139,7 +140,7 @@ def residual_chain(product_path: Path | str, *, off_through: str | None = None, 
         tau_c_high=float(corr.tau_hi) if corr.tau_hi is not None else math.nan,
         tau_quality=str(corr.quality), tau_reason=str(corr.reason or ""),
         components=components, gain=gain, delay_key=delay_key,
-        delay_suppression_db=float(residual.DELAY_SUPPRESSION_DB[delay_key]),
+        delay_suppression_db=float(DELAY_SUPPRESSION_DB[delay_key]),
     )
 
 
@@ -185,7 +186,7 @@ def invalidate_frames(arrays: dict, frames) -> dict:
 
 
 def residual_chain_on_frames(product: Product, frames, *, population: str, off_through: str | None = None,
-                             off_from: str | None = None, delay_key: str = residual.DEFAULT_DELAY_KEY) -> ChainResult:
+                             off_from: str | None = None, delay_key: str = DEFAULT_DELAY_KEY) -> ChainResult:
     """The chain on a frame mask: ``valid`` is cleared outside ``frames`` in a temporary copy of the product."""
     frames = np.asarray(frames, dtype=bool)
     if frames.shape != (product.n_frames,):

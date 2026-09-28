@@ -1,24 +1,18 @@
 """Named analytic residual templates remain callable and auditable."""
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from rfisher.forecast.radiofisher_bao import response as bias_tolerance
 from rfisher.forecast.radiofisher_bao.bank import (
     banks as fisherbank, templates as residual_templates)
 from rfisher.forecast.radiofisher_bao.bank.backend import find_radiofisher_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-BIAS_SPEC = importlib.util.spec_from_file_location(
-    "rfisher_test_named_template_bias_tolerance",
-    ROOT / "scripts" / "bias_tolerance.py")
-assert BIAS_SPEC is not None and BIAS_SPEC.loader is not None
-bias_tolerance = importlib.util.module_from_spec(BIAS_SPEC)
-BIAS_SPEC.loader.exec_module(bias_tolerance)
 
 
 @pytest.mark.parametrize("family", residual_templates.FAMILIES)
@@ -103,7 +97,7 @@ def _assert_authenticated_template_build(tmp_path, cosmology):
             ROOT,
             **fisherbank.BANK_SOURCE_MANIFEST)["working_tree_sha256"]
 
-    authenticated = bias_tolerance.load_bias_bank(output, rf_dir=rf_dir)
+    authenticated = bias_tolerance.load_response_bank(output, rf_dir=rf_dir)
     assert authenticated.evaluation_identity["baonoise"][
         "working_tree_sha256"] == bank.meta["provenance"]["baonoise"][
             "working_tree_sha256"]
@@ -119,7 +113,7 @@ def _assert_authenticated_template_build(tmp_path, cosmology):
 
     bank.meta["provenance"]["baonoise"]["working_tree_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="baonoise.working_tree_sha256"):
-        bias_tolerance._evaluation_identity(bank, rf_dir=rf_dir)
+        bias_tolerance.evaluation_identity(bank, rf_dir=rf_dir)
 
 
 def test_no_empirical_or_sidereal_family_is_fabricated():

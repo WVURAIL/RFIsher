@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import math
+from types import SimpleNamespace
 
 import pytest
 
@@ -110,45 +111,44 @@ def test_the_csv_round_trips_floats_exactly(tmp_path):
 def test_unauthenticated_cache_is_not_accepted(tmp_path):
     path = tmp_path / "cache.csv"
     path.write_text("old,unverified,cache\n")
-    assert not worlds._cache_is_current(path, tmp_path)
-    with pytest.raises(ValueError, match="required bias-response bank is missing"):
+    with pytest.raises(ValueError, match="no provenance sidecar"):
         worlds.tolerances(bank_dir=tmp_path, cache=path)
+    with pytest.raises(ValueError, match="required bias-response bank is missing"):
+        worlds.tolerances(bank_dir=tmp_path, cache=tmp_path / "new.csv", rebuild=True)
 
 
 def test_authenticated_cache_roundtrip_and_content_changes(tmp_path, monkeypatch):
     import json
-    from types import SimpleNamespace
-    for _, filename, _, _ in worlds.WORLDS:
-        (tmp_path / filename).write_bytes(b"fixture bank")
-    bt = SimpleNamespace(load_bias_bank=lambda *a, **k: SimpleNamespace(evaluation_identity={"source": "v1"}))
-    monkeypatch.setattr(worlds, "_bias_tolerance", lambda: bt)
     path = tmp_path / "cache.csv"
     with path.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(worlds.CACHE_COLUMNS))
         w.writeheader()
         w.writerows(_rows())
+    model = SimpleNamespace(target_years=1.0, identity=lambda: {"sources": {}, "banks": {"source": "v1"}})
+    monkeypatch.setattr(worlds, "_model", lambda bank_dir: model)
     path.with_suffix(".provenance.json").write_text(json.dumps(worlds._cache_identity(path, tmp_path)))
-    assert worlds._cache_is_current(path, tmp_path)
     back = worlds.tolerances(bank_dir=tmp_path, cache=path)
     assert isinstance(back[0]["bin_index"], int)
     assert isinstance(back[0]["at_target"], bool)
     old = path.read_bytes()
     path.write_bytes(old + b"\n")
-    assert not worlds._cache_is_current(path, tmp_path)
-    path.write_bytes(old)
-    (tmp_path / worlds.WORLDS[0][1]).write_bytes(b"changed bank")
-    assert not worlds._cache_is_current(path, tmp_path)
+    with pytest.raises(ValueError, match="csv_sha256"):
+        worlds.tolerances(bank_dir=tmp_path, cache=path)
 
 
 def test_target_time_refusal_is_not_replaced_by_another_year(monkeypatch):
-    from types import SimpleNamespace
-    target_hours = worlds.TARGET_YEARS * worlds.survey.OVERVIEW_ONSKY_YEAR_HOURS
-    bank = SimpleNamespace(paramnames=list(worlds.PARAMETERS), zs=[1.3, 1.4], F=lambda ib, t: t)
-    bt = SimpleNamespace(
-        load_bias_bank=lambda *a, **k: bank,
-        bias_per_unit_r=lambda *a: ({p: 1. for p in worlds.PARAMETERS}, {p: .01 for p in worlds.PARAMETERS}),
-        stability=lambda b, ib, t, names, p, frac: (2. if t == target_hours and p == "aperp" else 1., 1))
-    monkeypatch.setattr(worlds, "_bias_tolerance", lambda: bt)
+    from rfisher.forecast.radiofisher_bao.bank import experiments
+    from rfisher.science_model import Bin, Parameters, Scenario
+    target_hours = worlds.TARGET_YEARS * experiments.OVERVIEW_ONSKY_YEAR_HOURS
+    model = SimpleNamespace(
+        parameters=Parameters(tuple(worlds.PARAMETERS)), zeta=1.0, target_years=1.0,
+        year_grid=(1.0, 2.0, 3.0, 5.0, 8.0), maximum_tolerance_ratio=1.2,
+        scenarios=(Scenario("none", "rule", 0.0, "bank"),),
+        load=lambda name: None, bins=lambda: (Bin(0, "z 1.3-1.4", 1.3, 1.4),),
+        hours=lambda years: years * experiments.OVERVIEW_ONSKY_YEAR_HOURS,
+        response=lambda *a: ({p: 1. for p in worlds.PARAMETERS}, {p: .01 for p in worlds.PARAMETERS}),
+        accept=lambda scenario, ib, t, p: (2. if t == target_hours and p == "aperp" else 1., 1))
+    monkeypatch.setattr(worlds, "_model", lambda bank_dir: model)
     rows = worlds.compute_tolerances()
     for r in rows:
         if r["parameter"] == "aperp":

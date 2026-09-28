@@ -72,33 +72,11 @@ from pathlib import Path
 import numpy as np
 
 from .constants import CHIME_FRAME_SECONDS
+from .forecast.radiofisher_bao.filter_scenarios import (DEFAULT_DELAY_KEY,
+                                                        DELAY_SUPPRESSION_DB)
 from .npzio import load_npz
 from .pilotproxy import residual_product_view
 from .selection_policy import value as _policy_value
-
-# Delay-filter suppression of the DTV shelf, dB, as a function of which BAO
-# feature the filter must preserve. Derived from the k_par <-> delay relation
-# k_par = 2 pi nu_21 H0 E(z) tau / [c (1 + z)^2] (Amiri et al. 2023, Eq. 64)
-# evaluated at the DTV band. Preserving a *larger* scale (lower k_par, the
-# first acoustic peak) forces a shorter delay cutoff and buys less suppression.
-DELAY_SUPPRESSION_DB = {
-    "none": 0.0,                # claim no foreground-removal help (default)
-    "aggressive_200ns": 11.4,   # CHIME's deployed tau_cut = 200 ns
-    "bao_peak2": 8.2,           # second acoustic peak, tau ~ 104 ns
-    "bao_peak1": 3.6,           # first acoustic peak, tau ~ 56 ns
-}
-# Default to claiming nothing. The delay filter is a foreground-removal stage,
-# and the forecast this feeds follows the Overview paper's Figure 31
-# convention: thermal noise from Tsys and nothing else: no foreground
-# residual, no wedge, BAO-shift only. Crediting the chain with a filter the
-# forecast does not model would take suppression from a stage that is not in
-# the budget. The non-zero entries stay available as an explicit opt-in and
-# bound the help that *could* be claimed if the filter were modelled on both
-# sides. Note the direction: claiming nothing makes every residual larger,
-# which is the conservative direction for a contamination budget.
-DEFAULT_DELAY_KEY = str(_policy_value("transfer.delay_suppression.default_key"))
-if DEFAULT_DELAY_KEY not in DELAY_SUPPRESSION_DB:
-    raise RuntimeError("default delay scenario is not defined")
 
 SIDEREAL_DAY = float(_policy_value("correlation.sidereal_day_seconds"))
 

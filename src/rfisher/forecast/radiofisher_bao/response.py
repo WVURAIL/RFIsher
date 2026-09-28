@@ -1,5 +1,13 @@
-#!/usr/bin/env python3
-"""Evaluate coherent-residual Fisher-bias tolerances without hiding refusals.
+"""The response of the BAO forecast to a coherent residual.
+
+A response bank is a Fisher bank built with a unit residual template, carried
+as a ``_Pres`` row, whose amplitude is proportional to the thermal noise at the
+time each Fisher point is evaluated. From it this module computes the bias
+each parameter takes per unit residual, b, beside the parameter's statistical
+error, sigma; checks that the linear response is stable in time; and
+authenticates every bank against the source and inputs that built it.
+``rfisher.tolerance.rule`` turns b and sigma into the tolerance
+zeta * sigma / |b|.
 
 Two estimator families are deliberately kept separate:
 
@@ -14,9 +22,7 @@ Two estimator families are deliberately kept separate:
     inversion. The residual-response row is expanded per bin and is removed
     before inversion; it is a bias source, never a fitted parameter.
 
-The response bank is built with a unit template proportional to the thermal
-noise at the time at which each Fisher point is evaluated. That bank supports
-two different, explicitly named time families:
+A response bank supports two different, explicitly named time families:
 
 ``noise_normalized_at_each_time``
     One unit always means the contemporaneous thermal-noise power: the
@@ -29,17 +35,16 @@ two different, explicitly named time families:
     t/t_ref. This is the non-averaging persistent-residual limit. The two
     families are identical at t_ref and are not interchangeable away from it.
 
-Bias-response banks are intentionally not distributed. Build one and run:
+The four filter-scenario response banks are packaged. Build any other one and
+evaluate it with:
 
-    python scripts/build_bank.py --config chime2022 --cosmology planck2018 \
+    rfisher build-bank --config chime2022 --cosmology planck2018 \
         --epsilon-fg 0 --p-res 1.0 --dense-knee \
-        --out data/fisher_bank_chime2022_pres_dense.npz
-    python scripts/bias_tolerance.py \
-        --bank data/fisher_bank_chime2022_pres_dense.npz \
+        --out fisher_bank_chime2022_pres_dense.npz
+    rfisher tolerance bias --bank fisher_bank_chime2022_pres_dense.npz \
         --estimator overview_combined_multibin \
         --time-scaling fixed_physical_at_reference_time \
-        --reference-years 1 \
-        --json out/combined_fixed_physical.json
+        --reference-years 1 --json combined_fixed_physical.json
 """
 from __future__ import annotations
 
@@ -48,35 +53,40 @@ import copy
 import datetime as dt
 import hashlib
 import json
+from importlib.resources import files
 from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
-
 from rfisher import __version__, channels, selection_policy
-from rfisher.forecast.radiofisher_bao.bank import cosmologies
-from rfisher.forecast.radiofisher_bao.bank import experiments as survey
-from rfisher.forecast.radiofisher_bao.bank import pk_cache as pkcache
-from rfisher.forecast.radiofisher_bao.bank.backend import (
-    import_radiofisher, require_backend_capabilities)
-from rfisher.forecast.radiofisher_bao.bank.banks import (
-    ARTIFACT_BIAS_RESPONSE, BANK_SOURCE_MANIFEST as RFISHER_SOURCE_MANIFEST,
-    FOREGROUND_KEYS, RADIOFISHER_SOURCE_MANIFEST, FisherBank, _git_state,
+
+from .bank import cosmologies
+from .bank import experiments, pk_cache
+from .bank.backend import import_radiofisher, require_backend_capabilities
+from .bank.banks import (
+    ARTIFACT_BIAS_RESPONSE, BANK_SOURCE_MANIFEST, FOREGROUND_KEYS,
+    RADIOFISHER_SOURCE_MANIFEST, FisherBank, _git_state, bank_source_state,
     experiment_settings_payload,
 )
-from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
-from rfisher.forecast.radiofisher_bao.bank.resources import filesystem_data_file
-from rfisher.forecast.radiofisher_bao.bank.templates import (
-    validate_template_metadata)
+from .bank.physics import HI_REST_FREQUENCY_MHZ
+from .bank.resources import DATA_PACKAGE, filesystem_data_file
+from .bank.templates import validate_template_metadata
 
 PRES = "_Pres"
-DEFAULT_BIAS_BANK = ROOT / "data" / "fisher_bank_chime2022_pres_dense.npz"
+RESPONSE_BANK_DIRECTORY = "response_banks"
+
+
+def packaged_response_banks() -> Path:
+    """The directory of the four packaged filter-scenario response banks."""
+    return Path(str(files(DATA_PACKAGE).joinpath(RESPONSE_BANK_DIRECTORY)))
+
+
+DEFAULT_RESPONSE_BANK = "fisher_bank_chime2022_pres_dense.npz"
 DEFAULT_BUILD_COMMAND = (
-    "python scripts/build_bank.py --config chime2022 "
+    "rfisher build-bank --config chime2022 "
     "--cosmology planck2018 --epsilon-fg 0 --p-res 1.0 --dense-knee "
-    "--out data/fisher_bank_chime2022_pres_dense.npz"
+    "--out fisher_bank_chime2022_pres_dense.npz"
 )
 _ANY_KFG = object()
 _ANY_EPSILON_FG = object()
@@ -193,10 +203,16 @@ def _baseline_identity_sha256(path: Path | None, recorded: str | None) -> str | 
     return actual
 
 
-def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
-    """Reconstruct and authenticate every scientific input used at runtime."""
+def evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
+    """Reconstruct and authenticate every scientific input used at runtime.
+
+    The RFIsher section is recorded under its frozen key ``baonoise``. Its
+    source digest must equal the digest of the bank subpackage now; its
+    version is recorded beside it but not compared, because the digest
+    already identifies the source.
+    """
     build = bank.meta["provenance"]
-    expected_rfisher_manifest = _canonical_manifest(RFISHER_SOURCE_MANIFEST)
+    expected_rfisher_manifest = _canonical_manifest(BANK_SOURCE_MANIFEST)
     expected_rf_manifest = _canonical_manifest(RADIOFISHER_SOURCE_MANIFEST)
     if build["baonoise"]["source_manifest"] != expected_rfisher_manifest:
         raise ValueError(
@@ -210,7 +226,7 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
     rf, resolved_rf_dir = import_radiofisher(rf_dir)
     capabilities = require_backend_capabilities(
         rf, build["radiofisher"]["capabilities"], rf_dir=resolved_rf_dir)
-    rfisher_state = _git_state(ROOT, **RFISHER_SOURCE_MANIFEST)
+    rfisher_state = bank_source_state()
     rf_state = _git_state(resolved_rf_dir, **RADIOFISHER_SOURCE_MANIFEST)
     evaluation_rfisher = {
         "version": __version__,
@@ -228,18 +244,18 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
 
     cache_name = build["pk_cache"]["filename"]
     cachefile = filesystem_data_file(cache_name)
-    cache_meta = pkcache.inspect_pk_cache(cachefile)
+    cache_meta = pk_cache.inspect_pk_cache(cachefile)
     evaluation_cache = {
         "filename": cache_name,
-        "sha256": pkcache.file_sha256(cachefile),
+        "sha256": pk_cache.file_sha256(cachefile),
         "cache_id": _sha256_json(cache_meta),
     }
     resolved_cosmo = cosmologies.get(
         bank.meta["cosmology"], rf, resolved_rf_dir)
     evaluation_cosmology = {
         "name": bank.meta["cosmology"],
-        "sha256": pkcache.cosmology_fingerprint(resolved_cosmo),
-        "parameters": pkcache.cosmology_payload(resolved_cosmo),
+        "sha256": pk_cache.cosmology_fingerprint(resolved_cosmo),
+        "parameters": pk_cache.cosmology_payload(resolved_cosmo),
         "astrophysical_model_profile":
             resolved_cosmo[cosmologies.ASTROPHYSICAL_PROFILE_KEY],
         "astrophysical_models": {
@@ -250,14 +266,14 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
             or resolved_cosmo.get("fiducial_source") is not None):
         evaluation_cosmology["reference"] = copy.deepcopy(
             resolved_cosmo.get("fiducial_source", {}))
-    if not pkcache.cache_matches(cachefile, resolved_cosmo):
+    if not pk_cache.cache_matches(cachefile, resolved_cosmo):
         raise ValueError(
             "evaluation P(k) cache does not match the bank's resolved "
             "cosmology and canonical cache settings")
-    cosmo = pkcache.load_fiducial_cosmology(
+    cosmo = pk_cache.load_fiducial_cosmology(
         rf, cachefile, cosmo=resolved_cosmo)
 
-    experiment = survey.experiment_from_bank_metadata(
+    experiment = experiments.experiment_from_bank_metadata(
         rf, resolved_rf_dir, bank.meta, ttot_hours=1.0)
     experiment_payload = experiment_settings_payload(
         experiment, resolved_rf_dir)
@@ -297,11 +313,6 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
             mismatches.append(
                 f"{section}.working_tree_sha256 build={recorded!r} "
                 f"evaluation={current!r}")
-    for field in ("version",):
-        if build["baonoise"][field] != evaluation_rfisher[field]:
-            mismatches.append(
-                f"baonoise.{field} build={build['baonoise'][field]!r} "
-                f"evaluation={evaluation_rfisher[field]!r}")
     for field in ("backend_id", "backend_version", "api_version",
                   "capabilities"):
         if build["radiofisher"][field] != evaluation_rf[field]:
@@ -333,14 +344,14 @@ def _evaluation_identity(bank, *, rf_dir=None) -> tuple[dict, dict]:
     return evaluation, context
 
 
-def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
-                   expected_kfg_fac=_ANY_KFG,
-                   expected_epsilon_fg=_ANY_EPSILON_FG, rf_dir=None):
-    """Load an explicitly generated strict-v2 unit-response bank."""
+def load_response_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
+                       expected_kfg_fac=_ANY_KFG,
+                       expected_epsilon_fg=_ANY_EPSILON_FG, rf_dir=None):
+    """Load and authenticate a strict-v2 unit-response bank."""
     path = Path(path)
     instruction = (
-        "Bias-response banks are deliberately not shipped. Build the exact "
-        "prerequisite with:\n  " + build_command
+        "Only the four filter-scenario response banks are packaged. Build "
+        "any other response bank with:\n  " + build_command
     )
     if not path.is_file():
         raise ValueError(f"required bias-response bank is missing: {path}\n"
@@ -396,7 +407,7 @@ def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
             f"{path} is incompatible with the bias workflow: "
             + "; ".join(problems) + f"\n{instruction}")
     try:
-        evaluation, context = _evaluation_identity(bank, rf_dir=rf_dir)
+        evaluation, context = evaluation_identity(bank, rf_dir=rf_dir)
     except (FileNotFoundError, KeyError, ModuleNotFoundError, RuntimeError,
             TypeError, ValueError) as exc:
         raise ValueError(
@@ -408,7 +419,7 @@ def load_bias_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
 
 
 # ---------------------------------------------------------------------------
-# Appendix-A helpers used by plot_convergence.py and three_worlds.py.
+# The per-bin response that the tolerance table is built from.
 # ---------------------------------------------------------------------------
 def split(F, names):
     """(F_theta-theta, F_theta-A, kept names) with zero-information rows cut."""
@@ -421,7 +432,7 @@ def split(F, names):
     return Ftt, FtA, [names[i] for i in keep]
 
 
-def bias_per_unit_r(F, names):
+def bias_per_unit_residual(F, names):
     """d(theta)/dA and sigma(theta), for one bin's Fisher matrix."""
     Ftt, FtA, kept = split(F, names)
     try:
@@ -433,12 +444,16 @@ def bias_per_unit_r(F, names):
     return dict(zip(kept, dtheta)), dict(zip(kept, sigma))
 
 
-def stability(bank, ib, t_hours, names, param,
-              frac=DEFAULT_STABILITY_FRACTION):
-    """Historical +/-frac stability tuple used by existing research scripts."""
+def response_stability(bank, ib, t_hours, names, param,
+                       frac=DEFAULT_STABILITY_FRACTION):
+    """``(drift, sign count)`` of the tolerance over t * (1 -/+ frac).
+
+    The drift is the largest over the smallest sigma/|b| at the three times;
+    the sign count is the number of distinct signs of b among them.
+    """
     vals, signs = [], []
     for scale in (1.0 - frac, 1.0, 1.0 + frac):
-        dth, sig = bias_per_unit_r(bank.F(ib, t_hours * scale), names)
+        dth, sig = bias_per_unit_residual(bank.F(ib, t_hours * scale), names)
         if param not in dth or dth[param] == 0.0:
             return np.inf, 0
         vals.append(sig[param] / abs(dth[param]))
@@ -541,18 +556,12 @@ class OverviewCombinedMultibinEstimator:
                 "RadioFisher lacks the combined-estimator API(s): "
                 + ", ".join(missing))
         if cosmo is None or cosmo_fns is None:
-            from rfisher.forecast.radiofisher_bao.bank import cosmologies
-            from rfisher.forecast.radiofisher_bao.bank import (
-                pk_cache as pkcache)
-            from rfisher.forecast.radiofisher_bao.bank.resources import (
-                filesystem_data_file)
-
             cosmology_name = bank.meta["cosmology"]
             cache_tag = ("" if cosmology_name == "planck2018"
                          else f"_{cosmology_name}")
             cache = filesystem_data_file(
                 f"cache_pk_chime2022{cache_tag}.dat")
-            cosmo = pkcache.load_fiducial_cosmology(
+            cosmo = pk_cache.load_fiducial_cosmology(
                 rf, cache,
                 cosmo=cosmologies.get(cosmology_name, rf, self.rf_dir))
             cosmo_fns = rf.background_evolution_splines(cosmo)
@@ -1019,7 +1028,7 @@ def build_report(bank, bank_path: Path, estimator, *, bins, years, params,
     for ibin in bins:
         points = []
         for year in years:
-            t_hours = float(year * survey.OVERVIEW_ONSKY_YEAR_HOURS)
+            t_hours = float(year * experiments.OVERVIEW_ONSKY_YEAR_HOURS)
             points.append({
                 "years": float(year),
                 "t_hours": t_hours,
@@ -1112,7 +1121,7 @@ def build_report(bank, bank_path: Path, estimator, *, bins, years, params,
             "reference_hours": (
                 float(reference_hours) if reference_hours is not None else None),
             "reference_years": (
-                float(reference_hours / survey.OVERVIEW_ONSKY_YEAR_HOURS)
+                float(reference_hours / experiments.OVERVIEW_ONSKY_YEAR_HOURS)
                 if reference_hours is not None else None),
             "thermal_power_scaling_assumption": "P_N proportional to 1/t",
             "bank_response_definition": (
@@ -1157,13 +1166,17 @@ def _validate_cli_numbers(ap, args):
             "fixed_physical_at_reference_time")
 
 
-def main(argv=None):
+def bias_main(argv=None, prog: str = "rfisher tolerance bias") -> int:
+    """``rfisher tolerance bias``: the full tolerance report of one bank."""
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+        prog=prog, description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument(
-        "--bank", type=Path, default=DEFAULT_BIAS_BANK,
-        help="strict-v2 unit-P_res bias-response bank (not shipped; exact "
-             f"build prerequisite: {DEFAULT_BUILD_COMMAND})")
+        "--bank", type=Path,
+        default=packaged_response_banks() / DEFAULT_RESPONSE_BANK,
+        help="strict-v2 unit-P_res response bank (default: the packaged "
+             "no-filter bank; build another with: "
+             f"{DEFAULT_BUILD_COMMAND})")
     ap.add_argument("--estimator", choices=ESTIMATORS,
                     default=DEFAULT_ESTIMATOR)
     ap.add_argument("--time-scaling", choices=TIME_SCALINGS,
@@ -1196,7 +1209,7 @@ def main(argv=None):
     _validate_cli_numbers(ap, args)
 
     try:
-        bank = load_bias_bank(args.bank, rf_dir=args.radiofisher_dir)
+        bank = load_response_bank(args.bank, rf_dir=args.radiofisher_dir)
     except ValueError as exc:
         ap.error(str(exc))
     bins = dtv_bin_indices(bank) if args.bins is None else list(args.bins)
@@ -1212,7 +1225,7 @@ def main(argv=None):
     if not params or len(set(params)) != len(params):
         ap.error("--params must contain unique target names")
     reference_hours = (
-        args.reference_years * survey.OVERVIEW_ONSKY_YEAR_HOURS
+        args.reference_years * experiments.OVERVIEW_ONSKY_YEAR_HOURS
         if args.reference_years is not None else None)
     report = build_report(
         bank, args.bank, estimator, bins=bins, years=args.years,
@@ -1255,7 +1268,3 @@ def main(argv=None):
         args.json.write_text(encoded + "\n", encoding="utf-8")
         print(f"wrote {args.json}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

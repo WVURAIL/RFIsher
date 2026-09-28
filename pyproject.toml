@@ -14,6 +14,7 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
+    "pyyaml",
 ]
 
 # camb is only needed to regenerate the fiducial P(k) cache, and the caches

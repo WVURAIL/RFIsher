@@ -8,7 +8,6 @@ counting on a synthetic ledger and on the run of record.
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import math
 import os
@@ -30,12 +29,9 @@ PARAMETERS = (zs.GROWTH,) + zs.DILATIONS
 
 
 def _bias_tolerance():
-    """The tolerance solver, loaded the way the archive loads it (a script, not a module)."""
-    spec = importlib.util.spec_from_file_location("zeta_test_bias_tolerance",
-                                                  ROOT / "scripts" / "bias_tolerance.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The tolerance solver, the module the archive's world tolerances come from."""
+    from rfisher.forecast.radiofisher_bao import response
+    return response
 
 
 class _Bank:
@@ -112,11 +108,11 @@ def test_the_world_banks_take_the_budget_free_form_of_the_same_tolerance():
     """archive.worlds builds sig/|dth|, which is the solver's tolerance at zeta = 1."""
     bt = _bias_tolerance()
     bank = _Bank()
-    derivative, sigma = bt.bias_per_unit_r(bank.F(0, 3.0), bank.paramnames)
+    derivative, sigma = bt.bias_per_unit_residual(bank.F(0, 3.0), bank.paramnames)
     solved = bt.evaluate_fisher_point(bt.PerBinAppendixAEstimator(bank), 0, 3.0, "aperp", zeta=1.0)
     assert sigma["aperp"] / abs(derivative["aperp"]) == pytest.approx(solved["central"]["r_tolerance"])
     # the gate the world path uses takes no budget at all: it cannot depend on one
-    assert "zeta" not in bt.stability.__code__.co_varnames
+    assert "zeta" not in bt.response_stability.__code__.co_varnames
 
 
 def test_the_module_reprices_by_dividing_by_the_budget():
