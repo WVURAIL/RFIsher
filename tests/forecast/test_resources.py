@@ -21,11 +21,11 @@ from rfisher.forecast.radiofisher_bao.bank.banks import (
 
 EXPECTED_SHA256 = {
     resources.CMBSPA2026_BANK_NAME:
-        "7220b1a636554d3fdc2fb058444ec83a69a3cd3871b6ba6f1d1c62d337c8f766",
+        "1616f7e38c4c0ba00955f907f817caeb8f66890a02ff216ef27c4a3ff61de6b7",
     resources.PLANCK2018_BANK_NAME:
-        "3dea0310b56bc99cd51e8a7401700a10601cf4fc1967174d2a5f3ae5170e5c8f",
+        "7df2c6613cdb27ee2e97ca631e76289094f57a7e61045fe442d4af79a3ef6481",
     resources.PACT2025_BANK_NAME:
-        "ed14c10df2077cfd43e5c93135b0ee3b713bb2447a98f333a94e7d9b495d1a54",
+        "8c5e246f666aedd1d545ecdd294677bc92c8b81005cf105570a4f9db1ef42548",
     channels.DEFAULT_RATES_NAME:
         "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
     products.PRODUCTS_MANIFEST_NAME:
@@ -47,19 +47,19 @@ CANONICAL_TEXT_RESOURCES = frozenset({
 })
 BULL_BANK_SHA256 = {
     "fisher_bank_bull2015_planck2013_epsfg1e-6.npz":
-        "4aaa0828c0f385f57d5476da02bfff6697e789338721b3ab80d900e5b84b18a0",
+        "c5460e3866a6638dae201f9b08fcb47e489b698546d50075f006e9a225b7666e",
     "fisher_bank_bull2015_planck2013_epsfg1e-5.npz":
-        "0733b354e2b1b6cb925d1e6e382115527011569653291992015714c56fde6b52",
+        "ac1bb92a6d5685e4cd52ca50195e9aed38cbeaca56f5a3be7dc453097a3e0d0d",
 }
 RESPONSE_BANK_SHA256 = {
     "fisher_bank_chime2022_pres_dense.npz":
-        "35dccc13b7a915f3cd4ec44f2e27dfe298c18724c04f9428cdc49b9d1ade85fc",
+        "fc6f014bee4aafca74b774881a05c2da63eb524660042f814218f35f1869d2ce",
     "fisher_bank_chime2022_pres_kfg22_dense.npz":
-        "6d67a4ea976d0a989647a051143d947447c4f19903686f47aed79eecc5da8b58",
+        "642172cb1fdb072fca51632516e13e013743f70595baaa5db8b000989e493a08",
     "fisher_bank_chime2022_pres_kfg44_dense.npz":
-        "5a3a35560f3b9b6f6b0c0a93588db831e2e4568924d9fb5af9c13c2ee7c4aa89",
+        "d6c2bdd4fc8526ded22a36aeb0d69c44ff7c89c1b337202e6cc9f4063492ee71",
     "fisher_bank_chime2022_pres_kfg80_dense.npz":
-        "e48470ac49ede0047ce2e6b3233ba56a51fcc270a0dfb950986d6b2af97740c1",
+        "a862fc0f56ca6c4c5bb9c359ebead956c97aeee12504d0ca24f9066f53d7233a",
 }
 RESPONSE_BANK_KFG = {
     "fisher_bank_chime2022_pres_dense.npz": None,
