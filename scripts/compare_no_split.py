@@ -70,16 +70,32 @@ def assess(s):
             "feasible": "numerically feasible; inspect evidence and drift gates"}.get(sel.get("status"), "unresolved; inspect ledger")
 
 
+def csv_tables(root):
+    """The compared CSVs of one release, relative to its root, in comparison order."""
+    paths = [p for sub in TABLES for p in sorted((root / sub).glob("*.csv"))]
+    paths += sorted(root.glob("archive/channels/ch*/*.csv"))
+    if (root / "archive/ledger/ledger.csv").exists():
+        paths.append(root / "archive/ledger/ledger.csv")
+    return [p.relative_to(root).as_posix() for p in paths]
+
+
 def table_cells(old_root, new_root):
-    """Every changed cell of every CSV (TABLES, archive/channels/chNN, archive/ledger), rows matched by position with the key columns checked."""
+    """Every changed cell of every CSV (TABLES, archive/channels/chNN, archive/ledger), rows matched by position with the key columns checked.
+
+    The tables of both releases are enumerated: a table present on one side only is recorded in ``files``
+    as ``missing in new`` or ``missing in old``, and :func:`missing_tables` lists it for the verdict."""
     cells, removed_columns, added_columns, files = [], [], [], {}
-    paths = [p for sub in TABLES for p in sorted((old_root / sub).glob("*.csv"))]
-    paths += sorted(old_root.glob("archive/channels/ch*/*.csv")) + [old_root / "archive/ledger/ledger.csv"]
-    for old_path in paths:
-        rel = old_path.relative_to(old_root).as_posix()
-        new_path = new_root / rel
+    old_tables = csv_tables(old_root)
+    if "archive/ledger/ledger.csv" not in old_tables:
+        old_tables.append("archive/ledger/ledger.csv")
+    rels = old_tables + [rel for rel in csv_tables(new_root) if rel not in old_tables]
+    for rel in rels:
+        old_path, new_path = old_root / rel, new_root / rel
         if not new_path.exists():
             files[rel] = "missing in new"
+            continue
+        if not old_path.exists():
+            files[rel] = "missing in old"
             continue
         # columns from each side's header, so a header-only table compares like any other
         with old_path.open(newline="") as f:
@@ -110,9 +126,16 @@ def table_cells(old_root, new_root):
     return cells, removed_columns, added_columns, files
 
 
-def verdict(*, outside, outside_cells, unkeyed_cells, removed_ok, added, channels, removed_columns, added_columns) -> dict:
+def missing_tables(files) -> list[str]:
+    """The tables that exist in only one of the two releases."""
+    return [rel for rel, state in files.items() if state in ("missing in new", "missing in old")]
+
+
+def verdict(*, outside, outside_cells, unkeyed_cells, removed_ok, added, channels, removed_columns, added_columns,
+            missing_tables) -> dict:
     """The checks behind ``passed``, and ``passed`` itself: every one must hold."""
     checks = {
+        "no_missing_tables": not missing_tables,
         "no_unexpected_ledger_changes": not outside,
         "no_unexpected_table_cell_changes": not outside_cells,
         "no_table_cell_change_without_channel_key": not unkeyed_cells,
@@ -204,7 +227,9 @@ def main():
     summary = {
         "schema": "no-split-archive-reconciliation-v1",
         **verdict(outside=outside, outside_cells=outside_cells, unkeyed_cells=unkeyed_cells, removed_ok=removed_ok, added=added,
-                  channels=channels, removed_columns=removed_columns, added_columns=added_columns),
+                  channels=channels, removed_columns=removed_columns, added_columns=added_columns,
+                  missing_tables=missing_tables(files)),
+        "missing_tables": missing_tables(files),
         "channels": 23, "product_identities_equal": True, "era_overrides_equal": True,
         "usable_tau_channels": USABLE,
         "ledger_changes_outside_usable_channels": len(outside) + len(expected_outside),

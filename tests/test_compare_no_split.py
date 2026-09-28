@@ -26,7 +26,8 @@ def _tree(root: Path, *, surface_header: str, chain_header: str, chain_row: str)
 def _checks(**over):
     base = dict(outside=[], outside_cells=[], unkeyed_cells=[], removed_ok=True, added=[],
                 channels=[{"primary_assessment": "a", "primary_assessment_prior": "a"}],
-                removed_columns=[{"table": t, "column": c} for t, c in sorted(m.REMOVED_COLUMNS)], added_columns=[])
+                removed_columns=[{"table": t, "column": c} for t, c in sorted(m.REMOVED_COLUMNS)], added_columns=[],
+                missing_tables=[])
     base.update(over)
     return m.verdict(**base)
 
@@ -60,3 +61,27 @@ def test_passed_requires_no_added_columns_and_exactly_the_split_columns_removed(
     assert not _checks(added=[{"channel": 20, "field": "x"}])["passed"]
     assert not _checks(channels=[{"primary_assessment": "a", "primary_assessment_prior": "b"}])["passed"]
     assert ("archive/ledger/ledger.csv", "chain_archive_ground_filter_db") in m.REMOVED_COLUMNS and len(m.REMOVED_COLUMNS) == 9
+
+
+def test_a_table_missing_in_the_new_release_fails_the_verdict(tmp_path):
+    old = _tree(tmp_path / "old", surface_header=SURFACE, chain_header="channel,chain_gain\n", chain_row="20,3.0\n")
+    new = _tree(tmp_path / "new", surface_header=SURFACE, chain_header="channel,chain_gain\n", chain_row="20,3.0\n")
+    (old / "archive/tables/screening.csv").write_text("channel,screening_class\n20,a\n")
+    _, _, _, files = m.table_cells(old, new)
+    assert files["archive/tables/screening.csv"] == "missing in new"
+    assert m.missing_tables(files) == ["archive/tables/screening.csv"]
+    result = _checks(missing_tables=m.missing_tables(files))
+    assert not result["passed"] and not result["checks"]["no_missing_tables"]
+
+
+def test_a_table_only_in_the_new_release_is_listed_and_fails_the_verdict(tmp_path):
+    old = _tree(tmp_path / "old", surface_header=SURFACE, chain_header="channel,chain_gain\n", chain_row="20,3.0\n")
+    new = _tree(tmp_path / "new", surface_header=SURFACE, chain_header="channel,chain_gain\n", chain_row="20,3.0\n")
+    (new / "archive/channels/ch20/operating_point.csv").write_text("channel,rho\n20,1\n")
+    _, _, _, files = m.table_cells(old, new)
+    assert files["archive/channels/ch20/operating_point.csv"] == "missing in old"
+    assert list(files)[-1] == "archive/channels/ch20/operating_point.csv"      # after every table of the old release
+    assert m.missing_tables(files) == ["archive/channels/ch20/operating_point.csv"]
+    result = _checks(missing_tables=m.missing_tables(files))
+    assert not result["passed"] and not result["checks"]["no_missing_tables"]
+    assert _checks()["checks"]["no_missing_tables"]
