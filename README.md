@@ -13,13 +13,13 @@ target-independent Fisher package.
 
 ## Quickstart
 
-Two provenance-complete CHIME banks ship with the package, so the basic
+Three provenance-complete CHIME banks ship with the package, so the basic
 workflow does not require a RadioFisher checkout:
 
 ```python
-from rfisher import api, scenarios
+from rfisher.forecast.radiofisher_bao import api, scenarios
 
-fc = api.load()                                   # Planck-2018 bank
+fc = api.load()                                   # the default cmbspa2026 bank
 mask = {17: 0.33, 30: 0.97, 31: 0.24}             # masked-time fractions
 
 api.required_time(fc, mask, target=5.0)           # survey BAO target

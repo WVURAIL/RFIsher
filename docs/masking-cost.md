@@ -33,7 +33,7 @@ excise. Supply `excise_threshold` explicitly when uniform excision is the
 intended policy:
 
 ```python
-from rfisher import api, scenarios
+from rfisher.forecast.radiofisher_bao import api, scenarios
 
 fc = api.load()
 kept = api.scenario_from(uniform=0.75, band=scenarios.DTV_BAND)
@@ -86,7 +86,7 @@ uses physical frequency intervals, so other bands can share a bank when they
 overlap its frequency coverage:
 
 ```python
-from rfisher import api, scenarios
+from rfisher.forecast.radiofisher_bao import api, scenarios
 
 band = scenarios.FrequencyBand(
     "example_downlink", 617.0, 652.0, label="Example downlink")
@@ -131,7 +131,8 @@ not support an occupancy statement. Use corrected products for current
 detector claims:
 
 ```python
-from rfisher import channels, scenarios
+from rfisher import channels
+from rfisher.forecast.radiofisher_bao import scenarios
 
 products = ["506.npz", "521.npz", "537.npz"]
 table = channels.mask_table_from_products(products)

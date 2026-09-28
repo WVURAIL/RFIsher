@@ -109,8 +109,8 @@ def booked_components(corr: residual.CorrelationTime) -> tuple[tuple[float, floa
     ``tau`` is ``corr.tau_for_budget``: the measured correlation time or its
     upper bound where it is usable, the sidereal-day cap where it is refused.
     The variance split is not booked on any band, so no ground-filter credit
-    is taken. On a refused channel this is what
-    :func:`rfisher.residual.surviving_components` books.
+    is taken. On a refused channel this is what the retired
+    ``rfisher.residual.surviving_components`` booked before 4.0.0.
     """
     return ((1.0, float(residual.n_coh_from_correlation_time(corr.tau_for_budget))),)
 

@@ -19,7 +19,7 @@ Four tiers, each the weakest instrument that reaches it:
                 the sidereal-day cap because the correlation time was
                 refused, and a timescale the band actually exhibits would
                 bring it inside. This is a *what-if*, in the sense
-                :func:`rfisher.residual.surviving_components` fixes: a sub-cap
+                :func:`rfisher_results.archive.chain.booked_components` fixes: a sub-cap
                 timescale assumed on a refused channel books all shelf power
                 at that timescale and restores no ground-filter credit. It
                 says a contiguous-cadence campaign is worth running on the

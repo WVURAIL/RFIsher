@@ -7,7 +7,7 @@ residual template carried by its response bank.
 
 ## Estimators
 
-`scripts/bias_tolerance.py` exposes two estimator names. The name is written to
+`rfisher tolerance bias` exposes two estimator names. The name is written to
 every versioned JSON report; there is no implicit mode selected from the bank.
 
 ### `perbin_appendix_a`
@@ -20,8 +20,10 @@ convention, `DV` is also available as the logarithmic combination
 `-(2/3 aperp + 1/3 apar)`. The minus sign is required because `aperp` and
 `apar` describe coordinate dilation in the inverse direction from the
 physical distance perturbation. The Appendix-A numerical helpers
-`bias_per_unit_r` and `stability` remain available for the existing figure
-scripts; the report CLI now emits only the versioned schema and refusal ledger.
+`bias_per_unit_residual` and `response_stability` of
+`rfisher.forecast.radiofisher_bao.response` remain available for the tolerance
+table and the figure scripts; the report command emits only the versioned
+schema and refusal ledger.
 
 ### `overview_combined_multibin`
 
@@ -124,7 +126,7 @@ points only and become `null` if every requested point is refused.
 
 ## Named analytic template banks
 
-`scripts/build_bank.py` can build four unit-amplitude analytic families through
+`rfisher build-bank` can build four unit-amplitude analytic families through
 RadioFisher's callable `P_res(k, u, P_N, P_signal)` interface:
 
 - `noise_shaped`: exactly `P_N`;
@@ -137,7 +139,7 @@ For example:
 
 ```bash
 PYTHONPATH=src RADIOFISHER_DIR=/path/to/RadioFisher \
-python3 scripts/build_bank.py \
+python3 -m rfisher.cli build-bank \
   --config chime2022 --cosmology planck2018 \
   --epsilon-fg 0 \
   --residual-template low_kparallel \
@@ -146,7 +148,8 @@ python3 scripts/build_bank.py \
 ```
 
 The formulas live in the authenticated package module
-`src/rfisher/residual_templates.py`, not only in an unauthenticated research
+`src/rfisher/forecast/radiofisher_bao/bank/templates.py`, not only in an
+unauthenticated research
 script. The callable object is also a JSON dictionary, so the bank records its
 family, normalization, unit amplitude, parameters, template API version, and
 formula-source SHA-256 in both `expt_overrides` and the experiment-provenance
@@ -166,8 +169,8 @@ than synthesized from unrelated coordinates. They remain external-data gates.
 The existing per-bin result is still the default:
 
 ```bash
-PYTHONPATH=src python3 scripts/bias_tolerance.py \
-  --bank data/fisher_bank_chime2022_pres_dense.npz \
+PYTHONPATH=src python3 -m rfisher.cli tolerance bias \
+  --bank src/rfisher/data/response_banks/fisher_bank_chime2022_pres_dense.npz \
   --estimator perbin_appendix_a \
   --time-scaling noise_normalized_at_each_time \
   --zeta 1 --years 0.25 1 5 10 \
@@ -178,8 +181,8 @@ The combined fixed-physical family is explicit:
 
 ```bash
 PYTHONPATH=src RADIOFISHER_DIR=/path/to/RadioFisher \
-python3 scripts/bias_tolerance.py \
-  --bank data/fisher_bank_chime2022_pres_dense.npz \
+python3 -m rfisher.cli tolerance bias \
+  --bank src/rfisher/data/response_banks/fisher_bank_chime2022_pres_dense.npz \
   --estimator overview_combined_multibin \
   --time-scaling fixed_physical_at_reference_time \
   --reference-years 1 --zeta 1 \
@@ -209,7 +212,7 @@ records, not the information included in the combined Fisher matrix.
 
 ```bash
 PYTHONPATH=src RADIOFISHER_DIR=/path/to/RadioFisher \
-python3 scripts/build_bank.py \
+python3 -m rfisher.cli build-bank \
   --config chime2022 --cosmology planck2018 --p-res 1 --epsilon-fg 0 \
   --tmin 7000 --tmax 11000 --nt 3 --nproc 8 \
   --out /tmp/bias_response_small.npz

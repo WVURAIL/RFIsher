@@ -6,7 +6,7 @@ The three primary fiducials have different purposes:
 |---|---|---|---|
 | Bull reference configuration | `planck2013` | `bull2015` | Explicit historical bank |
 | Foreman/CHIME Overview reference configuration | `planck2018` | `chime2022` | `api.load(cosmology="planck2018")` |
-| New forecasts | `cmbspa2026` | `chime2022` | `api.load()` or `rfisher-forecast` without a cosmology argument |
+| New forecasts | `cmbspa2026` | `chime2022` | `api.load()` or `rfisher forecast` without a cosmology argument |
 
 The implemented fiducials have these values (density fractions rounded here;
 the bank metadata retains the full values):
@@ -53,10 +53,10 @@ and authenticates their parameters, cache and reference metadata. Response banks
 are generated separately; for a new current-fiducial response calculation:
 
 ```bash
-python scripts/build_bank.py --config chime2022 --cosmology cmbspa2026 \
+rfisher build-bank --config chime2022 --cosmology cmbspa2026 \
   --epsilon-fg 0 --p-res 1.0 --dense-knee \
   --out data/fisher_bank_chime2022_cmbspa2026_pres_dense.npz
-python scripts/bias_tolerance.py \
+rfisher tolerance bias \
   --bank data/fisher_bank_chime2022_cmbspa2026_pres_dense.npz \
   --json out/bias_current2026.json
 ```
@@ -95,14 +95,14 @@ records CAMB settings/version and independently verifies the numerical table.
 all select the current fiducial. Use `PLANCK2018_BANK`, `PLANCK2018_BANK_NAME`,
 or `bank_file("planck2018")` for the Foreman reference. Historical dissertation
 checks select that reference explicitly; forecast commands use the new default.
-The delay-cut sweep also defaults to the current fiducial. When redrawing
-previous sweep CSVs with `scripts/run_taucut_sweep.py --figures-only`, pass
-the cosmology used to generate them (for the retained historical tables,
-`--cosmology planck2018`); those CSVs do not identify their fiducial.
+The delay-cut sweep driver `scripts/run_taucut_sweep.py` was removed in 4.0.0.
+Its retained historical tables were computed with `planck2018`, which the
+CSVs themselves do not record.
 
 `scripts/rebuild_shipped_banks.sh` rebuilds all five artifacts: three CHIME
-banks (current, Foreman, P-ACT) and two Bull foreground cases. It runs physics
-and provenance checks before updating test pins. All banks must be rebuilt
+banks (current, Foreman, P-ACT) and two Bull foreground cases. It requires
+every rebuilt array to equal the committed bank's and runs physics and
+provenance checks before updating their test pins. All banks must be rebuilt
 after a change to either scientific source manifest; changing hashes alone
 does not make an old bank valid. The checked-in release recipe requires clean
 scientific source. A development build may record a dirty tree truthfully,

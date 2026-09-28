@@ -44,24 +44,33 @@ them.
 
 ## Main components
 
+Modules under `forecast.radiofisher_bao` are named here without that prefix.
+
 | Component | Responsibility |
 |---|---|
 | `api` | Short load, scenario, significance, and required-time calls |
 | `scenarios` | Frequency intervals, masking fractions, residual ratios, and excision policy |
-| `fisherbank` | Versioned forecast and bias-response banks with interpolation |
-| `forecast` | BAO marginalization, significance curves, and time inversion |
-| `residual` | Raw-product statistics, coherence, budgets, and reference threshold sweeps |
+| `bank.banks` | Versioned forecast and bias-response banks with interpolation |
+| `significance` | BAO marginalization, significance curves, and time inversion |
+| `response`, `model` and `filter_scenarios` | Bias per unit residual, the BAO science model, and the delay-filter scenarios |
+| `tolerance` and `science_model` | The residual tolerance table, built from any science model |
+| `residual` | Raw-product statistics, coherence, floor provenance, and the mask-benefit decision |
 | `thresholds` | Pure `(rho, eta)` selection from calibrated residual-score histograms |
 | `preparation` | Q16 family construction, early/late drift evidence, and evidence-bearing refusal |
 | `selection_policy` | Versioned decision values, rationales, sensitivity values, and digest |
 | `products` | External survey-product registry and path resolution |
 | `channels` | ATSC channel and physical-frequency conversion |
-| `survey` and `layout` | CHIME experiment definition, bins, time conventions, and baselines |
-| `backend` | RadioFisher checkout discovery, binding, and capability checks |
-| `pkcache` | Content-verified matter-power-spectrum caches |
+| `bank.experiments` and `layout` | CHIME experiment definition, bins, time conventions, and baselines |
+| `bank.backend` | RadioFisher checkout discovery, binding, and capability checks |
+| `bank.pk_cache` | Content-verified matter-power-spectrum caches |
 
-The public import namespace is `rfisher`. Version 3 removed the earlier Python
-and command-line aliases. Historical `baonoise` spellings remain in persisted
+Everything that determines what a bank holds, the build command included,
+lives in `forecast.radiofisher_bao.bank`, and that subpackage alone is hashed
+into bank provenance.
+
+The public import namespace is `rfisher`, with one command, `rfisher`.
+Version 3 removed the earlier Python and command-line aliases; version 4 moved
+the forecast under `rfisher.forecast.radiofisher_bao`. Historical `baonoise` spellings remain in persisted
 schemas, cache formats, bank provenance, and frozen release artifacts, where
 renaming them would change an existing scientific artifact or data contract.
 
@@ -207,12 +216,13 @@ uses: `radiofisher.delay_cut_kpar_min` and `delay_transfer_fn` map a
 delay to `k_par` through `nu_line` and `H(z)` and know nothing about any
 instrument. RFIsher owns every *number*, *decision*, and *dataset* that
 fills that dimension in: which field, band, time, and duty cycle define a
-configuration (`survey.chime2025_experiment`, `archive_accepted_experiment`),
-what a published analysis's cut and mask were, how a sky cut scales time
-(fixed per-voxel depth), and the digitised filter response the soft cut
-reads (`src/rfisher/data/chime2025_fig10_filter_residual.csv`, via
-`survey.delay_transfer`). `scripts/run_taucut_sweep.py` is the driver that
-sweeps the cut through the direct path; the shipped banks do not carry it.
+configuration (the experiment registry,
+`rfisher.forecast.radiofisher_bao.bank.experiments`), what a published
+analysis's cut was, and the digitised filter response the soft cut reads
+(`src/rfisher/data/chime2025_fig10_filter_residual.csv`, via
+`rfisher.forecast.radiofisher_bao.filter_scenarios.delay_transfer`). The
+hooks are forecast options, off by default; the shipped banks do not carry
+them, and the sweep driver `scripts/run_taucut_sweep.py` was removed in 4.0.0.
 
 The wedge-limited scenario (the foreground wedge, not the canceller, sets
 the cut on long baselines) needs no new hook: it is the hard cut beside the

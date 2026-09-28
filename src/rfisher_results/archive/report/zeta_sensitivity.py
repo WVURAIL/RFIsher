@@ -13,7 +13,7 @@ never showed it. This table shows it, and the budgets are read from the
 register rather than restated here, so a changed register changes the rows.
 
 Why one column of arithmetic is enough. The tolerance is exactly linear in
-the budget. ``scripts/bias_tolerance.py`` builds it as
+the budget. ``rfisher.forecast.radiofisher_bao.response`` builds it as
 ``zeta * sigma / |dtheta/dr|`` (``evaluate_raw``, both the noise-normalized
 and the reported-amplitude form), and the world banks the archive prices
 against build the same quantity at ``zeta = 1``, as ``min`` over the accepted

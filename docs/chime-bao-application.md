@@ -164,6 +164,7 @@ figures from their committed tables.
   when overridden. Total matter includes massive neutrinos unless the source
   explicitly declares otherwise.
 
-The numerical tables are guarded by `scripts/check_paper_numbers.py` and
-`scripts/check_dissertation_numbers.py`. Exact commands are in
-[reproducibility.md](reproducibility.md).
+The number checks that held these tables against the paper and the
+dissertation, `scripts/check_paper_numbers.py` and
+`scripts/check_dissertation_numbers.py`, were removed in 4.0.0 with the
+paper. Exact commands are in [reproducibility.md](reproducibility.md).

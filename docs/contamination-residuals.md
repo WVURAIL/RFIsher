@@ -25,7 +25,7 @@ The contamination residual is optional. With no residual supplied, every
 masking-only reference result is unchanged.
 
 ```python
-from rfisher import api
+from rfisher.forecast.radiofisher_bao import api
 
 fc = api.load()
 mask = {35: 0.48}
@@ -161,11 +161,9 @@ injected-truth check is conditional on its generator. The
 [physical-calibration workflow](physical-calibration.md) records the available
 checks and the remaining evidence requirements.
 
-Run the budget with:
-
-```bash
-python scripts/residual_budget.py 521.npz --off-through 2021-08 --plot
-```
+The script that computed this budget, `scripts/residual_budget.py`, was
+removed in RFIsher 4.0.0 together with the budget functions of
+`rfisher.residual` it called; the table above is the historical record.
 
 ## Sidereal decomposition
 
@@ -256,9 +254,8 @@ variance model only when
 net = (1 + r_unmasked) / (1 + r_masked) * (1 - f) > 1.
 ```
 
-`residual.mask_benefit` evaluates this decision per channel. The raw-product
-`residual.threshold_sweep` reference path follows it as the detector threshold
-moves; prepared operating-point selection uses `thresholds.optimize_threshold`.
+`residual.mask_benefit` evaluates this decision per channel; prepared
+operating-point selection uses `thresholds.optimize_threshold`.
 
 At the historical `F > mu0` decision for the two channels with an inferred
 transmitter-off epoch:

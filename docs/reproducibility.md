@@ -199,8 +199,14 @@ It produces:
 - the Bull-2015 Planck-2013 `epsilon_fg = 1e-6` comparison bank; and
 - the matched Bull-2015 `epsilon_fg = 1e-5` comparison bank.
 
-The recipe verifies the rebuilt banks and updates the corresponding test
-hashes with `scripts/restamp_bank_provenance.py --repin`.
+The recipe requires every numerical member of a rebuilt bank to equal the
+committed bank's byte for byte (`scripts/restamp_bank_provenance.py
+--same-arrays`), verifies the rebuilt banks, and updates their test hashes
+with `scripts/restamp_bank_provenance.py --repin` followed by the five bank
+paths. The four packaged response banks are never rebuilt by it: they take
+the metadata re-stamp (`restamp_bank_provenance.py --subset` with their four
+`BANK=OUT` pairs), committed before the recipe runs, so that its closing
+`--check` covers all nine banks.
 
 Run a bank build only from clean, committed RFIsher and RadioFisher trees. Do
 not edit the bank subpackage during a build. A bank records the digest of
@@ -261,7 +267,12 @@ rfisher tolerance bias --zeta 1.0
 `build` refuses to change the bytes of an existing table unless it is given
 `--accept-new`. `bands` reduces the table to one tolerance per band and
 scenario for the bands listed in `BANDS.csv` (columns `band_id`, `low_mhz`,
-`high_mhz`). `bias` prints the full response report of one bank. Build
+`high_mhz`). Before it reads the table, `bands` recomputes every digest the
+table's provenance records that needs no bank opened (the tolerance and model
+code, the profile, the science register, the bank subpackage and the bytes of
+the response banks) and refuses the table if any has changed; `rfisher
+tolerance show --project projects/chime_bao` does the same, and the archive
+reads the table only through that check. `bias` prints the full response report of one bank. Build
 replacement banks in a staging directory, and authenticate them with
 `rfisher.forecast.radiofisher_bao.response.load_response_bank` before they
 replace the packaged ones. A changed source digest requires a new

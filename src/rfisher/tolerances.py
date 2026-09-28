@@ -10,9 +10,9 @@ These constants were previously duplicated (and, worse, derived on two
 different footings) across scripts/optimal_thresholds.py,
 scripts/calibrated_thresholds.py, and scripts/dissertation/make_two_walls.py.
 They are the stable zeta = 1 minima of the dense bias-response bank
-(``scripts/bias_tolerance.py --zeta 1.0`` on the ``--p-res 1.0 --dense-knee``
-build), taken over the accepted multi-year grid --- the same convention for
-every channel, upper and lower band alike. The retired practice of extending
+(``scripts/bias_tolerance.py --zeta 1.0``, now ``rfisher tolerance bias``, on
+the ``--p-res 1.0 --dense-knee`` build), taken over the accepted multi-year
+grid --- the same convention for every channel, upper and lower band alike. The retired practice of extending
 the lower band from the completed-forecast ledger's single 1-on-sky-year
 point priced ch14-26 against tolerances up to ~1.8x looser than the
 convention applied to ch27-36; legacy scripts imported these.
