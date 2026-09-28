@@ -10,7 +10,7 @@ a screening allowance, not a physical lower bound or a confidence interval.
 All parameters are evaluated at TARGET_YEARS. Refused target-time cells stay
 unpriced; another year cannot supply the answer. The per-bin table is built
 by ``rfisher.tolerance`` from the RadioFisher BAO science model and read back
-only against its recorded content digest.
+only while its recorded content digests match the current inputs.
 """
 from __future__ import annotations
 
@@ -61,12 +61,16 @@ def _cache_identity(cache: Path, bank_dir: Path) -> dict:
 
 
 def tolerances(bank_dir: Path | str = BANK_DIR, cache: Path | str = CACHE, *, rebuild: bool = False) -> list[dict]:
-    """The per-bin table, read against its recorded digest, or rebuilt into ``cache``.
+    """The per-bin table, read against its recorded inputs, or rebuilt into ``cache``.
 
-    A rebuild never replaces an existing table whose bytes would change.
+    A table is read only while its sidecar matches the current code, profile,
+    register and banks. A rebuild never replaces an existing table whose bytes
+    would change.
     """
+    model = _model(bank_dir)
     if rebuild:
-        return tolerance_table.build(_model(bank_dir), cache)
+        return tolerance_table.build(model, cache)
+    tolerance_table.verify(model, cache)
     return tolerance_table.load(cache)
 
 

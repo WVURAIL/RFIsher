@@ -102,9 +102,18 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
                          help="output directory")
     reduced.add_argument("--table", type=Path,
                          help="the per-bin table (default: packaged)")
+    reduced.add_argument("--banks", type=Path,
+                         help="response bank directory the table was built "
+                              "from (default: packaged)")
     shown = actions.add_parser("show", help="print the per-bin table")
     shown.add_argument("--table", type=Path,
                        help="the per-bin table (default: packaged)")
+    shown.add_argument("--project", type=Path,
+                       help="also verify the table's recorded inputs against "
+                            "this science profile and the current code")
+    shown.add_argument("--banks", type=Path,
+                       help="response bank directory the table was built "
+                            "from (default: packaged)")
     actions.add_parser("bias", help="the full response report of one bank")
     args = parser.parse_args(argv)
 
@@ -119,12 +128,18 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
         print(f"wrote {out} ({len(rows)} rows) and {table.sidecar(out).name}")
         return 0
     source = args.table or packaged_table()
+    model = (RadioFisherBAO(args.project, response_banks_dir=args.banks)
+             if args.project is not None else None)
     try:
+        if model is not None:
+            table.verify(model, source)
         rows = table.load(source)
     except ValueError as exc:
         parser.error(str(exc))
     if args.action == "show":
-        print(f"{source} (csv_sha256 authenticated)")
+        checked = ("inputs verified" if model is not None
+                   else "inputs not verified; pass --project")
+        print(f"{source} (csv_sha256 authenticated; {checked})")
         for row in rows:
             value = (f"{row['tolerance']:.6g}" if row["at_target"]
                      else "refused")
@@ -132,7 +147,6 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
                   f"z {row['z_lo']:.4g}-{row['z_hi']:.4g} "
                   f"{row['parameter']:<6} {value}")
         return 0
-    model = RadioFisherBAO(args.project)
     band_list = bands.read_bands(args.bands)
     tolerances, components = bands.band_tolerances(model, rows, band_list)
     written = table.write_bands(tolerances, components, args.out, {

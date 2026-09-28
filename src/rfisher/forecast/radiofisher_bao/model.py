@@ -227,28 +227,29 @@ class RadioFisherBAO:
                                   list(bank.paramnames), parameter,
                                   frac=self.time_fraction)
 
-    def identity(self) -> dict:
+    def identity(self, *, responses: bool = True) -> dict:
         """Content digests of everything the responses depend on.
 
         Each bank's evaluation identity is taken without the commit and dirty
         flag of the RFIsher checkout, which change with every commit; its
-        source digest stays in.
+        source digest stays in. With ``responses`` False no bank is opened,
+        and each bank is identified by its bytes alone (None when missing).
         """
         here = Path(__file__).resolve().parent
         sources = {f"rfisher/forecast/radiofisher_bao/{name}":
                    _sha256_file(here / name) for name in SOURCES}
         banks = {}
         for item in self.scenarios:
-            evaluation = json.loads(json.dumps(
-                self.bank(item.name).evaluation_identity, sort_keys=True))
-            for key in ("git_commit", "git_dirty"):
-                evaluation["baonoise"].pop(key, None)
-            banks[item.response_source] = {
-                "sha256": _sha256_file(
-                    self.response_banks_dir / item.response_source),
-                "evaluation_sha256": hashlib.sha256(json.dumps(
-                    evaluation, sort_keys=True).encode("utf-8")).hexdigest(),
-            }
+            path = self.response_banks_dir / item.response_source
+            entry = {"sha256": _sha256_file(path) if path.is_file() else None}
+            if responses:
+                evaluation = json.loads(json.dumps(
+                    self.bank(item.name).evaluation_identity, sort_keys=True))
+                for key in ("git_commit", "git_dirty"):
+                    evaluation["baonoise"].pop(key, None)
+                entry["evaluation_sha256"] = hashlib.sha256(json.dumps(
+                    evaluation, sort_keys=True).encode("utf-8")).hexdigest()
+            banks[item.response_source] = entry
         return {
             "sources": sources,
             "profile_sha256": _sha256_file(self.profile_path),

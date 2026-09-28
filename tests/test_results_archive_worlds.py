@@ -118,13 +118,23 @@ def test_unauthenticated_cache_is_not_accepted(tmp_path):
 
 
 def test_authenticated_cache_roundtrip_and_content_changes(tmp_path, monkeypatch):
+    import hashlib
     import json
     path = tmp_path / "cache.csv"
     with path.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(worlds.CACHE_COLUMNS))
         w.writeheader()
         w.writerows(_rows())
-    model = SimpleNamespace(target_years=1.0, identity=lambda: {"sources": {}, "banks": {"source": "v1"}})
+    bank = tmp_path / "bank.npz"
+    bank.write_bytes(b"fixture bank")
+
+    def identity(responses=True):
+        entry = {"sha256": hashlib.sha256(bank.read_bytes()).hexdigest()}
+        if responses:
+            entry["evaluation_sha256"] = "v1"
+        return {"sources": {}, "banks": {"bank.npz": entry}}
+
+    model = SimpleNamespace(target_years=1.0, identity=identity)
     monkeypatch.setattr(worlds, "_model", lambda bank_dir: model)
     path.with_suffix(".provenance.json").write_text(json.dumps(worlds._cache_identity(path, tmp_path)))
     back = worlds.tolerances(bank_dir=tmp_path, cache=path)
@@ -133,6 +143,11 @@ def test_authenticated_cache_roundtrip_and_content_changes(tmp_path, monkeypatch
     old = path.read_bytes()
     path.write_bytes(old + b"\n")
     with pytest.raises(ValueError, match="csv_sha256"):
+        worlds.tolerances(bank_dir=tmp_path, cache=path)
+    path.write_bytes(old)
+    assert worlds.tolerances(bank_dir=tmp_path, cache=path) == back
+    bank.write_bytes(b"changed bank")                  # a changed bank invalidates the cache
+    with pytest.raises(ValueError, match="banks/bank.npz/sha256"):
         worlds.tolerances(bank_dir=tmp_path, cache=path)
 
 

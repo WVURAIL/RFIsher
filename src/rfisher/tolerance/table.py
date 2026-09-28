@@ -9,8 +9,9 @@ responses depend on. It holds no commit and no dirty flag, so it does not
 change with every commit.
 
 :func:`build` recomputes the table and refuses to change the bytes of an
-existing one unless asked to. :func:`load` checks the CSV against its sidecar
-and never opens a bank.
+existing one unless asked to. :func:`load` checks the CSV against its sidecar,
+and :func:`verify` checks the sidecar against the current inputs; neither
+opens a bank.
 """
 from __future__ import annotations
 
@@ -65,12 +66,17 @@ def render(rows: Sequence[dict], columns: Sequence[str]) -> bytes:
     return stream.getvalue().encode("utf-8")
 
 
-def identity(model: ScienceModel, path: str | Path) -> dict:
-    """Identity schema 3 of the table at ``path``: content digests only."""
+def identity(model: ScienceModel, path: str | Path, *,
+             responses: bool = True) -> dict:
+    """Identity schema 3 of the table at ``path``: content digests only.
+
+    With ``responses`` False, the digests the model can give only by loading
+    a response are left out.
+    """
     here = Path(__file__).resolve().parent
     sources = {f"rfisher/tolerance/{name}": sha256_file(here / name)
                for name in SOURCES}
-    described = model.identity()
+    described = model.identity(responses=responses)
     sources.update(described["sources"])
     out = {key: value for key, value in described.items() if key != "sources"}
     out.update(schema=IDENTITY_SCHEMA, target_years=float(model.target_years),
@@ -106,16 +112,59 @@ def _number(value: str) -> float:
     return float(value) if value not in ("", "nan", None) else math.nan
 
 
+def _recorded(path: Path) -> dict:
+    record = sidecar(path)
+    if not record.is_file():
+        raise ValueError(f"{path}: no provenance sidecar {record.name}")
+    return json.loads(record.read_text(encoding="utf-8"))
+
+
+def _leaves(value, prefix=()):
+    """``(key path, value)`` for every leaf of a nested mapping."""
+    if isinstance(value, dict) and value:
+        for key, item in value.items():
+            yield from _leaves(item, prefix + (str(key),))
+    else:
+        yield prefix, value
+
+
+def verify(model: ScienceModel, path: str | Path) -> None:
+    """Refuse a table whose sidecar no longer describes its inputs.
+
+    Every digest of the sidecar that needs no response loaded is recomputed
+    from the current inputs: the CSV, the tolerance code, and whatever the
+    model gives without loading a response (for the RadioFisher model, its
+    sources, the profile, the science register, the bank source and the
+    bytes of each response bank). A digest that needs a response loaded is
+    recomputed only by :func:`build`. Never opens a bank.
+    """
+    path = Path(path)
+    then = dict(_leaves(_recorded(path)))
+    current = identity(model, path, responses=False)
+    now = dict(_leaves(current))
+    listed = set(current.get("banks") or {})
+    stale = []
+    for key in sorted(set(then) | set(now)):
+        if key not in now and key[:1] == ("banks",) and len(key) > 2 \
+                and key[1] in listed:
+            continue                  # needs the response; build checks it
+        if then.get(key) != now.get(key):
+            stale.append(f"{'/'.join(key)}: recorded {then.get(key)!r}, "
+                         f"now {now.get(key)!r}")
+    if stale:
+        raise ValueError(
+            f"{path}: the table's provenance no longer matches its inputs; "
+            "rebuild it with 'rfisher tolerance build'\n  "
+            + "\n  ".join(stale))
+
+
 def load(path: str | Path) -> list[dict]:
     """The rows of an authenticated table; never opens a bank.
 
     The CSV must match the ``csv_sha256`` its sidecar records.
     """
     path = Path(path)
-    record = sidecar(path)
-    if not record.is_file():
-        raise ValueError(f"{path}: no provenance sidecar {record.name}")
-    recorded = json.loads(record.read_text(encoding="utf-8")).get("csv_sha256")
+    recorded = _recorded(path).get("csv_sha256")
     if recorded != sha256_file(path):
         raise ValueError(f"{path}: the table does not match the csv_sha256 "
                          f"its sidecar records")

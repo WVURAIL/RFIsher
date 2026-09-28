@@ -90,6 +90,7 @@ class ScienceModel(Protocol):
                parameter: str) -> tuple[float, int]:
         """``(drift, sign count)`` of the stability test; raises on a refusal."""
 
-    def identity(self) -> dict:
+    def identity(self, *, responses: bool = True) -> dict:
         """Content digests of the inputs, including ``sources``, a mapping of
-        source file to digest."""
+        source file to digest. With ``responses`` False, only the digests
+        that need no response loaded."""

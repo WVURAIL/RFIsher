@@ -92,3 +92,40 @@ def test_bias_runs_the_response_report(monkeypatch):
 def test_tolerance_needs_an_action():
     with pytest.raises(SystemExit):
         cli.main(["tolerance"])
+
+
+def _recorded_copy(path, **changes):
+    """A copy of the packaged table with a sidecar of the current inputs."""
+    copy = path
+    copy.write_bytes(model.packaged_table().read_bytes())
+    record = table.identity(model.RadioFisherBAO(PROJECT), copy,
+                            responses=False)
+    record.update(changes)
+    table.sidecar(copy).write_text(json.dumps(record))
+    return copy
+
+
+def test_show_with_a_project_verifies_the_packaged_table(capsys):
+    assert cli.main(["tolerance", "show", "--project", str(PROJECT)]) == 0
+    assert "inputs verified" in capsys.readouterr().out.splitlines()[0]
+
+
+def test_bands_and_show_refuse_a_table_whose_inputs_changed(tmp_path, capsys):
+    bands = tmp_path / "bands.csv"
+    bands.write_text("band_id,low_mhz,high_mhz\n18,494,500\n")
+    current = _recorded_copy(tmp_path / "current.csv")
+    assert cli.main(["tolerance", "bands", "--project", str(PROJECT),
+                     "--bands", str(bands), "--table", str(current),
+                     "--out", str(tmp_path / "out")]) == 0
+    stale = _recorded_copy(tmp_path / "stale.csv", profile_sha256="0" * 64)
+    for argv in (["bands", "--bands", str(bands), "--out",
+                  str(tmp_path / "stale")], ["show"]):
+        with pytest.raises(SystemExit) as excinfo:
+            cli.main(["tolerance", *argv, "--project", str(PROJECT),
+                      "--table", str(stale)])
+        assert excinfo.value.code == 2
+        assert "profile_sha256" in capsys.readouterr().err
+    assert not (tmp_path / "stale").exists()
+    # without a project, show checks the table's own digest only
+    assert cli.main(["tolerance", "show", "--table", str(stale)]) == 0
+    assert "inputs not verified" in capsys.readouterr().out.splitlines()[0]
