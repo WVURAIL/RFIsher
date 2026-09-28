@@ -160,7 +160,8 @@ def test_verify_accepts_the_inputs_a_table_was_built_from(tmp_path):
      "banks/x.npz/sha256"),
     (lambda i: i["banks"].pop("x.npz"), "banks/x.npz/sha256"),
     (lambda i: i["banks"].update(y={"sha256": "6" * 64}), "banks/y/sha256"),
-])
+], ids=["changed_source", "new_source", "changed_profile", "changed_bank",
+        "removed_bank", "added_bank"])
 def test_verify_refuses_a_table_whose_inputs_changed(tmp_path, change, field):
     out = tmp_path / "table.csv"
     table.build(_model(), out)

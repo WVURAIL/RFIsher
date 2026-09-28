@@ -93,4 +93,5 @@ class ScienceModel(Protocol):
     def identity(self, *, responses: bool = True) -> dict:
         """Content digests of the inputs, including ``sources``, a mapping of
         source file to digest. With ``responses`` False, only the digests
-        that need no response loaded."""
+        that need no response loaded; a digest that needs one is a field of
+        an entry of ``banks``."""

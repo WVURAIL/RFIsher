@@ -135,8 +135,9 @@ def verify(model: ScienceModel, path: str | Path) -> None:
     from the current inputs: the CSV, the tolerance code, and whatever the
     model gives without loading a response (for the RadioFisher model, its
     sources, the profile, the science register, the bank source and the
-    bytes of each response bank). A digest that needs a response loaded is
-    recomputed only by :func:`build`. Never opens a bank.
+    bytes of each response bank). A digest that needs a response loaded, a
+    field of a ``banks`` entry that the model leaves out without its
+    response, is recomputed only by :func:`build`. Never opens a bank.
     """
     path = Path(path)
     then = dict(_leaves(_recorded(path)))
