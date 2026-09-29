@@ -267,7 +267,9 @@ rfisher tolerance bias --zeta 1.0
 `build` refuses to change the bytes of an existing table unless it is given
 `--accept-new`. `bands` reduces the table to one tolerance per band and
 scenario for the bands listed in `BANDS.csv` (columns `band_id`, `low_mhz`,
-`high_mhz`). Before it reads the table, `bands` recomputes every digest the
+`high_mhz`). It prices only screened bands: a `role` column, when present,
+must read `screened` on every row, and the caller passes only the screened
+bands of the frequency plan. Before it reads the table, `bands` recomputes every digest the
 table's provenance records that needs no bank opened (the tolerance and model
 code, the profile, the science register, the bank subpackage and the bytes of
 the response banks) and refuses the table if any has changed; `rfisher

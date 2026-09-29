@@ -65,6 +65,15 @@ def _table_path(out: Path) -> Path:
     return out / TABLE_NAME if out.is_dir() or not out.suffix else out
 
 
+def _unscreened_bands(path: Path) -> list[str]:
+    """Band ids whose ``role`` column, when the CSV has one, is not screened."""
+    import csv
+
+    with path.open(newline="", encoding="utf-8") as fh:
+        return [row["band_id"] for row in csv.DictReader(fh)
+                if row.get("role", "screened") != "screened"]
+
+
 def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
     """``rfisher tolerance {build, bands, show, bias}``."""
     from .forecast.radiofisher_bao import response
@@ -97,7 +106,8 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
         "bands", help="write tolerances.csv and tolerance_components.csv")
     reduced.add_argument("--project", type=Path, required=True)
     reduced.add_argument("--bands", type=Path, required=True,
-                         help="CSV with band_id,low_mhz,high_mhz")
+                         help="CSV with band_id,low_mhz,high_mhz; an "
+                              "optional role column must read screened")
     reduced.add_argument("--out", type=Path, required=True,
                          help="output directory")
     reduced.add_argument("--table", type=Path,
@@ -147,6 +157,10 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
                   f"z {row['z_lo']:.4g}-{row['z_hi']:.4g} "
                   f"{row['parameter']:<6} {value}")
         return 0
+    unscreened = _unscreened_bands(args.bands)
+    if unscreened:
+        parser.error(f"{args.bands}: only screened bands are priced; "
+                     f"role is not screened for {', '.join(unscreened)}")
     band_list = bands.read_bands(args.bands)
     tolerances, components = bands.band_tolerances(model, rows, band_list)
     written = table.write_bands(tolerances, components, args.out, {

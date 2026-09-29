@@ -275,7 +275,12 @@ def restamp(args) -> int:
             sys.exit(f"expected BANK=OUT, got {item!r}")
         pairs.append((Path(source).resolve(), (ROOT / target).resolve()
                       if not Path(target).is_absolute() else Path(target)))
-    targets = {str(target.relative_to(ROOT)) for _, target in pairs}
+    outside = [str(target) for _, target in pairs
+               if not target.is_relative_to(ROOT)]
+    if outside:
+        sys.exit(f"targets outside the repository {ROOT}: "
+                 f"{', '.join(outside)}")
+    targets ={str(target.relative_to(ROOT)) for _, target in pairs}
     missing = set(BANKS.values()) - targets
     unexpected = targets - set(BANKS.values())
     if unexpected or (missing and not args.subset):

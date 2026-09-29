@@ -74,6 +74,13 @@ def test_the_budgets_come_from_the_decision_register():
     assert all(z > 0.0 for z in budgets)
 
 
+def test_a_primary_budget_other_than_one_is_refused(monkeypatch):
+    value = selection_policy.value
+    monkeypatch.setattr(selection_policy, "value", lambda key: 0.5 if key == zs.PRIMARY_ID else value(key))
+    with pytest.raises(ValueError, match="zeta = 1"):
+        zs.zetas()
+
+
 @pytest.mark.parametrize("parameter", ["aperp", "apar", "fs8"])
 def test_the_tolerance_is_exactly_linear_in_the_budget(parameter):
     """r_tol(zeta) = zeta * r_tol(1) in the solver the world tolerances come from."""

@@ -180,6 +180,17 @@ def test_the_restamp_refuses_a_bank_the_baseline_does_not_authenticate(
     assert checkout.bank.read_bytes() == checkout.original
 
 
+def test_the_restamp_refuses_a_target_outside_the_repository(checkout,
+                                                             tmp_path):
+    outside = tmp_path / "elsewhere" / "synthetic.npz"
+    args = SimpleNamespace(**{**vars(checkout.args),
+                              "banks": [f"{checkout.bank}={outside}"]})
+    with pytest.raises(SystemExit, match="outside the repository"):
+        restamp.restamp(args)
+    assert not outside.exists()
+    assert checkout.bank.read_bytes() == checkout.original
+
+
 def test_every_pinned_bank_must_be_restamped(checkout, monkeypatch):
     monkeypatch.setattr(restamp, "BANKS", {ANCHOR: BANK, '"other.npz":':
                                            "data/other.npz"})

@@ -102,7 +102,13 @@ def zetas() -> tuple[float, ...]:
     two entries shows up as an extra row rather than silently choosing one.
     """
     primary = float(selection_policy.value(PRIMARY_ID))
-    declared = [float(v) for v in selection_policy.decision(PRIMARY_ID).sensitivity_values]
+    if primary != 1.0:
+        # The per-bin table prices zeta * sigma / |b| at the primary budget, and
+        # ratio() divides a ledger R that it takes to be at zeta = 1.
+        raise ValueError(f"{PRIMARY_ID} is {primary:g}: the re-pricing "
+                         "R(zeta) = R(1) / zeta holds only for a table priced "
+                         "at zeta = 1")
+    declared =[float(v) for v in selection_policy.decision(PRIMARY_ID).sensitivity_values]
     declared += [float(v) for v in selection_policy.value(SENSITIVITY_ID)]
     return (primary,) + tuple(sorted({v for v in declared if v != primary and v > 0.0}, reverse=True))
 

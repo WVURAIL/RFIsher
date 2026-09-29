@@ -41,6 +41,33 @@ def test_bands_writes_both_tables_and_their_provenance(tmp_path):
         PROJECT / "science_model.yaml")
 
 
+def test_bands_prices_a_screened_role_column_as_without_one(tmp_path):
+    plain = tmp_path / "plain.csv"
+    plain.write_text("band_id,low_mhz,high_mhz\n18,494,500\n33,584,590\n")
+    screened = tmp_path / "screened.csv"
+    screened.write_text("band_id,low_mhz,high_mhz,role\n"
+                        "18,494,500,screened\n33,584,590,screened\n")
+    for bands in (plain, screened):
+        assert cli.main(["tolerance", "bands", "--project", str(PROJECT),
+                         "--bands", str(bands),
+                         "--out", str(tmp_path / bands.stem)]) == 0
+    for name in ("tolerances.csv", "tolerance_components.csv"):
+        assert ((tmp_path / "plain" / name).read_bytes()
+                == (tmp_path / "screened" / name).read_bytes())
+
+
+def test_bands_refuses_a_band_whose_role_is_not_screened(tmp_path, capsys):
+    bands = tmp_path / "bands.csv"
+    bands.write_text("band_id,low_mhz,high_mhz,role\n"
+                     "33,584,590,screened\n37,608,614,control\n")
+    out = tmp_path / "out"
+    with pytest.raises(SystemExit):
+        cli.main(["tolerance", "bands", "--project", str(PROJECT),
+                  "--bands", str(bands), "--out", str(out)])
+    assert "role is not screened for 37" in capsys.readouterr().err
+    assert not out.exists()
+
+
 @pytest.mark.parametrize("argv,name", [
     ([], "filter_scenarios_T1yr.csv"),
     (["other.csv"], "other.csv"),
