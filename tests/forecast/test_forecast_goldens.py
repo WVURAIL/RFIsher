@@ -11,9 +11,13 @@ The floats are exact under the numpy and scipy series the goldens were
 recorded with (numpy 2.5, scipy 1.18: the release interpreter, and CI on
 Python 3.12 and 3.14). An older series, such as the newest numpy that still
 supports Python 3.10, differs in the last bit of some values, so there every
-float is held to a relative 1e-12 instead. Exact floats also need an OpenBLAS
-kernel that reproduces them: Haswell and Zen do, while Sandybridge and Nehalem
-change the last bit of some values, so CI pins OPENBLAS_CORETYPE=Haswell.
+float is held to a relative 1e-12 instead. Exact floats also need the CPU
+paths that reproduce them. For OpenBLAS, Haswell and Zen do, while Sandybridge
+and Nehalem change the last bit of some values, so CI pins
+OPENBLAS_CORETYPE=Haswell. For numpy, the goldens were recorded under its
+X86_V3 dispatch on a machine without AVX-512, so CI also pins
+NPY_ENABLE_CPU_FEATURES=X86_V3. A failure reports how many values differ and
+the largest differences, but the check itself stays exact.
 """
 from __future__ import annotations
 
@@ -65,6 +69,80 @@ def same(got, recorded):
         return (isinstance(got, list) and len(got) == len(recorded)
                 and all(same(a, b) for a, b in zip(got, recorded)))
     return got == recorded
+
+
+def _is_float(value):
+    return isinstance(value, dict) and set(value) == {"repr", "hex"}
+
+
+def differences(got, recorded, path=""):
+    """Each (path, got, recorded) where got is not the recorded value."""
+    if _is_float(recorded) or not isinstance(recorded, (dict, list)):
+        if not same(got, recorded):
+            yield path, got, recorded
+    elif isinstance(recorded, dict) and isinstance(got, dict):
+        for key in sorted(set(recorded) | set(got), key=str):
+            yield from differences(got.get(key), recorded.get(key),
+                                   f"{path}/{key}")
+    elif (isinstance(recorded, list) and isinstance(got, list)
+          and len(got) == len(recorded)):
+        for i, (a, b) in enumerate(zip(got, recorded)):
+            yield from differences(a, b, f"{path}[{i}]")
+    else:
+        yield path, got, recorded
+
+
+def _leaves(recorded):
+    if isinstance(recorded, dict) and not _is_float(recorded):
+        return sum(_leaves(v) for v in recorded.values())
+    if isinstance(recorded, list):
+        return sum(_leaves(v) for v in recorded)
+    return 1
+
+
+def _gap(got, recorded):
+    """Absolute, relative and last-place difference of two recorded floats."""
+    a, b = float(got["repr"]), float(recorded["repr"])
+    if not (math.isfinite(a) and math.isfinite(b)):
+        return (0.0, 0.0, 0.0) if repr(a) == repr(b) else (math.inf,) * 3
+    d = abs(a - b)
+    return (d, d / abs(b) if b else (0.0 if d == 0 else math.inf),
+            d / math.ulp(b))
+
+
+def report(got, recorded):
+    """How far got is from the recorded values, for a failure message only."""
+    try:
+        from numpy._core import _multiarray_umath as mu
+        found = [f for f in mu.__cpu_dispatch__ if mu.__cpu_features__.get(f)]
+    except (ImportError, AttributeError):
+        found = "unknown"
+    lines = [f"numpy {np.__version__}, scipy {scipy.__version__}, "
+             f"exact={EXACT}, numpy dispatch {found}, "
+             f"OPENBLAS_CORETYPE={os.environ.get('OPENBLAS_CORETYPE')}, "
+             f"NPY_ENABLE_CPU_FEATURES="
+             f"{os.environ.get('NPY_ENABLE_CPU_FEATURES')}"]
+    diffs = list(differences(got, recorded))
+    floats = [(p, _gap(g, r)) for p, g, r in diffs
+              if _is_float(g) and _is_float(r)]
+    lines.append(f"{len(diffs)} of {_leaves(recorded)} recorded values differ: "
+                 f"{len(floats)} floats, {len(diffs) - len(floats)} other")
+    groups = {}
+    for path, gap in floats:
+        groups.setdefault(path.split("/")[1] if "/" in path else path,
+                          []).append((path, gap))
+    for name, items in [("all", floats)] + sorted(groups.items()):
+        if not items:
+            continue
+        worst_abs = max(items, key=lambda item: item[1][0])
+        worst_rel = max(items, key=lambda item: item[1][1])
+        lines.append(f"  {name}: {len(items)} floats differ, largest absolute "
+                     f"{worst_abs[1][0]:.3e} at {worst_abs[0]}, largest "
+                     f"relative {worst_rel[1][1]:.3e} ({worst_rel[1][2]:.1f} "
+                     f"ulp) at {worst_rel[0]}")
+    for path, g, r in diffs[:5]:
+        lines.append(f"  {path}: got {g!r}, recorded {r!r}")
+    return "\n".join(lines)
 
 
 def fx(x):
@@ -132,7 +210,9 @@ def test_packaged_bank_forecasts_are_the_recorded_floats(cosmology):
     assert GOLDENS["binding"][cosmology] == "identical"
     fc = api.load(cosmology=cosmology)
     assert fc.style == "perbin_A"
-    assert same(evaluate(fc, len(fc.bank.zc)), GOLDENS["results"][cosmology])
+    got = evaluate(fc, len(fc.bank.zc))
+    recorded = GOLDENS["results"][cosmology]
+    assert same(got, recorded), report(got, recorded)
 
 
 @pytest.mark.parametrize("key", sorted(key for key in GOLDENS["cli"]
@@ -141,7 +221,8 @@ def test_the_forecast_command_prints_the_recorded_json(key):
     got = run_command(GOLDENS["cli"][key]["argv"])
     recorded = GOLDENS["cli"][key]
     assert got["returncode"] == recorded["returncode"] == 0
-    assert same(_floats(got["stdout"]), _floats(recorded["stdout"]))
+    got, recorded = _floats(got["stdout"]), _floats(recorded["stdout"])
+    assert same(got, recorded), report(got, recorded)
 
 
 def test_the_shared_amplitude_path_is_the_recorded_floats():
@@ -151,8 +232,11 @@ def test_the_shared_amplitude_path_is_the_recorded_floats():
         pytest.skip("the Bull-2015 path needs RadioFisher; set RADIOFISHER_DIR")
     fc = api.load(bank=ROOT / "data" / "fisher_bank_bull2015_planck2013_epsfg1e-6.npz")
     assert fc.style == "shared_A"
-    assert same(evaluate(fc, len(fc.bank.zc)), GOLDENS["results"][BULL])
+    got = evaluate(fc, len(fc.bank.zc))
+    recorded = GOLDENS["results"][BULL]
+    assert same(got, recorded), report(got, recorded)
     recorded = GOLDENS["cli"]["bull2015_bank_uniform0.3"]
     got = run_command(recorded["argv"])
     assert got["returncode"] == recorded["returncode"] == 0
-    assert same(_floats(got["stdout"]), _floats(recorded["stdout"]))
+    got, recorded = _floats(got["stdout"]), _floats(recorded["stdout"])
+    assert same(got, recorded), report(got, recorded)

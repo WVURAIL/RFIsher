@@ -9,14 +9,25 @@ permissions:
 
 jobs:
   test:
+    name: test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    # The float goldens are exact under this OpenBLAS kernel.
+    # The float goldens are exact under this OpenBLAS kernel and, on the numpy
+    # series they were recorded with, under numpy's X86_V3 dispatch (the
+    # recording machine has no AVX-512). The 3.10 job has an older numpy, which
+    # names its CPU features differently and holds the goldens to 1e-12, so it
+    # gets no numpy pin; an empty value leaves numpy's dispatch as it is.
     env:
       OPENBLAS_CORETYPE: Haswell
+      NPY_ENABLE_CPU_FEATURES: ${{ matrix.numpy-cpu-features }}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.12", "3.14"]
+        include:
+          - python-version: "3.12"
+            numpy-cpu-features: X86_V3
+          - python-version: "3.14"
+            numpy-cpu-features: X86_V3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,6 +39,15 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[test]" -r requirements/test-coverage.txt
       - run: python -m pip check
+      - name: Record the CPU and the numerical runtime
+        run: |
+          lscpu
+          echo "OPENBLAS_CORETYPE=${OPENBLAS_CORETYPE-} NPY_ENABLE_CPU_FEATURES=${NPY_ENABLE_CPU_FEATURES-}"
+          # threadpoolctl goes to a side directory, so the tested environment is unchanged.
+          python -m pip install -q --target "$RUNNER_TEMP/threadpoolctl" threadpoolctl \
+            || echo "threadpoolctl not available"
+          PYTHONPATH="$RUNNER_TEMP/threadpoolctl" python -c "import numpy, scipy, scipy.linalg; print('numpy', numpy.__version__, 'scipy', scipy.__version__); numpy.show_runtime()"
+          env -u NPY_ENABLE_CPU_FEATURES python -c "from numpy._core import _multiarray_umath as m; print('numpy dispatch on this host without the pin:', [f for f in m.__cpu_dispatch__ if m.__cpu_features__[f]])"
       - run: ruff check .
       - run: python -m pytest -q --cov --cov-report=term-missing:skip-covered --cov-report=json
       - name: Enforce coverage for every package component
@@ -80,8 +100,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RADIOFISHER_DIR: ${{ github.workspace }}/RadioFisher
-      # The float goldens and the table rebuild are exact under this OpenBLAS kernel.
+      # The float goldens and the table rebuild are exact under this OpenBLAS
+      # kernel and numpy's X86_V3 dispatch, as on the recording machine.
       OPENBLAS_CORETYPE: Haswell
+      NPY_ENABLE_CPU_FEATURES: X86_V3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -101,6 +123,15 @@ jobs:
       # Editable: a bank authenticates against the digest of the bank source
       # in this checkout, which an installed copy cannot provide.
       - run: python -m pip install -e ".[test]" ./RadioFisher
+      - name: Record the CPU and the numerical runtime
+        run: |
+          lscpu
+          echo "OPENBLAS_CORETYPE=${OPENBLAS_CORETYPE-} NPY_ENABLE_CPU_FEATURES=${NPY_ENABLE_CPU_FEATURES-}"
+          # threadpoolctl goes to a side directory, so the tested environment is unchanged.
+          python -m pip install -q --target "$RUNNER_TEMP/threadpoolctl" threadpoolctl \
+            || echo "threadpoolctl not available"
+          PYTHONPATH="$RUNNER_TEMP/threadpoolctl" python -c "import numpy, scipy, scipy.linalg; print('numpy', numpy.__version__, 'scipy', scipy.__version__); numpy.show_runtime()"
+          env -u NPY_ENABLE_CPU_FEATURES python -c "from numpy._core import _multiarray_umath as m; print('numpy dispatch on this host without the pin:', [f for f in m.__cpu_dispatch__ if m.__cpu_features__[f]])"
       - name: Run pinned cross-repository contract tests
         run: |
           python -m pytest -q tests/forecast/test_resources.py \
