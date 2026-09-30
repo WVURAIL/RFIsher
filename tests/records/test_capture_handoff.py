@@ -164,10 +164,10 @@ class Block:
             raise ImportError(f"{name} is blocked")
         return None
 sys.meta_path.insert(0, Block())
-from rfisher.cli import main
-for command in ("table-of-record", "capture-ruling"):
+from rfisher.cli import CAPTURE_RECORDS, main
+for command in CAPTURE_RECORDS:
     assert main(["records", command, "--help"]) == 0
-import rfisher.records.chime_atsc_2026.capture_ruling, rfisher.records.chime_atsc_2026.table_of_record
+import rfisher.records.chime_atsc_2026.capture_release
 """
 
 
@@ -175,4 +175,5 @@ def test_the_capture_records_run_without_the_forecast_dependencies():
     """The records run under the release's interpreter, which has no PyYAML, h5py, jsonschema or pytest."""
     env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), PYTHONDONTWRITEBYTECODE="1")
     out = subprocess.run([sys.executable, "-c", BLOCKED], check=True, capture_output=True, text=True, env=env).stdout
-    assert "usage: rfisher records capture-ruling" in out and "usage: rfisher records table-of-record" in out
+    for command in ("capture-ruling", "table-of-record", "capture-release", "cohort-basis", "robustness", "phase-limit"):
+        assert f"usage: rfisher records {command}" in out, command

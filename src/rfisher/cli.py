@@ -301,6 +301,8 @@ CAPTURE_RECORDS = {
                        "against the credit readings"),
     "filter-sensitivity": ("filter_sensitivity", "revision 3's filter "
                            "sensitivity against revision 2"),
+    "capture-release": ("capture_release", "the capture ruling release r5.2 "
+                        "from the capture handoff"),
 }
 
 
