@@ -291,6 +291,16 @@ CAPTURE_RECORDS = {
                         "amendment 8 (v7) from the capture handoff"),
     "capture-ruling": ("capture_ruling", "the capture ruling under a rule "
                        "file (the table of record at 'record')"),
+    "cohort-basis": ("cohort_basis", "channel 24 on its 2020 cohort basis "
+                     "(borrowed, or its own in-band measurement)"),
+    "robustness": ("robustness", "the robustness margins of the excisions"),
+    "phase-limit": ("phase_limit", "the exclusion-side phase limit on the "
+                    "coherence gain"),
+    "duration": ("duration", "the keep gap and the survey-duration reading"),
+    "postprocessing": ("postprocessing", "the post-processing sensitivity "
+                       "against the credit readings"),
+    "filter-sensitivity": ("filter_sensitivity", "revision 3's filter "
+                           "sensitivity against revision 2"),
 }
 
 
