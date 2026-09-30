@@ -9,6 +9,7 @@ band. Reported parameters are listed in the components and set nothing.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,7 @@ from typing import Sequence
 
 from rfisher.science_model import ScienceModel
 
-from .table import BASIS
+from .table import basis
 
 REFUSED_PARAMETER = "one or more target-time parameter tolerances refused"
 REFUSED_COVERAGE = "forecast bins do not cover the full band"
@@ -32,8 +33,15 @@ class Band:
 
 
 def read_bands(path: str | Path) -> list[Band]:
-    """Bands from a CSV with the columns ``band_id,low_mhz,high_mhz``."""
-    with Path(path).open(newline="", encoding="utf-8") as fh:
+    """Bands from a CSV with the columns ``band_id,low_mhz,high_mhz``, or the
+    screened bands of a handoff ``manifest.json`` (its ``bands`` list)."""
+    path = Path(path)
+    if path.suffix == ".json":
+        entries = json.loads(path.read_text(encoding="utf-8"))["bands"]
+        return [Band(str(e["band_id"]), float(e["low_mhz"]),
+                     float(e["high_mhz"]))
+                for e in entries if e.get("role", "screened") == "screened"]
+    with path.open(newline="", encoding="utf-8") as fh:
         return [Band(row["band_id"], float(row["low_mhz"]),
                      float(row["high_mhz"]))
                 for row in csv.DictReader(fh)]
@@ -74,6 +82,7 @@ def band_tolerances(model: ScienceModel, rows: Sequence[dict],
     order, then in ascending bin order.
     """
     _check_bins(model, rows)
+    label = basis(model)
     labels = {b.index: b.label for b in model.bins()}
     required = model.parameters.required
     tolerances, components = [], []
@@ -95,7 +104,7 @@ def band_tolerances(model: ScienceModel, rows: Sequence[dict],
                     value = tolerance_of(rows, scenario.name, (b,), p)
                     components.append({
                         "band_id": band.band_id, "scenario": scenario.name,
-                        "tolerance_basis": BASIS, "parameter": p,
+                        "tolerance_basis": label, "parameter": p,
                         "required": p in required, "bin": b,
                         "bin_label": labels[b], "r_tol_component": value,
                         "status": ("accepted" if math.isfinite(value) else
@@ -109,7 +118,7 @@ def band_tolerances(model: ScienceModel, rows: Sequence[dict],
                 "binding_bin": binding_bin, "zeta": float(model.zeta),
                 "target_time_years": float(model.target_years),
                 "suppression_db": float(scenario.suppression_db),
-                "tolerance_basis": BASIS,
+                "tolerance_basis": label,
                 "refusal": ("" if priced else REFUSED_PARAMETER if covered
                             else REFUSED_COVERAGE)})
     return tolerances, components

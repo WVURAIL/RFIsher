@@ -20,14 +20,14 @@ from pathlib import Path
 
 import numpy as np
 
-from rfisher.selection_policy import value as _policy_value
+from rfisher import policy
 
 from .bank._validation import nonnegative_scalar, positive_scalar
 
-# Delay-filter suppression of the DTV shelf, dB, as a function of which BAO
+# Delay-filter suppression of the residual, dB, as a function of which BAO
 # feature the filter must preserve. Derived from the k_par <-> delay relation
 # k_par = 2 pi nu_21 H0 E(z) tau / [c (1 + z)^2] (Amiri et al. 2023, Eq. 64)
-# evaluated at the DTV band. Preserving a *larger* scale (lower k_par, the
+# evaluated at the profile's report band. Preserving a *larger* scale (lower k_par, the
 # first acoustic peak) forces a shorter delay cutoff and buys less suppression.
 DELAY_SUPPRESSION_DB = {
     "none": 0.0,                # claim no foreground-removal help (default)
@@ -44,7 +44,7 @@ DELAY_SUPPRESSION_DB = {
 # bound the help that *could* be claimed if the filter were modelled on both
 # sides. Note the direction: claiming nothing makes every residual larger,
 # which is the conservative direction for a contamination budget.
-DEFAULT_DELAY_KEY = str(_policy_value("transfer.delay_suppression.default_key"))
+DEFAULT_DELAY_KEY = str(policy.value("transfer.delay_suppression.default_key"))
 if DEFAULT_DELAY_KEY not in DELAY_SUPPRESSION_DB:
     raise RuntimeError("default delay scenario is not defined")
 

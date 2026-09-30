@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.optimize import brentq
 
-from rfisher.selection_policy import value as _policy_value
+from rfisher import policy
 
 from .bank import experiments
 from .bank._validation import (finite_scalar as _finite_scalar,
@@ -34,7 +34,7 @@ EXPAND = ["b_HI", "f", "aperp", "apar"]
 # b_HI/f enter through the (b+f mu^2) sigma8 combinations bs8/fs8.
 EXCLUDE_PERBIN = ["b_HI", "f", "Tb", "sigma8tot", "n_s", "pk"]
 
-V_FRAC_MIN = float(_policy_value(
+V_FRAC_MIN = float(policy.value(
     "science.response_solver.minimum_volume_fraction"))
 
 FORECAST_STYLES = frozenset({"shared_A", "perbin_A"})
@@ -44,9 +44,9 @@ FORECAST_STYLES = frozenset({"shared_A", "perbin_A"})
 # a pseudoinverse can turn an unconstrained parameter into a small, finite
 # error bar. A 1e12 condition-number limit is conservative relative to the
 # committed banks in their canonical forecast styles (O(1e6) or better).
-FISHER_CONDITION_LIMIT = float(_policy_value(
+FISHER_CONDITION_LIMIT = float(policy.value(
     "science.response_solver.maximum_condition_number"))
-FISHER_NULLSPACE_RTOL = float(_policy_value(
+FISHER_NULLSPACE_RTOL = float(policy.value(
     "science.response_solver.relative_nullspace_cutoff"))
 
 

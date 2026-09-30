@@ -11,7 +11,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from rfisher import channels, plots
+from rfisher import plots
+from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao import scenarios, significance
 from rfisher.forecast.radiofisher_bao.bank import experiments
 from rfisher.forecast.radiofisher_bao.bank.backend import import_radiofisher

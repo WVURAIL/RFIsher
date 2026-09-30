@@ -129,3 +129,18 @@ def test_the_provenance_names_the_table_and_the_outputs(written):
     _, _, out = written
     record = json.loads((out / "tolerances.provenance.json").read_text())
     assert set(record) == {"schema", "tolerances_sha256", "components_sha256"}
+
+
+def test_a_handoff_manifest_gives_its_screened_bands(tmp_path):
+    import json
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"bands": [
+        {"band_id": "18", "low_mhz": 494.0, "high_mhz": 500.0,
+         "role": "screened"},
+        {"band_id": "37", "low_mhz": 608.0, "high_mhz": 614.0,
+         "role": "control"},
+        {"band_id": "33", "low_mhz": 584.0, "high_mhz": 590.0,
+         "role": "screened"}]}), encoding="utf-8")
+    assert bands.read_bands(manifest) == [bands.Band("18", 494.0, 500.0),
+                                          bands.Band("33", 584.0, 590.0)]

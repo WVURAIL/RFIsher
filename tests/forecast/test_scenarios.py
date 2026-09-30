@@ -411,18 +411,6 @@ def test_duplicate_channel_is_refused(tmp_path):
         channels.mask_table_from_products(ps)
 
 
-def test_survey_product_scenario_refuses_to_mix_sources_by_default(tmp_path):
-    p = [_product(tmp_path / "a.npz", 35, 0.837)]
-    with pytest.raises(ValueError, match="mixes two detectors"):
-        scenarios.survey_product_scenario(p)
-    omitted = scenarios.survey_product_scenario(p, fill_missing="omit")
-    assert 17 not in omitted.fractions
-    assert omitted.fractions[35] == pytest.approx(0.837, abs=2e-3)
-    mixed = scenarios.survey_product_scenario(p, fill_missing="csv")
-    assert mixed.fractions[35] == pytest.approx(0.837, abs=2e-3)
-    assert 17 in mixed.fractions and "CSV" in mixed.label
-
-
 def test_window_selects_the_epoch(tmp_path):
     """A sign-off channel: masked through 2019, clean in 2025."""
     months = ["2019-06"] * 200 + ["2025-06"] * 200
@@ -460,19 +448,6 @@ def test_window_requires_timestamps(tmp_path):
         channels.mask_table_from_products([p], since="2025-01")
 
 
-def test_windowed_scenario_carries_the_window(tmp_path):
-    months = ["2019-06"] * 100 + ["2025-06"] * 100
-    rej = np.concatenate([np.ones(100), np.zeros(100)])
-    p = _product(tmp_path / "w.npz", 35, 0.5, months=months, rejected=rej)
-    sc = scenarios.survey_product_scenario(
-        [p], fill_missing="omit", since="2025-01")
-    assert sc.fractions[35] == pytest.approx(0.0)
-    assert "2025-01" in sc.label
-    with pytest.raises(ValueError, match="two decisions"):
-        scenarios.survey_product_scenario(
-            [p], fill_missing="csv", since="2025-01")
-
-
 def test_eta_rethresholds_from_the_stored_statistic(tmp_path):
     """A sign-off channel at eta=1 stays masked on faint residual excess;
     a threshold above the residual population frees it."""
@@ -504,19 +479,6 @@ def test_eta_must_be_positive_and_finite(tmp_path, eta):
     bare = _product(tmp_path / "bare.npz", 19, 0.5)
     with pytest.raises(ValueError, match="eta"):
         channels.mask_table_from_products([bare], eta=eta)
-
-
-def test_eta_scenario_carries_the_threshold(tmp_path):
-    F = np.r_[np.full(100, 50.0), np.full(300, 1.02)]
-    p = _product(tmp_path / "e.npz", 19, 1.0,
-                 rejected=(F > 1.0).astype(np.uint8), fstat=F)
-    sc = scenarios.survey_product_scenario(
-        [p], fill_missing="omit", eta=1.4)
-    assert sc.fractions[19] == pytest.approx(0.25)
-    assert "eta=1.4" in sc.label
-    with pytest.raises(ValueError, match="two decisions"):
-        scenarios.survey_product_scenario(
-            [p], fill_missing="csv", eta=1.4)
 
 
 def test_compare_mask_tables_orders_by_disagreement():

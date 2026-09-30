@@ -374,14 +374,16 @@ def test_missing_packaged_data_fails_clearly():
 def test_defaults_work_through_a_zip_importer(tmp_path):
     """Exercise archive-backed Traversables, not only pathlib resources."""
     package_root = Path(__file__).resolve().parents[2] / "src" / "rfisher"
+    projects_root = Path(__file__).resolve().parents[2] / "projects"
     archive = tmp_path / "rfisher-test.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for source in package_root.rglob("*"):
-            if (source.is_file() and "__pycache__" not in source.parts
-                    and source.suffix != ".pyc"):
-                destination = (Path("rfisher")
-                               / source.relative_to(package_root))
-                zf.write(source, destination)
+        # The package, and its projects where the wheel puts them.
+        for root, prefix in ((package_root, Path("rfisher")),
+                             (projects_root, Path("rfisher") / "projects")):
+            for source in root.rglob("*"):
+                if (source.is_file() and "__pycache__" not in source.parts
+                        and source.suffix != ".pyc"):
+                    zf.write(source, prefix / source.relative_to(root))
 
     code = f"""
 import sys

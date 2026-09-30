@@ -33,13 +33,31 @@ Documentation = "https://github.com/WVURAIL/RFIsher/tree/main/docs"
 Issues = "https://github.com/WVURAIL/RFIsher/issues"
 Repository = "https://github.com/WVURAIL/RFIsher"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-namespaces = false
+# The packages are listed (tests/test_packaging.py holds the list equal to the
+# packages under src/): the project directory projects/chime_bao ships inside
+# the package as rfisher.projects, so an installed rfisher reads the same
+# science register a checkout does.
+[tool.setuptools]
+package-dir = {"" = "src", "rfisher.projects" = "projects"}
+packages = [
+    "rfisher",
+    "rfisher.data",
+    "rfisher.forecast",
+    "rfisher.forecast.radiofisher_bao",
+    "rfisher.forecast.radiofisher_bao.bank",
+    "rfisher.projects",
+    "rfisher.residual_scores",
+    "rfisher.tolerance",
+    "rfisher_results",
+    "rfisher_results.archive",
+    "rfisher_results.archive.report",
+    "rfisher_results.validation",
+]
 
 [tool.setuptools.package-data]
 "rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat", "response_banks/*.npz",
                   "tolerances/*", "tolerances/*/*", "schemas/*"]
+"rfisher.projects" = ["chime_bao/*.json", "chime_bao/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

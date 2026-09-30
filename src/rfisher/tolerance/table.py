@@ -30,7 +30,16 @@ from . import rule
 COLUMNS = ("world", "bin_index", "z_lo", "z_hi", "parameter", "tolerance",
            "at_target", "years_used", "years_accepted", "years_refused")
 IDENTITY_SCHEMA = 3
-BASIS = "grid_T1yr_stability_gated"
+
+
+def basis(model: ScienceModel) -> str:
+    """The table's basis label: the target time it is priced at, on the grid.
+
+    ``grid_T1yr_stability_gated`` for a target of one year.
+    """
+    return f"grid_T{float(model.target_years):g}yr_stability_gated"
+
+
 BAND_COLUMNS = ("band_id", "band_low_mhz", "band_high_mhz", "scenario", "role",
                 "r_tol", "binding_parameter", "binding_bin", "zeta",
                 "target_time_years", "suppression_db", "tolerance_basis",
@@ -80,7 +89,7 @@ def identity(model: ScienceModel, path: str | Path, *,
     sources.update(described["sources"])
     out = {key: value for key, value in described.items() if key != "sources"}
     out.update(schema=IDENTITY_SCHEMA, target_years=float(model.target_years),
-               sources=dict(sorted(sources.items())),
+               zeta=float(model.zeta), sources=dict(sorted(sources.items())),
                csv_sha256=sha256_file(path))
     return out
 

@@ -19,16 +19,17 @@
     }
   },
   "csv_sha256": "3985dd593bbb19904e600e20adbd44248c2449b980bdb27856166c85b298f162",
-  "profile_sha256": "15e5397221ac14d6d9e75d88db5fa633a5c90ae63c9f94048166d582fd9abd1b",
+  "profile_sha256": "059e4db2d4cb124b010f0a52d623075ca71fba8cf0f1278519098eb1a85253c1",
   "schema": 3,
   "science_register_sha256": "ef5cbf45b0f5ea160b894f2666d70ccb0b9cfecd6cb01bcbb06f1a35548234f5",
   "sources": {
-    "rfisher/forecast/radiofisher_bao/filter_scenarios.py": "1d5031e1700c3930c213894a2f8ca2050cd49480ca666f79d256afd95c5373b1",
-    "rfisher/forecast/radiofisher_bao/model.py": "afc5966a0cb5f20f3c34474e7b1d985f3d8b7ade0a5fa0bf5bce1e956be177b5",
-    "rfisher/forecast/radiofisher_bao/response.py": "ee122d72fca310ad28164ef680f3deef4277019dfc65cb99dc2e99cc986ee66c",
-    "rfisher/tolerance/bands.py": "21a2ce8fb951b6f7a071806e6c60999c2f93ae8552dded1da648941df8d5c891",
+    "rfisher/forecast/radiofisher_bao/filter_scenarios.py": "66b0acae0c134fdb58311dab96a43144e200cfa93b3f8ae9afee264d92e0e147",
+    "rfisher/forecast/radiofisher_bao/model.py": "b22716dab5eee1c1852e74386475212a29cab1d3f0f06a075a7508c9aa30c2bf",
+    "rfisher/forecast/radiofisher_bao/response.py": "377ea033ba04be395964d529747af17f89fdb40b2f7612d2b8fcadb44711f612",
+    "rfisher/tolerance/bands.py": "a344effd74c3593af9b66b753763e654ddd85dae1514dae179e64d6a72f0a2d0",
     "rfisher/tolerance/rule.py": "ea0183fdc2b63c19caffc602aec99969087fb7559a0b7bf9d1b24ee112293ddd",
-    "rfisher/tolerance/table.py": "9d862e94422c108244041487f9c278a3231badde126d48154fe4e231d0152113"
+    "rfisher/tolerance/table.py": "a2e82150faf89d05c55bc4c1bd8cb61d2e3bb15a533b50c59e5e12c0136eeaa8"
   },
-  "target_years": 1.0
+  "target_years": 1.0,
+  "zeta": 1.0
 }

@@ -12,8 +12,8 @@ zeta * sigma / |b|.
 Two estimator families are deliberately kept separate:
 
 ``perbin_appendix_a``
-    The established dissertation path. Each redshift bin is inverted alone
-    over the Appendix-A parameter set.
+    The per-bin path. Each redshift bin is inverted alone over the
+    Appendix-A parameter set.
 
 ``overview_combined_multibin``
     The CHIME Overview/Fig.-31 construction. Every bank bin is projected with
@@ -59,7 +59,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from rfisher import __version__, channels, selection_policy
+from rfisher import __version__, policy
 
 from .bank import cosmologies
 from .bank import experiments, pk_cache
@@ -103,21 +103,21 @@ TIME_SCALINGS = (
 )
 
 REPORT_SCHEMA = "baonoise-bias-tolerance-v1"
-FISHER_CONDITION_LIMIT = float(selection_policy.value(
+FISHER_CONDITION_LIMIT = float(policy.value(
     "science.response_solver.maximum_condition_number"))
-FISHER_NULLSPACE_RTOL = float(selection_policy.value(
+FISHER_NULLSPACE_RTOL = float(policy.value(
     "science.response_solver.relative_nullspace_cutoff"))
-DEFAULT_YEARS = tuple(float(value) for value in selection_policy.value(
+DEFAULT_YEARS = tuple(float(value) for value in policy.value(
     "archive_reference.bias_year_grid"))
-DEFAULT_ZETA = float(selection_policy.value(
+DEFAULT_ZETA = float(policy.value(
     "science.systematic_budget.primary_zeta"))
-DEFAULT_STABILITY_FRACTION = float(selection_policy.value(
+DEFAULT_STABILITY_FRACTION = float(policy.value(
     "science.response_stability.time_fraction"))
-DEFAULT_MAXIMUM_TOLERANCE_RATIO = float(selection_policy.value(
+DEFAULT_MAXIMUM_TOLERANCE_RATIO = float(policy.value(
     "science.response_stability.maximum_tolerance_ratio"))
-DEFAULT_ESTIMATOR = str(selection_policy.value(
+DEFAULT_ESTIMATOR = str(policy.value(
     "science.response_solver.default_estimator"))
-DEFAULT_TIME_SCALING = str(selection_policy.value(
+DEFAULT_TIME_SCALING = str(policy.value(
     "science.response_solver.default_time_scaling"))
 if DEFAULT_ESTIMATOR not in ESTIMATORS:
     raise RuntimeError("default response estimator is not defined")
@@ -1010,13 +1010,20 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def dtv_bin_indices(bank) -> list[int]:
-    z_dtv = (
-        HI_REST_FREQUENCY_MHZ / channels.ATSC_DTV_UPPER_EDGE - 1.0,
-        HI_REST_FREQUENCY_MHZ / channels.ATSC_CH14_LOWER_EDGE - 1.0,
-    )
+def band_bin_indices(bank, band_mhz: tuple[float, float]) -> list[int]:
+    """The bank bins a frequency band (low, high edge in MHz) overlaps."""
+    low, high = band_mhz
+    z_band = (HI_REST_FREQUENCY_MHZ / high - 1.0,
+              HI_REST_FREQUENCY_MHZ / low - 1.0)
     return [i for i in range(bank.nbins)
-            if bank.zs[i + 1] > z_dtv[0] and bank.zs[i] < z_dtv[1]]
+            if bank.zs[i + 1] > z_band[0] and bank.zs[i] < z_band[1]]
+
+
+def report_bin_indices(bank, project=None) -> list[int]:
+    """The bins of the profile's report band (default project: the policy's)."""
+    from .model import report_band_mhz
+
+    return band_bin_indices(bank, report_band_mhz(project))
 
 
 def build_report(bank, bank_path: Path, estimator, *, bins, years, params,
@@ -1197,7 +1204,7 @@ def bias_main(argv=None, prog: str = "rfisher tolerance bias") -> int:
     ap.add_argument(
         "--bins", nargs="+", type=int,
         help="zero-based bank-bin indices (default: every bin overlapping "
-             "the 470--608 MHz DTV band)")
+             "the science profile's report band)")
     ap.add_argument("--stability-fraction", type=float,
                     default=DEFAULT_STABILITY_FRACTION)
     ap.add_argument("--max-drift", type=float,
@@ -1212,7 +1219,7 @@ def bias_main(argv=None, prog: str = "rfisher tolerance bias") -> int:
         bank = load_response_bank(args.bank, rf_dir=args.radiofisher_dir)
     except ValueError as exc:
         ap.error(str(exc))
-    bins = dtv_bin_indices(bank) if args.bins is None else list(args.bins)
+    bins = report_bin_indices(bank) if args.bins is None else list(args.bins)
     if (not bins or len(set(bins)) != len(bins)
             or any(ibin < 0 or ibin >= bank.nbins for ibin in bins)):
         ap.error("--bins must be unique valid bank-bin indices")

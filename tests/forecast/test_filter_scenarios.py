@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import shutil
+
 import numpy as np
 import pytest
 import yaml
 
-from rfisher import selection_policy
+from rfisher import policy
 from rfisher.forecast.radiofisher_bao import filter_scenarios, model
 from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
 
@@ -128,30 +130,35 @@ def test_the_suppression_is_the_literal_table():
     assert [filter_scenarios.suppression_db(s.name)
             for s in filter_scenarios.SCENARIOS] == [0.0, 3.6, 8.2, 11.4]
     assert filter_scenarios.DEFAULT_DELAY_KEY == "none" \
-        == selection_policy.value("transfer.delay_suppression.default_key")
+        == policy.value("transfer.delay_suppression.default_key")
     with pytest.raises(KeyError, match="unknown filter scenario"):
         filter_scenarios.suppression_db("wedge")
 
 
-def test_the_profile_states_the_register_values_it_replaces():
+def test_the_model_reads_the_register_values_the_profile_names():
     profile = model.load_profile(PROJECT)
     parameters = profile["parameters"]
     assert tuple(parameters["required"]) + tuple(parameters["reported"]) \
-        == selection_policy.value("archive_reference.three_worlds_parameters")
+        == policy.value("archive_reference.three_worlds_parameters", PROJECT)
     assert tuple(parameters["required"]) == ("aperp", "apar")
-    assert tuple(profile["year_grid"]) \
-        == selection_policy.value("archive_reference.forecast_year_grid")
-    assert profile["stability"] == {
-        "time_fraction": selection_policy.value(
-            "science.response_stability.time_fraction"),
-        "maximum_tolerance_ratio": selection_policy.value(
-            "science.response_stability.maximum_tolerance_ratio")}
-    assert profile["zeta"] == 1.0 == selection_policy.value(
-        "science.systematic_budget.primary_zeta")
-    assert profile["target_years"] == 1.0
-    for value in (profile["zeta"], profile["target_years"],
-                  *profile["year_grid"], *profile["stability"].values()):
+    assert profile["register"] == model.REGISTER_KEYS
+    assert profile["target_years"] == 1.0 and type(profile["target_years"]) \
+        is float
+    built = model.RadioFisherBAO(PROJECT)
+    # The literals the profile stated before the register became their one
+    # source (7b0067b), and the transfer closure g_sys = g_var = 1.
+    assert built.year_grid == (1.0, 2.0, 3.0, 5.0, 8.0)
+    assert built.time_fraction == 0.1
+    assert built.maximum_tolerance_ratio == 1.2
+    assert built.zeta == 1.0
+    assert built.transfer_gains == {"systematic": 1.0, "variance": 1.0}
+    for value in (built.zeta, built.time_fraction,
+                  built.maximum_tolerance_ratio, *built.year_grid):
         assert type(value) is float
+    for key, ident in model.REGISTER_KEYS.items():
+        assert policy.load(PROJECT).decision(ident).side == "science", key
+    for ident in model.REGISTER_IDS:
+        assert ident in policy.load(PROJECT).decisions
 
 
 def test_the_profile_gives_the_no_filter_scenario_the_rule_role():
@@ -163,6 +170,13 @@ def test_the_profile_gives_the_no_filter_scenario_the_rule_role():
         for s in filter_scenarios.SCENARIOS]
 
 
+def _project_copy(tmp_path, profile):
+    for name in policy.FILES:
+        shutil.copy(PROJECT / name, tmp_path / name)
+    (tmp_path / "science_model.yaml").write_text(yaml.safe_dump(profile))
+    return tmp_path
+
+
 @pytest.mark.parametrize("field,value,match", [
     ("kfg_fac", 40.0, "the forecast defines"),
     ("role", "rescue", "role must be one of"),
@@ -171,14 +185,42 @@ def test_a_profile_that_disagrees_with_the_forecast_is_refused(
         tmp_path, field, value, match):
     profile = yaml.safe_load((PROJECT / "science_model.yaml").read_text())
     profile["scenarios"][1][field] = value
-    (tmp_path / "science_model.yaml").write_text(yaml.safe_dump(profile))
     with pytest.raises(ValueError, match=match):
-        model.RadioFisherBAO(tmp_path)
+        model.RadioFisherBAO(_project_copy(tmp_path, profile))
+
+
+@pytest.mark.parametrize("roles,suppression", [
+    (("rule", "rule", "sensitivity", "sensitivity"), None),
+    (("sensitivity",) * 4, None),
+    (("sensitivity", "rule", "sensitivity", "sensitivity"), None),
+])
+def test_exactly_one_rule_scenario_without_suppression(tmp_path, roles,
+                                                       suppression):
+    profile = yaml.safe_load((PROJECT / "science_model.yaml").read_text())
+    for entry, role in zip(profile["scenarios"], roles):
+        entry["role"] = role
+    with pytest.raises(ValueError, match="exactly one scenario"):
+        model.RadioFisherBAO(_project_copy(tmp_path, profile))
+
+
+@pytest.mark.parametrize("field,value,match", [
+    ("register", {"zeta": "science.systematic_budget.primary_zeta"},
+     "register must name"),
+    ("r_reference", {"frame_seconds": 0.04194304}, "r_reference holds"),
+    ("residual_shapes", [], "residual_shapes"),
+    ("report_band_mhz", [608.0, 470.0], "report_band_mhz"),
+    ("report_band_mhz", [470, 608], "report_band_mhz"),
+])
+def test_a_profile_with_a_malformed_field_is_refused(tmp_path, field, value,
+                                                     match):
+    profile = yaml.safe_load((PROJECT / "science_model.yaml").read_text())
+    profile[field] = value
+    with pytest.raises(ValueError, match=match):
+        model.load_profile(_project_copy(tmp_path, profile))
 
 
 def test_a_profile_of_another_adapter_is_refused(tmp_path):
     profile = yaml.safe_load((PROJECT / "science_model.yaml").read_text())
     profile["adapter"] = "another"
-    (tmp_path / "science_model.yaml").write_text(yaml.safe_dump(profile))
     with pytest.raises(ValueError, match="adapter"):
-        model.load_profile(tmp_path)
+        model.load_profile(_project_copy(tmp_path, profile))

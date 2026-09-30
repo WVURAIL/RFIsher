@@ -67,9 +67,15 @@ def _table_path(out: Path) -> Path:
 
 
 def _unscreened_bands(path: Path) -> list[str]:
-    """Band ids whose ``role`` column, when the CSV has one, is not screened."""
+    """Band ids whose ``role`` column, when the CSV has one, is not screened.
+
+    A handoff manifest lists every band with its role; only its screened
+    bands are read, so it has none to refuse.
+    """
     import csv
 
+    if path.suffix == ".json":
+        return []
     with path.open(newline="", encoding="utf-8") as fh:
         return [row["band_id"] for row in csv.DictReader(fh)
                 if row.get("role", "screened") != "screened"]
@@ -89,8 +95,9 @@ def reference_main(argv=None, prog: str = "rfisher tolerance reference") -> int:
                         help="a reference basis; repeat for several, whose "
                              "rows are written in the order given")
     parser.add_argument("--bands", type=Path, required=True,
-                        help="CSV with band_id,low_mhz,high_mhz; an optional "
-                             "role column must read screened")
+                        help="CSV with band_id,low_mhz,high_mhz (an optional "
+                             "role column must read screened), or a handoff "
+                             "manifest.json, whose screened bands are read")
     parser.add_argument("--out", type=Path, required=True,
                         help="output directory")
     args = parser.parse_args(argv)
@@ -146,8 +153,10 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
         "bands", help="write tolerances.csv and tolerance_components.csv")
     reduced.add_argument("--project", type=Path, required=True)
     reduced.add_argument("--bands", type=Path, required=True,
-                         help="CSV with band_id,low_mhz,high_mhz; an "
-                              "optional role column must read screened")
+                         help="CSV with band_id,low_mhz,high_mhz (an "
+                              "optional role column must read screened), or "
+                              "a handoff manifest.json, whose screened bands "
+                              "are read")
     reduced.add_argument("--out", type=Path, required=True,
                          help="output directory")
     reduced.add_argument("--table", type=Path,

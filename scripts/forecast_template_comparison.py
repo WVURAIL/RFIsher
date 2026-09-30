@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from rfisher import channels
+from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao.bank import templates
 from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
 

@@ -57,8 +57,7 @@ from numbers import Integral
 
 import numpy as np
 
-from rfisher import channels
-
+from . import legacy_masks
 from .bank._validation import real_scalar
 from .bank.experiments import CHIME_FREQUENCY_MAX_MHZ, CHIME_FREQUENCY_MIN_MHZ
 from .bank.physics import HI_REST_FREQUENCY_MHZ
@@ -162,7 +161,7 @@ class FrequencyBand:
 
 
 DTV_BAND = FrequencyBand(
-    "dtv", channels.ATSC_CH14_LOWER_EDGE, channels.ATSC_DTV_UPPER_EDGE,
+    "dtv", legacy_masks.ATSC_CH14_LOWER_EDGE, legacy_masks.ATSC_DTV_UPPER_EDGE,
     label="DTV")
 CHIME_BAND = FrequencyBand(
     "chime", CHIME_FREQUENCY_MIN_MHZ, CHIME_FREQUENCY_MAX_MHZ, label="CHIME")
@@ -246,7 +245,7 @@ class Scenario:
     def _physical_slices(self):
         """Yield non-overlapping ``(lo, hi, weight, excised)`` slices."""
         for ch in set(self.fractions) | set(self.residuals):
-            lo, hi = channels.channel_edges(ch)
+            lo, hi = legacy_masks.channel_edges(ch)
             yield lo, hi, self.keep_weight(ch), self.is_excised(ch)
         for band in set(self.frequency_fractions) | set(self.frequency_residuals):
             yield (band.nu_min_mhz, band.nu_max_mhz,
@@ -349,83 +348,21 @@ def clean() -> Scenario:
 
 
 def _masking_scenario(
-        rates_csv=None, refused_fraction: float = channels.REFUSED_FRACTION,
+        rates_csv=None, refused_fraction: float = legacy_masks.REFUSED_FRACTION,
         excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
         mode: str = "time", residuals: dict[int, float] | None = None,
-        residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
-        products=None, fill_missing: str = "error",
-        since: str | None = None, until: str | None = None,
-        eta: float = 1.0) -> Scenario:
-    """Build a scenario from the legacy rate table or survey products.
+        residual_excise_threshold: float = NO_EXCISION_THRESHOLD) -> Scenario:
+    """Build a scenario from the legacy rate table.
 
-    ``residuals`` optionally adds the contamination that survives the mask
-    (see :mod:`rfisher.residual`); omitted, the result is masking-only and
-    identical to every published number in ``out/``.
-
-    ``products`` takes the masking fractions from survey products instead of
-    the vendored CSV, so the forecast's input is the detector's own decision
-    rather than an unlabeled rate column. Channels the products do not cover
-    are an error by default: filling them from the CSV would put two different
-    detectors in one table, which is the failure this argument exists to stop.
-    Pass ``fill_missing='csv'`` to do it anyway (the scenario is then tagged),
-    or ``'omit'`` to forecast on the covered channels alone.
-
-    ``since``/``until`` window the product fractions to UTC months
-    ``since <= YYYY-MM <= until`` (see
-    :func:`rfisher.channels.mask_table_from_products`): a forward-looking
-    forecast wants the epoch that still describes the sky, not a fraction
-    averaged over transmitters that have since signed off. ``eta``
-    rethresholds the coarse fractions at ``F > eta * mu0`` from the stored
-    statistic — the deployed ``eta = 1`` rule fires on faint residual signal
-    even where a transmitter has signed off, so windowing alone cannot lower
-    those channels' fractions. Both require ``products`` and the scenario
-    label carries them.
+    ``residuals`` optionally adds the contamination that survives the mask;
+    omitted, the result is masking-only and identical to every published
+    number in ``out/``.
     """
-    reworked = since is not None or until is not None or float(eta) != 1.0
-    if reworked and products is None:
-        raise ValueError(
-            "since/until/eta rework product fractions and require products=; "
-            "the vendored CSV records neither timestamps nor the statistic")
-    if reworked and fill_missing == "csv":
-        raise ValueError(
-            "fill_missing='csv' would put deployed full-span CSV fractions "
-            "beside reworked product fractions — two decisions in one "
-            "table; use 'omit' or cover the missing channels with products")
     kw = {} if rates_csv is None else {"rates_csv": rates_csv}
-    table = channels.legacy_rate_table(
+    table = legacy_masks.legacy_rate_table(
         refused_fraction=refused_fraction, **kw)
     label, name = "Legacy detector rate table", "legacy_rate_table"
-    if products is not None:
-        label, name = "Survey-product mask", "survey_products"
-        prod = channels.mask_table_from_products(
-            products, refused_fraction=refused_fraction,
-            since=since, until=until, eta=eta)
-        missing = sorted(set(table.fractions) - set(prod.fractions))
-        if missing and fill_missing == "error":
-            raise ValueError(
-                f"products cover {sorted(prod.fractions)} but the band needs "
-                f"{missing} as well; filling those from the CSV mixes two "
-                f"detectors; pass fill_missing='csv' to accept that, or "
-                f"'omit' to forecast on the covered channels only")
-        fr = dict(prod.fractions)
-        if missing and fill_missing == "csv":
-            fr.update({ch: table.fractions[ch] for ch in missing})
-            label += f" (products; {len(missing)} channels from CSV)"
-            name = "survey_products_mixed"
-        elif missing and fill_missing == "omit":
-            label += f" (products; {len(missing)} channels omitted)"
-            name = "survey_products"
-        else:
-            label += " (from products)"
-            name = "survey_products"
-        if fill_missing not in ("error", "csv", "omit"):
-            raise ValueError(f"unknown fill_missing: {fill_missing!r}")
-        if prod.window != "full span":
-            label += f" [{prod.window}]"
-        if float(eta) != 1.0:
-            label += f" [eta={float(eta):g}]"
-    else:
-        fr = table.fractions
+    fr = table.fractions
 
     name, label = _mode_identity(name, label, mode)
     return Scenario(name, label,
@@ -435,38 +372,19 @@ def _masking_scenario(
 
 
 def legacy_rate_table_scenario(
-        rates_csv=None, refused_fraction: float = channels.REFUSED_FRACTION,
+        rates_csv=None, refused_fraction: float = legacy_masks.REFUSED_FRACTION,
         excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
         mode: str = "time", residuals: dict[int, float] | None = None,
         residual_excise_threshold: float = NO_EXCISION_THRESHOLD) -> Scenario:
     """Use the identified legacy detector rate table.
 
     The table is retained for result reproduction. It is not a DTV occupancy
-    measurement; use :func:`survey_product_scenario` for corrected products.
+    measurement.
     """
     return _masking_scenario(
         rates_csv=rates_csv, refused_fraction=refused_fraction,
         excise_threshold=excise_threshold, mode=mode, residuals=residuals,
         residual_excise_threshold=residual_excise_threshold)
-
-
-def survey_product_scenario(
-        products, rates_csv=None,
-        refused_fraction: float = channels.REFUSED_FRACTION,
-        excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
-        mode: str = "time", residuals: dict[int, float] | None = None,
-        residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
-        fill_missing: str = "error", since: str | None = None,
-        until: str | None = None, eta: float = 1.0) -> Scenario:
-    """Build a masking scenario from corrected survey products."""
-    if products is None:
-        raise ValueError("survey_product_scenario requires products")
-    return _masking_scenario(
-        rates_csv=rates_csv, refused_fraction=refused_fraction,
-        excise_threshold=excise_threshold, mode=mode, residuals=residuals,
-        residual_excise_threshold=residual_excise_threshold,
-        products=products, fill_missing=fill_missing, since=since,
-        until=until, eta=eta)
 
 
 def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",

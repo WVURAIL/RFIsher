@@ -134,7 +134,7 @@ def test_authenticated_cache_roundtrip_and_content_changes(tmp_path, monkeypatch
             entry["evaluation_sha256"] = "v1"
         return {"sources": {}, "banks": {"bank.npz": entry}}
 
-    model = SimpleNamespace(target_years=1.0, identity=identity)
+    model = SimpleNamespace(target_years=1.0, zeta=1.0, identity=identity)
     monkeypatch.setattr(worlds, "_model", lambda bank_dir: model)
     path.with_suffix(".provenance.json").write_text(json.dumps(worlds._cache_identity(path, tmp_path)))
     back = worlds.tolerances(bank_dir=tmp_path, cache=path)
