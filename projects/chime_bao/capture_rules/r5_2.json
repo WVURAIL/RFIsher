@@ -1,0 +1,9 @@
+{
+ "rule": "r5_2",
+ "base": "r5_1",
+ "description": "Revision 5.2 (DECISIONS.md item 41, work item B-1): the ground credit's settled form (1 - gamma) at B-1's reconciled range gamma, where a credit is taken; the no-credit ruling is r5.1's.",
+ "switches": {
+  "CREDIT_FORM": "one_minus_gamma",
+  "CREDIT_GAMMA": "reconciled"
+ }
+}

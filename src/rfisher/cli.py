@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
+# These import no science profile reader (PyYAML): a command of record runs
+# where the forecast's own dependencies are not installed (tests/test_cli.py).
 from .forecast.radiofisher_bao import api, scenarios
 from .forecast.radiofisher_bao.bank import build, experiments, resources
 
@@ -282,14 +284,40 @@ def response_main(argv=None, prog: str = "rfisher response") -> int:
     return validate.main(args.arguments, prog=f"{prog} {args.action}")
 
 
+# The capture records keep the release producer's own argument handling:
+# each module's main(argv) reads its arguments and prints its usage on --help.
+CAPTURE_RECORDS = {
+    "table-of-record": ("table_of_record", "the table of record before "
+                        "amendment 8 (v7) from the capture handoff"),
+    "capture-ruling": ("capture_ruling", "the capture ruling under a rule "
+                       "file (the table of record at 'record')"),
+}
+
+
 def records_main(argv=None, prog: str = "rfisher records") -> int:
     """``rfisher records ...``: the code of record of the 2026 campaign."""
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in CAPTURE_RECORDS:
+        import importlib
+
+        module = importlib.import_module(
+            f".records.chime_atsc_2026.{CAPTURE_RECORDS[argv[0]][0]}",
+            __package__)
+        if "-h" in argv[1:] or "--help" in argv[1:]:
+            print(module.__doc__.strip())
+            return 0
+        return module.main(argv[1:])
     parser = argparse.ArgumentParser(
         prog=prog, description="Code of record of the 2026 CHIME DTV "
-        "campaign: the frozen release layouts, written from the handoff.")
+        "campaign: the frozen release layouts and the capture ruling of "
+        "record, written from the handoffs.",
+        epilog="capture records (each prints its usage on --help):\n"
+        + "\n".join(f"  {name:<18} {text}"
+                    for name, (_, text) in CAPTURE_RECORDS.items()),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     actions = parser.add_subparsers(dest="action", required=True,
-                                    metavar="{archive-layout}")
+                                    metavar="{archive-layout,"
+                                    + ",".join(CAPTURE_RECORDS) + "}")
     layout = actions.add_parser(
         "archive-layout", help="the frozen layout of an archive release")
     layout.add_argument("--release", required=True,

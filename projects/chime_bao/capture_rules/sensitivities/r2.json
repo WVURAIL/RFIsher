@@ -1,0 +1,8 @@
+{
+ "sensitivity": "r2",
+ "description": "The credit reading with the 200 ns delay filter plus S and the ground-filter credit (revision 2's world).",
+ "switches": {
+  "WORLD": "200ns",
+  "GROUND_CREDIT": "on"
+ }
+}

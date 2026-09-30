@@ -1,0 +1,25 @@
+{
+ "rule": "record",
+ "base": null,
+ "description": "The table of record at identity: every switch at the value that reproduces it byte for byte (amendments 1 to 16, the ruling of record).",
+ "switches": {
+  "UNITS": "booked",
+  "POL": "larger",
+  "UNMEASURED_TAU": "current",
+  "GAIN": "zero",
+  "KEEP": "coded",
+  "EVERY_POLICY": "coded",
+  "ALLOWANCE": "db",
+  "THRESHOLDS": "off",
+  "WORLD": "200ns",
+  "GROUND_CREDIT": "on",
+  "TAU_LOWER_BOUNDS": "off",
+  "TAU_CENSOR": "off",
+  "BOUND_SOURCE": "summary",
+  "BOUND_CALIBRATION": "off",
+  "G1_NAMES": "r5",
+  "SWITCH_RECORD": "omit",
+  "CREDIT_FORM": "one_minus_gamma_sq",
+  "CREDIT_GAMMA": "released"
+ }
+}

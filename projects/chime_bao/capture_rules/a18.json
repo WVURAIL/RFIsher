@@ -1,0 +1,25 @@
+{
+ "rule": "a18",
+ "base": "record",
+ "description": "Amendment 18 (DECISIONS.md items 1 to 8), with the no-filter world and no ground credit of items 15 and 17, and the within-dump lower bounds of item 35 (revisions 3 to 5 as built with --a18).",
+ "switches": {
+  "UNITS": "power",
+  "POL": "stokes_i",
+  "UNMEASURED_TAU": "gmin",
+  "GAIN": "bao",
+  "KEEP": "stated",
+  "EVERY_POLICY": "thesis",
+  "ALLOWANCE": "ratio",
+  "THRESHOLDS": "on",
+  "WORLD": "none",
+  "GROUND_CREDIT": "off",
+  "TAU_LOWER_BOUNDS": "on",
+  "TAU_CENSOR": "off",
+  "BOUND_SOURCE": "summary",
+  "BOUND_CALIBRATION": "off",
+  "G1_NAMES": "r5",
+  "SWITCH_RECORD": "omit",
+  "CREDIT_FORM": "one_minus_gamma_sq",
+  "CREDIT_GAMMA": "released"
+ }
+}

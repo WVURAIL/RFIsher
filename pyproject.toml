@@ -61,7 +61,8 @@ packages = [
 [tool.setuptools.package-data]
 "rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat", "response_banks/*.npz",
                   "tolerances/*", "tolerances/*/*", "schemas/*"]
-"rfisher.projects" = ["chime_bao/*.json", "chime_bao/*.yaml"]
+"rfisher.projects" = ["chime_bao/*.json", "chime_bao/*.yaml", "chime_bao/capture_rules/*.json",
+                      "chime_bao/capture_rules/sensitivities/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -72,3 +73,9 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E9", "F", "N"]
 ignore = ["N802", "N803", "N806", "N816", "N818"]
+
+[tool.ruff.lint.per-file-ignores]
+# The capture records keep the release producer's lines as they ran (its
+# unused locals, placeholder-free f-strings and "U" for the units).
+"src/rfisher/records/chime_atsc_2026/*.py" = ["F541", "F841", "N812"]
+"tests/records/*.py" = ["N812"]

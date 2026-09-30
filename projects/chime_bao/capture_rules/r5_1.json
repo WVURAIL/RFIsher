@@ -1,0 +1,12 @@
+{
+ "rule": "r5_1",
+ "base": "a18",
+ "description": "Revision 5.1 (red-team triage rows 4, 22 and 35, work items B-3 and B-4): censored taus and trim probes, the check's bounds as fitted, B-3's calibration of the bounds, literal G = 1 names and every switch recorded.",
+ "switches": {
+  "TAU_CENSOR": "all",
+  "BOUND_SOURCE": "fits",
+  "BOUND_CALIBRATION": "on",
+  "G1_NAMES": "literal",
+  "SWITCH_RECORD": "all"
+ }
+}
