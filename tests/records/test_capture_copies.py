@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from capture_golden import quiet, sha256
+from capture_golden import assert_frozen, duration_reference, quiet, sha256
 from rfisher.records.chime_atsc_2026 import (capture_ruling, cohort_basis, duration, phase_limit, robustness)
 from rfisher.records.chime_atsc_2026 import capture_units as U
 
@@ -103,7 +103,7 @@ def test_the_release_copies_are_the_frozen_files(capture_handoff_dir, ruled, tmp
     _write(t / "robustness_a18.log", quiet(robustness.main, [
         "--handoff", str(capture_handoff_dir), str(t / "robustness_a18.csv"), "--a18", str(ruled / "a18.json"),
         "--ch24", str(ruled / "ch24_a18.json"), "--variant-labels"]))
-    assert {name: sha256(t / name) for name in RELEASE} == RELEASE
+    assert_frozen({name: sha256(t / name) for name in RELEASE}, RELEASE)
 
 
 def test_the_measured_basis_opens_no_borrowed_quantity(capture_handoff_dir, ruled, tmp_path):
@@ -136,8 +136,8 @@ def test_the_duration_reading_is_the_releases(ruled, tmp_path, monkeypatch):
         monkeypatch.setattr(response, "evaluation_identity", lambda bank, rf_dir=None: ({}, {}))
     out = tmp_path / "rel"; out.mkdir()
     quiet(duration.main, [str(ruled / "a18.json"), str(out), "--ch24", str(ruled / "ch24_a18.json"),
-                          "--duration-reference", str(DURATION)])
-    assert {name: sha256(out / name) for name in DURATION_FILES} == DURATION_FILES
+                          "--duration-reference", str(duration_reference(tmp_path))])
+    assert_frozen({name: sha256(out / name) for name in DURATION_FILES}, DURATION_FILES)
 
 
 def test_revision_2s_duration_reading(capture_handoff_dir, tmp_path, monkeypatch):
@@ -155,7 +155,7 @@ def test_revision_2s_duration_reading(capture_handoff_dir, tmp_path, monkeypatch
                                 "--out", str(tmp_path / "full.csv"), "--ch33-rescan"])
     out = tmp_path / "rel"; out.mkdir()
     quiet(duration.main, [str(tmp_path / "a18.json"), str(out), "--duration-reference", str(DURATION)])
-    assert {name: sha256(out / name) for name in ("duration_a18.csv", "keep_gap_a18.csv", "sensitivity_a18.log")} == {
+    assert_frozen({name: sha256(out / name) for name in ("duration_a18.csv", "keep_gap_a18.csv", "sensitivity_a18.log")}, {
         "duration_a18.csv": "cfd1550532a8a2693d05e4d560fe5f84da70e41dff11d131e9148b534fd80fdf",
         "keep_gap_a18.csv": "79d1999c5d7e0f3791aec1c37dfd75940b2597586cd284597327a99d05dd6feb",
-        "sensitivity_a18.log": "e927bdd8abb5be344039652129a72c799b8bf41b764bf2e9e205d799445e2ccd"}
+        "sensitivity_a18.log": "e927bdd8abb5be344039652129a72c799b8bf41b764bf2e9e205d799445e2ccd"})

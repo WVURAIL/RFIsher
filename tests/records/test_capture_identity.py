@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from capture_golden import quiet, sha256
+from capture_golden import assert_frozen, quiet, sha256
 from rfisher.records.chime_atsc_2026 import capture_ruling, table_of_record
 
 RECORD = "9867551ad591757ed8b8864940376c68666483833478b4711292e0517a27b195"   # table_of_record.csv
@@ -105,11 +105,11 @@ def test_the_release_runs_are_the_frozen_ones(capture_handoff_dir, tmp_path):
         ruling(capture_handoff_dir, t / k / "a18_full.csv", "--rule", "r5_2", "--sensitivity", k,
                "--json", str(t / k / "a18.json"), "--thresholds", str(t / k / "thresholds.csv"))
     got = {name: sha256(t / name) for name in R52}
-    assert got == R52, _sections(t / "a18.json")
+    assert_frozen(got, R52, _sections(t / "a18.json"))
 
 
 @pytest.mark.parametrize("revision", sorted(REVISIONS))
 def test_the_earlier_revisions_keep_their_switches(capture_handoff_dir, tmp_path, revision):
     args, expected = REVISIONS[revision]
     ruling(capture_handoff_dir, tmp_path / "full.csv", *args, "--json", str(tmp_path / "a18.json"))
-    assert sha256(tmp_path / "a18.json") == expected
+    assert_frozen({"a18.json": sha256(tmp_path / "a18.json")}, {"a18.json": expected})

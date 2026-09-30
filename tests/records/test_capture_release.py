@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from capture_golden import quiet, sha256
+from capture_golden import assert_frozen, duration_reference, quiet, sha256
 from rfisher.records.chime_atsc_2026 import capture_release, capture_ruling, filter_sensitivity
 
 GOLDEN = Path(__file__).resolve().parents[1] / "golden" / "records"
@@ -99,7 +99,7 @@ def test_a_credit_reading_is_the_releases(capture_handoff_dir, tmp_path, reading
                                  "--releases", unused, "--duration-reference", unused, "--rel", str(rel),
                                  "--run", str(tmp_path / "run"), "--tables-only", "--credit-reading", reading])
     got = {p.relative_to(rel).as_posix(): sha256(p) for p in rel.rglob("*") if p.is_file()}
-    assert got == READINGS[reading]
+    assert_frozen(got, READINGS[reading])
 
 
 def test_the_release_manifest_keeps_the_releases_prose():
@@ -143,15 +143,15 @@ def test_the_release_is_the_frozen_one(capture_handoff_dir, evidence, tmp_path, 
     quiet(capture_release.main, ["--rule", "r5_2", "--handoff", str(capture_handoff_dir), "--record-table",
                                  str(capture_handoff_dir / "frame_analysis" / "table_of_record.csv"),
                                  "--evidence", str(evidence / "evidence"), "--releases", str(evidence / "releases"),
-                                 "--duration-reference", str(GOLDEN / "survey_duration_2026-09-24"),
+                                 "--duration-reference", str(duration_reference(tmp_path)),
                                  "--rel", str(rel), "--run", str(tmp_path / "run")])
     got = {p.relative_to(rel).as_posix(): sha256(p) for p in rel.rglob("*") if p.is_file() and p.name != "MANIFEST.json"}
-    assert got == RELEASE
+    assert_frozen(got, RELEASE)
     manifest = json.loads((rel / "MANIFEST.json").read_text())
     doc = capture_release._release_doc()
     assert list(manifest) == [k for k in doc["key_order"] if k in manifest]
     assert {k: manifest[k] for k in doc["fields"]} == doc["fields"]
-    assert {k: v for k, v in manifest["files"].items()} == RELEASE
+    assert manifest["files"] == got
     assert manifest["producer"]["repository"] == "WVURAIL/RFIsher"
 
 
