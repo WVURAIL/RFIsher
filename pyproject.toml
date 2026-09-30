@@ -26,7 +26,6 @@ test = ["jsonschema", "pytest", "ruff"]
 
 [project.scripts]
 rfisher = "rfisher.cli:main"
-rfisher-check-archive = "rfisher.archive_acceptance:main"
 
 [project.urls]
 Documentation = "https://github.com/WVURAIL/RFIsher/tree/main/docs"
@@ -48,14 +47,9 @@ packages = [
     "rfisher.projects",
     "rfisher.records",
     "rfisher.records.chime_atsc_2026",
-    "rfisher.residual_scores",
     "rfisher.response",
     "rfisher.tolerance",
     "rfisher.verdict",
-    "rfisher_results",
-    "rfisher_results.archive",
-    "rfisher_results.archive.report",
-    "rfisher_results.validation",
 ]
 
 [tool.setuptools.package-data]

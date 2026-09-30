@@ -9,12 +9,11 @@ manifest schema. Resolution, first hit wins:
 
 - ``$RFISHER_OUT``;
 - ``out_dir`` in ``data/products.local.json``, the gitignored machine-local
-  overlay ``rfisher.products`` already reads;
+  overlay;
 - the repository's own ignored ``out/``, where the scripts write by default.
 
-This lives beside ``rfisher`` rather than inside it for the same reason as
-the rest of ``rfisher_results``: the shipped banks pin a digest of
-``src/rfisher/``.
+The shipped banks pin a digest of the bank subpackage only, so this lives
+with the records.
 """
 from __future__ import annotations
 
@@ -22,7 +21,7 @@ import json
 import os
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 ENV = "RFISHER_OUT"
 LOCAL = ROOT / "data" / "products.local.json"
 DEFAULT = ROOT / "out"

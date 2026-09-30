@@ -583,6 +583,7 @@ BOUND_FLOOR = "measurement-bound on floor"
 BOUND_TAU = "measurement-bound on tau_c"
 WALL = "occupancy-wall excision candidate"
 OFF_ERA = "off-era"
+CLASSES = (RECOVERY, BOUND_FLOOR, BOUND_TAU, WALL, OFF_ERA)
 
 
 @dataclass(frozen=True)

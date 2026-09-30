@@ -52,3 +52,16 @@ def test_the_resolver_resolves_relative_imports():
     assert "rfisher.forecast.radiofisher_bao.legacy_masks" in names
     assert "rfisher.forecast.radiofisher_bao.bank._validation.real_scalar" \
         in names
+
+
+def test_only_the_adapter_reaches_the_bank_validation():
+    found = sorted(path.relative_to(PACKAGE).as_posix() for path in PACKAGE.rglob("*.py")
+                   if ADAPTER not in path.parents
+                   and any(m.startswith("rfisher.forecast.radiofisher_bao.bank._validation") for m in _imports(path)))
+    assert found == []
+
+
+def test_no_module_imports_the_detector():
+    found = sorted(path.relative_to(PACKAGE).as_posix() for path in PACKAGE.rglob("*.py")
+                   if any(m == "pilot_proxy" or m.startswith("pilot_proxy.") for m in _imports(path)))
+    assert found == []

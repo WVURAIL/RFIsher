@@ -5,52 +5,7 @@ import numpy as np
 import pytest
 
 from rfisher.forecast.radiofisher_bao import scenarios
-from rfisher import thresholds
 from rfisher.forecast.radiofisher_bao.significance import Forecast
-
-
-@pytest.mark.parametrize("seed", range(16))
-@pytest.mark.parametrize("with_variance", [False, True])
-def test_histogram_selector_matches_direct_frame_replay(seed, with_variance):
-    rng = np.random.default_rng(seed)
-    # Adjacent >2**53 boundaries deliberately have indistinguishable float displays.
-    candidates = (1, 65536, 65537, 2**63 - 1, 2**63)
-    frame_count, bulk_size = 120, 4
-    systematic = rng.integers(0, 17, frame_count) / 16
-    variance = rng.integers(0, 65, frame_count) / 16 if with_variance else None
-    tolerance = 0.48
-    family, reference = {}, {}
-    for rho in range(1, bulk_size + 1):
-        requirements = [candidates[i] if i < len(candidates) else thresholds.ALWAYS_MASKED_Q16
-                        for i in rng.integers(0, len(candidates) + 1, frame_count)]
-        family[rho] = thresholds.build_q16_residual_score_histogram(
-            requirements, systematic, candidates, bulk_size=bulk_size, variance_residuals=variance)
-        for q16 in candidates:
-            kept = [i for i, required in enumerate(requirements) if required <= q16]
-            if len(kept) < 30:
-                continue
-            r_sys = sum(float(systematic[i]) for i in kept) / len(kept)
-            r_var = None if variance is None else sum(float(variance[i]) for i in kept) / len(kept)
-            reference[rho, q16] = (len(kept), r_sys, r_var,
-                                   frame_count * (1 + (r_var or 0)) / len(kept))
-    result = thresholds.optimize_threshold(family, tolerance)
-    assert {(p.rho, p.multiplier_q16) for p in result.points} == set(reference)
-    for point in result.points:
-        kept, r_sys, r_var, cost = reference[point.rho, point.multiplier_q16]
-        assert point.kept_frames == kept and point.masked_frames == frame_count - kept
-        assert point.systematic_residual == r_sys
-        assert point.variance_residual == r_var
-        assert point.cost == pytest.approx(cost)
-        assert point.feasible == (r_sys <= tolerance)
-    feasible = {key: row for key, row in reference.items() if row[1] <= tolerance}
-    if feasible:
-        limit = 1.02 * min(row[3] for row in feasible.values())
-        expected = min((key for key, row in feasible.items() if row[3] <= limit),
-                       key=lambda key: (feasible[key][1], -feasible[key][0], *key))
-        assert (result.selected.rho, result.selected.multiplier_q16) == expected
-    else:
-        assert result.selected is None and result.status == "no_feasible_threshold"
-    assert result == thresholds.optimize_threshold(dict(reversed(list(family.items()))), tolerance)
 
 
 @pytest.mark.parametrize("seed", range(12))

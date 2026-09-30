@@ -10,22 +10,21 @@ import rfisher
 
 RELEASE_VERSION = "4.0.0"
 PUBLIC_MODULES = (
-    "rfisher.channels",
     "rfisher.cli",
-    "rfisher.constants",
     "rfisher.forecast.radiofisher_bao.api",
     "rfisher.forecast.radiofisher_bao.bank.banks",
     "rfisher.forecast.radiofisher_bao.bank.build",
+    "rfisher.forecast.radiofisher_bao.coherence_gain",
     "rfisher.forecast.radiofisher_bao.layout",
+    "rfisher.forecast.radiofisher_bao.legacy_masks",
     "rfisher.forecast.radiofisher_bao.scenarios",
     "rfisher.forecast.radiofisher_bao.significance",
-    "rfisher.incumbent",
-    "rfisher.preparation",
-    "rfisher.products",
-    "rfisher.residual",
-    "rfisher.residual_scores",
-    "rfisher.selection_policy",
-    "rfisher.thresholds",
+    "rfisher.policy",
+    "rfisher.records.chime_atsc_2026.capture_ruling",
+    "rfisher.response.visibility",
+    "rfisher.tolerance.reference",
+    "rfisher.verdict.archive",
+    "rfisher.verdict.interval",
 )
 
 

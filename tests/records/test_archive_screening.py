@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 
-from rfisher_results.archive import screening as sc
+from rfisher.records.chime_atsc_2026 import compat_tables as sc
 
 
 def _inputs(**kw):

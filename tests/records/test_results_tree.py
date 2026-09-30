@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from rfisher_results import results_tree as rt
+from rfisher.records import results_tree as rt
 
 
 def test_environment_wins(tmp_path, monkeypatch):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from rfisher_results import results_tree
+from rfisher.records import results_tree
 
 
 ROOT = Path(__file__).resolve().parents[1]

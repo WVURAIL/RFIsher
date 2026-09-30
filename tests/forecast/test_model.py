@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from rfisher import channels
+from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao import model
 from rfisher.forecast.radiofisher_bao.bank import experiments
 from rfisher.science_model import ScienceModel
