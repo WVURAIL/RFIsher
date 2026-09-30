@@ -122,11 +122,14 @@ def test_a_wrong_schema_or_constant_is_refused(capture_handoff_dir, tmp_path):
 
 
 AUDIT = r"""
-import runpy, sys
+import json, os, sys
 opened = []
 def hook(event, args):
-    if event == "open" and isinstance(args[0], str):
-        opened.append(args[0])
+    if event == "open" and not isinstance(args[0], int):
+        try:
+            opened.append(os.fsdecode(os.fspath(args[0])))
+        except TypeError:
+            pass
 sys.addaudithook(hook)
 from rfisher.cli import main
 code = main(sys.argv[2:])

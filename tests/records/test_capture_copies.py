@@ -125,17 +125,37 @@ def test_channel_24_per_bin(ruled):
     assert all(10 ** (float(r["bao_long_bar_db"]) / 10) > U.ALLOW_R for r in rows)
 
 
-def _radiofisher():
+def test_the_duration_reading_is_the_releases(ruled, tmp_path, monkeypatch):
+    """The keep gap and the no-filter duration reading on the packaged banks; where no RadioFisher checkout is
+    present the banks' authentication against it is stubbed (the Fisher matrices are the banks' either way)."""
+    from rfisher.forecast.radiofisher_bao import response
     from rfisher.forecast.radiofisher_bao.bank.backend import find_radiofisher_dir
     try:
-        return find_radiofisher_dir()
+        find_radiofisher_dir()
     except FileNotFoundError:
-        return None
-
-
-@pytest.mark.skipif(_radiofisher() is None, reason="the response banks authenticate against RadioFisher; set RADIOFISHER_DIR")
-def test_the_duration_reading_is_the_releases(ruled, tmp_path):
+        monkeypatch.setattr(response, "evaluation_identity", lambda bank, rf_dir=None: ({}, {}))
     out = tmp_path / "rel"; out.mkdir()
     quiet(duration.main, [str(ruled / "a18.json"), str(out), "--ch24", str(ruled / "ch24_a18.json"),
                           "--duration-reference", str(DURATION)])
     assert {name: sha256(out / name) for name in DURATION_FILES} == DURATION_FILES
+
+
+def test_revision_2s_duration_reading(capture_handoff_dir, tmp_path, monkeypatch):
+    """The 200 ns world's reading (revision 2's duration_a18.csv), with the crossing time of the one exclusion lost by
+    3 on-sky years found on the deployed bank."""
+    from rfisher.forecast.radiofisher_bao import response
+    from rfisher.forecast.radiofisher_bao.bank.backend import find_radiofisher_dir
+    try:
+        find_radiofisher_dir()
+    except FileNotFoundError:
+        monkeypatch.setattr(response, "evaluation_identity", lambda bank, rf_dir=None: ({}, {}))
+    table = capture_handoff_dir / "frame_analysis" / "table_of_record_before_amendment8.csv"
+    quiet(capture_ruling.main, ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off", "--sensitivity", "r2", "--json",
+                                str(tmp_path / "a18.json"), "--input", str(table), "--handoff", str(capture_handoff_dir),
+                                "--out", str(tmp_path / "full.csv"), "--ch33-rescan"])
+    out = tmp_path / "rel"; out.mkdir()
+    quiet(duration.main, [str(tmp_path / "a18.json"), str(out), "--duration-reference", str(DURATION)])
+    assert {name: sha256(out / name) for name in ("duration_a18.csv", "keep_gap_a18.csv", "sensitivity_a18.log")} == {
+        "duration_a18.csv": "cfd1550532a8a2693d05e4d560fe5f84da70e41dff11d131e9148b534fd80fdf",
+        "keep_gap_a18.csv": "79d1999c5d7e0f3791aec1c37dfd75940b2597586cd284597327a99d05dd6feb",
+        "sensitivity_a18.log": "e927bdd8abb5be344039652129a72c799b8bf41b764bf2e9e205d799445e2ccd"}

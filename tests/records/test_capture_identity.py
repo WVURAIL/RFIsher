@@ -7,6 +7,10 @@ files keep. The whole release is compared at the gate.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+from pathlib import Path
+
 import pytest
 
 from capture_golden import quiet, sha256
@@ -44,6 +48,20 @@ REVISIONS = {
            "95bc937ea97f9ebccb765a8456b4858c038fb6aa622d18fcb6203347adb5dc15"),
 }
 BOUNDS_OFF = ["--set", "TAU_LOWER_BOUNDS=off", "--set", "BOUND_SOURCE=summary", "--set", "BOUND_CALIBRATION=off"]
+# the release's run/a18.json by section (sha256 of each top-level value as sorted json, first 12 hex digits): on a
+# mismatch the test names the sections that differ
+A18_SECTIONS = {"switches": "85e0739bdbdf", "summary": "d142bbaf4b42", "has_pilot": "d2c6967a1e7a",
+                "results": "e411292523f1", "S": "8d0dcef48d9e", "lam_dep": "51e41f5a72bf", "lam_none": "f6c942b5225a",
+                "thresholds": "0d9f1f6ca2cc", "admissible_min_G": "50d0ef50e307", "world": "30a0924a3360",
+                "lam_exclusion": "f6c942b5225a", "fill": "fd618e49dce3", "tau_lower_bounds": "e10bcddcde91",
+                "tau_lower_bounds_used": "e392691b8e7a", "tau_censored": "4eb148a6e9f2",
+                "tau_probe_censored": "375bd39db8f9", "tau_lower_bounds_calibration": "cc264e5ff769"}
+
+
+def _sections(path):
+    doc = json.loads(Path(path).read_text())
+    digest = {k: hashlib.sha256(json.dumps(v, sort_keys=True).encode()).hexdigest()[:12] for k, v in doc.items()}
+    return {k: (digest.get(k), v) for k, v in A18_SECTIONS.items() if digest.get(k) != v}, doc.get("admissible_min_G")
 
 
 def ruling(handoff, out, *args, table=None):
@@ -86,7 +104,8 @@ def test_the_release_runs_are_the_frozen_ones(capture_handoff_dir, tmp_path):
         (t / k).mkdir()
         ruling(capture_handoff_dir, t / k / "a18_full.csv", "--rule", "r5_2", "--sensitivity", k,
                "--json", str(t / k / "a18.json"), "--thresholds", str(t / k / "thresholds.csv"))
-    assert {name: sha256(t / name) for name in R52} == R52
+    got = {name: sha256(t / name) for name in R52}
+    assert got == R52, _sections(t / "a18.json")
 
 
 @pytest.mark.parametrize("revision", sorted(REVISIONS))
