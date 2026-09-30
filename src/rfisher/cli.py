@@ -5,6 +5,7 @@
     rfisher tolerance    build, show and reduce the residual tolerance table,
                          and write the two frozen reference tolerances
     rfisher verdict      the screen of each band from a detector handoff
+    rfisher response     the known-moment check of the visibility response
     rfisher records      the code of record of the 2026 campaign
 """
 from __future__ import annotations
@@ -266,6 +267,21 @@ def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
     return 0
 
 
+def response_main(argv=None, prog: str = "rfisher response") -> int:
+    """``rfisher response visibility``."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    parser = argparse.ArgumentParser(
+        prog=prog, description="The linear parameter response of masked "
+        "visibilities: 'visibility' runs its known-moment synthetic check "
+        "(see 'rfisher response visibility --help').")
+    parser.add_argument("action", choices=("visibility",))
+    parser.add_argument("arguments", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+    from .response import validate
+
+    return validate.main(args.arguments, prog=f"{prog} {args.action}")
+
+
 def records_main(argv=None, prog: str = "rfisher records") -> int:
     """``rfisher records ...``: the code of record of the 2026 campaign."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -315,6 +331,8 @@ COMMANDS = {
     "verdict": (verdict_main,
                 "the screen of each band from a detector handoff and a "
                 "tolerance table"),
+    "response": (response_main,
+                 "the known-moment check of the visibility response"),
     "records": (records_main,
                 "the code of record of the 2026 campaign (frozen layouts)"),
 }

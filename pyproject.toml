@@ -49,6 +49,7 @@ packages = [
     "rfisher.records",
     "rfisher.records.chime_atsc_2026",
     "rfisher.residual_scores",
+    "rfisher.response",
     "rfisher.tolerance",
     "rfisher.verdict",
     "rfisher_results",

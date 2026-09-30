@@ -1,5 +1,11 @@
-#!/usr/bin/env python3
-"""Known-moment synthetic check of the explicit visibility response interface."""
+"""Known-moment synthetic check of the explicit visibility response interface.
+
+``rfisher response visibility --output DIR`` writes ``validation.json``: the
+analytic moments of a fixed quadratic statistic against 250,000 synthetic
+draws, and the parameter response fitted from them. Its ``sources`` name the
+code that ran (this module and :mod:`rfisher.response.visibility`) with
+their sha256.
+"""
 from __future__ import annotations
 
 import argparse
@@ -8,13 +14,13 @@ import json
 from pathlib import Path
 
 import numpy as np
-from rfisher_results.validation import visibility_response as response
+from . import visibility as response
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, prog: str = "rfisher response visibility"):
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__.split("\n")[0])
     parser.add_argument("--output", required=True, type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args.output.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(20260919)
     count = 250000
@@ -64,7 +70,4 @@ def main():
                       "relative_statistic_covariance_error":covariance_error}))
     if not passed:
         raise SystemExit(1)
-
-
-if __name__ == "__main__":
-    main()
+    return 0

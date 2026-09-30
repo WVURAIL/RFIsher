@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from rfisher_results.validation.visibility_response import (
+from rfisher.response.visibility import (
     complex_moments_to_real, linear_parameter_response,
     quadratic_contamination, quadratic_moments,
 )
