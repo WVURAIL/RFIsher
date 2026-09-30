@@ -4,6 +4,7 @@
     rfisher build-bank   build a Fisher bank (slow; needs RadioFisher)
     rfisher tolerance    build, show and reduce the residual tolerance table,
                          and write the two frozen reference tolerances
+    rfisher verdict      the screen of each band from a detector handoff
 """
 from __future__ import annotations
 
@@ -226,6 +227,44 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
     return 0
 
 
+def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
+    """``rfisher verdict archive``."""
+    parser = argparse.ArgumentParser(
+        prog=prog, description="The screen of each band: the deployable set "
+        "of thresholds [eta_Pfa, eta_sci] from the detector's handoff and one "
+        "tolerance table, the selector inside it, and keep, excise or "
+        "undetermined under the declared precedence.")
+    actions = parser.add_subparsers(dest="action", required=True,
+                                    metavar="{archive}")
+    archive = actions.add_parser(
+        "archive", help="the verdict of a characterization directory")
+    archive.add_argument("--project", type=Path, required=True,
+                         help="the science profile directory (its registers "
+                              "and its residual reference)")
+    archive.add_argument("--characterization", type=Path, required=True,
+                         help="the handoff: oc_table.csv, oc_summary.csv and "
+                              "manifest.json")
+    archive.add_argument("--tolerances", type=Path, required=True,
+                         help="tolerances.csv, or the directory holding it")
+    archive.add_argument("--out", type=Path, required=True,
+                         help="output directory")
+    args = parser.parse_args(argv)
+    from .verdict import handoff
+    from .verdict.archive import verdict_archive
+
+    try:
+        result = verdict_archive(args.characterization, args.tolerances,
+                                 args.project, args.out)
+    except handoff.HandoffError as exc:
+        parser.error(str(exc))
+    counts = {}
+    for row in result["screen"]:
+        counts[row["screen_outcome"]] = counts.get(row["screen_outcome"], 0) + 1
+    print(f"wrote {args.out}: " + ", ".join(
+        f"{n} {k}" for k, n in sorted(counts.items())))
+    return 0
+
+
 COMMANDS = {
     "forecast": (forecast_main,
                  "evaluate one uniform masking scenario from a Fisher bank"),
@@ -233,6 +272,9 @@ COMMANDS = {
                    "build a Fisher bank (slow; needs RadioFisher)"),
     "tolerance": (tolerance_main,
                   "build, show and reduce the residual tolerance table"),
+    "verdict": (verdict_main,
+                "the screen of each band from a detector handoff and a "
+                "tolerance table"),
 }
 
 

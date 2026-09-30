@@ -48,6 +48,7 @@ packages = [
     "rfisher.projects",
     "rfisher.residual_scores",
     "rfisher.tolerance",
+    "rfisher.verdict",
     "rfisher_results",
     "rfisher_results.archive",
     "rfisher_results.archive.report",
