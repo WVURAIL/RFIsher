@@ -46,6 +46,8 @@ packages = [
     "rfisher.forecast.radiofisher_bao",
     "rfisher.forecast.radiofisher_bao.bank",
     "rfisher.projects",
+    "rfisher.records",
+    "rfisher.records.chime_atsc_2026",
     "rfisher.residual_scores",
     "rfisher.tolerance",
     "rfisher.verdict",

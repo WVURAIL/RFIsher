@@ -5,6 +5,7 @@
     rfisher tolerance    build, show and reduce the residual tolerance table,
                          and write the two frozen reference tolerances
     rfisher verdict      the screen of each band from a detector handoff
+    rfisher records      the code of record of the 2026 campaign
 """
 from __future__ import annotations
 
@@ -265,6 +266,45 @@ def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
     return 0
 
 
+def records_main(argv=None, prog: str = "rfisher records") -> int:
+    """``rfisher records ...``: the code of record of the 2026 campaign."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Code of record of the 2026 CHIME DTV "
+        "campaign: the frozen release layouts, written from the handoff.")
+    actions = parser.add_subparsers(dest="action", required=True,
+                                    metavar="{archive-layout}")
+    layout = actions.add_parser(
+        "archive-layout", help="the frozen layout of an archive release")
+    layout.add_argument("--release", required=True,
+                        choices=("archive_author_eras_2026_09_23",
+                                 "archive_no_split_2026_09_24_r2"))
+    layout.add_argument("--characterization", type=Path, required=True,
+                        help="the detector's characterization directory")
+    layout.add_argument("--tolerances", type=Path, required=True,
+                        help="the band tolerance table (rfisher tolerance "
+                             "bands), or its directory")
+    layout.add_argument("--project", type=Path, required=True,
+                        help="the science profile directory")
+    layout.add_argument("--out", type=Path, required=True,
+                        help="output directory (must not exist)")
+    args = parser.parse_args(argv)
+    from .records.chime_atsc_2026 import compat_tables
+
+    if args.out.exists():
+        parser.error(f"{args.out} exists; the layout is written into a new "
+                     "directory")
+    try:
+        result = compat_tables.write_archive_layout(
+            args.release, args.characterization, args.tolerances,
+            args.project, args.out)
+    except (compat_tables.NotReproducible, ValueError) as exc:
+        parser.error(str(exc))
+    print(f"wrote {args.out}: {result['bands']} bands, priced "
+          f"{', '.join(result['priced'])}")
+    return 0
+
+
 COMMANDS = {
     "forecast": (forecast_main,
                  "evaluate one uniform masking scenario from a Fisher bank"),
@@ -275,6 +315,8 @@ COMMANDS = {
     "verdict": (verdict_main,
                 "the screen of each band from a detector handoff and a "
                 "tolerance table"),
+    "records": (records_main,
+                "the code of record of the 2026 campaign (frozen layouts)"),
 }
 
 
