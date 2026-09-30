@@ -144,20 +144,6 @@ otherwise "spectral-state transition"; the latest archive-observed stable
 era is the "current era", flagged stale-latest when it ends before the
 snapshot. Inputs exclude anything era-calibrated.
 
-Author-dated era lists may retain an externally documented start inside a
-frameless gap before their first populated month. The gap must contain no
-frames anywhere in the product, including invalid frames and frames excluded
-by an analysis mask. Frames without sample intervals use their acquisition
-month for this check. An observed but unpopulated month is not a frameless gap.
-
-This changes the reported start, calendar span, and populated-month coverage.
-It leaves the selected frames, statistics, monthly records, and automatic era
-rule unchanged. Boundary uncertainty still spans the previous era's last
-populated month to the next era's first populated month; an external date does
-not narrow that observational uncertainty. A first era retains zero boundary
-uncertainty. The end remains the last populated month in the supplied span.
-The boundary source and the rule's original current-era label remain recorded.
-
 Straddle loss: `-10 log10 |D_K(delta)|^2` with `D_K` the Dirichlet kernel of
 ch04 eq:dirichlet and `delta` the RF offset of the measured pilot from
 nominal in coarse bins (`|offset| K / f_s`); `|D_K(1/2)|^2 = -3.92 dB` at a
