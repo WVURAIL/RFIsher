@@ -2,7 +2,8 @@
 
     rfisher forecast     evaluate one uniform masking scenario from a Fisher bank
     rfisher build-bank   build a Fisher bank (slow; needs RadioFisher)
-    rfisher tolerance    build, show and reduce the residual tolerance table
+    rfisher tolerance    build, show and reduce the residual tolerance table,
+                         and write the two frozen reference tolerances
 """
 from __future__ import annotations
 
@@ -74,23 +75,62 @@ def _unscreened_bands(path: Path) -> list[str]:
                 if row.get("role", "screened") != "screened"]
 
 
+def reference_main(argv=None, prog: str = "rfisher tolerance reference") -> int:
+    """Write the frozen reference tolerances as band tolerance rows."""
+    from .tolerance import bands, reference, table
+
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Write tolerances.csv and "
+        "tolerance_components.csv for the bands on one or more frozen "
+        "reference bases (the vendored exact-time reference and the "
+        "coarse-world sensitivity).")
+    parser.add_argument("--basis", action="append", required=True,
+                        choices=reference.BASES,
+                        help="a reference basis; repeat for several, whose "
+                             "rows are written in the order given")
+    parser.add_argument("--bands", type=Path, required=True,
+                        help="CSV with band_id,low_mhz,high_mhz; an optional "
+                             "role column must read screened")
+    parser.add_argument("--out", type=Path, required=True,
+                        help="output directory")
+    args = parser.parse_args(argv)
+    unscreened = _unscreened_bands(args.bands)
+    if unscreened:
+        parser.error(f"{args.bands}: only screened bands are priced; "
+                     f"role is not screened for {', '.join(unscreened)}")
+    band_list = bands.read_bands(args.bands)
+    tolerances, components = [], []
+    for basis in args.basis:
+        rows, parts = reference.reference_rows(basis, band_list)
+        tolerances += rows
+        components += parts
+    for path in table.write_bands(tolerances, components, args.out,
+                                  reference.provenance(args.basis,
+                                                       args.bands)):
+        print(f"wrote {path}")
+    return 0
+
+
 def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
-    """``rfisher tolerance {build, bands, show, bias}``."""
+    """``rfisher tolerance {build, bands, reference, show, bias}``."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["reference"]:
+        return reference_main(argv[1:], prog=f"{prog} reference")
     from .forecast.radiofisher_bao import response
     from .forecast.radiofisher_bao.model import RadioFisherBAO, packaged_table
     from .tolerance import bands, table
 
-    argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["bias"]:
         return response.bias_main(argv[1:], prog=f"{prog} bias")
     parser = argparse.ArgumentParser(
         prog=prog, description="The residual tolerance table: "
         "'build' prices every scenario, bin and parameter of the science "
         "model; 'bands' reduces the table to one tolerance per band and "
-        "scenario; 'show' prints it; 'bias' reports the full response of one "
-        "bank (see 'rfisher tolerance bias --help').")
+        "scenario; 'reference' writes the frozen reference tolerances in the "
+        "same layout; 'show' prints it; 'bias' reports the full response of "
+        "one bank (see 'rfisher tolerance bias --help').")
     actions = parser.add_subparsers(dest="action", required=True,
-                                    metavar="{build,bands,show,bias}")
+                                    metavar="{build,bands,reference,show,bias}")
     built = actions.add_parser(
         "build", help="recompute the per-bin table and its provenance")
     built.add_argument("--project", type=Path, required=True,
@@ -124,6 +164,8 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
     shown.add_argument("--banks", type=Path,
                        help="response bank directory the table was built "
                             "from (default: packaged)")
+    actions.add_parser("reference", help="the frozen reference tolerances "
+                       "(see 'rfisher tolerance reference --help')")
     actions.add_parser("bias", help="the full response report of one bank")
     args = parser.parse_args(argv)
 

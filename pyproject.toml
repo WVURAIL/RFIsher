@@ -39,7 +39,7 @@ namespaces = false
 
 [tool.setuptools.package-data]
 "rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat", "response_banks/*.npz",
-                  "tolerances/*"]
+                  "tolerances/*", "tolerances/*/*", "schemas/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -9,7 +9,9 @@ locates any of them, and each file is read by the module that owns it:
   :mod:`rfisher.forecast.radiofisher_bao.bank`;
 - ``response_banks/`` and ``tolerances/`` by
   :mod:`rfisher.forecast.radiofisher_bao.response` and
-  :mod:`rfisher.forecast.radiofisher_bao.model`;
+  :mod:`rfisher.forecast.radiofisher_bao.model`, and the two frozen
+  reference tolerances in ``tolerances/`` by :mod:`rfisher.tolerance.reference`;
+- ``schemas/``, the detector handoff schema, vendored byte for byte;
 - the Fig. 10 filter residual by
   :mod:`rfisher.forecast.radiofisher_bao.filter_scenarios`;
 - ``products.json`` by :mod:`rfisher.products`, and the survey rates by
