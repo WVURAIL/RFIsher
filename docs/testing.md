@@ -15,14 +15,14 @@ python -m pytest -q --cov --cov-report=term-missing:skip-covered --cov-report=js
 python scripts/check_test_coverage.py
 ```
 
-The coverage report includes every Python module in `rfisher` and
-`rfisher_results`, including modules never imported by the tests. The gate
-requires 85% combined statement/branch coverage overall, at least 70% per
-module, and stronger thresholds on scalar validation, NPZ loading, threshold
-selection, forecasts, archive acceptance and block resampling. A missing
-module or a statement-only report fails the gate. Multiprocessing coverage
-counts archive worker execution as well as its parent process. Open
-`htmlcov/index.html` to inspect individual missed statements and branches.
+The coverage report includes every Python module in `rfisher`, including
+modules never imported by the tests. The gate requires 85% combined
+statement/branch coverage overall, at least 70% per module, and stronger
+thresholds on scalar validation, the verdict's deployable set and selector,
+and forecasts. A missing module or a statement-only report fails the gate.
+Open `htmlcov/index.html` to inspect individual missed statements and
+branches. The suite needs no pilot-proxy checkout: the detector's outputs
+enter as golden handoffs under `golden/handoff/`.
 
 CI runs these gates on Python 3.10, 3.12 and 3.14. Only the bank subpackage
 `src/rfisher/forecast/radiofisher_bao/bank/` enters the Fisher banks'
@@ -46,41 +46,35 @@ scientific correctness.
 | `bank.cosmologies`, `bank.pk_cache` | `forecast/test_current_cosmology.py`, `forecast/test_pkcache.py`, `forecast/test_pkcache_lifecycle.py`: published fiducial values, default/reproduction routing, neutrino accounting, authoritative densities, cache units and independent normalization, content identity, reuse, corruption, regeneration and missing optional CAMB |
 | `bank.experiments`, `layout`, `filter_scenarios` | `forecast/test_experiments.py`, `forecast/test_layout.py`, `forecast/test_filter_scenarios.py`: experiment reconstruction, time conventions, the delay-cut hooks, the filter scenarios and the science profile, feed geometry, frequency scaling and annular pair-count conservation |
 | `science_model`, `forecast.radiofisher_bao.model`, `response`, `tolerance` | `forecast/test_model.py`, `tolerance/test_rule.py`, `tolerance/test_table.py`, `tolerance/test_bands.py`, `tolerance/test_boundary.py`, `tolerance/test_response_offline.py`: bands to bins against the frozen archive tables, the rule's refusal accounting, the table's layout and v3 provenance, the refusal of a table whose recorded inputs changed, band tolerances against the frozen values, and the identifier boundary of the general layers |
-| `channels`, `scenarios` | `test_channels.py`, `test_scenarios.py`, `test_numerical_benches.py`: physical bands, overlap/refusal rules, masking/excision, arithmetic and harmonic band reductions versus a frequency-cell oracle |
-| Historical `tolerances` constants | `test_tolerances.py`: all-channel coverage, documented binding bins and independent release-ledger comparisons when available |
-| `thresholds`, `preparation`, `selection_policy` | `test_thresholds.py`, `test_preparation.py`, `test_selection_policy.py`, `test_threshold_boundary_bench.py`, `test_numerical_benches.py`: direct per-frame replay across ranks, adjacent uint64 boundaries, one-ULP tolerance checks, support and eligibility, deterministic ties, drift/resampling and claim provenance |
-| `residual`, `bank.templates`, `residual_scores` | `test_residual.py`, `forecast/test_templates.py`, `test_residual_scores.py`, `test_floor_provenance.py`: coherent/incoherent paths, additive scores, exact integer reductions, residual floors and evidence/refusal rules |
-| `pilotproxy`, `archive_acceptance` | `test_pilotproxy_v5.py`, `test_archive_acceptance_bench.py`: a complete synthetic 23-channel cohort, malformed/missing fields, mixed identities, sample/frame accounting, canonical JSON identity and CLI exit behavior |
-| `incumbent` | `test_incumbent.py`, `test_incumbent_product_bench.py`: burst versus steady interference, exact SK null variance, acquisition boundaries and a common scoring population |
-| `bank._validation`, `npzio`, `products`, `bank.resources` | `forecast/test_validation.py`, `test_npzio.py`, `test_products.py`, `forecast/test_resources.py`: strict scalar types, eager archive ownership, no pickle execution, product registries, packaged data, the nine bank pins and wheel resources |
+| `legacy_masks`, `scenarios` | `forecast/test_legacy_masks.py`, `forecast/test_scenarios.py`, `test_numerical_benches.py`: physical bands, the July 2026 rate table and its provenance, overlap/refusal rules, masking/excision, arithmetic and harmonic band reductions versus a frequency-cell oracle |
+| `policy` | `test_policy.py`: every entry of the 7b0067b selection policy in the science register or the selector policy with its value (or listed as a detector or deleted entry), the dead-reference gate and the side gate |
+| `verdict.handoff`, `interval`, `screening`, `sensitivity`, `archive` | `verdict/test_handoff.py`, `verdict/test_interval.py`, `verdict/test_screening.py`, `verdict/test_sensitivity.py`, `verdict/test_verdict_boundary.py`: the handoff's schema pin and refusals, the split property against the selector of 7b0067b on its fixtures and the channel 18 and 29 surfaces, the thinned-surface guard, the screen's precedence and union with the 23 x undetermined of the archive, the sensitivities' three gates, and the verdict's imports, file opens and identifiers |
+| `tolerance.reference` | `tolerance/test_reference.py`: the vendored capture references by sha, the record's lambda strings and the per-bin tolerances the capture reads |
+| `bank.templates` | `forecast/test_templates.py`: analytic templates and their refusal rules |
+| `bank._validation`, `bank.resources` | `forecast/test_validation.py`, `forecast/test_resources.py`: strict scalar types, the bank pins, packaged data and wheel resources |
 | `plots` | `test_plots.py`: every public forecast figure rendered headlessly, plotted numerical values, axes, masks, zero-information markers and PDF/PNG output |
-| Results `evaluations`, `estimator_transfer`, `census_psd`, `results_tree`, `cli`, `style` | Matching `test_results_*.py`, `test_results_cli.py`, `test_results_style.py`: pooling/calibration, result discovery, command routing, reproducible rendering, semantic legends and diagram layout |
-| Archive `blocks`, `eras`, `anchors`, `nulls`, `psd`, `masked_spectra` | Matching `test_results_archive_*.py`: UTC/calendar support, chronological whole-acquisition splits, bootstrap multiplicities and quantiles, era discovery, calibration, containment and masked spectra |
-| Archive `products`, `selection`, `operating`, `screening`, `flaggers`, `chain`, `tolerances`, `worlds` | Matching `test_results_archive_*.py`, `test_tolerance_ledger_bench.py`: product adaptation, selection/replay, held-out evaluation, threshold plateaus, policy comparisons, science-budget transfer, historical ledger parsing and refusal states |
-| Archive `run`, `ledger`, `numbers` | `test_results_archive_run.py`, `test_archive_pipeline_bench.py`, `test_results_archive_ledger.py`, `test_results_archive_numbers.py`: spawned workers, complete populated-era selection and spectral replay, written ledgers, source identity and auditable numbers |
-| Every archive `report` module | `test_results_archive_report_*.py`, `test_report_missing_components.py`: table/figure data, missing evidence, counts, denominators, band weighting, report manifests and number provenance |
+| `records.chime_atsc_2026` archive layouts (`compat_tables`, `ladder_pricing`) | `records/test_compat_tables.py`, `records/test_compat_layout.py`, `records/test_archive_screening.py`: the frozen rows of both archive releases on a two-band golden, the layout written end to end, and the releases' screening rule |
+| `records.chime_atsc_2026` capture records | `records/test_capture_identity.py`, `records/test_capture_handoff.py`, `records/test_capture_rules.py`, `records/test_capture_copies.py`, `records/test_capture_release.py`: from the golden capture handoff, the table of record (9867551a) and its v7 input, the r2 to r5.2 ruling runs, the copies and the whole r5.2 release byte for byte under the numerics of record (numpy 2.3 or later), the reader's objects against the release producer's, the rules of the producer's own tests, and the handoff's refusals |
+| `records.results_tree`, `response` | `records/test_results_tree.py`, `response/test_visibility.py`, `response/test_visibility_command.py`: where generated results live, and the visibility response's known moments |
 | Response report and release scripts | `tolerance/test_bias_estimators.py`, `tolerance/test_bias_workflows.py`, `tolerance/test_current_bias_authentication.py`, `forecast/test_templates.py`, `test_run_forecast.py`, `test_forecast_template_comparison.py`, `test_dissertation_figures.py`, `test_render_forecast_template_assets.py`; includes real historical/current response-bank builds and reference-tampering rejection |
 | Coverage gate itself | `test_coverage_gate.py`: missing/new modules, branch regressions, low-coverage components hidden by larger modules and unreadable reports |
 
 ## What makes the numerical benches independent
 
-Seeded benches replay raw frames instead of reproducing histogram prefix sums;
-compare Fisher outputs with dense matrix inverses; integrate frequency cells
-instead of reusing scenario interval reduction; and integrate baseline density
-back to an independently enumerated pair count. Seeds, small synthetic products
-and temporary output directories make these checks repeatable and suitable for
-CI. Bootstrap tests inspect the weights supplied to the statistic to prove that
-whole acquisitions, rather than individual correlated frames, are resampled.
+Seeded benches compare Fisher outputs with dense matrix inverses; integrate
+frequency cells instead of reusing scenario interval reduction; and integrate
+baseline density back to an independently enumerated pair count. The selector
+is checked against the recorded outcomes of the 7b0067b selector rather than
+against itself. Seeds, small synthetic inputs and temporary output directories
+make these checks repeatable and suitable for CI. The detector's own benches
+(frame replay, block resampling, era discovery) are pilot-proxy's.
 
 Small backend and CAMB doubles test interface contracts and unit conversions.
 They do not replace real-backend validation or certify a new cosmology.
 
-The opt-in `synthetic_archive_health` fixture supplies an importable provider
-for generated products, including inside spawned workers. It is not autouse:
-production health-provider absence and malformed-mask tests still exercise
-their refusal paths. The populated-era bench checks that the chain fit sees
-only calibration frames, then runs selection, operating-point choice and
-spectral replay on the separate evaluation block.
+The capture record tests derive nothing: every measured input is the golden
+capture handoff, and each output is compared with the frozen release by
+sha256.
 
 ## Optional integration and release evidence
 
@@ -108,6 +102,6 @@ Likewise, a bank source-digest failure requires reviewing/rebuilding the bank
 against the intended scientific source; weakening a hash assertion or merely
 updating its expected value does not repair stale provenance.
 
-The coverage denominator is the two installed packages. Script entry points
+The coverage denominator is the installed package. Script entry points
 have the targeted tests listed above; coverage is not claimed for every line of
 one-off research, figure-generation or rebuild scripts, or for external projects.

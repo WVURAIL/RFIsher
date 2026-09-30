@@ -61,64 +61,41 @@ Coherent contamination is a bias problem, not simply extra variance. The
 dedicated bias-response workflow propagates it through a `_Pres` Fisher row
 and refuses unsupported or numerically unstable evaluations.
 
-Threshold selection has a narrow boundary. Era discovery and invalid-frame
-bookkeeping happen first. `preparation.prepare_threshold_family` then takes the
-accepted latest-era rows, derives every rank supported by every row, uses the
-exact Q16 decision boundaries, splits the era at its calendar midpoint, and
-builds the pooled and early/late histograms. Each bin carries a frame count and
-a calibrated additive systematic-residual total, plus a variance-residual
-total when that quantity is measured.
+Threshold selection is split at the handoff. The detector (pilot-proxy)
+characterizes each band: every candidate threshold with its masked fraction,
+kept residual and evaluability, the false-alarm threshold eta_Pfa where a null
+supports one, and the stability screen (`oc_table.csv`, `oc_summary.csv` and
+`manifest.json`, schema `operating_characteristic` v1). RFIsher prices that
+surface against the band's tolerance and nothing else:
 
-The detector field `cfar_rank` is zero-based. The selector uses the one-based
-order-statistic rank `rho = cfar_rank + 1`.
+- `rfisher.verdict.interval` gives each family its science threshold eta_sci
+  (the largest eta whose kept residual meets r_tol), the deployable set between
+  max(eta_Pfa, eta_eval) and eta_sci, and the selection inside it: the least
+  cost `(1 + r_var) / (1 - f)` within 2% of the minimum, ties broken by kept
+  residual, masked fraction and candidate order;
+- `rfisher.verdict.screening` applies the screen's precedence (tolerance
+  refused, detector refused, keep only with a certified eta_Pfa, excise only
+  when every family's deployable set is empty, otherwise undetermined);
+- `rfisher.verdict.sensitivity` is the one place a sensitivity factor (a
+  delay-filter or other post-processing credit) multiplies a residual.
 
-`thresholds.optimize_threshold` takes only `histograms_by_rho` and
-`science_tolerance`. It derives the frame count and masked fraction, ignores
-candidates retaining fewer than 30 frames, and evaluates
-`(1 + r_var) / (1 - f)` subject to `r_sys <= science_tolerance`. Within 2% of
-the minimum cost it prefers more systematic margin, then less masking, lower
-`rho`, and lower `eta`. The result reports the exact Q16 multiplier, its
-displayed `eta`, and the normalized rank `rho / (bulk_size + 1)`. Without
-variance totals, the objective is the masking-only cost `1 / (1 - f)`; the
-systematic residual is not reused as a variance estimate. Era dates and other
-provenance stay with the prepared product as metadata rather than selector
-inputs.
+The selector's constants are data (`projects/chime_bao/selector_policy.json`),
+read through `rfisher.policy`; `selector.fine_rank` chooses the fine ranks the
+selector reads. A small example is in
+[`examples/threshold_selection.py`](examples/threshold_selection.py). Every
+choice and its evidence state is listed in the
+[threshold decision register](docs/threshold-decision-register.md).
 
-`preparation.select_prepared_threshold` is the evidence-bearing entry point.
-It verifies the latest-era, validity, equal-exposure, additivity, early/late
-drift, block-resampled upper bounds for an operational claim, score,
-correlation, transfer, and decision-digest records before calling the two-input
-numerical kernel. A screening selection carries
-its `claim_status`, source identity, and policy digest with the numerical
-result; permission to screen cannot produce an operational label.
-
-The histogram does not depend on the adopted systematic-budget factor. A
-smaller `zeta` sensitivity run reuses the same histograms and changes only
-`science_tolerance`.
-
-The selector and preparation contracts are implemented, but the current
-archive does not contain the exact per-frame fine-power fields needed to
-derive the Q16 decision boundaries. It must be rerun before this path can make
-an operational fine-threshold product. Block-based drift uncertainty,
-per-half support, drift limits, designated-set calibration, false-alarm and
-recovery targets, and visibility-domain transfer evidence also remain open or
-conditional. An accepted operational family therefore does not yet exist.
-Every choice and its evidence state is listed in the
-[threshold decision register](docs/threshold-decision-register.md). A small
-prepared-array example is in
-[`examples/threshold_selection.py`](examples/threshold_selection.py).
-
-Before using a new archive cohort, run the acceptance gate on its per-pilot
-directory:
+Given a characterization directory and the band tolerances:
 
 ```bash
-rfisher-check-archive /path/to/run/_per_pilot
+rfisher tolerance bands --project projects/chime_bao --bands CHAR/manifest.json --out TOL
+rfisher verdict archive --project projects/chime_bao --characterization CHAR --tolerances TOL --out SCIENCE
 ```
 
-The gate requires exactly channels 14-36 at their registered frequency IDs,
-one current v5 product per channel, common detector and weight-bank identities,
-enabled exact fine powers, complete acquisition provenance, and closed frame
-and sample accounting. It refuses partial or mixed cohorts.
+The code of record of the 2026 campaign is `rfisher records`: the frozen
+archive release layouts, and the capture ruling of record (release r5.2 and
+its table of record) from the capture handoff.
 
 ## Shipped reference result
 
@@ -185,7 +162,8 @@ rfisher forecast --uniform 0.25
 rfisher forecast --cosmology cmbspa2026 --uniform 0.25
 rfisher build-bank --help
 rfisher tolerance show
-rfisher-check-archive --help
+rfisher verdict archive --help
+rfisher records --help
 ```
 
 RadioFisher is needed only to build a bank or perform direct backend
