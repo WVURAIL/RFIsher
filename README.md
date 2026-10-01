@@ -146,7 +146,7 @@ the full inputs, results, and caveats.
 
 ## Documentation
 
-- [Architecture and scope](docs/architecture.md) — component boundaries,
+- [Architecture and scope](docs/architecture.md): component boundaries,
   bank contract, backend hooks, and the current generality limit.
 - [The handoff](docs/HANDOFF.md): what the verdict reads, the reading path,
   and how the selector chooses.
@@ -157,15 +157,15 @@ the full inputs, results, and caveats.
 - [Decision register](docs/decision-register.md): every science and selector
   entry with its value, status and evidence.
 - [Adapting](docs/adapting.md) and [terminology](docs/terminology.md).
-- [CHIME/BAO reference application](docs/application-chime.md) — fiducial
+- [CHIME/BAO reference application](docs/application-chime.md): fiducial
   configuration, headline results, inputs, and application-specific caveats.
-- [Reproducibility](docs/reproducibility.md) — installation, verification,
+- [Reproducibility](docs/reproducibility.md): installation, verification,
   bank builds, dissertation checks, and evidence regeneration.
-- [Verification benches](docs/testing.md) — component coverage, numerical
+- [Verification benches](docs/testing.md): component coverage, numerical
   oracles, CI coverage gates, and optional integration checks.
-- [Release index](docs/releases.md) — immutable existing releases and the
+- [Release index](docs/releases.md): immutable existing releases and the
   layout for future releases.
-- [Forecast-completion contract](docs/forecast-completion.md) — complete
+- [Forecast-completion contract](docs/forecast-completion.md): complete
   estimator, schema, and analytic-template details.
 
 ## Install and verify
