@@ -29,6 +29,7 @@ import hashlib
 import io
 import json
 import sys
+from importlib.resources import files as _package_files
 from pathlib import Path
 
 from rfisher.records.chime_atsc_2026 import capture_handoff as ch
@@ -45,6 +46,21 @@ TAU_COLUMNS = ("censor", "source", "calibrate", "channel", "ew", "ns", "lane", "
                "calibration_fcr_same_class", "calibration_null_max_s", "calibration_null_max_same_class_s",
                "calibration_passes")
 RANGE_OF = {c: name for name, classes in RANGES.items() for c in classes}
+# pilot-proxy's schema of the layout, vendored byte for byte (its sha256 is pinned by tests/test_schemas.py)
+SCHEMA_FILE = "capture_operating_characteristic_v1.schema.json"
+SCHEMA_COLUMNS = {"capture_oc_table.csv": "x-capture-oc-table-columns", "capture_oc_summary.csv": "x-capture-oc-summary-columns",
+                  "capture_tau_bounds.csv": "x-capture-tau-bounds-columns"}
+
+
+def schema() -> dict:
+    """The vendored schema of pilot-proxy's capture operating characteristic."""
+    return json.loads(_package_files("rfisher.data").joinpath("schemas", SCHEMA_FILE).read_text(encoding="utf-8"))
+
+
+def schema_columns() -> dict:
+    """{file: [column, ...]}: each table's columns, in the schema's order."""
+    s = schema()
+    return {name: [c["name"] for c in s[key]] for name, key in SCHEMA_COLUMNS.items()}
 
 
 class OCError(ValueError):
@@ -85,6 +101,9 @@ def read_oc(directory) -> dict:
             raise OCError(f"{root}: {name}: sha256 differs from the manifest")
         out["sha256"][name] = want
         out[name] = _rows(data)
+    for name, columns in schema_columns().items():
+        if out[name][0] != columns:
+            raise OCError(f"{root}: {name}: its columns are not the vendored schema's")
     header = out["capture_tau_bounds.csv"][0]
     if tuple(header) != TAU_COLUMNS:
         raise OCError(f"{root}: capture_tau_bounds.csv: columns {header}, expected {list(TAU_COLUMNS)}")

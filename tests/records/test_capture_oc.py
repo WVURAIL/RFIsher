@@ -27,7 +27,7 @@ SETTING = {v: k for k, v in ch.BOUND_SETTINGS.items()}
 
 def _write(path: Path, header, rows):
     with path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(header), lineterminator="\n")
+        w = csv.DictWriter(fh, fieldnames=list(header), lineterminator="\n", restval="")
         w.writeheader()
         w.writerows(rows)
 
@@ -67,14 +67,14 @@ def _operating_characteristic(handoff: Path, root: Path) -> Path:
             row.update(board_G_nocredit=repr(float(board[band]["G_nocredit"])), board_tau_quality=board[band]["tau_quality"],
                        board_tau_booked_s=board[band]["tau_booked_s"])
         summary.append(row)
-    _write(root / "capture_oc_summary.csv", ["band_id"] + cols + bcols, summary)
+    _write(root / "capture_oc_summary.csv", oc.schema_columns()["capture_oc_summary.csv"], summary)
     table = []
     for r in _read(handoff, "dump_q.csv"):
         science = r["event"] in ch.SCIENCE
         for product in ("xx", "yy"):   # a band's rows of a dump repeat its median
             table.append({"band_id": r["channel"], "product": product, "bank": r["bank"], "event": r["event"],
                           "science": str(science), "q_median": r["q_median"] if science else ""})
-    _write(root / "capture_oc_table.csv", ["band_id", "product", "bank", "event", "science", "q_median"], table)
+    _write(root / "capture_oc_table.csv", oc.schema_columns()["capture_oc_table.csv"], table)
     bounds = []
     for r in _read(handoff, "tau_bounds.csv"):
         censor, source, calibrate = SETTING[r["setting"]]
