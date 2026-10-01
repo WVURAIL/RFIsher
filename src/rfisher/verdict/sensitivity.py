@@ -9,8 +9,11 @@ For each band and sensitivity the least-R candidate of the exclusion reading
 is priced as R_S = r * 10^(-S/10) / r_tol (the operands in that order, never
 folded into the tolerance), and an excision of the rule is checked again:
 
-- ``robust to post-processing``: the excision holds under every sensitivity;
-- ``idealized-only``: it does not hold under at least one.
+- ``robust to post-processing``: the excision holds under every sensitivity
+  priced (at least one);
+- ``idealized-only``: it does not hold under at least one;
+- ``no sensitivity priced``: no sensitivity of the band has a finite
+  tolerance and a finite residual, so nothing was checked.
 
 A sensitivity can only remove an excision: a band the rule does not excise
 is never excised here.
@@ -24,6 +27,7 @@ SENSITIVITY = "sensitivity"
 ROBUST = "robust to post-processing"
 IDEALIZED = "idealized-only"
 NO_EXCISION = "no excision under the rule"
+UNPRICED = "no sensitivity priced"
 COLUMNS = ("band_id", "scenario", "tolerance_basis", "suppression_db",
            "r_tol", "rule_outcome", "min_R", "min_R_with_suppression",
            "excision_holds", "label")
@@ -51,6 +55,7 @@ def sensitivities(band_id: str, rule_outcome: str,
     points = [(float(r), family) for r, family in exclusion_points
               if math.isfinite(float(r))]
     holds_all = True
+    priced_any = False
     for s in scenarios:
         if s["role"] != SENSITIVITY:
             continue
@@ -63,6 +68,7 @@ def sensitivities(band_id: str, rule_outcome: str,
                          "min_R_with_suppression": math.nan,
                          "excision_holds": "", "label": ""})
             continue
+        priced_any = True
         least = min(r for r, _ in points)
         with_s = [priced(r, sdb, r_tol) for r, _ in points]
         holds = all(v > 1.0 for v in with_s)
@@ -75,8 +81,12 @@ def sensitivities(band_id: str, rule_outcome: str,
                      "min_R_with_suppression": min(with_s),
                      "excision_holds": holds if excised else "",
                      "label": ""})
-    label = ((ROBUST if holds_all else IDEALIZED)
-             if rule_outcome == "excise" else NO_EXCISION)
+    if rule_outcome != "excise":
+        label = NO_EXCISION
+    elif not priced_any:
+        label = UNPRICED
+    else:
+        label = ROBUST if holds_all else IDEALIZED
     for row in rows:
         row["label"] = label
     return rows

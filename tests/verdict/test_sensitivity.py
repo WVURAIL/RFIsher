@@ -112,3 +112,13 @@ def test_the_rule_rows_carry_no_suppression(handoff_copy, tolerances, tmp_path,
                suppression)
     header = out["verdict.csv"].decode().splitlines()[0]
     assert "suppression" not in header
+
+
+def test_an_excision_with_nothing_priced_is_not_called_robust():
+    scenarios = [{"scenario": "deployed", "role": "sensitivity",
+                  "tolerance_basis": "b", "r_tol": float("nan"),
+                  "suppression_db": 11.4}]
+    rows = sensitivity.sensitivities("7", "excise", scenarios,
+                                     [(2.0, "rho=1")])
+    assert {r["label"] for r in rows} == {sensitivity.UNPRICED}
+    assert sensitivity.sensitivities("7", "excise", [], [(2.0, "rho=1")]) == []

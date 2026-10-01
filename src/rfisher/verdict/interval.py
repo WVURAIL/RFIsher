@@ -41,6 +41,7 @@ AVAILABLE = "available"
 
 STATUS_NONEMPTY = "nonempty"
 STATUS_PFA_ABOVE = "empty: eta_Pfa > eta_sci"
+STATUS_EVAL_ABOVE = "empty: eta_eval > eta_sci"
 STATUS_NO_CANDIDATE = "empty: no candidate meets r_tol"
 STATUS_NO_EVALUABLE = "empty: no evaluable candidate"
 STATUS_TOLERANCE = "tolerance refused"
@@ -158,6 +159,13 @@ def select(candidates: Sequence[Point], policy) -> Selection:
     if not good:
         return Selection(None, math.nan, (), "no_feasible_threshold"
                          if candidates else "no_evaluable_threshold")
+    undefined = [p for p in good if not math.isfinite(p.cost)]
+    if undefined:
+        p = undefined[0]
+        raise SelectionRefused(
+            f"{p.family}, candidate {p.candidate_order}: the cost is not "
+            f"finite (r_var {p.row.get('r_var')!r}); the selector needs a "
+            "finite variance residual on every feasible candidate")
     ratio = float(policy.value("selection.cost_plateau_ratio"))
     minimum = min(p.cost for p in good)
     near = tuple(p for p in good if p.cost <= ratio * minimum)
@@ -247,7 +255,7 @@ def interval(candidates: Sequence[Point], summary: Mapping, *,
     elif not ok:
         status = STATUS_NO_CANDIDATE
     elif not members:
-        status = STATUS_PFA_ABOVE
+        status = STATUS_PFA_ABOVE if source == "pfa" else STATUS_EVAL_ABOVE
     else:
         status = STATUS_NONEMPTY
     if thinned and least is not None and least.feasible:

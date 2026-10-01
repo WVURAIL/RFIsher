@@ -12,10 +12,18 @@ The steps, in the order the selector policy declares them
    and its false-alarm limit is certified. Without the certification the
    band is undetermined ("keep-eligible; P_fa unverified").
 4. ``excise``: every family has an empty deployable set in the exclusion
-   reading and, where the floor is not verified, the least-R candidate's
-   floor share is below ``selector.sensitivity_limited_share`` (an R that
-   only measures the floor cannot excise).
+   reading and, unless the floor is verified on every family, the least-R
+   candidate's floor share is below ``selector.sensitivity_limited_share``
+   (an R that only measures the floor cannot excise).
 5. ``undetermined`` otherwise.
+
+Steps 3 and 4 read only the families the detector did not refuse: a family
+whose stability screen or preparation refused carries no keep and no
+excision, whatever its set.
+
+A false-alarm limit is certified (:func:`certified`) only when the detector
+reports it available, it is finite, its null population is not the bulk of
+the mixture, and it was estimated at the alpha the handoff declares.
 
 The two readings differ only for a quantity that is not measured
 (``selector.unmeasured``): an exclusion reads it at its most favorable value
@@ -41,6 +49,7 @@ SCREEN_COLUMNS = ("band_id", "screen_outcome", "precedence_step",
                   "screen_reason", "families_checked", "rule_version")
 RESIDUAL = {"booked": "r_sys", 1: "r_sys_incoherent"}
 NONEMPTY = (STATUS_NONEMPTY, STATUS_THINNED)
+BULK_NULL = "bulk of the mixture"
 
 
 def check_precedence(policy) -> None:
@@ -93,6 +102,12 @@ def family_readings(rows: Sequence[Mapping], summaries: Sequence[Mapping],
     return out
 
 
+def refused_family(family: Readings) -> bool:
+    """Whether the detector refused this family (stability or preparation)."""
+    return bool(str(family.summary["stability_status"] or "").startswith(
+        "refused") or family.summary["refusal"])
+
+
 def detector_refusal(summaries: Sequence[Mapping],
                      families: Sequence[Readings]) -> str:
     """The detector's refusal of the band's surface, or ``""``.
@@ -103,19 +118,28 @@ def detector_refusal(summaries: Sequence[Mapping],
     reasons = sorted({str(s["refusal"]) for s in summaries if s["refusal"]})
     if not families:
         return reasons[0] if reasons else ""
-    refused = [f for f in families
-               if str(f.summary["stability_status"] or "").startswith("refused")
-               or f.summary["refusal"]]
+    refused = [f for f in families if refused_family(f)]
     if len(refused) == len(families):
         return str(refused[0].summary["refusal"] or
                    refused[0].summary["stability_status"])
     return ""
 
 
-def certified(reading: FamilyInterval) -> bool:
-    """A false-alarm limit is certified only when it is available."""
-    return reading.eta_pfa_status == "available" and math.isfinite(
-        reading.eta_pfa)
+def certified(reading: FamilyInterval, summary: Mapping | None = None,
+              alpha: float | None = None) -> bool:
+    """A false-alarm limit is certified only when it is available and finite,
+    and (given the family's summary and the declared alpha) read on a null
+    population other than the bulk of the mixture at that alpha."""
+    if not (reading.eta_pfa_status == "available"
+            and math.isfinite(reading.eta_pfa)):
+        return False
+    if summary is not None and str(summary.get("null_source") or
+                                   "").startswith(BULK_NULL):
+        return False
+    if alpha is not None and (summary is None or summary.get("pfa_target")
+                              != alpha):
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -135,8 +159,12 @@ class Screen:
 
 def screen(band_id: str, tolerance: Mapping | None,
            summaries: Sequence[Mapping], families: Sequence[Readings],
-           policy) -> Screen:
-    """The band's outcome under the precedence (see the module docstring)."""
+           policy, *, alpha: float | None = None) -> Screen:
+    """The band's outcome under the precedence (see the module docstring).
+
+    ``alpha`` is the false-alarm target the handoff declares; a limit read
+    at another one is not certified.
+    """
     check_precedence(policy)
     n = len(families)
     r_tol = float(tolerance["r_tol"]) if tolerance else math.nan
@@ -148,28 +176,30 @@ def screen(band_id: str, tolerance: Mapping | None,
     if refusal:
         return Screen(band_id, "undetermined", 2,
                       f"detector refused: {refusal}", n)
-    keepable = [f for f in families if f.keep.status in NONEMPTY]
+    usable = [f for f in families if not refused_family(f)]
+    keepable = [f for f in usable if f.keep.status in NONEMPTY]
     if keepable:
-        if any(certified(f.keep) for f in keepable):
+        if any(certified(f.keep, f.summary, alpha) for f in keepable):
             return Screen(band_id, "keep", 3,
                           f"deployable set nonempty on {len(keepable)} "
                           f"famil{'y' if len(keepable) == 1 else 'ies'} with "
                           "a certified false-alarm limit", n)
         return Screen(band_id, "undetermined", 5,
                       "keep-eligible; P_fa unverified", n)
-    empty = n > 0 and all(f.exclusion.status not in NONEMPTY
-                          and f.exclusion.status.startswith("empty")
-                          for f in families)
+    empty = bool(usable) and all(f.exclusion.status not in NONEMPTY
+                                 and f.exclusion.status.startswith("empty")
+                                 for f in usable)
     if empty:
         share = float(policy.value("selector.sensitivity_limited_share"))
-        verified = all(s["floor_verified"] for s in summaries
-                       if s["floor_verified"] is not None)
-        least = [f.exclusion.least for f in families
+        verified = all(f.summary["floor_verified"] is True for f in usable)
+        least = [f.exclusion.least for f in usable
                  if f.exclusion.least is not None]
         best = min(least, key=lambda p: (p.R, p.candidate_order),
                    default=None)
-        floor_share = (float(best.row["floor_share"]) if best is not None
-                       else math.nan)
+        if best is None:
+            return Screen(band_id, "undetermined", 5,
+                          "no finite R in the exclusion reading", n)
+        floor_share = float(best.row["floor_share"])
         if verified or (math.isfinite(floor_share) and floor_share < share):
             return Screen(band_id, "excise", 4,
                           f"every family's deployable set is empty in the "

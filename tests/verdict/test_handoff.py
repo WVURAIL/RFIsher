@@ -91,3 +91,20 @@ def test_tolerance_rows_and_their_edges(handoff_copy, tolerances):
     with pytest.raises(handoff.HandoffError, match="edges"):
         handoff.read_tolerances(tolerances({"29": [("none", "rule", 0.02,
                                                     0.0)]}), shifted)
+
+
+def test_a_manifest_that_does_not_call_the_surface_complete_reads_thinned(
+        handoff_copy):
+    path = handoff_copy.path / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest.pop("fine_surface_rows")
+    path.write_text(json.dumps(manifest))
+    oc = handoff.read_characterization(handoff_copy.path,
+                                       r_reference=R_REFERENCE,
+                                       residual_shapes=("band_thermal",))
+    assert oc.thinned
+    manifest["fine_surface_rows"] = "complete: every evaluable candidate"
+    path.write_text(json.dumps(manifest))
+    assert not handoff.read_characterization(
+        handoff_copy.path, r_reference=R_REFERENCE,
+        residual_shapes=("band_thermal",)).thinned

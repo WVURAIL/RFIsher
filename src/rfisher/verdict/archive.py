@@ -5,8 +5,10 @@ Reads a characterization directory (checked by :mod:`.handoff`) and one
 
 - ``verdict.csv``: one row per band, fine family and scenario, with the
   deployable set, the selector's choice and the least-R candidate, and one
-  ``union`` row per band and scenario over all its fine families (the
-  selection pooled over ranks, and the surface's least-residual point);
+  ``union`` row per band and scenario over the fine families read (the
+  selection pooled over them, and their least-residual point: the
+  surface's, as the detector records it, when every family of the surface
+  is read);
 - ``verdict_points.csv``: every fine calibration candidate of the rule
   scenario, with its cost, R, feasibility and membership of the set;
 - ``screen.csv``: one row per band, the outcome under the precedence;
@@ -86,7 +88,8 @@ def _selection_fields(chosen: interval.Selection) -> dict:
         "plateau_eta_low": low, "plateau_eta_high": high}
 
 
-def _family_row(key, tol, readings: screening.Readings, pol) -> dict:
+def _family_row(key, tol, readings: screening.Readings, pol,
+                alpha=None) -> dict:
     keep, excl = readings.keep, readings.exclusion
     least = keep.least
     chosen = interval.select(keep.members, pol)
@@ -108,11 +111,13 @@ def _family_row(key, tol, readings: screening.Readings, pol) -> dict:
             "min_R_incoherent": incoherent,
             "min_R_floor_share": float(least.row["floor_share"]) if least
             else math.nan,
-            "false_alarm_certified": screening.certified(keep)}
+            "false_alarm_certified": screening.certified(
+                keep, readings.summary, alpha)}
 
 
 def _union_row(key, tol, families: Sequence[screening.Readings],
-               summary: Mapping | None, status_override: str, pol) -> dict:
+               summary: Mapping | None, status_override: str, pol, *,
+               whole_surface: bool = True, alpha=None) -> dict:
     row = {**key, "threshold_family": UNION, "scenario": tol["scenario"],
            "role": tol["role"], "r_tol": tol["r_tol"],
            "tolerance_basis": tol["tolerance_basis"]}
@@ -131,8 +136,10 @@ def _union_row(key, tol, families: Sequence[screening.Readings],
                 return interval.STATUS_NONEMPTY
             if statuses == {interval.STATUS_NO_EVALUABLE}:
                 return interval.STATUS_NO_EVALUABLE
-            if interval.STATUS_PFA_ABOVE in statuses:
-                return interval.STATUS_PFA_ABOVE
+            for above in (interval.STATUS_PFA_ABOVE,
+                          interval.STATUS_EVAL_ABOVE):
+                if above in statuses:
+                    return above
             return interval.STATUS_NO_CANDIDATE
         members = [p for part in keep for p in part.members]
         chosen = interval.select(members, pol)
@@ -143,18 +150,32 @@ def _union_row(key, tol, families: Sequence[screening.Readings],
             eta_eval=min((p.eta_eval for p in keep), default=math.nan),
             eta_sci=max((p.eta_sci for p in keep if math.isfinite(p.eta_sci)),
                         default=math.nan),
-            false_alarm_certified=any(screening.certified(p) for p in keep),
+            false_alarm_certified=any(screening.certified(
+                f.keep, f.summary, alpha) for f in families),
             **_selection_fields(chosen))
     else:
         row["interval_status"] = interval.STATUS_NO_EVALUABLE
-    if summary is not None and math.isfinite(r_tol) and \
-            summary["least_residual_rho"] is not None:
+    if summary is None or not math.isfinite(r_tol):
+        return row
+    if whole_surface:
+        # every family of the surface is read: its least-residual point, as
+        # the detector records it (with the detector's tie rule)
+        if summary["least_residual_rho"] is not None:
+            row.update(
+                min_R=float(summary["least_residual_r_sys"]) / r_tol,
+                min_R_eta=summary["least_residual_eta"],
+                min_R_incoherent=float(
+                    summary["least_residual_r_sys_incoherent"]) / r_tol,
+                min_R_floor_share=summary["least_residual_floor_share"])
+        return row
+    least = [f.keep.least for f in families if f.keep.least is not None]
+    if least:
+        best = min(least, key=lambda p: (p.r_sys, p.masked_fraction,
+                                         p.candidate_order))
         row.update(
-            min_R=float(summary["least_residual_r_sys"]) / r_tol,
-            min_R_eta=summary["least_residual_eta"],
-            min_R_incoherent=float(summary["least_residual_r_sys_incoherent"])
-            / r_tol,
-            min_R_floor_share=summary["least_residual_floor_share"])
+            min_R=best.R, min_R_eta=best.eta,
+            min_R_incoherent=float(best.row["r_sys_incoherent"]) / r_tol,
+            min_R_floor_share=float(best.row["floor_share"]))
     return row
 
 
@@ -196,6 +217,7 @@ def run(characterization: str | Path, tolerances: str | Path,
     oc = handoff.read_characterization(characterization,
                                        r_reference=r_reference,
                                        residual_shapes=residual_shapes)
+    alpha = (oc.manifest.get("null_policy") or {}).get("alpha")
     tol_path = _tolerance_path(Path(tolerances))
     tol_rows = handoff.read_tolerances(tol_path, oc.bands)
     by_band_tol: dict[str, list] = {}
@@ -221,8 +243,16 @@ def run(characterization: str | Path, tolerances: str | Path,
         key = {**key, "candidate_set": interval.FINE}
         tols = by_band_tol.get(band, [])
         rule = [t for t in tols if t["role"] == RULE]
-        rule_tol = rule[0] if len(rule) == 1 else None
+        if len(rule) > 1:
+            raise handoff.HandoffError(f"band {band}: {len(rule)} rule "
+                                       "scenarios in the tolerance table; "
+                                       "a band has one")
+        rule_tol = rule[0] if rule else None
         rule_families = []
+        surface_families = {
+            r["threshold_family"] for r in rows_by_band.get(band, [])
+            if r["candidate_set"] == interval.FINE
+            and r["block"] == interval.CALIBRATION}
         for tol in tols:
             r_tol = float(tol["r_tol"])
             if not math.isfinite(r_tol):
@@ -235,11 +265,12 @@ def run(characterization: str | Path, tolerances: str | Path,
             refused = screening.detector_refusal(summaries, families)
             for f in families:
                 verdict_rows.append(_family_row(
-                    {**_key(f.summary)}, tol, f, pol))
+                    {**_key(f.summary)}, tol, f, pol, alpha))
             verdict_rows.append(_union_row(
                 key, tol, families, fine[0] if fine else None,
                 interval.STATUS_DETECTOR if (refused and not families) else "",
-                pol))
+                pol, whole_surface={f.family for f in families}
+                == surface_families, alpha=alpha))
             if tol is rule_tol:
                 rule_families = families
                 candidates = interval.fine_candidates(
@@ -259,7 +290,7 @@ def run(characterization: str | Path, tolerances: str | Path,
                             "R": p.R, "feasible": p.feasible,
                             "in_deployable_set": p.candidate_order in members})
         outcome = screening.screen(band, rule_tol, summaries, rule_families,
-                                   pol)
+                                   pol, alpha=alpha)
         screen_rows.append(outcome.as_row())
         candidates = interval.fine_candidates(rows_by_band.get(band, []), pol)
         exclusion_points = []

@@ -180,3 +180,29 @@ def test_the_tie_break_is_the_policys(pol):
 
     with pytest.raises(ValueError, match="tie_break"):
         interval.tie_key(Other())
+
+
+def test_the_empty_status_names_the_lower_bound(pol):
+    rows = histogram_rows({"4": {
+        "candidate_multiplier_q16": [65536, 131072],
+        "counts": [30, 30, 40], "systematic_residual_sums": [3.0, 6.0, 40.0]}})
+    pts = interval.points(rows, 0.2, pol)
+    summary = summary_row("rho=4", rows, eta_eval=5.0)
+    fam = interval.interval(pts, summary)
+    assert fam.status == interval.STATUS_EVAL_ABOVE == \
+        "empty: eta_eval > eta_sci"
+    assert fam.lower_bound_source == "evaluability"
+    fam = interval.interval(pts, {**summary, "eta_eval": 1.0, "eta_pfa": 5.0,
+                                  "eta_pfa_status": "available"})
+    assert fam.status == interval.STATUS_PFA_ABOVE
+
+
+def test_a_feasible_candidate_without_a_finite_cost_is_refused(pol):
+    rows = histogram_rows({"4": {
+        "candidate_multiplier_q16": [65536, 131072],
+        "counts": [30, 30, 40], "systematic_residual_sums": [3.0, 6.0, 40.0]}})
+    rows[0]["r_var"] = math.nan                 # an empty cell of the table
+    with pytest.raises(interval.SelectionRefused, match="cost is not finite"):
+        interval.select(interval.points(rows, 0.2, pol), pol)
+    assert interval.select(interval.points(rows[1:], 0.2, pol),
+                           pol).status == "selected"

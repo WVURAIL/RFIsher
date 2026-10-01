@@ -111,9 +111,11 @@ class Characterization:
 
     @property
     def thinned(self) -> bool:
-        """Whether the fine surface is written thinned (not every candidate)."""
-        return str(self.manifest.get("fine_surface_rows", "")).startswith(
-            "thinned")
+        """Whether the fine surface may be written thinned (not every
+        candidate). A manifest that does not say it is complete is read as
+        thinned, so a missing statement never completes a set."""
+        rows = self.manifest.get("fine_surface_rows")
+        return rows is None or str(rows).startswith("thinned")
 
 
 def read_characterization(directory: str | Path, *,

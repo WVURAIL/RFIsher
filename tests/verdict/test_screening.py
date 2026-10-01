@@ -140,3 +140,56 @@ def test_the_policy_must_declare_the_implemented_precedence(pol):
     with pytest.raises(ValueError, match="no exclusion gain"):
         screening.exclusion_residual("guessed", pol)
     assert interval.STATUS_THINNED in screening.NONEMPTY
+
+
+def test_an_empty_floor_flag_does_not_verify_the_floor(pol):
+    rows, summaries = _band([[5.0, 6.0]], floor_share=0.99, floor_verified=None)
+    out = _screen(pol, rows, summaries)
+    assert out.outcome == "undetermined" and "sensitivity-limited" in out.reason
+    rows, summaries = _band([[5.0, 6.0], [7.0, 8.0]], floor_share=0.99)
+    summaries[0]["floor_verified"] = True       # one family verified is not every family
+    assert _screen(pol, rows, summaries).outcome == "undetermined"
+    for s in summaries:
+        s["floor_verified"] = True
+    assert _screen(pol, rows, summaries).outcome == "excise"
+
+
+def test_an_exclusion_without_a_finite_r_does_not_excise(pol):
+    rows, summaries = _band([[5.0, 6.0]], floor_verified=True)
+    for r in rows:
+        r["r_sys"] = math.inf
+    out = _screen(pol, rows, summaries)
+    assert (out.outcome, out.reason) == ("undetermined",
+                                         "no finite R in the exclusion reading")
+
+
+def test_a_refused_family_carries_no_keep_and_no_excision(pol):
+    # family rho=1 keeps with a certified limit but is refused; rho=2 is empty
+    rows, summaries = _band([[0.5, 6.0], [7.0, 8.0]], eta_pfa=0.5,
+                            eta_pfa_status="available")
+    summaries[0]["stability_status"] = "refused_drift"
+    out = _screen(pol, rows, summaries)
+    assert (out.outcome, out.step) == ("excise", 4)
+    assert out.families_checked == 2
+    # the unrefused family keeps: the refused empty one does not block it
+    rows, summaries = _band([[5.0, 6.0], [0.5, 8.0]], eta_pfa=0.5,
+                            eta_pfa_status="available")
+    summaries[0]["refusal"] = "bundle: too few frames"
+    assert _screen(pol, rows, summaries).outcome == "keep"
+
+
+def test_a_limit_on_the_bulk_or_at_another_alpha_is_not_certified(pol):
+    rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5,
+                            eta_pfa_status="available", pfa_target=1e-3,
+                            null_source="transmitter-off epoch from 2023-02")
+    families = screening.family_readings(rows, summaries, 1.0, pol)
+    tol = {"r_tol": 1.0, "refusal": ""}
+    assert screening.screen("99", tol, summaries, families, pol,
+                            alpha=1e-3).outcome == "keep"
+    assert screening.screen("99", tol, summaries, families, pol,
+                            alpha=1e-2).outcome == "undetermined"
+    for s in summaries:
+        s["null_source"] = "bulk of the mixture (declared)"
+    families = screening.family_readings(rows, summaries, 1.0, pol)
+    out = screening.screen("99", tol, summaries, families, pol, alpha=1e-3)
+    assert out.reason == "keep-eligible; P_fa unverified"
