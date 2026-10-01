@@ -27,8 +27,21 @@ SOURCES = sorted((ROOT / "src").rglob("*.py")) + sorted(
     (ROOT / "scripts").rglob("*.py"))
 
 
+# The one declared rename against the golden: the tie-break's tail rho, multiplier_q16 is named candidate_order, the
+# detector's enumeration order it stands for.
+RENAMED = {"selection.tie_break": (("rho", "multiplier_q16"), ("candidate_order",))}
+
+
 def _golden():
     return json.loads(GOLDEN.read_text(encoding="utf-8"))["entries"]
+
+
+def _renamed(ident, value):
+    if ident not in RENAMED:
+        return value
+    old, new = RENAMED[ident]
+    assert tuple(value[-len(old):]) == old, ident
+    return list(value[:-len(old)]) + list(new)
 
 
 def test_every_old_entry_is_carried_moved_or_deleted():
@@ -41,7 +54,7 @@ def test_every_old_entry_is_carried_moved_or_deleted():
             decision = loaded.decision(entry["id"])
             assert decision.register == targets[target], entry["id"]
             assert decision.side == "science"
-            assert policy._thaw(decision.value) == entry["value"], entry["id"]
+            assert policy._thaw(decision.value) == _renamed(entry["id"], entry["value"]), entry["id"]
         elif target.startswith("pilot-proxy "):
             assert entry["id"] not in loaded.decisions, entry["id"]
         else:

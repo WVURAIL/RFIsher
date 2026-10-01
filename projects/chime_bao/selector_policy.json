@@ -18,7 +18,10 @@
       "selector.precedence",
       "selector.sensitivity_limited_share",
       "selector.unmeasured"
-    ]
+    ],
+    "renamed": {
+      "selection.tie_break": "the tail rho, multiplier_q16 of the 7b0067b value is named candidate_order, the order it stands for (M6)"
+    }
   },
   "decisions": [
     {
@@ -45,8 +48,7 @@
       "value": [
         "systematic_residual",
         "masked_fraction",
-        "rho",
-        "multiplier_q16"
+        "candidate_order"
       ],
       "units": "lexicographic order",
       "basis": "policy",

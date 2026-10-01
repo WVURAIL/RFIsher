@@ -182,6 +182,24 @@ def test_the_tie_break_is_the_policys(pol):
         interval.tie_key(Other())
 
 
+def test_the_frozen_tie_break_names_the_same_order(pol):
+    """The archive's frozen policy copy names the tail by rho and multiplier_q16; the key is the same."""
+    class Frozen:
+        def value(self, ident):
+            return ["systematic_residual", "masked_fraction", "rho", "multiplier_q16"] \
+                if ident == "selection.tie_break" else pol.value(ident)
+
+    assert pol.value("selection.tie_break") == ("systematic_residual", "masked_fraction", "candidate_order")
+    rows = histogram_rows({"3": {"candidate_multiplier_q16": [65536, 70000],
+                                 "counts": [40, 10, 5],
+                                 "systematic_residual_sums": [4.0, 1.0, 0.5]},
+                           "2": {"candidate_multiplier_q16": [65536],
+                                 "counts": [40, 10],
+                                 "systematic_residual_sums": [4.0, 1.0]}})
+    pts = interval.points(rows, 1.0, pol)
+    assert [interval.tie_key(pol)(p) for p in pts] == [interval.tie_key(Frozen())(p) for p in pts]
+
+
 def test_the_empty_status_names_the_lower_bound(pol):
     rows = histogram_rows({"4": {
         "candidate_multiplier_q16": [65536, 131072],

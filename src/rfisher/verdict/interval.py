@@ -32,9 +32,11 @@ from typing import Mapping, Sequence
 FINE = "fine_surface"
 CALIBRATION = "calibration"
 FAMILY_PREFIX = "rho="
-# The detector's parameters in the policy's tie-break stand for its declared
-# candidate order: the order is rank, then multiplier.
-ORDER_NAMES = ("rho", "multiplier_q16")
+# The tail of the policy's tie-break is the detector's declared candidate
+# order (rank, then multiplier). The frozen archive policy copy names it by
+# those two parameters, the order they stand for.
+ORDER_NAMES = ("candidate_order",)
+LEGACY_ORDER_NAMES = ("rho", "multiplier_q16")
 TIE_FIELDS = {"systematic_residual": "r_sys", "masked_fraction":
               "masked_fraction"}
 AVAILABLE = "available"
@@ -115,9 +117,10 @@ def points(rows: Sequence[Mapping], r_tol: float, policy, *,
 def tie_key(policy):
     """The policy's tie-break as a key on a :class:`Point`."""
     names = tuple(policy.value("selection.tie_break"))
-    head = names[:len(names) - len(ORDER_NAMES)]
-    if names[len(head):] != ORDER_NAMES or not all(n in TIE_FIELDS
-                                                   for n in head):
+    tail = next((t for t in (ORDER_NAMES, LEGACY_ORDER_NAMES)
+                 if names[len(names) - len(t):] == t), ORDER_NAMES)
+    head = names[:len(names) - len(tail)]
+    if names[len(head):] != tail or not all(n in TIE_FIELDS for n in head):
         raise ValueError(f"selection.tie_break {names} is not "
                          f"{list(TIE_FIELDS)} followed by the candidate order")
     fields = [TIE_FIELDS[n] for n in head]
