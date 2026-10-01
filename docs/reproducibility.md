@@ -237,8 +237,22 @@ evaluation-block replay is the detector's and the handoff does not carry it.
 
 ### Capture ruling of record
 
-From a capture handoff `HANDOFF` (the detector's measurement tables of the
-2026 matched capture), the table of record before amendment 8 and the table of
+The capture records read a capture handoff `HANDOFF` (the detector's
+measurement tables of the 2026 matched capture, in the layout
+`capture_handoff_measurements` version 0). Its three detector readings (each
+rung's archive threshold, each science dump's median Q and the within-dump
+bounds on tau) can be taken from pilot-proxy's capture output
+(`pilot-proxy capture oc-table`, the layout
+`capture_operating_characteristic` version 1); the other files come from a
+measurement handoff `MEASUREMENTS`, since their lanes (the channel 24 lane,
+the reduced dumps' class means and the archive shares) are not run by
+pilot-proxy:
+
+```bash
+rfisher records capture-handoff --oc OC_DIR/capture --measurements MEASUREMENTS --out HANDOFF
+```
+
+From the handoff, the table of record before amendment 8 and the table of
 record itself:
 
 ```bash
@@ -252,8 +266,21 @@ and the release of record r5.2, its credit readings included:
 ```bash
 rfisher records capture-release --rule r5_2 --handoff HANDOFF \
   --record-table table_of_record.csv --evidence DECISION_EVIDENCE \
-  --releases RESULTS --duration-reference SURVEY_DURATION_RUN --rel REL --run RUN
+  --releases RESULTS --duration-reference SURVEY_DURATION_RUN --rel REL --run RUN \
+  --input-table table_of_record_v7.csv
 ```
+
+`--input-table` names the v7 table written above; without it the release reads
+the handoff's copy. The robustness copy and the phase limit read the table of
+record given as `--record-table`.
+
+Three files carry the site paths of the inputs they were derived from, as the
+frozen records wrote them: the vendored exact-time reference
+(`src/rfisher/data/tolerances/exact_time_reference_2026-09-09/reference.json`,
+which ships in the wheel), the release's fixed prose
+(`projects/chime_bao/capture_rules/release_r5_2.json`) and the golden capture
+handoff's manifest. They are byte copies that the sha pins and the release's
+equal manifest keys need; nothing opens a file at those paths.
 
 The rule files are `projects/chime_bao/capture_rules/` (`record`, `a18`, `r5`,
 `r5_1`, `r5_2`, and the sensitivities `g1`, `r3` and `r2`). Under numpy 2.3 or

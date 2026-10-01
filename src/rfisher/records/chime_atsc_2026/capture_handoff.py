@@ -173,6 +173,21 @@ def open_handoff(directory, *, borrowed: bool = False) -> CaptureHandoff:
     return CaptureHandoff(directory, borrowed=borrowed)
 
 
+def table_rows(h: CaptureHandoff, rel: str, path=None) -> list[dict]:
+    """The rows of one of the record's own tables (the table of record, its v7 input): the handoff's copy, or the file
+    at ``path`` (the table written in the same run), its header checked as the handoff's."""
+    if path is None:
+        return h.rows(rel)
+    with open(path, newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        rows = list(reader)
+    expected = HEADERS[_header_key(rel)].split(",")
+    if reader.fieldnames != expected:
+        got, want = set(reader.fieldnames or ()), set(expected)
+        raise HandoffError(f"{path}: columns differ from {rel} (missing {sorted(want - got)}, extra {sorted(got - want)})")
+    return rows
+
+
 def polkey(s):
     return 0 if s == "I" else int(s)           # Stokes I is the single product, read as product 0
 

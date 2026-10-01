@@ -45,7 +45,10 @@ accepted; its exclusion-side ratio columns are then named R_exclusion_* in place
 r4 (item 17): a units-only json run with --set GROUND_CREDIT=off (no ground-filter credit) is accepted; its rescue
 coherence is then the coherence a ground filter would need with no credit taken, and the log says so. A units-only json
 with the ground credit gives revision 3's (or revision 2's) output byte for byte.
+With --record-table TABLE the table of record is read from TABLE (the table written in the same run) in place of the
+handoff's copy.
 usage: rfisher records phase-limit --handoff DIR <out dir> [--units booked|power --units-json RUN.json] [--a18-json A18.json]
+                                   [--record-table TABLE]
 
 The release's ``phase_limit_a18.py``, with its logic unchanged; the record, the frame-analysis tables, the vendored
 phasor14.csv and the class means of the reduced dumps come from the capture handoff.
@@ -60,7 +63,7 @@ from rfisher.records.chime_atsc_2026 import capture_handoff
 def main(argv=None):
     import sys
     argv = ["phase-limit"] + list(sys.argv[1:] if argv is None else argv)
-    _args = argv[1:]; OUT = None; UNITS = "booked"; UJSON = A18JSON = None; H = None
+    _args = argv[1:]; OUT = None; UNITS = "booked"; UJSON = A18JSON = None; H = None; RT = None
     while _args:
         k = _args.pop(0)
         if not k.startswith("--") and OUT is None: OUT = k; continue
@@ -69,6 +72,7 @@ def main(argv=None):
         elif k == "--units": UNITS = v
         elif k == "--units-json": UJSON = json.load(open(v))
         elif k == "--a18-json": A18JSON = json.load(open(v))
+        elif k == "--record-table": RT = v
     if H is None or OUT is None: raise SystemExit("phase-limit: --handoff and an output directory are required")
     assert UNITS in ("booked", "power") and (UNITS == "booked" or UJSON is not None)
     if UJSON is not None: assert UJSON["switches"]["UNITS"] == "power" and all(v == dict(POL="larger", UNMEASURED_TAU="current", GAIN="zero", KEEP="coded", EVERY_POLICY="coded", ALLOWANCE="db", THRESHOLDS="off")[k] for k, v in UJSON["switches"].items() if k not in ("UNITS", "WORLD", "GROUND_CREDIT"))
@@ -84,7 +88,7 @@ def main(argv=None):
     EXCISED = (15, 17, 30, 31, 33, 35)
     BOOKING = {15: "bao_short", 17: "bao_long", 30: "bao_long", 31: "bao_long", 33: "bao_long", 35: "bao_long"}
 
-    record = {int(r["channel"]): r for r in H.rows("frame_analysis/table_of_record.csv") if r["role"] == "data"}
+    record = {int(r["channel"]): r for r in capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RT) if r["role"] == "data"}
     # every range the record excises, and the channels, not excised, that carry one: the limit is evaluated on all of them
     EXCISED_RANGES = {(ch, rng) for ch, r in record.items() for rng in RANGES if r[f"{rng}_verdict"] == "excise"}
     assert {ch for ch, r in record.items() if r["disposition"] == "excise"} == set(EXCISED)

@@ -11,13 +11,16 @@ table; and the promotion evidence (:mod:`promotion_evidence`). Then ``table_of_r
 fields are the release's (``projects/chime_bao/capture_rules/release_r5_2.json``) and whose ``producer`` names this
 repository's commit and modules in place of a source snapshot.
 
-Read-only on every input: the capture handoff, the frozen table of record (``--record-table``, 9867551a), the
+Read-only on every input: the capture handoff, the frozen table of record (``--record-table``, 9867551a; the
+robustness copy and the phase limit read it too), the ruling's v7 input (``--input-table``; by default the handoff's
+copy), the
 decision-evidence directory (``--evidence``: the B-list, the static mask and B-2's rerun), the directory of the frozen
 releases (``--releases``: revisions 5 and 5.1, which the bounds table and the promotion evidence compare with) and the
 survey-duration compute run (``--duration-reference``).
 
 usage: rfisher records capture-release --rule r5_2 --handoff DIR --record-table TABLE --evidence DIR --releases DIR
-                                       --duration-reference DIR --rel DIR --run DIR [--credit-reading r3|r2] [--tables-only]
+                                       --duration-reference DIR --rel DIR --run DIR [--input-table TABLE]
+                                       [--credit-reading r3|r2] [--tables-only]
 """
 import contextlib, csv, datetime, glob, hashlib, io, json, math, os, shutil, sys
 from importlib.resources import files as _files
@@ -62,7 +65,7 @@ def main(argv=None):
         return d
     rule = opt("--rule", RULE); handoff_dir = opt("--handoff"); RECORD = opt("--record-table"); EVID = opt("--evidence")
     RELEASES = opt("--releases"); DUR = opt("--duration-reference"); REL = opt("--rel"); RUN = opt("--run"); project = opt("--project")
-    reading = opt("--credit-reading")
+    reading = opt("--credit-reading"); INPUT = opt("--input-table")
     TABLES_ONLY = "--tables-only" in a
     if TABLES_ONLY: a.remove("--tables-only")
     if a: raise SystemExit(f"capture-release: unknown arguments {a}")
@@ -87,7 +90,10 @@ def main(argv=None):
     B2R51 = os.path.join(EVID, "b_list", "B-2", "r51"); EVB = os.path.join(EVID, "b_list")
     assert os.path.abspath(REL) not in (R5, R51REL), "the frozen releases are only read"
     H = capture_handoff.open_handoff(handoff_dir)
-    IN = os.path.join(handoff_dir, "frame_analysis", "table_of_record_before_amendment8.csv"); H.data("frame_analysis/table_of_record_before_amendment8.csv")
+    if INPUT is None:
+        IN = os.path.join(handoff_dir, "frame_analysis", "table_of_record_before_amendment8.csv"); H.data("frame_analysis/table_of_record_before_amendment8.csv")
+    else:
+        IN = INPUT; capture_handoff.table_rows(H, "frame_analysis/table_of_record_before_amendment8.csv", IN)
     assert sha(RECORD) == RECORD_SHA
     os.makedirs(RUN, exist_ok=True); os.makedirs(REL, exist_ok=True)
     R = capture_ruling.main
@@ -125,10 +131,12 @@ def main(argv=None):
     C24FLAG = ["--ch24", f"{RUN}/ch24_a18.json"]
     if not CREDIT:
         pl = os.path.join(REL, "phase_limit_a18"); os.makedirs(pl, exist_ok=True)
-        run(phase_limit.main, ["--handoff", handoff_dir, pl, "--units", "power", "--units-json", f"{RUN}/units_only.json", "--a18-json", f"{RUN}/a18.json"],
+        run(phase_limit.main, ["--handoff", handoff_dir, pl, "--units", "power", "--units-json", f"{RUN}/units_only.json", "--a18-json", f"{RUN}/a18.json",
+                               "--record-table", RECORD],
             os.path.join(pl, "phase_limit_a18.log"))
         for f in ("phase_limit_ranges.csv", "phase_limit_classes.csv"): os.replace(os.path.join(pl, f), os.path.join(pl, f.replace(".csv", "_a18.csv")))
-        run(robustness.main, ["--handoff", handoff_dir, os.path.join(REL, "robustness_a18.csv"), "--a18", f"{RUN}/a18.json", *C24FLAG, *(["--variant-labels"] if R51 else [])],
+        run(robustness.main, ["--handoff", handoff_dir, os.path.join(REL, "robustness_a18.csv"), "--a18", f"{RUN}/a18.json", *C24FLAG, *(["--variant-labels"] if R51 else []),
+                              "--record-table", RECORD],
             f"{RUN}/robustness_a18.log")
         run(duration.main, [f"{RUN}/a18.json", REL, *C24FLAG, "--duration-reference", DUR], f"{RUN}/sensitivity_a18.stdout")
         shutil.move(os.path.join(REL, "sensitivity_a18.log"), os.path.join(RUN, "sensitivity_a18.log"))

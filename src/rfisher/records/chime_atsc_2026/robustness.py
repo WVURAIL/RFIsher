@@ -27,7 +27,10 @@ booking range above the control floor (its reading would be priced at the 3e-5 a
 
 The release's ``robustness_credit_a18.py``, with its logic unchanged; the frame-analysis tables and the archive shares
 come from the capture handoff.
-usage: rfisher records robustness --handoff DIR <output csv> [--a18 A18.json] [--ch24 CH24.json] [--variant-labels]"""
+With --record-table TABLE the table of record is read from TABLE (the table written in the same run) in place of the
+handoff's copy.
+usage: rfisher records robustness --handoff DIR <output csv> [--a18 A18.json] [--ch24 CH24.json] [--variant-labels]
+                                  [--record-table TABLE]"""
 import csv, json, re
 
 import numpy as np
@@ -42,7 +45,7 @@ def main(argv=None):
     _h = [argv[i + 1] for i, x in enumerate(argv) if x == "--handoff"]
     if not _h: raise SystemExit("robustness: --handoff is required")
     H = capture_handoff.open_handoff(_h[0])
-    _pos = [x for i, x in enumerate(argv) if i > 0 and x not in ("--handoff", "--a18", "--ch24", "--variant-labels") and argv[i - 1] not in ("--handoff", "--a18", "--ch24")]
+    _pos = [x for i, x in enumerate(argv) if i > 0 and x not in ("--handoff", "--a18", "--ch24", "--variant-labels", "--record-table") and argv[i - 1] not in ("--handoff", "--a18", "--ch24", "--record-table")]
     if len(_pos) != 1: raise SystemExit("robustness: one output csv is required")
     OUT = _pos[0]
     A18 = json.load(open(argv[argv.index("--a18") + 1])) if "--a18" in argv else None
@@ -52,7 +55,8 @@ def main(argv=None):
     RANGES = {"bao_short": [(0, 32), (0, 64)], "bao_long": [(0, 128), (0, 255), (1, 0), (2, 0), (3, 0)]}
     SCIENCE = ["20260916162300", "20260917040230", "20260917090230", "20260917140230"]
     tor = {}
-    for r in H.rows("frame_analysis/table_of_record.csv"):
+    RT = argv[argv.index("--record-table") + 1] if "--record-table" in argv else None
+    for r in capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RT):
         ch = int(r["channel"])
         if r["role"] != "pilot" and ch not in tor: tor[ch] = r
     shares = {}

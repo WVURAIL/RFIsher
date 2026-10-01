@@ -287,6 +287,8 @@ def response_main(argv=None, prog: str = "rfisher response") -> int:
 # The capture records keep the release producer's own argument handling:
 # each module's main(argv) reads its arguments and prints its usage on --help.
 CAPTURE_RECORDS = {
+    "capture-handoff": ("capture_oc", "the capture handoff, with the detector's "
+                        "readings from pilot-proxy's capture output"),
     "table-of-record": ("table_of_record", "the table of record before "
                         "amendment 8 (v7) from the capture handoff"),
     "capture-ruling": ("capture_ruling", "the capture ruling under a rule "
