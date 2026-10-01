@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from capture_golden import record_input
 from test_capture_handoff import OBJECTS, _key, _value
 
 from rfisher.records.chime_atsc_2026 import capture_handoff as ch
@@ -54,14 +55,19 @@ def _operating_characteristic(handoff: Path, root: Path) -> Path:
     eta = _read(handoff, "ladder_eta.csv")
     bands = sorted({int(r["channel"]) for r in eta})
     cols = [f"eta_{q}_{b}" for b in oc.BANKS for q in ch.QS]
+    board = {int(r["channel"]): r for r in _read(handoff, "board_detector.csv")}
+    bcols = ["board_G_nocredit", "board_tau_quality", "board_tau_booked_s"]
     summary = []
-    for band in bands:
-        row = {"band_id": band, **{c: "" for c in cols}}
+    for band in sorted(set(bands) | set(board)):
+        row = {"band_id": band, **{c: "" for c in cols + bcols}}
         for r in eta:
             if int(r["channel"]) == band:
                 row[f"eta_{r['policy']}_{r['bank']}"] = r["eta"]
+        if band in board:
+            row.update(board_G_nocredit=repr(float(board[band]["G_nocredit"])), board_tau_quality=board[band]["tau_quality"],
+                       board_tau_booked_s=board[band]["tau_booked_s"])
         summary.append(row)
-    _write(root / "capture_oc_summary.csv", ["band_id"] + cols, summary)
+    _write(root / "capture_oc_summary.csv", ["band_id"] + cols + bcols, summary)
     table = []
     for r in _read(handoff, "dump_q.csv"):
         science = r["event"] in ch.SCIENCE
@@ -101,6 +107,10 @@ def test_the_built_handoff_reads_back_the_golden(capture_handoff_dir, built):
     _, out = built
     for name in ("ladder_eta.csv", "tau_bounds.csv"):
         assert (out / name).read_bytes() == (capture_handoff_dir / name).read_bytes(), name
+    board = [(r["channel"], r["tau_quality"], r["tau_booked_s"], float(r["G_nocredit"]))
+             for r in _read(capture_handoff_dir, "board_detector.csv")]
+    assert [(r["channel"], r["tau_quality"], r["tau_booked_s"], float(r["G_nocredit"]))
+            for r in _read(out, "board_detector.csv")] == board
     science = {(r["channel"], r["event"], r["bank"]): r["q_median"] for r in _read(capture_handoff_dir, "dump_q.csv")
                if r["event"] in ch.SCIENCE}
     assert {(r["channel"], r["event"], r["bank"]): r["q_median"] for r in _read(out, "dump_q.csv")} == science
@@ -176,12 +186,32 @@ def test_what_the_reader_refuses(capture_handoff_dir, tmp_path):
         oc.build(_operating_characteristic(capture_handoff_dir, tmp_path / "oc4"), capture_handoff_dir, out)
 
 
-def test_the_record_tables_can_be_given_explicitly(capture_handoff_dir, tmp_path):
+def test_the_record_tables_are_explicit_inputs(capture_handoff_dir, tmp_path):
     h = ch.open_handoff(capture_handoff_dir)
     rel = "frame_analysis/table_of_record.csv"
+    assert not any(h.has(r) for r in ch.RECORD_FILES)
+    with pytest.raises(ch.HandoffError, match="explicit input"):
+        ch.table_rows(h, rel, None)
     copy = tmp_path / "table_of_record.csv"
-    copy.write_bytes((capture_handoff_dir / rel).read_bytes())
-    assert ch.table_rows(h, rel, copy) == ch.table_rows(h, rel)
+    copy.write_bytes(record_input("table_of_record.csv").read_bytes())
+    assert len(ch.table_rows(h, rel, copy)) == 368
     copy.write_text("channel,role\n14,data\n")
     with pytest.raises(ch.HandoffError, match="columns differ"):
         ch.table_rows(h, rel, copy)
+
+
+def test_a_handoff_holding_a_record_table_is_refused(capture_handoff_dir, tmp_path):
+    import shutil
+    root = tmp_path / "handoff"
+    shutil.copytree(capture_handoff_dir, root)
+    data = record_input("table_of_record.csv").read_bytes()
+    (root / "frame_analysis" / "table_of_record.csv").write_bytes(data)
+    m = json.loads((root / "manifest.json").read_text())
+    m["files"]["frame_analysis/table_of_record.csv"] = {"sha256": hashlib.sha256(data).hexdigest()}
+    (root / "manifest.json").write_text(json.dumps(m))
+    with pytest.raises(ch.HandoffError, match="explicit inputs"):
+        ch.open_handoff(root)
+    assert ch.open_handoff(root, measurements=True).has("frame_analysis/table_of_record.csv")
+    built = tmp_path / "built"
+    oc.build(_operating_characteristic(capture_handoff_dir, tmp_path / "oc"), root, built)
+    assert not (built / "frame_analysis" / "table_of_record.csv").exists()

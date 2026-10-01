@@ -12,14 +12,13 @@ fields are the release's (``projects/chime_bao/capture_rules/release_r5_2.json``
 repository's commit and modules in place of a source snapshot.
 
 Read-only on every input: the capture handoff, the frozen table of record (``--record-table``, 9867551a; the
-robustness copy and the phase limit read it too), the ruling's v7 input (``--input-table``; by default the handoff's
-copy), the
+robustness copy and the phase limit read it too), the ruling's v7 input (``--input-table``, fd718463), the
 decision-evidence directory (``--evidence``: the B-list, the static mask and B-2's rerun), the directory of the frozen
 releases (``--releases``: revisions 5 and 5.1, which the bounds table and the promotion evidence compare with) and the
 survey-duration compute run (``--duration-reference``).
 
-usage: rfisher records capture-release --rule r5_2 --handoff DIR --record-table TABLE --evidence DIR --releases DIR
-                                       --duration-reference DIR --rel DIR --run DIR [--input-table TABLE]
+usage: rfisher records capture-release --rule r5_2 --handoff DIR --record-table TABLE --input-table TABLE --evidence DIR
+                                       --releases DIR --duration-reference DIR --rel DIR --run DIR
                                        [--credit-reading r3|r2] [--tables-only]
 """
 import contextlib, csv, datetime, glob, hashlib, io, json, math, os, shutil, sys
@@ -74,8 +73,9 @@ def main(argv=None):
     if TABLES_ONLY: a.remove("--tables-only")
     if a: raise SystemExit(f"capture-release: unknown arguments {a}")
     if rule != RULE: raise SystemExit(f"capture-release: the release of record is {RULE}; its earlier revisions are frozen")
-    if not all((handoff_dir, RECORD, EVID, RELEASES, DUR, REL, RUN)):
-        raise SystemExit("capture-release: --handoff, --record-table, --evidence, --releases, --duration-reference, --rel and --run are required")
+    if not all((handoff_dir, RECORD, INPUT, EVID, RELEASES, DUR, REL, RUN)):
+        raise SystemExit("capture-release: --handoff, --record-table, --input-table, --evidence, --releases, --duration-reference, --rel "
+                         "and --run are required")
     if reading not in (None, "r3", "r2"): raise SystemExit("capture-release: --credit-reading is r3 or r2")
     CREDIT = reading is not None   # only the rulings, channel 24 and the dispositions and thresholds (a credit reading of the release)
     if CREDIT: assert TABLES_ONLY, "a credit reading is built with --tables-only"
@@ -94,10 +94,7 @@ def main(argv=None):
     B2R51 = os.path.join(EVID, "b_list", "B-2", "r51"); EVB = os.path.join(EVID, "b_list")
     assert os.path.abspath(REL) not in (R5, R51REL), "the frozen releases are only read"
     H = capture_handoff.open_handoff(handoff_dir)
-    if INPUT is None:
-        IN = os.path.join(handoff_dir, "frame_analysis", "table_of_record_before_amendment8.csv"); H.data("frame_analysis/table_of_record_before_amendment8.csv")
-    else:
-        IN = INPUT; capture_handoff.table_rows(H, "frame_analysis/table_of_record_before_amendment8.csv", IN)
+    IN = INPUT; capture_handoff.table_rows(H, "frame_analysis/table_of_record_before_amendment8.csv", IN)
     assert sha(RECORD) == RECORD_SHA
     os.makedirs(RUN, exist_ok=True); os.makedirs(REL, exist_ok=True)
     R = capture_ruling.main
@@ -295,7 +292,7 @@ def main(argv=None):
     # credit ("r2"), built here into credit_readings/, and the post-processing sensitivity is computed against them
     for k in ("r3", "r2"):
         d = os.path.join(REL, "credit_readings", k); shutil.rmtree(d, ignore_errors=True)
-        run(main, ["--rule", RULE, "--handoff", handoff_dir, "--record-table", RECORD, "--evidence", EVID, "--releases", RELEASES, "--duration-reference", DUR,
+        run(main, ["--rule", RULE, "--handoff", handoff_dir, "--record-table", RECORD, "--input-table", IN, "--evidence", EVID, "--releases", RELEASES, "--duration-reference", DUR,
                    "--rel", d, "--run", os.path.join(RUN, f"credit_{k}"), "--tables-only", "--credit-reading", k, *(["--project", project] if project else [])],
             os.path.join(RUN, f"credit_{k}.log"))
     run(postprocessing.main, ["--handoff", handoff_dir, f"{RUN}/a18.json", f"{RUN}/a18_g1.json", os.path.join(REL, "dispositions_a18.csv"),
@@ -345,12 +342,12 @@ def main(argv=None):
     PROMO = promotion_evidence.write(REL, B2R51, EVB, A, C24, rev=REV, r51_rel=(None if OLDCREDIT else R51REL), evid=EVID, r5=R5)
     print("item 18 as coded:", PROMO["coded"], "under B-2's admissible grid:", PROMO["grid"])
     if TABLES_ONLY: print("tables:", REL); return 0
-    write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUTS, project)
+    write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUTS, project, IN)
     print("release:", REL)
     return 0
 
 
-def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUTS, project=None):
+def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUTS, project=None, INPUT=None):
     """MANIFEST.json: the release's prose and fixed fields, then what this build read and wrote."""
     doc = _release_doc(project); fixed = doc["fields"]
     assert fixed["r5_1"]["ruling_switches"] == {k: A["switches"][k] for k in fixed["r5_1"]["ruling_switches"]}
@@ -361,6 +358,7 @@ def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUT
     inputs = {f"handoff/{k}": v["sha256"] for k, v in sorted(H.files.items())}
     inputs["handoff/manifest.json"] = sha(os.path.join(handoff_dir, "manifest.json"))
     inputs[RECORD] = sha(RECORD)
+    if INPUT is not None: inputs[INPUT] = sha(INPUT)
     for p in PE_INPUTS + tuple(sorted(glob.glob(os.path.join(EVID, "b_list", "B-2", "r51", "*.csv")) + glob.glob(os.path.join(EVID, "b_list", "B-2", "*.csv")))):
         if os.path.isfile(p): inputs[p] = sha(p)
     for rel in ("capture_ruling_a19_2026-09-25_r5/run/a18.json", "capture_ruling_a19_2026-09-25_r5/dispositions_a18.csv",
@@ -373,10 +371,10 @@ def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUT
     computed = dict(built=datetime.datetime.now().isoformat(timespec="seconds"), python=sys.version.split()[0], interpreter=sys.executable,
                     switches_a18=A["switches"],
                     producer=dict(provenance.producer_identity(), modules={m.__name__: sha(m.__file__) for m in MODULES}),
-                    commands=[(f"rfisher records capture-release --rule {RULE} --handoff <handoff> --record-table <table of record> --evidence <evidence>"
-                               f" --releases <releases> --duration-reference <duration> --rel <release> --run <run>   (this release)"),
-                              ("rfisher records capture-ruling --rule r5_2 --json a18.json --thresholds thresholds.csv --input <handoff>/frame_analysis/"
-                               "table_of_record_before_amendment8.csv --handoff <handoff> --out a18_full.csv --ch33-rescan"),
+                    commands=[(f"rfisher records capture-release --rule {RULE} --handoff <handoff> --record-table <table of record> --input-table <v7 table>"
+                               f" --evidence <evidence> --releases <releases> --duration-reference <duration> --rel <release> --run <run>   (this release)"),
+                              ("rfisher records capture-ruling --rule r5_2 --json a18.json --thresholds thresholds.csv --input "
+                               "<v7 table> --handoff <handoff> --out a18_full.csv --ch33-rescan"),
                               "rfisher records capture-release ... --tables-only --credit-reading r3   (and r2)"],
                     inputs=inputs, datasets=dict(handoff=H.manifest.get("inputs", {}), note="the reduced dumps, products and lanes the handoff was derived from"),
                     files=files,

@@ -6,8 +6,10 @@ products, channel 33's rescan, the channel 24 lane, the reduced dumps and the
 archive ledger. The records here read one directory instead, in the layout
 ``capture_handoff_measurements`` version 0 (``manifest.json``):
 
-- ``frame_analysis/``, ``stokes_i/``, ``board_final.csv``, ``cohort2020/``,
-  ``phasor/phasor14.csv.gz``: byte copies of the detector's measurement tables;
+- ``frame_analysis/``, ``stokes_i/``, ``cohort2020/``, ``phasor/phasor14.csv.gz``: byte copies of the detector's
+  measurement tables;
+- ``board_detector.csv``: the archive's gain bound per channel (the channel ruling's tau quality, booked tau and
+  ``G_nocredit``, the columns the detector reads from it);
 - ``ladder_eta.csv``: each rung's archive threshold per channel (the
   ``higher`` quantile of Q over the band's valid frames), on the nominal bank
   and on channel 33's measured-marker bank;
@@ -18,6 +20,11 @@ archive ledger. The records here read one directory instead, in the layout
 - ``phasor/raw_epochs.json``: the reference-free class means of the reduced
   dumps the phase limit reads;
 - ``archive_shares.json``: the archive ledger's booked shares per channel.
+
+The record's own tables (the table of record and its v7 input), the BAO-basis coherence times (``gain_bao.csv``) and
+the channel ruling's board are not measurements of the capture: the records take them as explicit inputs
+(``--record-table``, ``--input-table``, ``--gain-bao``), and a handoff that holds one of them is refused
+(:data:`RECORD_FILES`); a measurement handoff of the earlier layout is read only to build the handoff from.
 
 Every float the derivation computed is a ``repr`` string or a JSON number, so
 it reads back bit for bit. :class:`CaptureHandoff` checks the schema, the
@@ -56,6 +63,9 @@ TAU_FILES = {(0, 1): "cadence_tau.csv", (0, 32): "cadence_tau_ns32.csv", (0, 64)
              (2, 0): "cadence_tau_ew2.csv", (3, 0): "cadence_tau_ew3.csv"}
 CLS_NAME = {(0, 1): "ns1", (0, 8): "ns8", (0, 32): "ns32", (0, 64): "ns64", (0, 128): "ns128", (0, 255): "ns255",
             (1, 0): "ew1", (1, 32): "ew1ns32", (2, 0): "ew2", (3, 0): "ew3"}
+# files of the earlier layout that are not measurements of the capture: the records take them as explicit inputs
+RECORD_FILES = ("frame_analysis/table_of_record.csv", "frame_analysis/table_of_record_before_amendment8.csv",
+                "frame_analysis/gain_bao.csv", "board_final.csv")
 # the lane settings the releases read (a19_inputs.tau_lower_bounds(censor, source, calibrate))
 BOUND_SETTINGS = {(False, "summary", False): "r5", (True, "fits", True): "r5_1"}
 
@@ -77,6 +87,7 @@ HEADERS = {
     "gain_bao.csv": "channel,bins,status,tau_c_s,tau_c_high_s,G,basis,ew1,ew2,ew3",
     "lag_coherence_tenclasses_D.csv": "channel,cls,bins,a,b,lag_s,lag_class,rho,rho_noise,n_bins",
     "pilot_to_inband.csv": "channel,pilot_A_long,inband_A_long,correction_db,usable,strong",
+    "board_detector.csv": "channel,tau_quality,tau_booked_s,G_nocredit",
     "board_final.csv": ("channel,era,first_blocker_record,archived_refusal,tau_quality,tau_booked_s,G_nocredit,G_table,"
                         "table_credit_dB,floor_evidence,floor_db,lambda_q,best_policy,tie_note,retention,exposure_cost,"
                         "kept,A,R_q_nocredit,gap_dB_nocredit,gap_dB_nocredit_15bin,R_q_table,gap_dB_table,G1_R_q,"
@@ -111,7 +122,7 @@ def _header_key(rel: str) -> str:
 class CaptureHandoff:
     """One handoff directory, checked on open; :attr:`opened` lists what was read."""
 
-    def __init__(self, directory, *, borrowed: bool = False):
+    def __init__(self, directory, *, borrowed: bool = False, measurements: bool = False):
         self.root = Path(directory)
         path = self.root / "manifest.json"
         if not path.is_file():
@@ -121,6 +132,10 @@ class CaptureHandoff:
             raise HandoffError(f"{self.root}: schema {self.manifest.get('schema')!r} version "
                                f"{self.manifest.get('schema_version')!r}, expected {SCHEMA!r} {SCHEMA_VERSION}")
         self.files = self.manifest["files"]
+        held = [r for r in RECORD_FILES if r in self.files]
+        if held and not measurements:
+            raise HandoffError(f"{self.root}: holds {held}, which the records take as explicit inputs, not as "
+                               "measurements of the capture")
         self.borrowed = borrowed
         self.opened: list[str] = []
         self.check_constants()
@@ -169,15 +184,17 @@ class CaptureHandoff:
         return json.loads(self.text(rel))
 
 
-def open_handoff(directory, *, borrowed: bool = False) -> CaptureHandoff:
-    return CaptureHandoff(directory, borrowed=borrowed)
+def open_handoff(directory, *, borrowed: bool = False, measurements: bool = False) -> CaptureHandoff:
+    """The capture handoff at ``directory``; ``measurements`` also reads one of the earlier layout, which held the
+    record's own tables (only to build a handoff from it)."""
+    return CaptureHandoff(directory, borrowed=borrowed, measurements=measurements)
 
 
-def table_rows(h: CaptureHandoff, rel: str, path=None) -> list[dict]:
-    """The rows of one of the record's own tables (the table of record, its v7 input): the handoff's copy, or the file
-    at ``path`` (the table written in the same run), its header checked as the handoff's."""
+def table_rows(h: CaptureHandoff, rel: str, path) -> list[dict]:
+    """The rows of one of the record's own tables (the table of record, its v7 input, the BAO-basis coherence times)
+    from the file at ``path``, its header checked as the record's (:data:`HEADERS`). ``rel`` names the table."""
     if path is None:
-        return h.rows(rel)
+        raise HandoffError(f"{rel}: the records take this table as an explicit input, not from the handoff")
     with open(path, newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         rows = list(reader)

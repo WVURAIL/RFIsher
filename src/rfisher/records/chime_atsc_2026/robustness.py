@@ -27,10 +27,9 @@ booking range above the control floor (its reading would be priced at the 3e-5 a
 
 The release's ``robustness_credit_a18.py``, with its logic unchanged; the frame-analysis tables and the archive shares
 come from the capture handoff.
-With --record-table TABLE the table of record is read from TABLE (the table written in the same run) in place of the
-handoff's copy.
-usage: rfisher records robustness --handoff DIR <output csv> [--a18 A18.json] [--ch24 CH24.json] [--variant-labels]
-                                  [--record-table TABLE]"""
+The table of record is read from --record-table TABLE (the frozen table, or the table written in the same run).
+usage: rfisher records robustness --handoff DIR --record-table TABLE <output csv> [--a18 A18.json] [--ch24 CH24.json]
+                                  [--variant-labels]"""
 import csv, re
 
 import numpy as np

@@ -3,7 +3,8 @@
 The frame analysis's ``table_of_record.py``, with its logic unchanged and its inputs injected. The tolerances are the
 vendored references (:mod:`rfisher.tolerance.reference`: lambda_none from the exact-time reference, lambda_deployed and
 the suppression from the coarse-world sensitivity); the archive's gain bound, the frame residuals, the coherence times,
-the ladder thresholds and each dump's median Q come from the capture handoff (:mod:`capture_handoff`).
+the ladder thresholds and each dump's median Q come from the capture handoff (:mod:`capture_handoff`), and the BAO-basis
+coherence times from the record's ``gain_bao.csv``, an explicit input (``--gain-bao``).
 
 Per channel and policy (cal_q0.1, cal_q0.5, cal_q0.9, keep_all): the dumps that policy keeps (dump median Q at or
 below the archive's eta_q for that channel), the physical A = in-band median excess on the shortest same-polarisation
@@ -12,10 +13,11 @@ lambda_world in the world without credit and in the deployed 200 ns world (S_wor
 shelf). Disposition follows the predeclaration: keep with the loosest passing policy, excise when no policy passes with
 the deployed credit and G = 1 (bar = dB over tolerance), pilot for the detector bin.
 
-usage: rfisher records table-of-record --handoff DIR --out CSV [<dump label>=<frame_residual csv>:<event> ...]
-                                       [gain=<cadence_tau csv>] [lowbound=<frame_residual csv>,...] [bao=<gain_bao csv>]
-With no dump arguments the record's: pilot, D1, D2 and D3 on the four science dumps, gain=cadence_tau.csv, lowbound= the
-fourteen frame residuals and bao=gain_bao.csv (the command that wrote table_of_record_before_amendment8.csv, fd718463).
+usage: rfisher records table-of-record --handoff DIR --gain-bao CSV --out CSV [<dump label>=<frame_residual csv>:<event> ...]
+                                       [gain=<cadence_tau csv>] [lowbound=<frame_residual csv>,...]
+With no dump arguments the record's: pilot, D1, D2 and D3 on the four science dumps, gain=cadence_tau.csv and lowbound=
+the fourteen frame residuals (the command that wrote table_of_record_before_amendment8.csv, fd718463, with the
+record's gain_bao.csv, 7dff5619, the only file --gain-bao accepts then).
 """
 import csv, os
 import numpy as np
@@ -30,6 +32,8 @@ EPOCHS = ("20260916162300", "20260917040230", "20260917090230", "20260917140230"
           "20260917161808", "20260917162208")
 RECORD_SPECS = ([f"{label}=frame_residual_{ev}.csv:{ev}" for label, ev in SCIENCE.items()]
                 + ["gain=cadence_tau.csv", "lowbound=" + ",".join(f"frame_residual_{ev}.csv" for ev in EPOCHS), "bao=gain_bao.csv"])
+# the record's BAO-basis coherence times (the frame analysis's gain_bao.csv), the input of the command of record
+GAIN_BAO_SHA256 = "7dff5619ea34f855812834e8310835a01284a54c1f0307a0236b4408700a9cf8"
 NFFT = 16384; W = 0.390625
 PILOT = {14:844,15:829,16:813,17:798,18:783,19:767,20:752,21:736,22:721,23:706,24:690,25:675,26:660,27:644,28:629,29:614,30:598,31:583,32:568,33:552,34:537,35:521,36:506,37:491}
 POLICIES = ["cal_q0.1", "cal_q0.5", "cal_q0.9", "keep_all"]; QS = {"cal_q0.1": 0.1, "cal_q0.5": 0.5, "cal_q0.9": 0.9}
@@ -40,14 +44,20 @@ def channel_of(fid):
 def main(argv=None):
     import sys
     args = list(sys.argv[1:] if argv is None else argv)
-    handoff_dir = out = None; specs = []
+    handoff_dir = out = gain_bao = None; specs = []
     while args:
         x = args.pop(0)
         if x == "--handoff": handoff_dir = args.pop(0)
         elif x == "--out": out = args.pop(0)
+        elif x == "--gain-bao": gain_bao = args.pop(0)
         else: specs.append(x)
-    if not (handoff_dir and out):
-        raise SystemExit("table-of-record: --handoff and --out are required")
+    if not (handoff_dir and out and gain_bao):
+        raise SystemExit("table-of-record: --handoff, --gain-bao and --out are required")
+    if not specs:
+        import hashlib
+        with open(gain_bao, "rb") as fh:
+            if hashlib.sha256(fh.read()).hexdigest() != GAIN_BAO_SHA256:
+                raise SystemExit(f"table-of-record: {gain_bao} is not the record's gain_bao.csv ({GAIN_BAO_SHA256[:8]})")
     specs = specs or list(RECORD_SPECS)
     H = capture_handoff.open_handoff(handoff_dir)
     # tolerances per world (the vendored references)
@@ -55,9 +65,9 @@ def main(argv=None):
     lam_dep = {}; sup_dep = {}
     for c, r in reference.coarse_world_bands().items():
         lam_dep[int(c)] = float(r["r_tol"]); sup_dep[int(c)] = float(r["suppression_db"])
-    # the archive's gain bound per channel (board_final.csv: G_nocredit = min(tau bound, cap) / T_frame)
+    # the archive's gain bound per channel (the channel ruling's G_nocredit = min(tau bound, cap) / T_frame)
     G_arch = {}; tau_arch = {}
-    for r in H.rows("board_final.csv"):
+    for r in H.rows("board_detector.csv"):
         G_arch[int(r["channel"])] = float(r["G_nocredit"]); tau_arch[int(r["channel"])] = r["tau_quality"] + " " + r["tau_booked_s"]
     # archive ladder thresholds
     eta = capture_handoff.ladder_eta(H, "nominal")
@@ -88,7 +98,7 @@ def main(argv=None):
             continue
         if label == "bao":
             # amendment 7: BAO-basis coherence time per channel (gain_bao.csv built from the east-west classes)
-            for r in H.rows(FA + rest):
+            for r in capture_handoff.table_rows(H, FA + "gain_bao.csv", gain_bao if rest == "gain_bao.csv" else rest):
                 if r["bins"] == "inband" and r["tau_c_s"]:
                     bao_gain[int(r["channel"])] = dict(status=r["status"], tau=float(r["tau_c_s"]), G=float(r["G"]), basis=r["basis"])
             continue

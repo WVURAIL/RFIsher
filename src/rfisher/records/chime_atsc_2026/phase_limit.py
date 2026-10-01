@@ -45,10 +45,9 @@ accepted; its exclusion-side ratio columns are then named R_exclusion_* in place
 r4 (item 17): a units-only json run with --set GROUND_CREDIT=off (no ground-filter credit) is accepted; its rescue
 coherence is then the coherence a ground filter would need with no credit taken, and the log says so. A units-only json
 with the ground credit gives revision 3's (or revision 2's) output byte for byte.
-With --record-table TABLE the table of record is read from TABLE (the table written in the same run) in place of the
-handoff's copy.
-usage: rfisher records phase-limit --handoff DIR <out dir> [--units booked|power --units-json RUN.json] [--a18-json A18.json]
-                                   [--record-table TABLE]
+The table of record is read from --record-table TABLE (the frozen table, or the table written in the same run).
+usage: rfisher records phase-limit --handoff DIR --record-table TABLE <out dir> [--units booked|power --units-json RUN.json]
+                                   [--a18-json A18.json]
 
 The release's ``phase_limit_a18.py``, with its logic unchanged; the record, the frame-analysis tables, the vendored
 phasor14.csv and the class means of the reduced dumps come from the capture handoff.
