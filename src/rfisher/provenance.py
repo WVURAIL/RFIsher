@@ -1,8 +1,10 @@
 """The identity of the code that produced an output (informational).
 
 :func:`producer_identity` records the repository commit and whether the
-package's own sources are dirty (a change elsewhere in the checkout does not
-count), a digest of the package's sources, the science register's digest,
+package's own files are dirty (a modified or untracked file under the
+package counts, since the source digest reads untracked sources; a change
+elsewhere in the checkout does not), a digest of the package's sources, the
+science register's digest,
 and the sha256 of the inputs the caller names. It is written into manifests
 beside the outputs; a consumer never requires it.
 """
@@ -42,7 +44,7 @@ def producer_identity(inputs: Mapping[str, str] | None = None,
                       register_sha256: str | None = None) -> dict:
     """Commit, package-scoped dirty flag, source digest, register and inputs."""
     commit = _git("rev-parse", "HEAD")
-    status = _git("status", "--porcelain", "--untracked-files=no", "--",
+    status = _git("status", "--porcelain", "--untracked-files=all", "--",
                   str(PACKAGE))
     if register_sha256 is None:
         from . import policy

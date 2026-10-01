@@ -28,8 +28,10 @@ def quiet(fn, args):
 
 # The capture records are byte for byte under the numerics of record (numpy 2.3 and later: the r5.2 interpreter's
 # 2.3.5, 2.5 in the release's and CI's 3.12 and 3.14 jobs). An older numpy (the 3.10 job's 2.2) gives the same tables
-# but other last digits in the unrounded json; there the records still run and the byte comparison is skipped.
+# but other last digits in the unrounded json; there the tables are still compared byte for byte and only the
+# comparison of the other files is skipped.
 RECORD_NUMERICS = NumpyVersion(np.__version__) >= "2.3.0"
+TABLE_SUFFIXES = (".csv",)
 DURATION = GOLDEN.parents[1] / "records" / "survey_duration_2026-09-24"
 
 
@@ -38,6 +40,9 @@ def assert_frozen(got, expected, detail=None):
         return
     if not RECORD_NUMERICS:
         import pytest
+        if isinstance(expected, dict):
+            tables = sorted(k for k in expected if str(k).endswith(TABLE_SUFFIXES) and got.get(k) != expected[k])
+            assert not tables, f"tables differ under numpy {np.__version__}: {tables}"
         differ = sorted(k for k in expected if got.get(k) != expected[k]) if isinstance(expected, dict) else "the file"
         pytest.skip(f"byte identity is asserted under numpy >= 2.3, the numerics of record; numpy {np.__version__} "
                     f"differs in {differ}")

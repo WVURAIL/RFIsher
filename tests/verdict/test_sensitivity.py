@@ -1,8 +1,9 @@
 """Named sensitivities, and the three gates on them.
 
-(a) Mutation: with no sensitivity named, the screen, the deployable sets, R
-    and the selections are byte-identical whatever suppression the
-    sensitivity scenarios assume.
+(a) Mutation: the screen, the deployable sets, R and the selections are
+    byte-identical whatever suppression the sensitivity scenarios assume,
+    whatever suppression the rule row states, and whatever split shares the
+    detector reports.
 (b) Property: a sensitivity can only remove an excision, never add one.
 (c) Lint: no residual is multiplied by a sensitivity factor outside
     ``rfisher/verdict/sensitivity.py`` (and the named records).
@@ -20,14 +21,22 @@ from rfisher.verdict.archive import verdict_archive
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = ROOT / "projects" / "chime_bao"
-FACTOR_NAMES = ("suppression_db", "gamma", "split_share", "variance_split")
+# names of a post-processing credit or factor; outside the module that prices
+# the sensitivities, no residual is multiplied by one
+FACTOR_NAMES = ("suppression", "gamma", "split_share", "variance_split",
+                "intraday_share", "fast_share", "credit", "S_dep", "factor")
+# the record modules that carry their frozen credit readings by name: the
+# capture ruling of record and its copies, and the archive layouts' frozen
+# delay-filter scenarios
+EXEMPT_RECORDS = ("capture_ruling.py", "capture_release.py", "cohort_basis.py",
+                  "robustness.py", "compat_tables.py")
 
 
-def _run(handoff_copy, tolerances, out, suppression):
-    tol = tolerances({"29": [("none", "rule", 1000.0, 0.0),
+def _run(handoff_copy, tolerances, out, suppression, rule_suppression=0.0):
+    tol = tolerances({"29": [("none", "rule", 1000.0, rule_suppression),
                              ("deployed", "sensitivity", 900.0, suppression),
                              ("peak1", "sensitivity", 800.0, suppression / 3)],
-                      "34": [("none", "rule", 100.0, 0.0),
+                      "34": [("none", "rule", 100.0, rule_suppression),
                              ("deployed", "sensitivity", 90.0, suppression)]},
                      name=f"tolerances_{out.name}.csv")
     verdict_archive(handoff_copy.path, tol, PROJECT, out)
@@ -42,8 +51,10 @@ def test_a_changed_suppression_changes_nothing_but_the_sensitivities(
     base = _run(handoff_copy, tolerances, tmp_path / "a", 11.4)
     rng = random.Random(20260930)
     for index in range(3):
+        handoff_copy.edit(intraday_share=repr(rng.uniform(0.0, 1.0)),
+                          fast_share=repr(rng.uniform(0.0, 1.0)))
         other = _run(handoff_copy, tolerances, tmp_path / f"m{index}",
-                     rng.uniform(0.0, 60.0))
+                     rng.uniform(0.0, 60.0), rng.uniform(0.0, 60.0))
         for name in ("screen.csv", "verdict.csv", "verdict_points.csv"):
             assert other[name] == base[name], name
         assert other["sensitivity.csv"] != base["sensitivity.csv"]
@@ -90,13 +101,13 @@ def _factor_products(tree):
 
 def test_no_sensitivity_factor_is_multiplied_in_elsewhere():
     package = ROOT / "src" / "rfisher"
-    exempt = {package / "verdict" / "sensitivity.py"}
-    # The forecast defines S and its own physics; the records of the 2026
-    # capture ruling carry their frozen credit readings by name.
-    exempt_dirs = (package / "forecast", package / "records")
+    records = package / "records" / "chime_atsc_2026"
+    exempt = {package / "verdict" / "sensitivity.py"} | {
+        records / name for name in EXEMPT_RECORDS}
+    assert all(p.is_file() for p in exempt)
     found = {}
     for path in sorted(package.rglob("*.py")):
-        if path in exempt or any(d in path.parents for d in exempt_dirs):
+        if path in exempt:
             continue
         hits = list(_factor_products(ast.parse(path.read_text(
             encoding="utf-8"))))
