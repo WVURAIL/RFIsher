@@ -77,9 +77,10 @@ def test_the_committed_provenance_is_identity_v3_without_commits():
     record = json.loads(table.sidecar(COMMITTED).read_text())
     assert record["schema"] == table.IDENTITY_SCHEMA == 3
     assert record["target_years"] == 1.0
+    assert record["zeta"] == 1.0
     assert not {"git_commit", "git_dirty"} & set(_keys(record))
     assert set(record) == {
-        "schema", "target_years", "csv_sha256", "sources", "banks",
+        "schema", "target_years", "zeta", "csv_sha256", "sources", "banks",
         "profile_sha256", "science_register_sha256", "bank_source_sha256"}
     assert set(record["sources"]) == {
         "rfisher/tolerance/rule.py", "rfisher/tolerance/bands.py",
@@ -263,3 +264,9 @@ def test_verify_sees_a_one_byte_edit_to_each_kind_of_input(tmp_path):
         assert f"  {field}: recorded" in refused, (field, refused)
         path.write_bytes(original)
     assert verify().strip() == "current"
+
+
+def test_the_basis_label_names_the_models_target_time():
+    assert table.basis(_model()) == "grid_T1yr_stability_gated"
+    assert table.basis(SimpleNamespace(target_years=2.5)) \
+        == "grid_T2.5yr_stability_gated"

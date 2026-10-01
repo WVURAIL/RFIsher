@@ -204,7 +204,7 @@ def main(argv=None) -> int:
             rf_dir=args.radiofisher_dir)
     except ValueError as exc:
         parser.error(str(exc))
-    bins = response.dtv_bin_indices(bank) if args.all_dtv_bins else [
+    bins = response.report_bin_indices(bank) if args.all_dtv_bins else [
         6 if args.bin is None else args.bin]
     if (not bins or len(set(bins)) != len(bins)
             or any(ibin < 0 or ibin >= bank.nbins for ibin in bins)):

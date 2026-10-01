@@ -1,0 +1,6 @@
+{
+ "rule": "r5",
+ "base": "a18",
+ "description": "Revision 5 (amendment 19, items 34 and 35): the a18 switch set, which already carries TAU_LOWER_BOUNDS=on; channel 24 is ruled on its own 2020 measurement by the cohort-basis record.",
+ "switches": {}
+}

@@ -1,0 +1,7 @@
+{
+ "sensitivity": "g1",
+ "description": "Item 3's G = 1 sensitivity: unmeasured and refused classes at G = 1 (a class with a within-dump bound keeps its bound).",
+ "switches": {
+  "UNMEASURED_TAU": "g1"
+ }
+}

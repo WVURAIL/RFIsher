@@ -68,6 +68,12 @@ class ScienceModel(Protocol):
     year_grid: tuple[float, ...]
     maximum_tolerance_ratio: float
     scenarios: tuple[Scenario, ...]
+    # What a tolerance is a tolerance on: the residual reference (a power
+    # ratio per frame, with its noise bandwidth, frame length and feed sum)
+    # and the residual shapes the model's response describes. A handoff that
+    # declares another reference or shape is refused before any verdict.
+    r_reference: dict
+    residual_shapes: tuple[str, ...]
 
     def load(self, scenario: str) -> None:
         """Make the scenario's response available; raise if it cannot be."""

@@ -1,0 +1,156 @@
+{
+  "schema": "rfisher_selector_policy_v1",
+  "side": "science",
+  "source": {
+    "copied_from": "RFIsher src/rfisher/selection_policy.py at 7b0067bf875a20365503c0ce9c7ffdf65de682c6",
+    "file_sha256": "a997e91999f879de8c7597a51cce7b6758e5d4a8d47ddca8a80cf78d9ab8c347",
+    "snapshot_schema": "rfisher-threshold-decisions-v1",
+    "snapshot_sha256": "b36c612ca1a59c0b5e09ced129bca9e15c589fb94a7e2e3648c6ebd815b68cf7",
+    "evidence_paths": "Relative paths in evidence name files of the repository that recorded the entry; the copied entries keep the paths they had.",
+    "copied_ids": [
+      "selection.cost_plateau_ratio",
+      "selection.tie_break",
+      "selection.tolerance_equality_is_feasible"
+    ],
+    "added": [
+      "selector.archive_exclusion_gain",
+      "selector.fine_rank",
+      "selector.precedence",
+      "selector.sensitivity_limited_share",
+      "selector.unmeasured"
+    ]
+  },
+  "decisions": [
+    {
+      "id": "selection.cost_plateau_ratio",
+      "side": "science",
+      "value": 1.02,
+      "units": "cost ratio",
+      "basis": "policy",
+      "status": "provisional",
+      "rationale": "Candidates within two percent of minimum cost are treated as practically tied before residual margin breaks the tie.",
+      "evidence": [
+        "src/rfisher/thresholds.py"
+      ],
+      "sensitivity_values": [
+        1.0,
+        1.01,
+        1.02,
+        1.05
+      ]
+    },
+    {
+      "id": "selection.tie_break",
+      "side": "science",
+      "value": [
+        "systematic_residual",
+        "masked_fraction",
+        "rho",
+        "multiplier_q16"
+      ],
+      "units": "lexicographic order",
+      "basis": "policy",
+      "status": "locked",
+      "rationale": "The order favors science margin, then exposure, then the simpler rank and multiplier when forecast cost is practically tied.",
+      "evidence": [
+        "src/rfisher/thresholds.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "selection.tolerance_equality_is_feasible",
+      "side": "science",
+      "value": true,
+      "units": "rule",
+      "basis": "derivation",
+      "status": "derived",
+      "rationale": "The tolerance defines a closed upper bound, so equality passes.",
+      "evidence": [
+        "src/rfisher/thresholds.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "selector.archive_exclusion_gain",
+      "side": "science",
+      "value": {
+        "measured": "booked",
+        "bounded": 1,
+        "cap": 1
+      },
+      "units": "chain gain by chain_gain_status",
+      "basis": "policy",
+      "status": "locked",
+      "rationale": "An exclusion takes the most favorable value of an unmeasured quantity. Where the correlation time is measured, the booked gain is a measurement; where it is only bounded or at the cap, no admissible minimum is defined for the archive, so an exclusion reads G = 1 (r_sys_incoherent).",
+      "evidence": [
+        "src/rfisher/verdict/screening.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "selector.fine_rank",
+      "side": "science",
+      "value": "all",
+      "units": "background rank of the fine families",
+      "basis": "policy",
+      "status": "provisional",
+      "rationale": "The fine families the verdict reads: every rank the detector enumerates. A fixed rank (the declared order-statistic change fixes rho = 63) is a change of this value alone.",
+      "evidence": [
+        "src/rfisher/verdict/interval.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "selector.precedence",
+      "side": "science",
+      "value": [
+        "tolerance refused",
+        "detector refused",
+        "keep",
+        "excise",
+        "undetermined"
+      ],
+      "units": "ordered screen steps",
+      "basis": "policy",
+      "status": "locked",
+      "rationale": "The first step that matches decides a band: a band without a tolerance, or whose detector surface is refused, is undetermined; a keep needs a certified false-alarm limit; an excision needs every family empty and an R that does not only measure the floor.",
+      "evidence": [
+        "src/rfisher/verdict/screening.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "selector.sensitivity_limited_share",
+      "side": "science",
+      "value": 0.95,
+      "units": "share of kept frames",
+      "basis": "policy",
+      "status": "provisional",
+      "rationale": "Where the floor is not verified, an R whose least candidate keeps floor-bounded frames on this share or more measures the measurement's sensitivity, not the interference, and cannot excise.",
+      "evidence": [
+        "src/rfisher/verdict/screening.py"
+      ],
+      "sensitivity_values": [
+        0.9,
+        0.95,
+        0.99
+      ]
+    },
+    {
+      "id": "selector.unmeasured",
+      "side": "science",
+      "value": {
+        "exclude": "most_favorable",
+        "keep": "least_favorable"
+      },
+      "units": "reading of an unmeasured quantity",
+      "basis": "policy",
+      "status": "locked",
+      "rationale": "An unmeasured quantity is read at its most favorable value when excising and at its least favorable value when keeping, so neither verdict rests on an assumption in its own favor.",
+      "evidence": [
+        "src/rfisher/verdict/screening.py"
+      ],
+      "sensitivity_values": []
+    }
+  ]
+}

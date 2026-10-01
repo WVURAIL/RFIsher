@@ -1,5 +1,15 @@
 # Threshold decision register
 
+This page records the single register of RFIsher 7b0067b
+(`selection_policy`), from before the detector's choices and the science's
+were split. The science entries are now `projects/chime_bao/science_register.json`
+and `projects/chime_bao/selector_policy.json`, read through `rfisher.policy`;
+the detector's (the era definition, the within-era drift, the shelf and
+correlation treatment and the rest of the preparation) are entries of
+pilot-proxy's detector register. The modules and scripts named below
+(`selection_policy`, `preparation`, `scripts/threshold_decisions.py`) are no
+longer part of this repository.
+
 Current scientific decisions are maintained in the dissertation's `DECISION_CONTRACT.md` and `figure_src/data/channel_decisions/decisions.json`. All 23 channels remain undetermined at the masked 10-second visibility endpoint. This register documents the frozen scalar archive screen and its assumptions; it is not a physical channel ruling. Filter-credit scenarios are exploratory and do not enter the primary endpoint. See `visibility_response.md` for the explicit mean/covariance interface and its remaining physical inputs.
 
 The threshold calculation itself still has only two scientific inputs:

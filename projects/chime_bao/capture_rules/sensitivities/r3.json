@@ -1,0 +1,7 @@
+{
+ "sensitivity": "r3",
+ "description": "The credit reading with the ground-filter credit (revision 3's world): no delay filter, the ground credit taken.",
+ "switches": {
+  "GROUND_CREDIT": "on"
+ }
+}

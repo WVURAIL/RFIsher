@@ -1,11 +1,14 @@
 """The RadioFisher BAO forecast as a science model (``rfisher.science_model``).
 
 The profile (``projects/chime_bao/science_model.yaml``) declares the
-parameters, the target time, zeta, the year grid, the stability test and the
-role of each delay-filter scenario. This module supplies the rest from the
-forecast: the redshift bins of the experiment, the bins a frequency band
-overlaps, and, from the packaged response banks, the bias per unit residual,
-sigma, and the stability of the response.
+parameters, the target time, the role of each delay-filter scenario, the
+residual reference and shape the handoff must match, and the band a report
+covers by default. It names the science register entries (``register``) that
+hold zeta, the year grid and the stability test; those values are read from
+the project's register (``rfisher.policy``), their one source. This module
+supplies the rest from the forecast: the redshift bins of the experiment, the
+bins a frequency band overlaps, and, from the packaged response banks, the
+bias per unit residual, sigma, and the stability of the response.
 
 A response bank is loaded, and authenticated, only when a response is first
 asked of it, so a model that only maps bands to bins never opens a bank.
@@ -20,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from rfisher import selection_policy
+from rfisher import policy
 from rfisher.science_model import SCENARIO_ROLES, Bin, Parameters, Scenario
 
 from . import filter_scenarios
@@ -34,8 +37,22 @@ from .response import (bias_per_unit_residual, load_response_bank,
 ADAPTER = "radiofisher_bao"
 PROFILE_NAME = "science_model.yaml"
 PROFILE_KEYS = frozenset({
-    "adapter", "experiment", "cosmology", "parameters", "target_years", "zeta",
-    "year_grid", "stability", "scenarios"})
+    "adapter", "experiment", "cosmology", "parameters", "target_years",
+    "register", "scenarios", "r_reference", "residual_shapes",
+    "report_band_mhz"})
+# What the profile's ``register`` names, and the entry each must name.
+REGISTER_KEYS = {
+    "zeta": "science.systematic_budget.primary_zeta",
+    "year_grid": "archive_reference.forecast_year_grid",
+    "time_fraction": "science.response_stability.time_fraction",
+    "maximum_tolerance_ratio":
+        "science.response_stability.maximum_tolerance_ratio",
+    "systematic_gain": "transfer.systematic_gain",
+    "variance_gain": "transfer.variance_gain",
+}
+R_REFERENCE_KEYS = frozenset({"definition", "feed_sum", "frame_seconds",
+                              "noise_bandwidth_hz", "summed_terms"})
+RULE_ROLE = "rule"
 # The response banks carry no foreground term (epsilon_fg = 0): the forecast
 # prices thermal noise and nothing else.
 RESPONSE_EPSILON_FG = 0.0
@@ -44,8 +61,8 @@ COVERAGE_SLACK = 1e-10
 # The per-bin tolerance table of the four scenarios at T* = 1 year.
 TABLE_NAME = "filter_scenarios_T1yr.csv"
 TABLE_DIRECTORY = "tolerances"
-# The register values the table depends on; the profile states the same
-# values, and a test holds the two equal.
+# The register values the table depends on; their digest is the table's
+# science_register_sha256.
 REGISTER_IDS = (
     "archive_reference.three_worlds_parameters",
     "archive_reference.forecast_year_grid",
@@ -67,9 +84,9 @@ def packaged_table() -> Path:
     return Path(str(files(DATA_PACKAGE).joinpath(TABLE_DIRECTORY, TABLE_NAME)))
 
 
-def register_sha256() -> str:
+def register_sha256(project: str | Path | None = None) -> str:
     """Digest of the register values the tolerance table depends on."""
-    values = {key: selection_policy.value(key) for key in REGISTER_IDS}
+    values = {key: policy.value(key, project) for key in REGISTER_IDS}
     payload = json.dumps(values, sort_keys=True, separators=(",", ":"),
                          allow_nan=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -100,10 +117,31 @@ def load_profile(project: str | Path) -> dict:
             or profile["cosmology"] != "planck2018":
         raise ValueError(f"{path}: the response banks are chime2022 "
                          "planck2018 builds")
-    for name in ("target_years", "zeta"):
-        if not isinstance(profile[name], float):
-            raise ValueError(f"{path}: {name} must be written as a float")
+    if not isinstance(profile["target_years"], float):
+        raise ValueError(f"{path}: target_years must be written as a float")
+    if profile["register"] != REGISTER_KEYS:
+        raise ValueError(f"{path}: register must name {REGISTER_KEYS}")
+    reference = profile["r_reference"]
+    if not isinstance(reference, dict) or set(reference) != R_REFERENCE_KEYS:
+        raise ValueError(f"{path}: r_reference holds exactly "
+                         f"{sorted(R_REFERENCE_KEYS)}")
+    shapes = profile["residual_shapes"]
+    if not isinstance(shapes, list) or not shapes or not all(
+            isinstance(v, str) for v in shapes):
+        raise ValueError(f"{path}: residual_shapes is a list of names")
+    band = profile["report_band_mhz"]
+    if not (isinstance(band, list) and len(band) == 2 and all(
+            isinstance(v, float) for v in band) and band[0] < band[1]):
+        raise ValueError(f"{path}: report_band_mhz is [low, high] in MHz, "
+                         "written as floats")
     return profile
+
+
+def report_band_mhz(project: str | Path | None = None) -> tuple[float, float]:
+    """The band a report covers by default (default project: the policy's)."""
+    band = load_profile(project if project is not None
+                        else policy.default_project())["report_band_mhz"]
+    return float(band[0]), float(band[1])
 
 
 class RadioFisherBAO:
@@ -120,11 +158,20 @@ class RadioFisherBAO:
             required=tuple(data["parameters"]["required"]),
             reported=tuple(data["parameters"].get("reported") or ()))
         self.target_years = float(data["target_years"])
-        self.zeta = float(data["zeta"])
-        self.year_grid = tuple(float(value) for value in data["year_grid"])
-        self.time_fraction = float(data["stability"]["time_fraction"])
-        self.maximum_tolerance_ratio = float(
-            data["stability"]["maximum_tolerance_ratio"])
+        self.project = self.profile_path.parent
+        register = policy.load(self.project)
+        named = {key: register.value(ident)
+                 for key, ident in data["register"].items()}
+        self.zeta = float(named["zeta"])
+        self.year_grid = tuple(float(value) for value in named["year_grid"])
+        self.time_fraction = float(named["time_fraction"])
+        self.maximum_tolerance_ratio = float(named["maximum_tolerance_ratio"])
+        self.transfer_gains = {"systematic": float(named["systematic_gain"]),
+                               "variance": float(named["variance_gain"])}
+        self.r_reference = dict(data["r_reference"])
+        self.residual_shapes = tuple(data["residual_shapes"])
+        self.report_band_mhz = tuple(float(v)
+                                     for v in data["report_band_mhz"])
         scenarios = []
         for entry in data["scenarios"]:
             known = filter_scenarios.scenario(entry["name"])
@@ -142,6 +189,11 @@ class RadioFisherBAO:
                 name=known.name, role=entry["role"],
                 suppression_db=filter_scenarios.suppression_db(known.name),
                 response_source=known.bank))
+        rules = [item for item in scenarios if item.role == RULE_ROLE]
+        if len(rules) != 1 or rules[0].suppression_db != 0.0:
+            raise ValueError(
+                f"{self.profile_path}: exactly one scenario has the role "
+                f"{RULE_ROLE!r}, and it assumes no suppression (S = 0)")
         self.scenarios = tuple(scenarios)
         self.response_banks_dir = Path(
             response_banks_dir if response_banks_dir is not None
@@ -253,7 +305,7 @@ class RadioFisherBAO:
         return {
             "sources": sources,
             "profile_sha256": _sha256_file(self.profile_path),
-            "science_register_sha256": register_sha256(),
+            "science_register_sha256": register_sha256(self.project),
             "bank_source_sha256": bank_source_state()["working_tree_sha256"],
             "banks": banks,
         }

@@ -84,97 +84,24 @@ default temporary path is on a mounted Windows filesystem:
 TMPDIR=/tmp python -m pytest tests/ -q
 ```
 
-## Product-dependent work
+## Detector outputs
 
-Point the product registry at the archived survey products the shipped
-tables were built from (the complete-23 set of 2026-08-20; the September
-2026 rebuild is beside it under `~/rail/products/chime_pilots_rebuild_20260829/products/_per_pilot`
-and is read by the same code):
-
-```bash
-export RFISHER_PRODUCT_DIRS=~/rail/products/per_pilot_2026-08-20_complete23
-```
+RFIsher reads no survey product. pilot-proxy characterizes each band of an
+archive run into a directory (`manifest.json`, `oc_table.csv`,
+`oc_summary.csv`, schema `operating_characteristic` v1, with its `tables/`,
+`channels/` and `ledger/`), and the capture campaign's measurements enter as a
+capture handoff (`manifest.json`, schema `capture_handoff_measurements` v0).
+Their readers check every file's sha256 against the manifest, the columns
+against the schema, and the reference residual and band edges against the
+science profile, and refuse a mismatch.
 
 The shipped tables, evidence ledgers and release roots live in the results
 tree outside the repository (see [releases.md](releases.md)); point the
-number gates and the release regression tests at it, or they skip:
+release regression tests at it, or they skip:
 
 ```bash
 export RFISHER_OUT=~/rail/results/forecasts/rfisher_out_c1302f4
 ```
-
-The archived and current pilot-proxy products can share filename patterns
-while using different schemas. Confirm the intended product set before a
-threshold, coherence, or dissertation calculation.
-
-Audit every threshold choice and its evidence state with:
-
-```bash
-python scripts/threshold_decisions.py
-python scripts/threshold_decisions.py --check-operational
-```
-
-The operational check remains nonzero while any required calibration choice
-is provisional, open, or conditional. A prepared histogram family embeds the
-full decision snapshot and digest; a family made under a different snapshot
-is refused.
-
-The strict preparation path requires the minimum Q16 multiplier that keeps
-each accepted frame at every supported rank. Those boundaries must be derived
-from the exact per-frame target, lower-reference, and upper-reference
-`fine_power_u64` terms. The current archived products do not contain those
-fields, and their floating fine summary cannot reproduce the integer
-comparison. Rerun detector processing with the exact fields retained before
-attempting an operational fine-threshold export.
-
-Build the versioned residual-score interchange bundle from a current v5
-per-pilot product with:
-
-```bash
-PYTHONPATH=src python3 scripts/build_residual_score_bundle.py 844.npz \
-  --selected-frames accepted.npy \
-  --anchor-bin "${ANCHOR_BIN}" \
-  --designated-half-width "${DESIGNATED_HALF_WIDTH}" \
-  --bulk-mask null-bulk.npy \
-  --output 844-residual-scores.npz
-```
-
-Both NPY inputs must be explicit boolean vectors. The driver does not infer an
-era selection, pilot anchor, width, guard, or null bulk from the product. It
-validates the local v5 exact-power, timing, source-scope, and acquisition
-provenance contract without importing the producing package. Historical f9
-rehearsal products predate the complete per-unit provenance and are refused as
-final inputs. An existing output is also refused unless `--overwrite` is
-given.
-
-The bundle manifest records the package version and labeled SHA-256 digests of
-the exact scorer sources. Loading under a different scorer is refused, even if
-the outer bundle was rewritten with a self-consistent content digest. Rebuild
-the bundle from its recorded source product instead of relabeling it.
-
-Reload the authenticated bundle with
-`rfisher.residual_scores.load_residual_score_bundle`. Its
-`prepare_threshold_family` method supplies the exact all-rank boundaries and
-stored frame metadata to strict preparation after the caller provides the
-additive systematic and variance residuals, calibration evidence, era state,
-and stability settings.
-
-`preparation.prepare_threshold_family` expects already accepted rows from the
-latest era. It requires every rank through the minimum valid bulk count,
-derives each exact Q16 candidate grid, and splits the rows at the calendar
-midpoint. Its support span is elapsed time between the earliest and latest row
-in each half; 270 elapsed days does not mean 270 days with observations.
-`assess_histogram_stability` only compares supplied half-histograms.
-
-Without a block plan, the resulting drift check is deterministic and supports
-screening only. Operational preparation also records acquisition or
-sidereal-day block IDs, a minimum block count per half, seed, replicate count,
-and one-sided interval coverage. It resamples whole blocks within each half and
-requires the surface-maximum cost and systematic-residual ratio bounds to fit
-inside the caller-declared limits. The per-half retained-frame floor and both
-limits still require scientific justification. An explicit screening
-selection retains its claim status, source identity, and policy digest
-alongside the numerical result.
 
 ## Rebuild the shipped banks
 
@@ -280,48 +207,86 @@ replacement banks in a staging directory, and authenticate them with
 replace the packaged ones. A changed source digest requires a new
 calculation, not new metadata on old matrices.
 
-### Corrected retrospective archive analysis
+### Archive verdict and release layouts
 
-Use a Python environment containing `h5py` and the local `pilot-proxy` source;
-the official driver refuses missing health-audit support. The archive reads
-the packaged tolerance table; `rfisher_results.archive.worlds.tolerances(
-rebuild=True)` rebuilds it into a new cache path and never replaces a table
-whose bytes would change.
-Every required bin/parameter must be accepted at the declared one-on-sky-year
-target; a refusal cannot borrow a different integration time.
-
-Run into a new directory:
+Given a characterization directory `CHAR` written by pilot-proxy, price its
+bands and screen them:
 
 ```bash
-export PYTHONPATH="src:../RadioFisher:../pilot-proxy/src"
-export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
-python -m rfisher_results.cli archive \
-  --products ../products/chime_pilots_rebuild_20260829/products/_per_pilot \
-  --out ../results/NEW_ARCHIVE_RELEASE --workers 6 --replicates 1000 --seed 20260907
-python -m rfisher_results.cli archive-report \
-  --results ../results/NEW_ARCHIVE_RELEASE
+rfisher tolerance bands --project projects/chime_bao --bands CHAR/manifest.json --out TOL
+rfisher verdict archive --project projects/chime_bao --characterization CHAR \
+  --tolerances TOL --out SCIENCE
 ```
 
-Freeze source and bank bytes throughout the run. Retain the four bank hashes
-and build identities, tolerance CSV and sidecar, package versions, source
-commits and any uncommitted patch beside the analysis ledger. Check the source
-and input identities again after execution, require all 23 channels without
-worker errors, and compare health denominators, fitted preparation, support,
-refusals and policy-specific residual/exposure values with the historical run.
+`verdict.csv` holds each family's deployable set and the band's union,
+`verdict_points.csv` the rule scenario's priced candidates, `screen.csv` the
+screen's step and outcome, `sensitivity.csv` the named sensitivities, and
+`manifest.json` the sha256 of every file read and the producer's identity.
 
-A new run records `worlds_contract` for its report captions. Historical ledgers
-without that field remain explicitly unspecified when rendered; the renderer
-does not assign them a new target-time convention. Delay credits are
-hypothetical in either case. The class-floor table and its summary price the
-same recorded coarse-frontier allowance against recorded scenario tolerances.
-The floor-only flag in evaluation tables is computed from the evaluation
-allowance alone; a different calibration policy cannot supply that label.
+The two frozen archive releases are written in their own layouts from the same
+inputs:
 
-This release procedure establishes computational provenance, not physical
-calibration. Independent transmitter-state records, selected-residual coverage,
-complex-visibility covariance, filter response and retained science information
-remain required for a physical recovery claim. Possible CANFAR inputs for those
-checks are an open data-inventory task in the dissertation's Chapter 9 stub.
+```bash
+rfisher records archive-layout --release archive_author_eras_2026_09_23 \
+  --characterization CHAR --tolerances TOL --project projects/chime_bao --out RELEASE
+```
+
+(`archive_no_split_2026_09_24_r2` for the release without the variance split.)
+A band whose selection finds a feasible point is refused, because its
+evaluation-block replay is the detector's and the handoff does not carry it.
+
+### Capture ruling of record
+
+The capture records read a capture handoff `HANDOFF` (the detector's
+measurement tables of the 2026 matched capture, in the layout
+`capture_handoff_measurements` version 0). Its three detector readings (each
+rung's archive threshold, each science dump's median Q and the within-dump
+bounds on tau) can be taken from pilot-proxy's capture output
+(`pilot-proxy capture oc-table`, the layout
+`capture_operating_characteristic` version 1); the other files come from a
+measurement handoff `MEASUREMENTS`, since their lanes (the channel 24 lane,
+the reduced dumps' class means and the archive shares) are not run by
+pilot-proxy:
+
+```bash
+rfisher records capture-handoff --oc OC_DIR/capture --measurements MEASUREMENTS --out HANDOFF
+```
+
+From the handoff, the table of record before amendment 8 and the table of
+record itself:
+
+```bash
+rfisher records table-of-record --handoff HANDOFF --out table_of_record_v7.csv
+rfisher records capture-ruling --rule record --input table_of_record_v7.csv \
+  --handoff HANDOFF --out table_of_record.csv --ch33-rescan
+```
+
+and the release of record r5.2, its credit readings included:
+
+```bash
+rfisher records capture-release --rule r5_2 --handoff HANDOFF \
+  --record-table table_of_record.csv --evidence DECISION_EVIDENCE \
+  --releases RESULTS --duration-reference SURVEY_DURATION_RUN --rel REL --run RUN \
+  --input-table table_of_record_v7.csv
+```
+
+`--input-table` names the v7 table written above; without it the release reads
+the handoff's copy. The robustness copy and the phase limit read the table of
+record given as `--record-table`.
+
+Three files carry the site paths of the inputs they were derived from, as the
+frozen records wrote them: the vendored exact-time reference
+(`src/rfisher/data/tolerances/exact_time_reference_2026-09-09/reference.json`,
+which ships in the wheel), the release's fixed prose
+(`projects/chime_bao/capture_rules/release_r5_2.json`) and the golden capture
+handoff's manifest. They are byte copies that the sha pins and the release's
+equal manifest keys need; nothing opens a file at those paths.
+
+The rule files are `projects/chime_bao/capture_rules/` (`record`, `a18`, `r5`,
+`r5_1`, `r5_2`, and the sensitivities `g1`, `r3` and `r2`). Under numpy 2.3 or
+later every file equals the frozen release byte for byte. `records
+cohort-basis`, `robustness`, `phase-limit`, `duration` and `postprocessing` run
+the release's copies one at a time; each prints its usage on `--help`.
 
 ## Forecast-completion evidence
 

@@ -26,20 +26,38 @@ test = ["jsonschema", "pytest", "ruff"]
 
 [project.scripts]
 rfisher = "rfisher.cli:main"
-rfisher-check-archive = "rfisher.archive_acceptance:main"
 
 [project.urls]
 Documentation = "https://github.com/WVURAIL/RFIsher/tree/main/docs"
 Issues = "https://github.com/WVURAIL/RFIsher/issues"
 Repository = "https://github.com/WVURAIL/RFIsher"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-namespaces = false
+# The packages are listed (tests/test_packaging.py holds the list equal to the
+# packages under src/): the project directory projects/chime_bao ships inside
+# the package as rfisher.projects, so an installed rfisher reads the same
+# science register a checkout does.
+[tool.setuptools]
+package-dir = {"" = "src", "rfisher.projects" = "projects"}
+packages = [
+    "rfisher",
+    "rfisher.data",
+    "rfisher.forecast",
+    "rfisher.forecast.radiofisher_bao",
+    "rfisher.forecast.radiofisher_bao.bank",
+    "rfisher.projects",
+    "rfisher.records",
+    "rfisher.records.chime_atsc_2026",
+    "rfisher.response",
+    "rfisher.tolerance",
+    "rfisher.verdict",
+]
 
 [tool.setuptools.package-data]
 "rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat", "response_banks/*.npz",
-                  "tolerances/*"]
+                  "tolerances/*", "tolerances/*/*", "schemas/*"]
+"rfisher.projects" = ["chime_bao/*.json", "chime_bao/*.yaml", "chime_bao/capture_rules/*.json",
+                      "chime_bao/capture_rules/sensitivities/*.json"]
+"rfisher.records.chime_atsc_2026" = ["data/*.md", "data/policy_2026_archive/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -50,3 +68,9 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E9", "F", "N"]
 ignore = ["N802", "N803", "N806", "N816", "N818"]
+
+[tool.ruff.lint.per-file-ignores]
+# The capture records keep the release producer's lines as they ran (its
+# unused locals, placeholder-free f-strings and "U" for the units).
+"src/rfisher/records/chime_atsc_2026/*.py" = ["F541", "F841", "N812"]
+"tests/records/*.py" = ["N812"]

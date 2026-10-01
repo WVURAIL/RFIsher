@@ -11,7 +11,7 @@ from typing import get_type_hints
 import numpy as np
 import pytest
 
-from rfisher import channels, products
+from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao.bank import banks as fisherbank, resources
 from rfisher.forecast.radiofisher_bao import significance as forecast, scenarios
 from rfisher.forecast.radiofisher_bao.bank.backend import find_radiofisher_dir
@@ -28,8 +28,6 @@ EXPECTED_SHA256 = {
         "8c5e246f666aedd1d545ecdd294677bc92c8b81005cf105570a4f9db1ef42548",
     channels.DEFAULT_RATES_NAME:
         "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
-    products.PRODUCTS_MANIFEST_NAME:
-        "051e00d4ef8a3d1ee1eb82872ac9cd27bd1fa14bec65d8958d9d002b7ada769d",
     resources.SYNTHETIC_BASELINE_NAME:
         "101a156d88c212781b098f89a86bfb11ada58433d5dcc5cc2fb86956c930790b",
     "cache_pk.dat":
@@ -374,28 +372,27 @@ def test_missing_packaged_data_fails_clearly():
 def test_defaults_work_through_a_zip_importer(tmp_path):
     """Exercise archive-backed Traversables, not only pathlib resources."""
     package_root = Path(__file__).resolve().parents[2] / "src" / "rfisher"
+    projects_root = Path(__file__).resolve().parents[2] / "projects"
     archive = tmp_path / "rfisher-test.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for source in package_root.rglob("*"):
-            if (source.is_file() and "__pycache__" not in source.parts
-                    and source.suffix != ".pyc"):
-                destination = (Path("rfisher")
-                               / source.relative_to(package_root))
-                zf.write(source, destination)
+        # The package, and its projects where the wheel puts them.
+        for root, prefix in ((package_root, Path("rfisher")),
+                             (projects_root, Path("rfisher") / "projects")):
+            for source in root.rglob("*"):
+                if (source.is_file() and "__pycache__" not in source.parts
+                        and source.suffix != ".pyc"):
+                    zf.write(source, prefix / source.relative_to(root))
 
     code = f"""
 import sys
 sys.path.insert(0, {str(archive)!r})
-from rfisher import channels, products
+from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao import api
 from rfisher.forecast.radiofisher_bao.bank import resources
 assert '.zip/' in str(resources.DEFAULT_BANK)
 forecast = api.load()
 assert forecast.bank.meta['config'] == 'chime2022'
 assert len(channels.legacy_rate_fractions()) == 23
-found, missing = products.load()
-assert products.freq_id(35) == 521
-assert len(found) + len(missing) == 23
 for resource_name in resources.RADIOFISHER_FILESYSTEM_NAMES:
     with resources.data_file(resource_name).open('rb') as stream:
         assert stream.read(1)
@@ -430,15 +427,11 @@ import importlib.util
 import sys
 sys.path.insert(0, {str(wheel)!r})
 import rfisher
-from rfisher import products
 from rfisher.forecast.radiofisher_bao.bank import resources
 from rfisher.forecast.radiofisher_bao.bank.banks import (
     BANK_SCHEMA_VERSION, FisherBank)
 assert rfisher.__version__ == '4.0.0'
 assert importlib.util.find_spec('baonoise') is None
-assert products.freq_id(35) == 521
-found, missing = products.load()
-assert len(found) + len(missing) == 23
 assert set(resources.BANK_NAMES) == {{'planck2018', 'pact2025', 'cmbspa2026'}}
 for cosmology in resources.BANK_NAMES:
     bank = FisherBank(resources.bank_file(cosmology))

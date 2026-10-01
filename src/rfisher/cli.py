@@ -2,7 +2,11 @@
 
     rfisher forecast     evaluate one uniform masking scenario from a Fisher bank
     rfisher build-bank   build a Fisher bank (slow; needs RadioFisher)
-    rfisher tolerance    build, show and reduce the residual tolerance table
+    rfisher tolerance    build, show and reduce the residual tolerance table,
+                         and write the two frozen reference tolerances
+    rfisher verdict      the screen of each band from a detector handoff
+    rfisher response     the known-moment check of the visibility response
+    rfisher records      the code of record of the 2026 campaign
 """
 from __future__ import annotations
 
@@ -12,6 +16,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
+# These import no science profile reader (PyYAML): a command of record runs
+# where the forecast's own dependencies are not installed (tests/test_cli.py).
 from .forecast.radiofisher_bao import api, scenarios
 from .forecast.radiofisher_bao.bank import build, experiments, resources
 
@@ -66,31 +72,77 @@ def _table_path(out: Path) -> Path:
 
 
 def _unscreened_bands(path: Path) -> list[str]:
-    """Band ids whose ``role`` column, when the CSV has one, is not screened."""
+    """Band ids whose ``role`` column, when the CSV has one, is not screened.
+
+    A handoff manifest lists every band with its role; only its screened
+    bands are read, so it has none to refuse.
+    """
     import csv
 
+    if path.suffix == ".json":
+        return []
     with path.open(newline="", encoding="utf-8") as fh:
         return [row["band_id"] for row in csv.DictReader(fh)
                 if row.get("role", "screened") != "screened"]
 
 
+def reference_main(argv=None, prog: str = "rfisher tolerance reference") -> int:
+    """Write the frozen reference tolerances as band tolerance rows."""
+    from .tolerance import bands, reference, table
+
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Write tolerances.csv and "
+        "tolerance_components.csv for the bands on one or more frozen "
+        "reference bases (the vendored exact-time reference and the "
+        "coarse-world sensitivity).")
+    parser.add_argument("--basis", action="append", required=True,
+                        choices=reference.BASES,
+                        help="a reference basis; repeat for several, whose "
+                             "rows are written in the order given")
+    parser.add_argument("--bands", type=Path, required=True,
+                        help="CSV with band_id,low_mhz,high_mhz (an optional "
+                             "role column must read screened), or a handoff "
+                             "manifest.json, whose screened bands are read")
+    parser.add_argument("--out", type=Path, required=True,
+                        help="output directory")
+    args = parser.parse_args(argv)
+    unscreened = _unscreened_bands(args.bands)
+    if unscreened:
+        parser.error(f"{args.bands}: only screened bands are priced; "
+                     f"role is not screened for {', '.join(unscreened)}")
+    band_list = bands.read_bands(args.bands)
+    tolerances, components = [], []
+    for basis in args.basis:
+        rows, parts = reference.reference_rows(basis, band_list)
+        tolerances += rows
+        components += parts
+    for path in table.write_bands(tolerances, components, args.out,
+                                  reference.provenance(args.basis,
+                                                       args.bands)):
+        print(f"wrote {path}")
+    return 0
+
+
 def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
-    """``rfisher tolerance {build, bands, show, bias}``."""
+    """``rfisher tolerance {build, bands, reference, show, bias}``."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["reference"]:
+        return reference_main(argv[1:], prog=f"{prog} reference")
     from .forecast.radiofisher_bao import response
     from .forecast.radiofisher_bao.model import RadioFisherBAO, packaged_table
     from .tolerance import bands, table
 
-    argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["bias"]:
         return response.bias_main(argv[1:], prog=f"{prog} bias")
     parser = argparse.ArgumentParser(
         prog=prog, description="The residual tolerance table: "
         "'build' prices every scenario, bin and parameter of the science "
         "model; 'bands' reduces the table to one tolerance per band and "
-        "scenario; 'show' prints it; 'bias' reports the full response of one "
-        "bank (see 'rfisher tolerance bias --help').")
+        "scenario; 'reference' writes the frozen reference tolerances in the "
+        "same layout; 'show' prints it; 'bias' reports the full response of "
+        "one bank (see 'rfisher tolerance bias --help').")
     actions = parser.add_subparsers(dest="action", required=True,
-                                    metavar="{build,bands,show,bias}")
+                                    metavar="{build,bands,reference,show,bias}")
     built = actions.add_parser(
         "build", help="recompute the per-bin table and its provenance")
     built.add_argument("--project", type=Path, required=True,
@@ -106,8 +158,10 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
         "bands", help="write tolerances.csv and tolerance_components.csv")
     reduced.add_argument("--project", type=Path, required=True)
     reduced.add_argument("--bands", type=Path, required=True,
-                         help="CSV with band_id,low_mhz,high_mhz; an "
-                              "optional role column must read screened")
+                         help="CSV with band_id,low_mhz,high_mhz (an "
+                              "optional role column must read screened), or "
+                              "a handoff manifest.json, whose screened bands "
+                              "are read")
     reduced.add_argument("--out", type=Path, required=True,
                          help="output directory")
     reduced.add_argument("--table", type=Path,
@@ -124,6 +178,8 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
     shown.add_argument("--banks", type=Path,
                        help="response bank directory the table was built "
                             "from (default: packaged)")
+    actions.add_parser("reference", help="the frozen reference tolerances "
+                       "(see 'rfisher tolerance reference --help')")
     actions.add_parser("bias", help="the full response report of one bank")
     args = parser.parse_args(argv)
 
@@ -175,6 +231,138 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
     return 0
 
 
+def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
+    """``rfisher verdict archive``."""
+    parser = argparse.ArgumentParser(
+        prog=prog, description="The screen of each band: the deployable set "
+        "of thresholds [eta_Pfa, eta_sci] from the detector's handoff and one "
+        "tolerance table, the selector inside it, and keep, excise or "
+        "undetermined under the declared precedence.")
+    actions = parser.add_subparsers(dest="action", required=True,
+                                    metavar="{archive}")
+    archive = actions.add_parser(
+        "archive", help="the verdict of a characterization directory")
+    archive.add_argument("--project", type=Path, required=True,
+                         help="the science profile directory (its registers "
+                              "and its residual reference)")
+    archive.add_argument("--characterization", type=Path, required=True,
+                         help="the handoff: oc_table.csv, oc_summary.csv and "
+                              "manifest.json")
+    archive.add_argument("--tolerances", type=Path, required=True,
+                         help="tolerances.csv, or the directory holding it")
+    archive.add_argument("--out", type=Path, required=True,
+                         help="output directory")
+    args = parser.parse_args(argv)
+    from .verdict import handoff
+    from .verdict.archive import verdict_archive
+
+    try:
+        result = verdict_archive(args.characterization, args.tolerances,
+                                 args.project, args.out)
+    except handoff.HandoffError as exc:
+        parser.error(str(exc))
+    counts = {}
+    for row in result["screen"]:
+        counts[row["screen_outcome"]] = counts.get(row["screen_outcome"], 0) + 1
+    print(f"wrote {args.out}: " + ", ".join(
+        f"{n} {k}" for k, n in sorted(counts.items())))
+    return 0
+
+
+def response_main(argv=None, prog: str = "rfisher response") -> int:
+    """``rfisher response visibility``."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    parser = argparse.ArgumentParser(
+        prog=prog, description="The linear parameter response of masked "
+        "visibilities: 'visibility' runs its known-moment synthetic check "
+        "(see 'rfisher response visibility --help').")
+    parser.add_argument("action", choices=("visibility",))
+    parser.add_argument("arguments", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+    from .response import validate
+
+    return validate.main(args.arguments, prog=f"{prog} {args.action}")
+
+
+# The capture records keep the release producer's own argument handling:
+# each module's main(argv) reads its arguments and prints its usage on --help.
+CAPTURE_RECORDS = {
+    "capture-handoff": ("capture_oc", "the capture handoff, with the detector's "
+                        "readings from pilot-proxy's capture output"),
+    "table-of-record": ("table_of_record", "the table of record before "
+                        "amendment 8 (v7) from the capture handoff"),
+    "capture-ruling": ("capture_ruling", "the capture ruling under a rule "
+                       "file (the table of record at 'record')"),
+    "cohort-basis": ("cohort_basis", "channel 24 on its 2020 cohort basis "
+                     "(borrowed, or its own in-band measurement)"),
+    "robustness": ("robustness", "the robustness margins of the excisions"),
+    "phase-limit": ("phase_limit", "the exclusion-side phase limit on the "
+                    "coherence gain"),
+    "duration": ("duration", "the keep gap and the survey-duration reading"),
+    "postprocessing": ("postprocessing", "the post-processing sensitivity "
+                       "against the credit readings"),
+    "filter-sensitivity": ("filter_sensitivity", "revision 3's filter "
+                           "sensitivity against revision 2"),
+    "capture-release": ("capture_release", "the capture ruling release r5.2 "
+                        "from the capture handoff"),
+}
+
+
+def records_main(argv=None, prog: str = "rfisher records") -> int:
+    """``rfisher records ...``: the code of record of the 2026 campaign."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in CAPTURE_RECORDS:
+        import importlib
+
+        module = importlib.import_module(
+            f".records.chime_atsc_2026.{CAPTURE_RECORDS[argv[0]][0]}",
+            __package__)
+        if "-h" in argv[1:] or "--help" in argv[1:]:
+            print(module.__doc__.strip())
+            return 0
+        return module.main(argv[1:])
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Code of record of the 2026 CHIME DTV "
+        "campaign: the frozen release layouts and the capture ruling of "
+        "record, written from the handoffs.",
+        epilog="capture records (each prints its usage on --help):\n"
+        + "\n".join(f"  {name:<18} {text}"
+                    for name, (_, text) in CAPTURE_RECORDS.items()),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    actions = parser.add_subparsers(dest="action", required=True,
+                                    metavar="{archive-layout,"
+                                    + ",".join(CAPTURE_RECORDS) + "}")
+    layout = actions.add_parser(
+        "archive-layout", help="the frozen layout of an archive release")
+    layout.add_argument("--release", required=True,
+                        choices=("archive_author_eras_2026_09_23",
+                                 "archive_no_split_2026_09_24_r2"))
+    layout.add_argument("--characterization", type=Path, required=True,
+                        help="the detector's characterization directory")
+    layout.add_argument("--tolerances", type=Path, required=True,
+                        help="the band tolerance table (rfisher tolerance "
+                             "bands), or its directory")
+    layout.add_argument("--project", type=Path, required=True,
+                        help="the science profile directory")
+    layout.add_argument("--out", type=Path, required=True,
+                        help="output directory (must not exist)")
+    args = parser.parse_args(argv)
+    from .records.chime_atsc_2026 import compat_tables
+
+    if args.out.exists():
+        parser.error(f"{args.out} exists; the layout is written into a new "
+                     "directory")
+    try:
+        result = compat_tables.write_archive_layout(
+            args.release, args.characterization, args.tolerances,
+            args.project, args.out)
+    except (compat_tables.NotReproducible, ValueError) as exc:
+        parser.error(str(exc))
+    print(f"wrote {args.out}: {result['bands']} bands, priced "
+          f"{', '.join(result['priced'])}")
+    return 0
+
+
 COMMANDS = {
     "forecast": (forecast_main,
                  "evaluate one uniform masking scenario from a Fisher bank"),
@@ -182,6 +370,13 @@ COMMANDS = {
                    "build a Fisher bank (slow; needs RadioFisher)"),
     "tolerance": (tolerance_main,
                   "build, show and reduce the residual tolerance table"),
+    "verdict": (verdict_main,
+                "the screen of each band from a detector handoff and a "
+                "tolerance table"),
+    "response": (response_main,
+                 "the known-moment check of the visibility response"),
+    "records": (records_main,
+                "the code of record of the 2026 campaign (frozen layouts)"),
 }
 
 

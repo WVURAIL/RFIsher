@@ -1,64 +1,29 @@
-"""Select a screening threshold from exact prepared frame rows."""
-import datetime as dt
-import hashlib
+"""Price a detector's fine threshold surface against a science tolerance.
 
-import numpy as np
+The detector (pilot-proxy) writes each candidate threshold with its masked
+fraction and kept residual; the verdict prices them against the band's
+tolerance, forms the deployable set of each family and selects inside it.
+The rows here are a small synthetic family, not a measurement.
+"""
+import math
 
-from rfisher.preparation import (CalibrationEvidence,
-                                 prepare_threshold_family,
-                                 select_prepared_threshold)
-from rfisher.thresholds import ALWAYS_MASKED_Q16, Q16_SCALE
+from rfisher import policy
+from rfisher.verdict import interval
 
+rules = policy.load()
+rows = [{"candidate_set": "fine_surface", "block": "calibration", "threshold_family": "rho=1",
+         "eta": 1.0 + 0.05 * i, "masked_fraction": 0.5 - 0.04 * i, "r_sys": 0.2 + 0.06 * i,
+         "r_var": None, "candidate_order": i} for i in range(10)]
+# A fine family has no false-alarm limit (P_fa is estimated on the coarse statistic Q only), so the deployable set's
+# low end is left empty rather than shown at the edge of the candidate grid.
+summary = {"threshold_family": "rho=1", "eta_eval": 1.05, "eta_pfa": float("nan"),
+           "eta_pfa_status": "not computed: statistic Z_rho"}
 
-def artifact_digest(label):
-    return hashlib.sha256(label.encode("utf-8")).hexdigest()
-
-
-def measured_evidence(label):
-    return CalibrationEvidence(
-        state="measured",
-        method=f"example {label}",
-        source="embedded threshold-selection example",
-        artifact_sha256=artifact_digest(label),
-    )
-
-
-stamps = []
-for year in (2024, 2025):
-    for month in range(1, 13):
-        stamp = dt.datetime(
-            year, month, 1, tzinfo=dt.timezone.utc).timestamp()
-        stamps.extend([stamp] * 5)
-
-frame_count = len(stamps)
-pattern = [1, Q16_SCALE, 2 * Q16_SCALE,
-           ALWAYS_MASKED_Q16, Q16_SCALE]
-requirements = pattern * (frame_count // len(pattern))
-
-# These drift values demonstrate the interface; they are not adopted limits.
-family = prepare_threshold_family(
-    {1: requirements, 2: requirements},
-    np.full(frame_count, 0.02),
-    frame_times=stamps,
-    acquisition_ids=range(frame_count),
-    exposure_seconds=np.full(frame_count, 41.0),
-    source_id=f"sha256:{artifact_digest('latest-era rows')}",
-    era_label="2024-01..2025-12 example",
-    latest_era=True,
-    additive_residuals=True,
-    score=measured_evidence("Q16 score boundaries"),
-    correlation=measured_evidence("block correlation summary"),
-    transfer=CalibrationEvidence(
-        state="conditional",
-        method="unit screening transfer",
-        source="embedded threshold-selection example",
-    ),
-    max_cost_ratio=1.0,
-    max_systematic_residual_ratio=1.0,
-    minimum_half_retained_frames=10,
-)
-
-result = select_prepared_threshold(
-    family, science_tolerance=0.025, allow_screening=True)
-print(result.claim_status, result.source_id, result.policy_sha256,
-      result.selected)
+candidates = interval.points(interval.fine_candidates(rows, rules), r_tol=0.5, policy=rules)
+family = interval.interval(candidates, summary)
+chosen = interval.select(family.members, rules)
+low = "no eta_Pfa" if math.isnan(family.interval_low) else f"{family.interval_low:.2f}"
+print(f"deployable set: eta in [{low}, {family.interval_high:.2f}] ({family.status}); "
+      f"lower bound {family.lower_bound:.2f} from {family.lower_bound_source}")
+print(f"selected: eta {chosen.selected.eta:.2f}, masked fraction {chosen.selected.masked_fraction:.2f}, "
+      f"R {chosen.selected.R:.2f}, cost {chosen.selected.cost:.3f}")

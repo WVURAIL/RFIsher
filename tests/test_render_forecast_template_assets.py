@@ -12,7 +12,7 @@ import subprocess
 import matplotlib
 import pytest
 
-from rfisher_results import results_tree
+from rfisher.records import results_tree
 
 
 FIGURE_TOOLCHAIN = ("latex", "dvipng", "kpsewhich", "pdffonts", "pdfinfo")

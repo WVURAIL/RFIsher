@@ -1,6 +1,6 @@
 # Response of the 10-second visibility product
 
-`rfisher_results.validation.visibility_response` carries the coherent complex mean and centered covariance through an explicitly supplied, fixed idealized science response. It does not infer telescope calibration or equate a normalized coherent amplitude with the forecast's additive covariance power.
+`rfisher.response.visibility` carries the coherent complex mean and centered covariance through an explicitly supplied, fixed idealized science response. It does not infer telescope calibration or equate a normalized coherent amplitude with the forecast's additive covariance power.
 
 The input is the same-policy, same-support visibility ensemble at the 10-second boundary. No delay cut or sidereal-mean subtraction receives cleaning credit. A fixed idealized response translates endpoint contamination into a science requirement; it is not an additional proposed mitigation stage.
 
@@ -24,8 +24,8 @@ The expectation requires only second moments. The covariance formula uses a Gaus
 
 From this repository, using an environment with NumPy and pytest:
 
-    PYTHONPATH=src python -m pytest -q tests/test_visibility_response.py
-    PYTHONPATH=src python scripts/validate_visibility_response.py --output ../output/dissertation-implementation-2026-09-19/visibility-response
+    PYTHONPATH=src python -m pytest -q tests/response/test_visibility.py
+    PYTHONPATH=src python -m rfisher.cli response visibility --output ../output/dissertation-implementation-2026-09-19/visibility-response
 
 The simulation uses known six-dimensional Gaussian visibility moments and fixed illustrative kernels and derivatives. It validates moment accounting and the linear fit. Its arbitrary units and synthetic derivatives are not a CHIME BAO forecast. The output records source hashes, seed, acceptance limits, separate bias contributions, covariance and fit results.
 

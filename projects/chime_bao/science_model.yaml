@@ -8,11 +8,20 @@
 # maximum_tolerance_ratio and may not flip the sign of b. Reported parameters
 # are listed but set no tolerance.
 #
+# zeta, the year grid, the stability test and the transfer gains are held by
+# the science register of this project (science_register.json); register
+# names the entry of each, and the model reads the values from there.
+#
 # Each scenario is a delay-filter cut priced by its own response bank. The
 # rule scenario is the one a verdict rests on; sensitivity scenarios are
 # reported beside it and never enter a rule. suppression_key names the
 # assumed suppression S of the residual, which is listed and never folded
 # into a tolerance.
+#
+# r_reference and residual_shapes are what a tolerance is a tolerance on: a
+# residual power ratio per frame, in this reference, with this spectral
+# shape. A handoff whose manifest declares another reference or shape is
+# refused. report_band_mhz is the band a report covers when no bins are named.
 adapter: radiofisher_bao
 experiment: chime2022
 cosmology: planck2018
@@ -20,11 +29,13 @@ parameters:
   required: [aperp, apar]
   reported: [fs8]
 target_years: 1.0
-zeta: 1.0
-year_grid: [1.0, 2.0, 3.0, 5.0, 8.0]
-stability:
-  time_fraction: 0.1
-  maximum_tolerance_ratio: 1.2
+register:
+  zeta: science.systematic_budget.primary_zeta
+  year_grid: archive_reference.forecast_year_grid
+  time_fraction: science.response_stability.time_fraction
+  maximum_tolerance_ratio: science.response_stability.maximum_tolerance_ratio
+  systematic_gain: transfer.systematic_gain
+  variance_gain: transfer.variance_gain
 scenarios:
   - {name: none, bank: fisher_bank_chime2022_pres_dense.npz, kfg_fac: null,
      suppression_key: none, role: rule}
@@ -34,3 +45,11 @@ scenarios:
      kfg_fac: 44.0, suppression_key: bao_peak2, role: sensitivity}
   - {name: deployed, bank: fisher_bank_chime2022_pres_kfg80_dense.npz,
      kfg_fac: 80.0, suppression_key: aggressive_200ns, role: sensitivity}
+r_reference:
+  definition: residual interference power over system noise power per frame, in the band
+  feed_sum: all_inputs
+  frame_seconds: 0.04194304
+  noise_bandwidth_hz: 6000000.0
+  summed_terms: 262144
+residual_shapes: [band_thermal]
+report_band_mhz: [470.0, 608.0]
