@@ -369,10 +369,10 @@ def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUT
     computed = dict(built=datetime.datetime.now().isoformat(timespec="seconds"), python=sys.version.split()[0], interpreter=sys.executable,
                     switches_a18=A["switches"],
                     producer=dict(provenance.producer_identity(), modules={m.__name__: sha(m.__file__) for m in MODULES}),
-                    commands=[f"rfisher records capture-release --rule {RULE} --handoff <handoff> --record-table <table of record> --evidence <evidence>"
-                              f" --releases <releases> --duration-reference <duration> --rel <release> --run <run>   (this release)",
-                              "rfisher records capture-ruling --rule r5_2 --json a18.json --thresholds thresholds.csv --input <handoff>/frame_analysis/"
-                              "table_of_record_before_amendment8.csv --handoff <handoff> --out a18_full.csv --ch33-rescan",
+                    commands=[(f"rfisher records capture-release --rule {RULE} --handoff <handoff> --record-table <table of record> --evidence <evidence>"
+                               f" --releases <releases> --duration-reference <duration> --rel <release> --run <run>   (this release)"),
+                              ("rfisher records capture-ruling --rule r5_2 --json a18.json --thresholds thresholds.csv --input <handoff>/frame_analysis/"
+                               "table_of_record_before_amendment8.csv --handoff <handoff> --out a18_full.csv --ch33-rescan"),
                               "rfisher records capture-release ... --tables-only --credit-reading r3   (and r2)"],
                     inputs=inputs, datasets=dict(handoff=H.manifest.get("inputs", {}), note="the reduced dumps, products and lanes the handoff was derived from"),
                     files=files,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 from rfisher.cli import main
 from rfisher.response import validate, visibility
@@ -20,8 +21,8 @@ def test_the_command_writes_the_validation(tmp_path, capsys):
     assert main(["response", "visibility", "--output", str(tmp_path)]) == 0
     result = json.loads((tmp_path / "validation.json").read_text())
     assert result["passed"] is True and result["samples"] == 250000
-    assert [s["sha256"] for s in result["sources"]] == [
-        hashlib.sha256(open(p, "rb").read()).hexdigest()
-        for p in (validate.__file__, visibility.__file__)]
+    expected = [hashlib.sha256(Path(p).read_bytes()).hexdigest()
+                for p in (validate.__file__, visibility.__file__)]
+    assert [s["sha256"] for s in result["sources"]] == expected
     assert result["sources"][1]["sha256"] == MODULE_SHA256
     assert json.loads(capsys.readouterr().out)["passed"] is True

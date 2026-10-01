@@ -5,6 +5,8 @@ fraction and kept residual; the verdict prices them against the band's
 tolerance, forms the deployable set of each family and selects inside it.
 The rows here are a small synthetic family, not a measurement.
 """
+import math
+
 from rfisher import policy
 from rfisher.verdict import interval
 
@@ -20,7 +22,7 @@ summary = {"threshold_family": "rho=1", "eta_eval": 1.05, "eta_pfa": float("nan"
 candidates = interval.points(interval.fine_candidates(rows, rules), r_tol=0.5, policy=rules)
 family = interval.interval(candidates, summary)
 chosen = interval.select(family.members, rules)
-low = "no eta_Pfa" if family.interval_low != family.interval_low else f"{family.interval_low:.2f}"
+low = "no eta_Pfa" if math.isnan(family.interval_low) else f"{family.interval_low:.2f}"
 print(f"deployable set: eta in [{low}, {family.interval_high:.2f}] ({family.status}); "
       f"lower bound {family.lower_bound:.2f} from {family.lower_bound_source}")
 print(f"selected: eta {chosen.selected.eta:.2f}, masked fraction {chosen.selected.masked_fraction:.2f}, "

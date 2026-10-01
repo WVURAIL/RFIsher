@@ -36,9 +36,7 @@ DURATION = GOLDEN.parents[1] / "records" / "survey_duration_2026-09-24"
 
 
 def assert_frozen(got, expected, detail=None):
-    if got == expected:
-        return
-    if not RECORD_NUMERICS:
+    if got != expected and not RECORD_NUMERICS:
         import pytest
         if isinstance(expected, dict):
             tables = sorted(k for k in expected if str(k).endswith(TABLE_SUFFIXES) and got.get(k) != expected[k])
