@@ -33,7 +33,8 @@
       "status": "provisional",
       "rationale": "Candidates within two percent of minimum cost are treated as practically tied before residual margin breaks the tie.",
       "evidence": [
-        "src/rfisher/thresholds.py"
+        "src/rfisher/thresholds.py@7b0067b",
+        "src/rfisher/verdict/interval.py"
       ],
       "sensitivity_values": [
         1.0,
@@ -55,7 +56,8 @@
       "status": "locked",
       "rationale": "The order favors science margin, then exposure, then the simpler rank and multiplier when forecast cost is practically tied.",
       "evidence": [
-        "src/rfisher/thresholds.py"
+        "src/rfisher/thresholds.py@7b0067b",
+        "src/rfisher/verdict/interval.py"
       ],
       "sensitivity_values": []
     },
@@ -68,7 +70,8 @@
       "status": "derived",
       "rationale": "The tolerance defines a closed upper bound, so equality passes.",
       "evidence": [
-        "src/rfisher/thresholds.py"
+        "src/rfisher/thresholds.py@7b0067b",
+        "src/rfisher/verdict/interval.py"
       ],
       "sensitivity_values": []
     },
