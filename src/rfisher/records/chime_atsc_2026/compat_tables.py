@@ -23,6 +23,12 @@ with the tokens and column orders the releases have:
 A band is priced where the frozen run priced it: where the rule scenario has
 a tolerance and the detector characterized a surface. A value the handoff
 does not carry is never guessed: :class:`NotReproducible` names it.
+
+The selector policy and the science register these layouts were priced
+under are frozen with them (``data/policy_2026_archive``, byte copies of the
+project's registers at the release of these records): a later change of the
+project's policy, such as the fine rank the verdict reads, changes the
+verdict and leaves these layouts as the releases wrote them.
 """
 from __future__ import annotations
 
@@ -31,6 +37,7 @@ import io
 import json
 import math
 from dataclasses import dataclass, field
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -58,6 +65,13 @@ RELEASE_CHOICES = {
         (None, "off", "selector_order")},
 }
 LEDGER_SCHEMA = {"name": "rfisher-archive-ledger", "version": 1}
+# The registers the two releases were priced under (see the module docstring).
+FROZEN_POLICY = ("data", "policy_2026_archive")
+
+
+def frozen_policy():
+    """The selector policy and science register of the two archive releases."""
+    return _policy.load(files(__package__).joinpath(*FROZEN_POLICY))
 PRODUCER_REPOSITORY = "WVURAIL/RFIsher"
 PRODUCER_MODULE = "rfisher.records.chime_atsc_2026.compat_tables"
 PARAMETERS = ("aperp", "apar", "fs8")
@@ -242,7 +256,7 @@ def read_inputs(release: str, characterization: str | Path,
     per_bin = tolerance_table.load(packaged_table())
     return Inputs(release, root, oc.manifest, summary, fine, coarse, ladder,
                   ledger, names, run, (chain_header, chain_rows), rule,
-                  per_bin, model, _policy.load(project), oc.bands)
+                  per_bin, model, frozen_policy(), oc.bands)
 
 
 # ---------------------------------------------------------------- tolerance

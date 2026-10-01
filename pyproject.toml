@@ -57,7 +57,7 @@ packages = [
                   "tolerances/*", "tolerances/*/*", "schemas/*"]
 "rfisher.projects" = ["chime_bao/*.json", "chime_bao/*.yaml", "chime_bao/capture_rules/*.json",
                       "chime_bao/capture_rules/sensitivities/*.json"]
-"rfisher.records.chime_atsc_2026" = ["data/*.md"]
+"rfisher.records.chime_atsc_2026" = ["data/*.md", "data/policy_2026_archive/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -159,3 +159,28 @@ def test_the_ladder_pricing_states_what_it_cannot_price():
     assert row["chain_status"] == "calibration chain gain unavailable" and row["G1_tolerance_fraction"] == 2.0
     row = ladder_pricing.price(0.25, 4.0, 0.5)
     assert row["chain_tolerance_fraction"] == 2.0 and row["G1_required_suppression_db"] == 0.0
+
+
+def test_the_layout_reads_the_frozen_policy_not_the_projects(golden, tmp_path):
+    """The declared change of the fine rank (or any later policy change) moves the verdict, never these layouts."""
+    import shutil
+    assert ct.frozen_policy().sha256() == "05dfa2a6f448530e2517c7406d58eb0dd5f357bb88fb7f3e2383f94d78d73203"
+    project = tmp_path / "project"
+    shutil.copytree(PROJECT, project)
+    path = project / "selector_policy.json"
+    doc = json.loads(path.read_text())
+    entry = next(d for d in doc["decisions"] if d["id"] == "selector.fine_rank")
+    entry["value"] = 63
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    release = ct.RELEASES[0]
+    char, tol = _characterization(golden, release, tmp_path / "characterization")
+    a, b = tmp_path / "a", tmp_path / "b"
+    ct.write_archive_layout(release, char, tol, PROJECT, a)
+    ct.write_archive_layout(release, char, tol, project, b)
+    files = sorted(p.relative_to(a) for p in a.rglob("*") if p.is_file())
+    assert files == sorted(p.relative_to(b) for p in b.rglob("*") if p.is_file())
+    for rel in files:
+        if rel.name != "run.json":
+            assert (a / rel).read_bytes() == (b / rel).read_bytes(), rel
+    run_a, run_b = (json.loads((d / "ledger" / "run.json").read_text()) for d in (a, b))
+    assert run_a["producer"]["policy_sha256"] == run_b["producer"]["policy_sha256"] == ct.frozen_policy().sha256()

@@ -1,0 +1,275 @@
+{
+  "schema": "rfisher_science_register_v1",
+  "side": "science",
+  "source": {
+    "copied_from": "RFIsher src/rfisher/selection_policy.py at 7b0067bf875a20365503c0ce9c7ffdf65de682c6",
+    "file_sha256": "a997e91999f879de8c7597a51cce7b6758e5d4a8d47ddca8a80cf78d9ab8c347",
+    "snapshot_schema": "rfisher-threshold-decisions-v1",
+    "snapshot_sha256": "b36c612ca1a59c0b5e09ced129bca9e15c589fb94a7e2e3648c6ebd815b68cf7",
+    "evidence_paths": "Relative paths in evidence name files of the repository that recorded the entry; the copied entries keep the paths they had.",
+    "copied_ids": [
+      "science.systematic_budget.primary_zeta",
+      "science.systematic_budget.sensitivity_zeta",
+      "science.response_stability.time_fraction",
+      "science.response_stability.maximum_tolerance_ratio",
+      "science.response_solver.maximum_condition_number",
+      "science.response_solver.relative_nullspace_cutoff",
+      "science.response_solver.minimum_volume_fraction",
+      "science.response_solver.default_estimator",
+      "science.response_solver.default_time_scaling",
+      "transfer.systematic_gain",
+      "transfer.variance_gain",
+      "transfer.delay_suppression.default_key",
+      "archive_reference.three_worlds_parameters",
+      "archive_reference.forecast_year_grid",
+      "archive_reference.bias_year_grid"
+    ]
+  },
+  "decisions": [
+    {
+      "id": "archive_reference.bias_year_grid",
+      "side": "science",
+      "value": [
+        0.25,
+        1.0,
+        5.0,
+        10.0
+      ],
+      "units": "on-sky years",
+      "basis": "implementation",
+      "status": "historical",
+      "rationale": "These samples reproduce the standalone bias-tolerance report; they do not set an operating threshold.",
+      "evidence": [
+        "scripts/bias_tolerance.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "archive_reference.forecast_year_grid",
+      "side": "science",
+      "value": [
+        1.0,
+        2.0,
+        3.0,
+        5.0,
+        8.0
+      ],
+      "units": "on-sky years",
+      "basis": "implementation",
+      "status": "historical",
+      "rationale": "These are the integration-time samples used by the released three-scenario table; they do not define a threshold operating knob.",
+      "evidence": [
+        "scripts/three_worlds.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "archive_reference.three_worlds_parameters",
+      "side": "science",
+      "value": [
+        "aperp",
+        "apar",
+        "fs8"
+      ],
+      "units": "forecast parameters",
+      "basis": "policy",
+      "status": "historical",
+      "rationale": "The released three-scenario table reports the two dilation parameters and the growth-rate combination used in the chapter.",
+      "evidence": [
+        "scripts/three_worlds.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "science.response_solver.default_estimator",
+      "side": "science",
+      "value": "perbin_appendix_a",
+      "units": "estimator",
+      "basis": "literature",
+      "status": "locked",
+      "rationale": "The paper default evaluates each redshift bin with the Appendix-A parameter set. The combined multibin estimator remains an explicit alternative.",
+      "evidence": [
+        "scripts/bias_tolerance.py",
+        "dissertation/chapters/ch09_tolerance.tex"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "science.response_solver.default_time_scaling",
+      "side": "science",
+      "value": "noise_normalized_at_each_time",
+      "units": "time model",
+      "basis": "policy",
+      "status": "provisional",
+      "rationale": "The default treats one response unit as contemporaneous thermal power. The fixed-physical alternative tests a persistent residual defined at a reference time.",
+      "evidence": [
+        "scripts/bias_tolerance.py"
+      ],
+      "sensitivity_values": [
+        "noise_normalized_at_each_time",
+        "fixed_physical_at_reference_time"
+      ]
+    },
+    {
+      "id": "science.response_solver.maximum_condition_number",
+      "side": "science",
+      "value": 1000000000000.0,
+      "units": "condition number",
+      "basis": "literature",
+      "status": "provisional",
+      "rationale": "Modes beyond this condition number are treated as numerically unresolved. The limit is conservative relative to the released banks but remains a material numerical choice.",
+      "evidence": [
+        "https://doi.org/10.1137/1.9780898718027",
+        "src/rfisher/forecast.py"
+      ],
+      "sensitivity_values": [
+        10000000000.0,
+        1000000000000.0,
+        100000000000000.0
+      ]
+    },
+    {
+      "id": "science.response_solver.minimum_volume_fraction",
+      "side": "science",
+      "value": 1e-06,
+      "units": "retained bin fraction",
+      "basis": "empirical",
+      "status": "provisional",
+      "rationale": "Forecast slices below this retained-volume fraction are treated as carrying no useful information. The cutoff avoids nearly empty matrices but remains a sensitivity choice.",
+      "evidence": [
+        "src/rfisher/forecast.py"
+      ],
+      "sensitivity_values": [
+        0.0,
+        1e-08,
+        1e-06,
+        0.0001
+      ]
+    },
+    {
+      "id": "science.response_solver.relative_nullspace_cutoff",
+      "side": "science",
+      "value": 1.4901161193847656e-08,
+      "units": "relative singular scale",
+      "basis": "literature",
+      "status": "provisional",
+      "rationale": "The square root of float64 machine epsilon separates numerical null-space overlap from roundoff. This is standard numerical screening rather than a science-derived tolerance.",
+      "evidence": [
+        "https://doi.org/10.1137/1.9780898718027",
+        "src/rfisher/forecast.py"
+      ],
+      "sensitivity_values": [
+        2.220446049250313e-16,
+        1.4901161193847656e-08,
+        1e-06
+      ]
+    },
+    {
+      "id": "science.response_stability.maximum_tolerance_ratio",
+      "side": "science",
+      "value": 1.2,
+      "units": "ratio",
+      "basis": "policy",
+      "status": "provisional",
+      "rationale": "A response is refused when its inferred tolerance moves by more than twenty percent across the time perturbations.",
+      "evidence": [
+        "scripts/bias_tolerance.py"
+      ],
+      "sensitivity_values": [
+        1.1,
+        1.2,
+        1.5
+      ]
+    },
+    {
+      "id": "science.response_stability.time_fraction",
+      "side": "science",
+      "value": 0.1,
+      "units": "fraction",
+      "basis": "policy",
+      "status": "provisional",
+      "rationale": "The Fisher response is re-evaluated at plus and minus ten percent in integration time to expose interpolation and cancellation failures.",
+      "evidence": [
+        "scripts/bias_tolerance.py"
+      ],
+      "sensitivity_values": [
+        0.05,
+        0.1,
+        0.2
+      ]
+    },
+    {
+      "id": "science.systematic_budget.primary_zeta",
+      "side": "science",
+      "value": 1.0,
+      "units": "sigma",
+      "basis": "policy",
+      "status": "provisional",
+      "rationale": "The paper uses a permissive screening budget of one statistical standard deviation; a collaboration must set its own total budget.",
+      "evidence": [
+        "https://doi.org/10.1111/j.1365-2966.2007.12731.x"
+      ],
+      "sensitivity_values": [
+        0.5,
+        0.3,
+        0.1
+      ]
+    },
+    {
+      "id": "science.systematic_budget.sensitivity_zeta",
+      "side": "science",
+      "value": [
+        0.5,
+        0.3,
+        0.1
+      ],
+      "units": "sigma",
+      "basis": "policy",
+      "status": "locked",
+      "rationale": "These values expose progressively tighter systematic budgets and have direct root-mean-square error interpretations.",
+      "evidence": [
+        "dissertation/chapters/ch09_tolerance.tex"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "transfer.delay_suppression.default_key",
+      "side": "science",
+      "value": "none",
+      "units": "scenario key",
+      "basis": "policy",
+      "status": "locked",
+      "rationale": "The default claims no delay-filter credit because the forecast does not model that foreground-removal stage. This is conservative for the residual budget.",
+      "evidence": [
+        "src/rfisher/residual.py"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "transfer.systematic_gain",
+      "side": "science",
+      "value": 1.0,
+      "units": "science residual per shelf proxy",
+      "basis": "policy",
+      "status": "conditional",
+      "rationale": "Unity is a screening closure, not a measured shelf-to-visibility systematic transfer.",
+      "evidence": [
+        "docs/contamination-residuals.md"
+      ],
+      "sensitivity_values": []
+    },
+    {
+      "id": "transfer.variance_gain",
+      "side": "science",
+      "value": 1.0,
+      "units": "science variance per shelf proxy",
+      "basis": "policy",
+      "status": "conditional",
+      "rationale": "Unity is a screening closure, not a measured shelf-to-visibility variance transfer.",
+      "evidence": [
+        "docs/contamination-residuals.md"
+      ],
+      "sensitivity_values": []
+    }
+  ]
+}
