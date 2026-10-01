@@ -27,6 +27,7 @@ import numpy as np
 
 from rfisher.records.chime_atsc_2026 import capture_handoff
 from rfisher.records.chime_atsc_2026 import capture_units as U
+from rfisher.records.chime_atsc_2026._files import read_rows
 
 RHO_CEIL = 0.95   # the ground credit's ceiling: channel 24 has no measured coherence, so the credit readings take the most generous
 TAU_ARCHIVE = 8423.0
@@ -65,7 +66,7 @@ def load(h, record_table):
     """Read the lane from the handoff and channel 24's lambda_none from the table of record."""
     global lam_none, FILL
     c = capture_handoff.cohort24(h)
-    lam_none = [float(x["lambda_none"]) for x in csv.DictReader(open(record_table)) if int(x["channel"]) == 24 and x["role"] != "pilot" and x["lambda_none"]][0]
+    lam_none = [float(x["lambda_none"]) for x in read_rows(record_table) if int(x["channel"]) == 24 and x["role"] != "pilot" and x["lambda_none"]][0]
     FILL = U.fill_factor(24, lam_none, "none")
     L = Lane(EVENTS=c.EVENTS, MAXFR=c.MAXFR, INB=c.INB, C37=c.C37, R=c.R, dup=c.dup, eta=c.eta, Qmed={e: c.Qmed[e] for e in c.EVENTS},
              lam_none=lam_none, FILL=FILL, POLICIES=POLICIES, CLS=CLS, LONG=LONG, RANGES=RANGES, lane=c.lane, code=c.code,
@@ -165,7 +166,7 @@ def ceiling_text(form="one_minus_gamma_sq"):
 
 
 def _record24():
-    for r in csv.DictReader(open(_STATE["record"])):
+    for r in read_rows(_STATE["record"]):
         if r["channel"] == "24" and r["role"] != "pilot" and r["lambda_none"]:
             return float(r["lambda_none"]), float(r["lambda_deployed"]), float(r["suppression_db"])
 
@@ -473,7 +474,7 @@ def main(argv=None):
     print("  that is the chief caveat on this row.\n")
 
     lam = None
-    for x in csv.DictReader(open(TOR)):
+    for x in read_rows(TOR):
         if int(x["channel"]) == 24 and x["role"] != "pilot" and x["lambda_deployed"]:
             lam = float(x["lambda_deployed"] if WORLD == "200ns" else x["lambda_none"]); break
     A_pilot = float(np.median(exc[24]))
@@ -499,7 +500,7 @@ def main(argv=None):
     worst_at_arch = [b for n, c, t, g, b in rows if n == "strong worst case" and t == TAU_ARCHIVE][0]
     thresh_worst = (10 ** (ALLOW / 10)) * lam / (A_pilot * 10 ** (worst_corr / 10) * S * credit) * TF
     if A18:
-        lam_n = [float(x["lambda_none"]) for x in csv.DictReader(open(TOR)) if int(x["channel"]) == 24 and x["role"] != "pilot" and x["lambda_none"]][0]
+        lam_n = [float(x["lambda_none"]) for x in read_rows(TOR) if int(x["channel"]) == 24 and x["role"] != "pilot" and x["lambda_none"]][0]
         print("VERDICT (amendment 18, the rule as written): UNDETERMINED on the 2020 basis.")
         print(f"  The excision rests on the pilot-to-in-band correction, and that correction is not measured on channel 24:")
         print(f"  the {worst_corr:+.2f} dB carried here is the worst of {len(strong_db)} other strong transmitters on the 2026 capture, whose")

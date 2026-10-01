@@ -40,17 +40,18 @@ import csv, math, os
 import numpy as np
 
 from rfisher.records.chime_atsc_2026 import capture_units as U
+from rfisher.records.chime_atsc_2026._files import load_json, read_rows
 
 
 def main(argv=None):
     import sys
     argv = ["duration"] + list(sys.argv[1:] if argv is None else argv)
     A18, OUT = argv[1], argv[2]
-    C24 = __import__("json").load(open(argv[argv.index("--ch24") + 1])) if "--ch24" in argv else None
+    C24 = load_json(argv[argv.index("--ch24") + 1]) if "--ch24" in argv else None
     if "--duration-reference" not in argv: raise SystemExit("duration: --duration-reference DIR (the survey-duration compute run) is required")
     if C24 is not None and not (C24.get("basis") == "measured2020" and C24["disposition"] == "excise"): C24 = None
     DUR = argv[argv.index("--duration-reference") + 1]   # the survey-duration compute run, whose values the banks are checked against
-    d = __import__("json").load(open(A18)); res = d["results"]; lam_none = d["lam_none"]; lam_dep = d["lam_dep"]
+    d = load_json(A18); res = d["results"]; lam_none = d["lam_none"]; lam_dep = d["lam_dep"]
     def db(x): return 10 * math.log10(x) if (x is not None and math.isfinite(x) and x > 0) else math.nan
     def over(b): return 10 ** (b / 10) > U.ALLOW_R                    # item 7, the code's test
     log = []
@@ -99,7 +100,7 @@ def main(argv=None):
                 cache[(ib, y, p)] = (float(sig[p] / abs(dth[p])), bool(drift <= LIMIT and nsign == 1))
             return cache[(ib, y, p)]
         # the bank reproduces the compute run at the six durations, value and gate
-        ref = {(int(r["bin"]), r["param"], float(r["years"])): r for r in csv.DictReader(open(os.path.join(DUR, "bin_sigma_lambda.csv"))) if r["world"] == "none"}
+        ref = {(int(r["bin"]), r["param"], float(r["years"])): r for r in read_rows(os.path.join(DUR, "bin_sigma_lambda.csv")) if r["world"] == "none"}
         nchk = 0
         for (ib, p, y), r in ref.items():
             if y in YN and ib in {b for ch in range(14, 37) for b in U.bin_overlaps(ch)}:
@@ -112,7 +113,7 @@ def main(argv=None):
             return min(v), acc
         def chan_lam(ch, y):   # the channel's lambda_none(t): min over bins and both dilations, no fill (the keep side)
             return min(cell(b, y, p)[0] for b in U.bin_overlaps(ch) for p in ("aperp", "apar"))
-        cl = {int(r["channel"]): r for r in csv.DictReader(open(os.path.join(DUR, "channel_lambda.csv"))) if r["world"] == "none"}
+        cl = {int(r["channel"]): r for r in read_rows(os.path.join(DUR, "channel_lambda.csv")) if r["world"] == "none"}
         assert all(repr(chan_lam(ch, y)) == cl[ch][f"lamraw_{y:g}yr"] for ch in cl for y in YN)
         out = []; soft = []
         items = sorted(res.items(), key=lambda x: int(x[0]))
@@ -173,7 +174,7 @@ def main(argv=None):
 
     # ---------------------------------------------------------------- 2. duration sensitivity (the 200 ns world, revision 2)
     YEARS = (2.0, 3.0)
-    fac = {(int(r["channel"]), float(r["years"])): r for r in csv.DictReader(open(os.path.join(DUR, "ruling_factors.csv")))}
+    fac = {(int(r["channel"]), float(r["years"])): r for r in read_rows(os.path.join(DUR, "ruling_factors.csv"))}
     out = []; lost = []
     for c, per in sorted(res.items(), key=lambda x: int(x[0])):
         ch = int(c)

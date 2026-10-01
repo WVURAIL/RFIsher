@@ -9,17 +9,18 @@ both. A disposition is excise when either BAO range excises; excisions that exis
 The release's ``filter_sensitivity_a18.py`` (revision 3's), with its logic unchanged.
 usage: rfisher records filter-sensitivity <r3 a18.json> <r3 dispositions_a18.csv> <r2 release dir> <out csv>
 """
-import csv, json, math, os
+import csv, math, os
+from rfisher.records.chime_atsc_2026._files import load_json, read_rows
 
 
 def main(argv=None):
     import sys
     argv = ["filter-sensitivity"] + list(sys.argv[1:] if argv is None else argv)
     A3, D3, R2, OUT = argv[1:5]
-    a3 = json.load(open(A3)); a2 = json.load(open(os.path.join(R2, "run", "a18.json")))
+    a3 = load_json(A3); a2 = load_json(os.path.join(R2, "run", "a18.json"))
     assert a3.get("world") == "none" and "world" not in a2 and "WORLD" not in a2["switches"]
     assert {k: v for k, v in a3["switches"].items() if k != "WORLD"} == a2["switches"]
-    d3 = {r["channel"]: r for r in csv.DictReader(open(D3))}; d2 = {r["channel"]: r for r in csv.DictReader(open(os.path.join(R2, "dispositions_a18.csv")))}
+    d3 = {r["channel"]: r for r in read_rows(D3)}; d2 = {r["channel"]: r for r in read_rows(os.path.join(R2, "dispositions_a18.csv"))}
     BAO = ("bao_short", "bao_long")
     def db(x): return 10 * math.log10(x)
     def bar(a, c, rng):

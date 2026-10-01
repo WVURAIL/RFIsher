@@ -45,12 +45,13 @@ usage: rfisher records postprocessing --handoff DIR <r4 a18.json> <r4 a18_g1.jso
                                       <r4 robustness_a18.csv> <r3 release dir> <r2 release dir> <out csv>
                                       [--ch24 C4.json C3.json C2.json] [--r51] [--credit-form one_minus_gamma_sq|one_minus_gamma]
 """
-import csv, json, math, os
+import csv, math, os
 
 import numpy as np
 
 from rfisher.records.chime_atsc_2026 import capture_handoff
 from rfisher.records.chime_atsc_2026 import capture_units as U
+from rfisher.records.chime_atsc_2026._files import load_json, read_rows
 
 
 def main(argv=None):
@@ -86,12 +87,12 @@ def main(argv=None):
     GFORM = "(1 - gamma^2)" if CF == "one_minus_gamma_sq" else "(1 - gamma)"
     C24 = None
     if "--ch24" in argv:
-        i = argv.index("--ch24"); C24 = [json.load(open(x)) for x in argv[i + 1:i + 4]]
+        i = argv.index("--ch24"); C24 = [load_json(x) for x in argv[i + 1:i + 4]]
         if C24[0].get("basis") != "measured2020": C24 = None
         else: assert [(c["world"], c["ground"]) for c in C24] == [("none", "off"), ("none", "on"), ("200ns", "on")], [(c["world"], c["ground"]) for c in C24]
         if C24 is not None: assert all(c.get("ground_credit_form", "one_minus_gamma_sq") == CF for c in C24[1:]), "r5.2: channel 24's credit readings in the same form"
-    a4 = json.load(open(A4)); g4 = json.load(open(G14))
-    a3 = json.load(open(os.path.join(R3, "run", "a18.json"))); a2 = json.load(open(os.path.join(R2, "run", "a18.json")))
+    a4 = load_json(A4); g4 = load_json(G14)
+    a3 = load_json(os.path.join(R3, "run", "a18.json")); a2 = load_json(os.path.join(R2, "run", "a18.json"))
     assert a4["switches"]["GROUND_CREDIT"] == "off" and a4["world"] == "none" and g4["switches"]["GROUND_CREDIT"] == "off"
     if R51:   # r5.1: every switch recorded
         assert a3["switches"]["GROUND_CREDIT"] == "on" and a3["world"] == "none" and "world" not in a2 and a2["switches"]["WORLD"] == "200ns" and a2["switches"]["GROUND_CREDIT"] == "on"
@@ -101,10 +102,10 @@ def main(argv=None):
     else:
         assert "GROUND_CREDIT" not in a3["switches"] and a3["world"] == "none" and "world" not in a2
         assert {k: v for k, v in a4["switches"].items() if k != "GROUND_CREDIT"} == a3["switches"]
-    d4 = {r["channel"]: r for r in csv.DictReader(open(D4))}
-    d3 = {r["channel"]: r for r in csv.DictReader(open(os.path.join(R3, "dispositions_a18.csv")))}
-    d2 = {r["channel"]: r for r in csv.DictReader(open(os.path.join(R2, "dispositions_a18.csv")))}
-    rb4 = {r["channel"]: r for r in csv.DictReader(open(RB4))}
+    d4 = {r["channel"]: r for r in read_rows(D4)}
+    d3 = {r["channel"]: r for r in read_rows(os.path.join(R3, "dispositions_a18.csv"))}
+    d2 = {r["channel"]: r for r in read_rows(os.path.join(R2, "dispositions_a18.csv"))}
+    rb4 = {r["channel"]: r for r in read_rows(RB4)}
     BAO = ("bao_short", "bao_long")
     def db(x): return 10 * math.log10(x)
     def over(b): return 10 ** (b / 10) > U.ALLOW_R          # item 7, the code's test

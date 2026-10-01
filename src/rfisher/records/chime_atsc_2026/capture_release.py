@@ -31,6 +31,7 @@ from rfisher import provenance
 from rfisher.records.chime_atsc_2026 import (capture_handoff, capture_ruling, cohort_basis, duration, phase_limit,
                                              postprocessing, promotion_evidence, robustness)
 from rfisher.records.chime_atsc_2026 import capture_units as U
+from rfisher.records.chime_atsc_2026._files import load_json, read_rows
 
 RULE = "r5_2"
 RECORD_SHA = "9867551ad591757ed8b8864940376c68666483833478b4711292e0517a27b195"
@@ -43,15 +44,6 @@ def sha(p):
     with open(p, "rb") as fh:
         return hashlib.sha256(fh.read()).hexdigest()
 
-
-def _load_json(p):
-    with open(p) as fh:
-        return json.load(fh)
-
-
-def _read_rows(p):
-    with open(p) as fh:
-        return list(csv.DictReader(fh))
 
 
 def run(fn, args, out=None):
@@ -117,13 +109,13 @@ def main(argv=None):
         run(R, ["--rule", RULE, "--sensitivity", "g1", "--json", f"{RUN}/a18_g1.json", "--out", f"{RUN}/a18_g1_full.csv", *RARGS], f"{RUN}/a18_g1.log")
         run(R, ["--rule", "record", "--set", "UNITS=power", "--set", "WORLD=none", "--set", "GROUND_CREDIT=off", "--json", f"{RUN}/units_only.json",
                 "--out", f"{RUN}/units_only_full.csv", *RARGS], f"{RUN}/units_only.log")
-    A = _load_json(f"{RUN}/a18.json"); G1 = _load_json(f"{RUN}/a18_g1.json") if not CREDIT else None
+    A = load_json(f"{RUN}/a18.json"); G1 = load_json(f"{RUN}/a18_g1.json") if not CREDIT else None
     # 2. the copies
     PB24 = os.path.join(REL, "ch24_per_bin_a19.csv")
     run(cohort_basis.main, ["--handoff", handoff_dir, "--record-table", RECORD, "--a18", "--world", WORLD, *(["--ground", "off"] if GROUND == "off" else []),
                             "--set", "CH24_BASIS=measured2020", *(["--per-bin", PB24] if not CREDIT else []), *C24X, *CFX, "--json", f"{RUN}/ch24_a18.json"],
         os.path.join(REL, "ch24_basis_a18.txt"))
-    C24 = _load_json(f"{RUN}/ch24_a18.json")
+    C24 = load_json(f"{RUN}/ch24_a18.json")
     _CE = "its ceiling" if CF == "one_minus_gamma_sq" else "its ceiling, (1 - 0.95),"   # r5.2: the settled form
     _W = {("none", "off"): "", ("none", "on"): f" with the ground credit at {_CE} (no measured coherence)",
           ("200ns", "on"): f" with the 200 ns filter plus S and the ground credit at {_CE} (no measured coherence)"}[(WORLD, GROUND)]
@@ -165,7 +157,7 @@ def main(argv=None):
     def range_bar(ch, rng):
         p = A["results"][str(ch)][rng]
         return p["bar"] if p["verdict"][0] in ("excise", "marginal", "policy at floor") else None
-    rec = list(_read_rows(RECORD)); full = list(_read_rows(f"{RUN}/a18_full.csv"))
+    rec = list(read_rows(RECORD)); full = list(read_rows(f"{RUN}/a18_full.csv"))
     def _f(x, fmt): return "" if x is None else format(x, fmt)
     def row24(o, rng):
         """r5: channel 24's per-range columns on its own 2020 in-band measurement, in the ruling's formats (the keep_all reading, as
@@ -236,7 +228,7 @@ def main(argv=None):
         if disp == "excise": reason = f"excised on the {RTXT[dr]}: {state(ch, dr, A)}; {RTXT[other]}: {state(ch, other, A)}"
         elif dr: reason = f"{RTXT[dr]}: {state(ch, dr, A)}; {RTXT[other]}: {state(ch, other, A)}"
         else: reason = "both BAO ranges at the control floor" + ("; no pilot bin, lowest epoch at the floor" if "lowest epoch" in per["bao_long"]["verdict"][1] + per["bao_short"]["verdict"][1] else "")
-        t = next((r for r in _read_rows(f"{RUN}/thresholds.csv") if r["channel"] == s and r["range"] == "channel"), None)
+        t = next((r for r in read_rows(f"{RUN}/thresholds.csv") if r["channel"] == s and r["range"] == "channel"), None)
         rows.append(dict(channel=ch, record_disposition=recd.get(s, ""), a18_disposition=disp, deciding_range=dr, deciding_bar_db=f1(range_bar(ch, dr)) if dr else "",
                          reason=reason, bao_short=state(ch, "bao_short", A), bao_long=state(ch, "bao_long", A), policies_excluded="; ".join(exc),
                          sensitivity_G1_disposition=G1["summary"][s][0] if G1 else "",
@@ -247,7 +239,7 @@ def main(argv=None):
         # bounded class at its bound) is "unmeasured classes at G = 1"; the literal reading puts every class at G = 1, which is R at G = 1
         # on the deciding range (the ruling's R1: the least policy, or the least epoch), excised where a BAO range that excises has
         # R1 over the allowance (the code's test), which is the thresholds' "excised at any τ"
-        TH = {(r["channel"], r["range"]): r for r in _read_rows(f"{RUN}/thresholds.csv")}
+        TH = {(r["channel"], r["range"]): r for r in read_rows(f"{RUN}/thresholds.csv")}
         for o in rows:
             ch = int(o["channel"]); s_ = str(ch); o["sensitivity_unmeasured_G1_disposition"] = o.pop("sensitivity_G1_disposition"); thr_ = o.pop("threshold")
             if ch == 24 and CH24 == "measured2020":
@@ -263,7 +255,7 @@ def main(argv=None):
         w = csv.DictWriter(fh, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
 
     # 5. thresholds_a18.csv: the producer's, with channel 24 on its 2020 basis in place of its empty capture rows
-    thr = [r for r in _read_rows(f"{RUN}/thresholds.csv") if r["channel"] != "24"]
+    thr = [r for r in read_rows(f"{RUN}/thresholds.csv") if r["channel"] != "24"]
     fields = list(thr[0]); i24 = next(i for i, r in enumerate(thr) if int(r["channel"]) > 24)
     if CH24 == "borrowed":
         thr.insert(i24, {**{k: "" for k in fields}, "channel": "24", "range": "channel", "verdict_a18": "undetermined",
@@ -318,10 +310,10 @@ def main(argv=None):
             "--out", f"{RUN}/a18_bounds_off_full.csv", *RARGS], f"{RUN}/a18_bounds_off.log")
     run(R, ["--rule", RULE, "--set", "TAU_LOWER_BOUNDS=off", *BOFF, *([] if TC == "off" else ["--set", "TAU_CENSOR=on"]), "--sensitivity", "g1",
             "--json", f"{RUN}/a18_g1_bounds_off.json", "--out", f"{RUN}/a18_g1_bounds_off_full.csv", *RARGS], f"{RUN}/a18_g1_bounds_off.log")
-    Aoff = _load_json(f"{RUN}/a18_bounds_off.json"); G1off = _load_json(f"{RUN}/a18_g1_bounds_off.json")
+    Aoff = load_json(f"{RUN}/a18_bounds_off.json"); G1off = load_json(f"{RUN}/a18_g1_bounds_off.json")
     LBall = capture_handoff.tau_lower_bounds(H, censor=(TC == "on" or R51), source=("fits" if R51 else "summary"), calibrate=R51); CN = {(0, 1): "ns1", (0, 32): "ns32", (0, 64): "ns64", (0, 128): "ns128", (0, 255): "ns255", (1, 0): "ew1", (2, 0): "ew2", (3, 0): "ew3"}
     used = set(A["tau_lower_bounds_used"]); brows = []
-    R5A = _load_json(os.path.join(R5, "run", "a18.json")) if R51 else None
+    R5A = load_json(os.path.join(R5, "run", "a18.json")) if R51 else None
     def _bar(p): return f1(p["bar"] if p["verdict"][0] in ("excise", "marginal", "policy at floor") else None)
     for (ch, c), v in sorted(LBall.items()):
         if ch == 37: continue

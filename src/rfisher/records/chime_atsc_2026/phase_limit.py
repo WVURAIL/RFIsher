@@ -53,11 +53,12 @@ usage: rfisher records phase-limit --handoff DIR <out dir> [--units booked|power
 The release's ``phase_limit_a18.py``, with its logic unchanged; the record, the frame-analysis tables, the vendored
 phasor14.csv and the class means of the reduced dumps come from the capture handoff.
 """
-import collections, csv, json, os, re
+import collections, csv, os, re
 
 import numpy as np
 
 from rfisher.records.chime_atsc_2026 import capture_handoff
+from rfisher.records.chime_atsc_2026._files import load_json
 
 
 def main(argv=None):
@@ -70,8 +71,8 @@ def main(argv=None):
         v = _args.pop(0)
         if k == "--handoff": H = capture_handoff.open_handoff(v)
         elif k == "--units": UNITS = v
-        elif k == "--units-json": UJSON = json.load(open(v))
-        elif k == "--a18-json": A18JSON = json.load(open(v))
+        elif k == "--units-json": UJSON = load_json(v)
+        elif k == "--a18-json": A18JSON = load_json(v)
         elif k == "--record-table": RT = v
     if H is None or OUT is None: raise SystemExit("phase-limit: --handoff and an output directory are required")
     assert UNITS in ("booked", "power") and (UNITS == "booked" or UJSON is not None)

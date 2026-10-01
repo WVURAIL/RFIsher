@@ -13,7 +13,7 @@ MODULE_SHA256 = "0d041bfdd55605c7b3422ca0d7ab4209603dbf72b8c81990e5312ba3a464b4e
 
 
 def test_the_module_is_the_cited_one():
-    data = open(visibility.__file__, "rb").read()
+    data = Path(visibility.__file__).read_bytes()
     assert hashlib.sha256(data).hexdigest() == MODULE_SHA256
 
 

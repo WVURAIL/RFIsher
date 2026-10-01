@@ -12,9 +12,10 @@ r5.2 (DECISIONS.md items 39 and 41): write(..., rev="r5.2", r51_rel=<the r5.1 re
 the settled ground credit ((1 - gamma) at B-1's reconciled gamma), names channel 24's promotion as the author's ruling (item 39), and
 moves B-7's both-credit margins by the change of the r2 bar from r5.1 (the credit multiplies R as the bar does). Without them the
 output is r5.1's byte for byte."""
-import csv, json, math, os
+import csv, math, os
 
 from rfisher.records.chime_atsc_2026 import capture_units as U
+from rfisher.records.chime_atsc_2026._files import load_json, read_rows
 
 
 def inputs(evid):
@@ -35,21 +36,21 @@ def _f(x):
 
 def write(REL, B2R51, EVB, A, C24, rev="r5.1", r51_rel=None, *, evid, r5):
     MASK, B6, B7, B8 = inputs(evid); R5 = r5
-    lc = {int(r["channel"]): r for r in csv.DictReader(open(os.path.join(B2R51, "least_corners.csv")))}
-    cells = list(csv.DictReader(open(os.path.join(B2R51, "grid_cells.csv"))))
-    chk = json.load(open(os.path.join(B2R51, "checks.json")))
-    pp = {int(r["channel"]): r for r in csv.DictReader(open(os.path.join(REL, "postprocessing_sensitivity.csv")))}
-    dp = {int(r["channel"]): r for r in csv.DictReader(open(os.path.join(REL, "dispositions_a18.csv")))}
-    r5d = {int(r["channel"]): r for r in csv.DictReader(open(os.path.join(R5, "dispositions_a18.csv")))}
-    mask = {int(r["uhf_channel"]): r for r in csv.DictReader(open(MASK))}
-    b6 = [r for r in csv.DictReader(open(B6)) if r["cls"] in CROSS]
-    b7 = [r for r in csv.DictReader(open(B7)) if r["credit"] == "both" and r["range"] != "shortest" and r["margin_fourier_db"] not in ("", "nan")]
-    A5 = json.load(open(os.path.join(R5, "run", "a18.json")))
+    lc = {int(r["channel"]): r for r in read_rows(os.path.join(B2R51, "least_corners.csv"))}
+    cells = list(read_rows(os.path.join(B2R51, "grid_cells.csv")))
+    chk = load_json(os.path.join(B2R51, "checks.json"))
+    pp = {int(r["channel"]): r for r in read_rows(os.path.join(REL, "postprocessing_sensitivity.csv"))}
+    dp = {int(r["channel"]): r for r in read_rows(os.path.join(REL, "dispositions_a18.csv"))}
+    r5d = {int(r["channel"]): r for r in read_rows(os.path.join(R5, "dispositions_a18.csv"))}
+    mask = {int(r["uhf_channel"]): r for r in read_rows(MASK)}
+    b6 = [r for r in read_rows(B6) if r["cls"] in CROSS]
+    b7 = [r for r in read_rows(B7) if r["credit"] == "both" and r["range"] != "shortest" and r["margin_fourier_db"] not in ("", "nan")]
+    A5 = load_json(os.path.join(R5, "run", "a18.json"))
     NEW = r51_rel is not None   # r5.2: the settled ground credit
     if NEW:   # the r2 bars of this release and of r5.1, per range (channel 24 from its own credit readings)
-        R2N, R2O = (json.load(open(os.path.join(x, "credit_readings", "r2", "run", "a18.json"))) for x in (REL, r51_rel))
-        C2N, C2O = (json.load(open(os.path.join(x, "credit_readings", "r2", "run", "ch24_a18.json"))) for x in (REL, r51_rel))
-    g24 = json.load(open(B8))
+        R2N, R2O = (load_json(os.path.join(x, "credit_readings", "r2", "run", "a18.json")) for x in (REL, r51_rel))
+        C2N, C2O = (load_json(os.path.join(x, "credit_readings", "r2", "run", "ch24_a18.json")) for x in (REL, r51_rel))
+    g24 = load_json(B8)
     # ---- checks: the rerun reads this release's rule (rule, I, none, none, 0.7, released is the no-credit bar of each range)
     assert chk["r5_bars_max_abs_diff_db"] < 1e-9 and chk["r2_bars_max_abs_diff_db"] < 1e-3, chk
     for ch in EXCISED:
@@ -164,7 +165,7 @@ def write(REL, B2R51, EVB, A, C24, rev="r5.1", r51_rel=None, *, evid, r5):
            f"channel {c} in {lc[c]['inadmissible_cells_not_excised']} of {lc[c]['inadmissible_cells']} (least {fx(R[c]['least_including_inadmissible_db'])} dB)" for c in inad) + "." if inad else "")
        + "\n")
     # against B-2 on r5 (the same grid on r5's readings)
-    old = list(csv.DictReader(open(os.path.join(EVB, "B-2", "grid_cells.csv"))))
+    old = list(read_rows(os.path.join(EVB, "B-2", "grid_cells.csv")))
     key = lambda x: tuple(x[f] for f in ("channel", "G", "pol", "steady_share", "filter", "cosdec", "lambda_dep"))
     oc = {key(x): x for x in old}; flips = {}
     for x in cells:
@@ -172,7 +173,7 @@ def write(REL, B2R51, EVB, A, C24, rev="r5.1", r51_rel=None, *, evid, r5):
         if x["status"] == "admissible" and y["channel_excised"] != x["channel_excised"]: flips.setdefault(int(x["channel"]), []).append((y, x))
     moved6 = [c for c in PROMOTED_R5 if any(abs(_f(y["channel_value_db"]) - _f(x["channel_value_db"])) > 1e-9 for x in cells if int(x["channel"]) == c and x["status"] == "admissible"
                                              for y in [oc[key(x)]] if _f(x["channel_value_db"]) is not None and _f(y["channel_value_db"]) is not None)]
-    old_lc = {int(r_["channel"]): r_ for r_ in csv.DictReader(open(os.path.join(EVB, "B-2", "least_corners.csv")))}
+    old_lc = {int(r_["channel"]): r_ for r_ in read_rows(os.path.join(EVB, "B-2", "least_corners.csv"))}
     same6 = all(old_lc[c]["least_admissible_value_db"] == R[c]["least_admissible_corner_db"] for c in PROMOTED_R5)
     txt = ["Against B-2 on r5: the six's least corners are " + ("unchanged" if same6 else "changed") + (f", and no admissible cell of theirs moves" if not moved6 else f"; admissible cells move on {moved6}") + "."]
     for c, fl in sorted(flips.items()):

@@ -99,6 +99,7 @@ import numpy as np
 
 from rfisher.records.chime_atsc_2026 import capture_handoff
 from rfisher.records.chime_atsc_2026 import capture_units as U
+from rfisher.records.chime_atsc_2026._files import read_rows
 
 RULES = "capture_rules"
 CHOICES = dict(UNITS=("booked", "power"), POL=("larger", "stokes_i"), UNMEASURED_TAU=("current", "gmin", "g1"), GAIN=("zero", "bao"),
@@ -199,7 +200,7 @@ def main(argv=None, *, project=None):
     def gain(t, ch):
         """item 4: the coherence gain of a coherence time t on channel ch."""
         return min(t, CAP) / TF if SW["GAIN"] == "zero" else U.gain_bao(min(t, CAP), ch)
-    rows_in = list(csv.DictReader(open(inp)))
+    rows_in = list(read_rows(inp))
     lam_none = {int(r["channel"]): float(r["lambda_none"]) for r in rows_in if r["lambda_none"]}
     lam_dep = {int(r["channel"]): float(r["lambda_deployed"]) for r in rows_in if r["lambda_deployed"]}
     sup = {int(r["channel"]): float(r["suppression_db"]) for r in rows_in if r["suppression_db"]}

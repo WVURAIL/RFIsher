@@ -31,12 +31,13 @@ With --record-table TABLE the table of record is read from TABLE (the table writ
 handoff's copy.
 usage: rfisher records robustness --handoff DIR <output csv> [--a18 A18.json] [--ch24 CH24.json] [--variant-labels]
                                   [--record-table TABLE]"""
-import csv, json, re
+import csv, re
 
 import numpy as np
 
 from rfisher.records.chime_atsc_2026 import capture_handoff
 from rfisher.records.chime_atsc_2026 import capture_units as U
+from rfisher.records.chime_atsc_2026._files import load_json
 
 
 def main(argv=None):
@@ -48,8 +49,8 @@ def main(argv=None):
     _pos = [x for i, x in enumerate(argv) if i > 0 and x not in ("--handoff", "--a18", "--ch24", "--variant-labels", "--record-table") and argv[i - 1] not in ("--handoff", "--a18", "--ch24", "--record-table")]
     if len(_pos) != 1: raise SystemExit("robustness: one output csv is required")
     OUT = _pos[0]
-    A18 = json.load(open(argv[argv.index("--a18") + 1])) if "--a18" in argv else None
-    C24 = json.load(open(argv[argv.index("--ch24") + 1])) if "--ch24" in argv else None
+    A18 = load_json(argv[argv.index("--a18") + 1]) if "--a18" in argv else None
+    C24 = load_json(argv[argv.index("--ch24") + 1]) if "--ch24" in argv else None
     VLAB = "--variant-labels" in argv   # r5.1, triage row 26
     if C24 is not None and not (C24.get("basis") == "measured2020" and C24["disposition"] == "excise"): C24 = None
     RANGES = {"bao_short": [(0, 32), (0, 64)], "bao_long": [(0, 128), (0, 255), (1, 0), (2, 0), (3, 0)]}
