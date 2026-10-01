@@ -1,9 +1,32 @@
 # RFIsher
 
-RFIsher evaluates masking cost and contamination-residual tolerance with
-Fisher forecasts. Give it a frequency-dependent masking policy and an optional
-contamination residual; it reports the observing-time cost, target
-significance, and residual-amplitude tolerance.
+RFIsher is the science side of a detector/science split for radio-frequency
+interference in 21 cm intensity mapping: it decides what a detector's masking
+is worth to a cosmological measurement. The detector side,
+[pilot-proxy](https://github.com/WVURAIL/pilot-proxy), characterizes each
+band (every candidate threshold with its masked fraction and kept residual);
+RFIsher turns a Fisher forecast into a tolerance on that residual and prices
+the detector's surface against it, band by band: keep, excise or
+undetermined. It also prices masking as observing-time cost, the use it was
+first written for.
+
+```mermaid
+flowchart LR
+  OC["pilot-proxy handoff<br/>operating_characteristic_v1"] --> V["verdict<br/>(eta_sci, deployable set,<br/>selector, screen)"]
+  F["forecast<br/>(RadioFisher BAO, banks,<br/>delay-filter scenarios)"] --> T["tolerance<br/>(r_tol per band and scenario)"]
+  T -->|tolerances.csv| V
+  COC["pilot-proxy capture handoff<br/>capture_operating_characteristic_v1"] --> R["records of the 2026 campaign<br/>(capture ruling of record)"]
+  T --> R
+  F -->|BAO-band coherence gain| R
+```
+
+Cosmology enters through `rfisher.forecast` and `rfisher.tolerance`, and two
+things leave them: `tolerances.csv`, for both verdicts, and the BAO-band gain,
+for the capture ruling of record only. [docs/HANDOFF.md](docs/HANDOFF.md) says
+what the verdict reads and gives the reading path through the code;
+[docs/cosmology-entry.md](docs/cosmology-entry.md) explains the tolerance for
+an engineer; [docs/adapting.md](docs/adapting.md) says how to add a science
+model.
 
 The current release ships a CHIME, ATSC DTV, and 21 cm BAO reference
 application. Its public scenario and bank boundaries are designed for other
@@ -125,13 +148,15 @@ the full inputs, results, and caveats.
 
 - [Architecture and scope](docs/architecture.md) — component boundaries,
   bank contract, backend hooks, and the current generality limit.
-- [Masking cost](docs/tolerance.md) — retained-time and excision models,
-  weighting conventions, and mask-product provenance.
-- [Contamination residuals](docs/tolerance.md) — variance and
-  bias paths, histogram threshold selection, coherence, and refusal rules.
-- [Threshold decision register](docs/decision-register.md): the
-  earlier single register of preparation and selection choices, kept as a
-  record; the current entries are the two project registers.
+- [The handoff](docs/HANDOFF.md): what the verdict reads, the reading path,
+  and how the selector chooses.
+- [Where cosmology enters](docs/cosmology-entry.md): the tolerance, the
+  suppression S and the refused bands, for an engineer.
+- [Tolerance](docs/tolerance.md): the masking-cost and contamination-residual
+  models in force.
+- [Decision register](docs/decision-register.md): every science and selector
+  entry with its value, status and evidence.
+- [Adapting](docs/adapting.md) and [terminology](docs/terminology.md).
 - [CHIME/BAO reference application](docs/application-chime.md) — fiducial
   configuration, headline results, inputs, and application-specific caveats.
 - [Reproducibility](docs/reproducibility.md) — installation, verification,

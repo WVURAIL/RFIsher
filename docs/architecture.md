@@ -1,158 +1,44 @@
 # Architecture and scope
 
-RFIsher is an analysis layer between measured contamination decisions and a
-Fisher forecast. It evaluates two distinct effects:
-
-1. data removed by masking or excision; and
-2. a contamination residual left in retained data.
-
-The shipped implementation applies that layer to CHIME 21 cm BAO forecasts
-and ATSC DTV contamination. The scenario and bank contracts admit other
-frequency intervals and compatible banks, but the installed target metric,
-instrument builders, and direct-validation paths remain CHIME/BAO-specific.
+RFIsher is the science side of the detector/science split: it turns a
+cosmological forecast into a tolerance on a residual, and the detector's
+operating characteristic into a verdict per band. The detector side is
+[pilot-proxy](https://github.com/WVURAIL/pilot-proxy); what crosses between
+them, and the reading path through each, are in [HANDOFF.md](HANDOFF.md) here
+and in `docs/HANDOFF.md` there.
 
 ## Data flow
 
-The target selector workflow is:
+```text
+ pilot-proxy handoff (files only)          RFIsher
+   oc_table.csv, oc_summary.csv,           forecast/radiofisher_bao  the science model: RadioFisher, chime2022,
+   manifest.json                              |                       Planck 2018, banks, delay-filter scenarios
+   (operating_characteristic_v1)              v  sigma(T*) and the bias per unit residual, per parameter and bin
+          |                                tolerance/   r_tol = min over required parameters and bins of zeta sigma / |b|
+          |                                   v
+          |                               tolerances.csv  (the only science input of the verdict)
+          v                                   v
+       verdict/  handoff.py checks the files; interval.py eta_sci, the deployable set, the selector;
+                 screening.py keep / excise / undetermined; sensitivity.py the post-processing readings
+   capture_operating_characteristic_v1 --> records/chime_atsc_2026/  the capture ruling of record and its copies
+```
 
-1. A detector project produces exact per-frame fine-power terms and residual
-   measurements. Era discovery and invalid-frame bookkeeping retain only the
-   accepted rows from the latest station and receiver state.
-2. Conditioning turns the exact integer decision into the minimum Q16
-   multiplier that keeps each frame at each supported one-based rank.
-3. `preparation.prepare_threshold_family` requires every rank supported by
-   every accepted frame. It derives the exact Q16 multiplier grids, splits the
-   era at its calendar midpoint, builds pooled and early/late histograms, and
-   runs the deterministic drift screen.
-4. `preparation.select_prepared_threshold` verifies the evidence and calls
-   `thresholds.optimize_threshold`, which takes the histograms and science
-   tolerance and selects the `(rho, eta)` operating point. The returned claim
-   retains the source identity and policy digest.
-5. The selected mask fraction and residual enter a `Scenario`, which maps
-   them onto physical frequency intervals.
-6. Each forecast bin receives a surviving-volume fraction and an effective
-   integration-time factor.
-7. A Fisher bank supplies the matrix at the requested effective time.
-8. The forecast layer marginalizes the declared BAO parameters and reports a
-   target significance, uncertainty, or time-to-target.
-9. The bias-response workflow evaluates coherent contamination separately.
-
-This separation is deliberate. Detector design and survey-product generation
-belong in pilot-proxy; the Fisher calculation belongs in RadioFisher; RFIsher
-owns the scientific-cost mapping, validation, and evidence records between
-them.
+Cosmology lives in `forecast/` and `tolerance/`. `verdict/` imports neither
+and reads one tolerance file; `records/` holds the code of record of the 2026
+campaign, kept runnable and not part of the library's interface.
 
 ## Main components
 
-Modules under `forecast.radiofisher_bao` are named here without that prefix.
-
-| Component | Responsibility |
+| Package | Role |
 |---|---|
-| `api` | Short load, scenario, significance, and required-time calls |
-| `scenarios` | Frequency intervals, masking fractions, residual ratios, and excision policy |
-| `bank.banks` | Versioned forecast and bias-response banks with interpolation |
-| `significance` | BAO marginalization, significance curves, and time inversion |
-| `response`, `model` and `filter_scenarios` | Bias per unit residual, the BAO science model, and the delay-filter scenarios |
-| `tolerance` and `science_model` | The residual tolerance table, built from any science model |
-| `residual` | Raw-product statistics, coherence, floor provenance, and the mask-benefit decision |
-| `thresholds` | Pure `(rho, eta)` selection from calibrated residual-score histograms |
-| `preparation` | Q16 family construction, early/late drift evidence, and evidence-bearing refusal |
-| `selection_policy` | Versioned decision values, rationales, sensitivity values, and digest |
-| `products` | External survey-product registry and path resolution |
-| `channels` | ATSC channel and physical-frequency conversion |
-| `bank.experiments` and `layout` | CHIME experiment definition, bins, time conventions, and baselines |
-| `bank.backend` | RadioFisher checkout discovery, binding, and capability checks |
-| `bank.pk_cache` | Content-verified matter-power-spectrum caches |
-
-Everything that determines what a bank holds, the build command included,
-lives in `forecast.radiofisher_bao.bank`, and that subpackage alone is hashed
-into bank provenance.
-
-The public import namespace is `rfisher`, with one command, `rfisher`.
-Version 3 removed the earlier Python and command-line aliases; version 4 moved
-the forecast under `rfisher.forecast.radiofisher_bao`. Historical `baonoise` spellings remain in persisted
-schemas, cache formats, bank provenance, and frozen release artifacts, where
-renaming them would change an existing scientific artifact or data contract.
-
-## Threshold boundary
-
-The pure threshold selector has two inputs: `histograms_by_rho` and
-`science_tolerance`. A histogram is complete for one candidate `rho`: its bins
-cover every prepared frame, including the overflow above the last candidate
-multiplier. Each bin records its count and calibrated systematic-residual
-total. It may also record a calibrated variance-residual total. The histogram
-carries the usable bulk size, which validates `rho` and gives the comparable
-rank fraction `rho / (bulk_size + 1)`.
-
-`rho` is a one-based rank. A strict prepared family contains every rank from
-one through the minimum valid bulk count across the accepted rows; omitting a
-supported rank is refused. Every accepted frame must have the same exposure,
-so a fraction of frame counts is also the masked-exposure fraction. Across
-ranks, the family must describe the same frame population, common bulk size,
-full systematic total, and variance basis and total when present.
-
-The detector comparison uses an integer Q16 multiplier. Preparation records
-the minimum Q16 value that keeps each frame without converting the exact
-rational decision to a floating ratio. Each rank's grid begins at Q16 integer
-one and includes every unique deployable decision boundary observed for that
-rank. The displayed `eta` is the exact integer divided by `65536`; selection
-uses the recorded integer boundary and does not interpolate a rectangular
-surface.
-
-For each `(rho, eta)`, the selector sums the retained bins. It derives the
-frame count, masked fraction `f`, retained systematic residual `r_sys`, and,
-when present, retained variance residual `r_var`. A candidate must retain at
-least 30 frames, and feasible points satisfy `r_sys <= science_tolerance`. The
-cost is
-
-```text
-(1 + r_var) / (1 - f).
-```
-
-If variance totals are absent, the selector minimizes the masking-only cost
-`1 / (1 - f)`. It does not treat `r_sys` as `r_var`.
-Among points within 2% of the minimum cost, selection prefers lower `r_sys`,
-less masking, lower `rho`, then lower `eta`, so mapping order cannot change the
-result.
-
-The residual totals are sufficient statistics only when they are additive:
-their retained prefix sum divided by the retained count must equal the
-calibrated residual for that subset. A correlation or transfer model that must
-be refit after masking belongs in preparation and cannot use this compressed
-form.
-
-Frame validity, era choice, correlation treatment, and proxy-to-science
-transfer calibration begin outside the numerical selector. Era dates,
-rejected-frame counts, and source identities remain product metadata. They do
-not become inputs to `thresholds.optimize_threshold`.
-`prepare_threshold_family` receives accepted latest-era rows and performs the
-calendar split, support accounting, histogram construction, and drift screen.
-`assess_histogram_stability` is the lower-level comparison only: it does not
-split rows or establish that the supplied halves came from one era.
-
-The early/late point screen remains a deterministic screening path, not a
-statistical equivalence test. Operational evidence additionally supplies
-aligned acquisition or sidereal-day block IDs and a `BlockResamplingPlan`.
-Whole blocks are resampled separately within each half, and a one-sided upper
-percentile of the maximum ratio over the full candidate surface must lie
-inside both declared margins. The block unit, minimum block count, seed,
-replicate count, coverage, per-half retained-frame floor, and both margins are
-explicit caller choices recorded with the prepared product. The strict wrapper
-also refuses stale policy identity, a
-non-latest era, invalid or unequal-exposure frames, mask-dependent non-additive
-residual corrections, and inadequate score, correlation, or science-transfer
-evidence. A permitted screening selection returns `claim_status="screening"`
-with its source identity and policy digest.
-
-The current survey archive lacks the exact per-frame fine-power terms needed
-to reconstruct the Q16 decision boundaries. Its floating summary cannot be
-promoted to this strict contract; the detector processing must be rerun with
-the exact fields retained.
-
-The numerical values and unresolved decisions are in the
-[threshold decision register](decision-register.md). The pure
-selector remains available as a numerical kernel; it does not by itself prove
-that preparation occurred.
+| `rfisher.science_model` | the `ScienceModel` protocol a science model satisfies |
+| `rfisher.forecast.radiofisher_bao` | the one science model: the RadioFisher BAO adapter (`model.py`), its banks (`bank/`, the whole bank source manifest), the response (`response.py`), the delay-filter scenarios (`filter_scenarios.py`), the BAO-band coherence gain (`coherence_gain.py`) and the forecast API (`api.py`, `scenarios.py`, `significance.py`) |
+| `rfisher.tolerance` | the rule (`rule.py`), its reduction to bands (`bands.py`), the table and its provenance (`table.py`), and the frozen reference tolerances of the capture (`reference.py`) |
+| `rfisher.verdict` | the archive verdict: `handoff.py`, `interval.py`, `screening.py`, `sensitivity.py`, `archive.py` |
+| `rfisher.response` | the linear response of the masked visibility (`visibility.py`, byte-pinned) and its validation |
+| `rfisher.records.chime_atsc_2026` | the capture ruling of record, its copies, the capture release r5.2, the cadence report's table of record section, and the writers of the frozen archive layouts |
+| `rfisher.policy` | the side-checked loader of the two project registers |
+| `rfisher.cli` | `rfisher forecast`, `build-bank`, `tolerance`, `verdict`, `response`, `records` |
 
 ## Fisher-bank contract
 
@@ -222,7 +108,7 @@ analysis's cut was, and the digitised filter response the soft cut reads
 (`src/rfisher/data/chime2025_fig10_filter_residual.csv`, via
 `rfisher.forecast.radiofisher_bao.filter_scenarios.delay_transfer`). The
 hooks are forecast options, off by default; the shipped banks do not carry
-them, and the sweep driver `scripts/run_taucut_sweep.py` was removed in 4.0.0.
+them, and the sweep driver `scripts/run_taucut_sweep.py@2d682c1` was removed in 4.0.0.
 
 The wedge-limited scenario (the foreground wedge, not the canceller, sets
 the cut on long baselines) needs no new hook: it is the hard cut beside the
@@ -278,30 +164,19 @@ CHIME/BAO bank, but other scientific targets cannot be claimed as supported.
 ## Repository layout
 
 ```text
-src/                 installed package namespaces and package data
-scripts/             bank, evidence, verification, and application commands
-data/                 research comparison banks
-docs/                 architecture, methods, release contracts, and schemas
-paper/                BAO masking-cost manuscript source
-docs/releases/        manifests of the two immutable release roots
-out/                  ignored scratch; the results tree lives outside (releases.md)
-tests/                package and workflow regression tests
+src/rfisher/            the package and its data (banks, P(k) caches, tolerances/, schemas/, response_banks/)
+projects/chime_bao/     the science profile: science_model.yaml, the two registers, capture_rules/
+scripts/                bank verification and re-stamping, coverage, the forecast-template and validation scripts
+data/                   research comparison banks
+docs/                   architecture, the handoff, cosmology entry, tolerance, releases, schemas
+docs/releases/          manifests of the immutable release roots
+examples/               the minimal forecast and the verdict of a handoff
+out/                    ignored scratch; the results tree lives outside (releases.md)
+tests/                  package, verdict, record and workflow tests; tests/golden/ the vendored fixtures
 ```
 
-`src/rfisher_results/` is the results layer, kept outside the `rfisher`
-namespace because the shipped banks pin a digest of `src/rfisher/`. It holds
-the dissertation style (`style`, byte-identical to the dissertation's copy),
-the results-tree resolver (`results_tree`), the readers for what pilot-proxy
-hands over -- frozen estimator-transfer releases (`estimator_transfer`), the
-census spectra export (`census_psd`), and raw `evaluate-snr` directories with
-the pooling that turns a sweep of them into a release's `plot_points.csv`
-(`evaluations`) -- and the figures rendered from them, driven by
-`python -m rfisher_results.cli`.
-
-Generated results, including the two immutable release roots, live outside
-the repository in the results tree that `rfisher_results.results_tree`
-resolves; see the [release index](releases.md) before changing anything
-there. Scripts write their scratch output to the ignored `out/`. Detector
-kernels, non-pilot selection, and new survey-product generation remain outside
-this repository. The archived roadmap (`docs/archive/legacy-roadmap.md@f56916a`) records the
-remaining cross-project evidence dependencies.
+Generated results, including the immutable release roots, live outside the
+repository in the results tree that `rfisher.records.results_tree` resolves;
+see the [release index](releases.md) before changing anything there. Scripts
+write their scratch output to the ignored `out/`. Detector kernels, the
+characterization and new survey-product generation are the detector side's.

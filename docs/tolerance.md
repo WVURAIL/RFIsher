@@ -115,84 +115,20 @@ also signal a frequency-unit mistake.
 ## Mask-product provenance
 
 A masked fraction is meaningful only beside the rule and detector geometry
-that produced it. The package carries two distinct sources:
-
-1. a historical quarterly CSV used by the original forecast; and
-2. corrected-geometry survey products supplied explicitly by the caller.
-
-The historical table was written on 2026-07-18 from the first production
-trawl with the coarse rule
-
-```text
-F > mu_hat + 0.012 * mu0.
-```
-
-Its weight bank placed the coarse-channel center at Nyquist. That convention
-was later found to be offset by half the sample rate: pilots were suppressed
-by 39--47 dB at the line on every channel except channel 30, whose pilot lies
-near the self-canceling quarter-rate position. The CSV therefore records a
-legacy detector epoch, not DTV occupancy. Its 97% values for channels 24 and
-30 are refused-channel placeholders rather than measured rates.
-
-The historical rows remain useful as a reproducible baseline, but they must
-not support an occupancy statement. Use corrected products for current
-detector claims:
-
-```python
-from rfisher import channels
-from rfisher.forecast.radiofisher_bao import scenarios
-
-products = ["506.npz", "521.npz", "537.npz"]
-table = channels.mask_table_from_products(products)
-scenario = scenarios.survey_product_scenario(products)
-```
-
-Set `RFISHER_PRODUCT_DIRS` to a platform-separated list of product search
-directories when paths should be resolved through the registry.
-
-## Why the two sources disagree
-
-The following comparison exposed the geometry mismatch:
-
-```bash
-python scripts/compare_mask_tables.py 506.npz 521.npz 537.npz --forecast
-```
-
-| Channel | Historical CSV | Corrected products | Ratio |
-|---:|---:|---:|---:|
-| 34 | 0.0231 | 0.9909 | 43x |
-| 35 | 0.1380 | 0.8370 | 6x |
-| 36 | 0.0115 | 0.9991 | 87x |
-
-This is not one detector evaluated at a different threshold. The corrected
-products declare the raw positive-excess rule `F > mu0`; no single threshold
-on their statistic reproduces the CSV. Their exposure counts also differ.
-
-`channels.MaskTable` keeps the provenance beside the values. In particular,
-the historical table is traceable but is marked as not being an occupancy
-measurement:
-
-```python
-from rfisher import channels
-
-current = channels.mask_table_from_products(["506.npz", "521.npz", "537.npz"])
-historical = channels.legacy_rate_table()
-
-current.is_traceable
-current.is_occupancy_measurement
-historical.is_traceable
-historical.is_occupancy_measurement
-```
-
-The product loader also refuses:
-
-- products made by different detector kernels or masking rules;
-- two products that cover the same channel; and
-- implicit mixing of corrected products with historical CSV backfill.
-
-Use `fill_missing="csv"` only when that mixed provenance is intentional and
-must be recorded. Use `fill_missing="omit"` to forecast only the covered
-channels.
+that produced it. The historical quarterly table the original forecast used
+(`src/rfisher/data/survey_quarterly_rates_all23.csv`, written on 2026-07-18 from the first
+production trawl with the coarse rule `F > mu_hat + 0.012 * mu0`) records a
+legacy detector epoch, not DTV occupancy: its weight bank placed the
+coarse-channel center at Nyquist, half the sample rate from the true
+position, which suppressed the pilots by 39 to 47 dB on every channel but
+channel 30, and its 97 % values for channels 24 and 30 are placeholders for
+refused channels. It is kept as the reproducible baseline of the July 2026
+forecast validation (`scripts/run_forecast.py`, `scripts/verify_bank.py`) and
+supports no occupancy statement. Current masked fractions come from the
+detector side's operating characteristic (pilot-proxy's handoff), with the
+rule and the geometry recorded beside them. The comparison that exposed the
+mismatch, and the product loader of the time, are in the history
+(`docs/masking-cost.md@f56916a`).
 
 ## What this calculation does not establish
 

@@ -239,14 +239,19 @@ evaluation-block replay is the detector's and the handoff does not carry it.
 
 The capture records read a capture handoff `HANDOFF` (the detector's
 measurement tables of the 2026 matched capture, in the layout
-`capture_handoff_measurements` version 0). Its three detector readings (each
-rung's archive threshold, each science dump's median Q and the within-dump
-bounds on tau) can be taken from pilot-proxy's capture output
-(`pilot-proxy capture oc-table`, the layout
-`capture_operating_characteristic` version 1); the other files come from a
-measurement handoff `MEASUREMENTS`, since their lanes (the channel 24 lane,
-the reduced dumps' class means and the archive shares) are not run by
-pilot-proxy:
+`capture_handoff_measurements` version 0). Its four detector readings (each
+rung's archive threshold, each science dump's median Q, the within-dump
+bounds on tau and the archive's gain bound per band) are taken from
+pilot-proxy's capture output (`pilot-proxy capture oc-table`, the layout
+`capture_operating_characteristic` version 1, whose schema is vendored here as
+`src/rfisher/data/schemas/capture_operating_characteristic_v1.schema.json` and
+pinned with pilot-proxy's golden capture handoff by `tests/test_schemas.py`);
+the other files come from a measurement handoff `MEASUREMENTS`, since their
+lanes (the channel 24 lane, the reduced dumps' class means and the archive
+shares) are not run by pilot-proxy. The record's own tables (the table of
+record and its v7 input), the BAO-basis coherence times (`gain_bao.csv`) and
+the channel ruling's board are not part of the handoff; the records that read
+them take them as explicit inputs:
 
 ```bash
 rfisher records capture-handoff --oc OC_DIR/capture --measurements MEASUREMENTS --out HANDOFF
@@ -256,7 +261,7 @@ From the handoff, the table of record before amendment 8 and the table of
 record itself:
 
 ```bash
-rfisher records table-of-record --handoff HANDOFF --out table_of_record_v7.csv
+rfisher records table-of-record --handoff HANDOFF --gain-bao gain_bao.csv --out table_of_record_v7.csv
 rfisher records capture-ruling --rule record --input table_of_record_v7.csv \
   --handoff HANDOFF --out table_of_record.csv --ch33-rescan
 ```
@@ -270,9 +275,20 @@ rfisher records capture-release --rule r5_2 --handoff HANDOFF \
   --input-table table_of_record_v7.csv
 ```
 
-`--input-table` names the v7 table written above; without it the release reads
-the handoff's copy. The robustness copy and the phase limit read the table of
-record given as `--record-table`.
+`--input-table` names the v7 table written above. The robustness copy and the
+phase limit read the table of record given as `--record-table`.
+
+The cadence report of record is the detector's report with the table of
+record's section appended:
+
+```bash
+pilot-proxy capture cadence-report CADENCE_DETECTOR.md cadence_tau.csv lag_coherence_14.csv cadence_tau_a3.csv
+rfisher records cadence-report --detector-report CADENCE_DETECTOR.md \
+  --table-of-record table_of_record_v10.csv --out CADENCE_REPORT.md
+```
+
+The pair reproduces the frozen `CADENCE_REPORT.md` byte for byte
+(`tests/records/test_cadence_report.py`).
 
 Three files carry the site paths of the inputs they were derived from, as the
 frozen records wrote them: the vendored exact-time reference
