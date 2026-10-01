@@ -53,6 +53,14 @@ KEPT_MANIFESTS = {
 }
 
 
+def test_the_renderer_loads_the_dissertation_style_contract():
+    # the renderer reads its figure style from scripts/dissertation/style.py; this runs without the toolchain or the
+    # results tree, so a missing style file fails here and not only where the figure is rendered
+    assert renderer.FIGURE_STYLE_PATH.is_file()
+    style = renderer._dissertation_style()
+    assert callable(style.configure) and len(style.SERIES) >= len(renderer.FAMILIES) and style.GRID
+
+
 @requires_figure_toolchain
 @requires_results_tree
 def test_renderer_exports_figure_table_and_complete_caption(tmp_path):

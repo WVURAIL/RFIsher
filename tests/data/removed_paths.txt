@@ -54,7 +54,6 @@ scripts/dissertation/data/bao_policy_case.csv	f56916a
 scripts/dissertation/data/bao_two_walls.csv	f56916a
 scripts/dissertation/figures.py	f56916a
 scripts/dissertation/make_two_walls.py	0f9eb43
-scripts/dissertation/style.py	f56916a
 scripts/export_coarse_histogram_frames_v1.py	877aeb1
 scripts/fg_sensitivity.py	2d682c1
 scripts/figstyle.py	2d682c1
