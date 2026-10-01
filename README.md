@@ -63,8 +63,11 @@ and refuses unsupported or numerically unstable evaluations.
 
 Threshold selection is split at the handoff. The detector (pilot-proxy)
 characterizes each band: every candidate threshold with its masked fraction,
-kept residual and evaluability, the false-alarm threshold eta_Pfa where a null
-supports one, and the stability screen (`oc_table.csv`, `oc_summary.csv` and
+kept residual and evaluability, the false-alarm limit eta_Pfa (the higher
+1 - alpha quantile of Q, alpha = 1e-3, on the band's own verified
+signal-free population; a control band's quantile, such as Q37(1e-3), is a
+surrogate and never a band's eta_Pfa), and the stability screen
+(`oc_table.csv`, `oc_summary.csv` and
 `manifest.json`, schema `operating_characteristic` v1). RFIsher prices that
 surface against the band's tolerance and nothing else:
 
@@ -83,8 +86,10 @@ The selector's constants are data (`projects/chime_bao/selector_policy.json`),
 read through `rfisher.policy`; `selector.fine_rank` chooses the fine ranks the
 selector reads. A small example is in
 [`examples/threshold_selection.py`](examples/threshold_selection.py). Every
-choice and its evidence state is listed in the
-[threshold decision register](docs/threshold-decision-register.md).
+science choice is an entry of the project's two registers,
+`projects/chime_bao/science_register.json` and `selector_policy.json`, with
+its value, units, basis, status, rationale, evidence and sensitivity values;
+the detector's choices are entries of pilot-proxy's register.
 
 Given a characterization directory and the band tolerances:
 
@@ -124,8 +129,9 @@ the full inputs, results, and caveats.
   weighting conventions, and mask-product provenance.
 - [Contamination residuals](docs/contamination-residuals.md) — variance and
   bias paths, histogram threshold selection, coherence, and refusal rules.
-- [Threshold decision register](docs/threshold-decision-register.md) — every
-  operating choice, rationale, evidence state, and sensitivity value.
+- [Threshold decision register](docs/threshold-decision-register.md): the
+  earlier single register of preparation and selection choices, kept as a
+  record; the current entries are the two project registers.
 - [CHIME/BAO reference application](docs/chime-bao-application.md) — fiducial
   configuration, headline results, inputs, and application-specific caveats.
 - [Reproducibility](docs/reproducibility.md) — installation, verification,
