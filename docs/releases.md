@@ -68,7 +68,7 @@ The waveform audit explains the startup discrepancy and preserves newly generate
 tolerance experiment, regulatory-history sidecars, a 23-channel monthly-prefix
 era audit and four bounded saved-filter examples. Its
 [manifest](releases/calibration_next_2026-09-08.manifest.json) binds the source
-snapshots and evidence; the [workflow](physical-calibration.md) explains the
+snapshots and evidence; the workflow (`docs/physical-calibration.md@f56916a`) explains the
 method and remaining physical requirements.
 
 The new experiment uses 60 calibration and 60 fresh evaluation blocks, each
@@ -91,7 +91,7 @@ It contains a frozen fresh-draw digital protocol, 18 generated frame shards,
 coverage and post-hoc batch diagnostics, a six-frame GPU/CPU arithmetic audit,
 the eight-product collaboration preflight and a pending physical-data plan.
 Its [manifest](releases/calibration_followup_2026-09-08.manifest.json) preserves
-the input and output identities. The [workflow](physical-calibration.md)
+the input and output identities. The workflow (`docs/physical-calibration.md@f56916a`)
 explains the new validation helpers and the remaining physical requirements.
 
 All twelve fixed digital cases have 60 supported batches without under-booking;

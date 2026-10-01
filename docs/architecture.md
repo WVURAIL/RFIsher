@@ -303,5 +303,5 @@ the repository in the results tree that `rfisher_results.results_tree`
 resolves; see the [release index](releases.md) before changing anything
 there. Scripts write their scratch output to the ignored `out/`. Detector
 kernels, non-pilot selection, and new survey-product generation remain outside
-this repository. The [archived roadmap](archive/legacy-roadmap.md) records the
+this repository. The archived roadmap (`docs/archive/legacy-roadmap.md@f56916a`) records the
 remaining cross-project evidence dependencies.

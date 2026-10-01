@@ -158,7 +158,7 @@ The retained-frame quantity is a floor-based assignment. A nondetection alone
 does not establish an upper confidence bound on the surviving shelf. Coverage
 must be tested with independent controls and a fixed policy; the digital
 injected-truth check is conditional on its generator. The
-[physical-calibration workflow](physical-calibration.md) records the available
+physical-calibration workflow (`docs/physical-calibration.md@f56916a`) records the available
 checks and the remaining evidence requirements.
 
 The script that computed this budget, `scripts/residual_budget.py`, was
