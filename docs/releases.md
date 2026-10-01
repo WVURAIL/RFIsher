@@ -253,5 +253,5 @@ and historical verification.
 
 - [Reproducibility commands](reproducibility.md)
 - [Forecast-completion contract](forecast-completion.md)
-- [CHIME/BAO application](chime-bao-application.md)
+- [CHIME/BAO application](application-chime.md)
 - [Architecture and provenance boundary](architecture.md)

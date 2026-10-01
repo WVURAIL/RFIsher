@@ -254,7 +254,7 @@
       "status": "conditional",
       "rationale": "Unity is a screening closure, not a measured shelf-to-visibility systematic transfer.",
       "evidence": [
-        "docs/contamination-residuals.md"
+        "docs/tolerance.md"
       ],
       "sensitivity_values": []
     },
@@ -267,7 +267,7 @@
       "status": "conditional",
       "rationale": "Unity is a screening closure, not a measured shelf-to-visibility variance transfer.",
       "evidence": [
-        "docs/contamination-residuals.md"
+        "docs/tolerance.md"
       ],
       "sensitivity_values": []
     }

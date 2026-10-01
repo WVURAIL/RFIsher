@@ -477,7 +477,7 @@ window-function coupling. Each remains explicitly
 ## JSON contract
 
 The versioned output identifier is `baonoise-bias-tolerance-v1`; its
-machine-readable schema is `docs/bias-tolerance.schema.json`. JSON is emitted with
+machine-readable schema is `docs/schemas/bias-tolerance.schema.json`. JSON is emitted with
 `allow_nan=False`: unavailable or refused quantities are `null`, never the
 non-standard tokens `NaN` or `Infinity`.
 

@@ -158,7 +158,7 @@ python scripts/run_forecast.py
 
 The main driver regenerates the reference figures, CSV tables, and
 `out/results.md`. Interpretation and input limitations are documented in
-[chime-bao-application.md](chime-bao-application.md).
+[application-chime.md](application-chime.md).
 
 ## Response banks and the tolerance table
 

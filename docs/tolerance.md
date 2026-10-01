@@ -1,3 +1,11 @@
+# Tolerance: masking cost and contamination residual
+
+A mask has two outcomes: it discards exposure, and it changes the
+contamination left in the retained data. This page gives the models RFIsher
+uses for both: the masking cost (retained time and excised survey volume) and
+the contamination residual (incoherent excess variance, and the coherent bias
+path behind the tolerance table).
+
 # Masking cost
 
 Masking removes exposure. RFIsher translates that loss into effective
@@ -191,7 +199,7 @@ channels.
 Masking cost alone is monotone: remove less data and the time penalty falls.
 It cannot select a detector threshold because it does not say how dirty the
 retained data are. Threshold selection requires the contamination-residual
-term described in [contamination-residuals.md](contamination-residuals.md).
+term described in [the contamination residual](#contamination-residual).
 Latest-era preparation packages that information as one complete
 residual-score histogram for every rank supported by every accepted frame.
 The candidate boundaries are exact Q16 multipliers derived from the detector
@@ -206,7 +214,7 @@ variance.
 The 30-frame floor and 2% plateau are provisional project policies, not
 universal statistical constants. Their rationales and required sensitivity
 runs are recorded in
-[threshold-decision-register.md](threshold-decision-register.md).
+[decision-register.md](decision-register.md).
 The separate early/late retained-frame floor is still open and must be derived
 from the precision required of the drift calculation. Passing the current
 deterministic drift screen is not an equivalence result; operational use also
@@ -226,4 +234,113 @@ The masking calculation also does not include:
 
 Run `scripts/run_forecast.py` to regenerate the reference application's
 masking-cost tables and figures. See
-[chime-bao-application.md](chime-bao-application.md) for their interpretation.
+[application-chime.md](application-chime.md) for their interpretation.
+
+# Contamination residual
+
+A mask has two outcomes: it discards exposure and it changes the contamination
+left in retained data. RFIsher calls the second quantity the contamination
+residual. A detector threshold can be evaluated as a scientific operating
+point only when both outcomes are present.
+
+## Incoherent variance model
+
+Let `r` be retained contamination power relative to contemporaneous thermal
+noise:
+
+```text
+r = P_res / P_N.
+```
+
+If the contamination residual behaves as incoherent excess variance, a slice
+masked for fraction `f` has the effective-time factor
+
+```text
+(1 - f) / (1 + r).
+```
+
+The contamination residual is optional. With no residual supplied, every
+masking-only reference result is unchanged.
+
+```python
+from rfisher.forecast.radiofisher_bao import api
+
+fc = api.load()
+mask = {35: 0.48}
+residual = {35: 0.59}
+
+api.required_time(fc, mask, residuals=residual, target=5.0)
+```
+
+This construction is not conservative for coherent contamination. A coherent
+term can bias a fitted parameter even when its variance contribution appears
+small; that case uses the bias-response path described below.
+
+## Time-scaling families
+
+The bias workflow keeps two physical limits distinct.
+
+### Thermal-noise normalized at each time
+
+The reported amplitude `r(t)` is held constant while time changes. Residual
+power and thermal-noise power both average down approximately as `1/t`. This
+is the stationary, finite-correlation-time limit used by the historical
+convergence calculation.
+
+### Fixed physical amplitude at a reference time
+
+The reported amplitude is `r_ref = P_res / P_N(t_ref)`. Physical residual
+power is held fixed while thermal noise falls, so
+
+```text
+r(t) / r_ref = t / t_ref.
+```
+
+This is the deliberately conservative persistent-residual limit. The two
+families agree at `t_ref` and answer different questions away from it. Neither
+family proves that a measured pilot residual has the assumed persistence;
+that requires visibility-domain time and coherence measurements.
+
+## Does masking pay?
+
+Reducing the contamination residual is not sufficient. The reduction must be
+worth the discarded exposure. For unmasked residual `r_unmasked`, retained
+residual `r_masked`, and masking fraction `f`, masking pays in the incoherent
+variance model only when
+
+```text
+net = (1 + r_unmasked) / (1 + r_masked) * (1 - f) > 1.
+```
+
+The verdict prices a candidate threshold by the same model, as the cost
+`C = (1 + r_var) / (1 - f)` of `rfisher.verdict.interval.cost`; the historical
+per-channel readings of this test, and the sidereal and correlation-time
+budgets of the 2026-08 screening chain, are in the history
+(`docs/contamination-residuals.md@f56916a`).
+
+## Coherent bias path
+
+RadioFisher's `P_res` hook adds a `_Pres` response row to the Fisher matrix.
+RFIsher records such a bank as a strict-v2 `bias_response` artifact and
+rejects it from the ordinary `Forecast` and `api.load()` path. The dedicated
+workflow evaluates the parameter shift per unit contamination amplitude,
+tests whether the response overlaps discarded null modes, and reports a
+tolerance only for accepted points.
+
+The released analytic response families are:
+
+- scalar thermal-noise shaped;
+- `low_kparallel`;
+- `wedge_like`; and
+- `k_shell_localized`.
+
+They are equally unit-normalized sensitivity hypotheses, not probabilities
+and not measured channel templates. Frequency-localized, baseline-localized,
+and sidereal-coherent empirical templates remain refused because the current
+callable interface lacks the required physical coordinates and authenticated
+visibility residuals.
+
+The exact estimators, named schema values, stability fields, and release
+commands are in the
+[forecast-completion contract](forecast-completion.md). Bank construction and
+verification commands are collected in [reproducibility.md](reproducibility.md).

@@ -354,7 +354,7 @@ def test_report_is_strict_json_and_counts_rejections(tmp_path):
     }
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads(
-        (ROOT / "docs" / "bias-tolerance.schema.json").read_text(
+        (ROOT / "docs" / "schemas" / "bias-tolerance.schema.json").read_text(
             encoding="utf-8"))
     jsonschema.Draft202012Validator(schema).validate(decoded)
 

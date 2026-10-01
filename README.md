@@ -85,7 +85,7 @@ surface against the band's tolerance and nothing else:
 The selector's constants are data (`projects/chime_bao/selector_policy.json`),
 read through `rfisher.policy`; `selector.fine_rank` chooses the fine ranks the
 selector reads. A small example is in
-[`examples/threshold_selection.py`](examples/threshold_selection.py). Every
+[`examples/verdict_from_oc_table.py`](examples/verdict_from_oc_table.py). Every
 science choice is an entry of the project's two registers,
 `projects/chime_bao/science_register.json` and `selector_policy.json`, with
 its value, units, basis, status, rationale, evidence and sensitivity values;
@@ -118,21 +118,21 @@ applying masking. Selected masking-only results are:
 The legacy table is a historical detector summary, not a DTV
 occupancy measurement. Use corrected survey products for occupancy claims.
 Absolute Fisher times are model-dependent; masking ratios are the more robust
-comparison. See [the CHIME/BAO application](docs/chime-bao-application.md) for
+comparison. See [the CHIME/BAO application](docs/application-chime.md) for
 the full inputs, results, and caveats.
 
 ## Documentation
 
 - [Architecture and scope](docs/architecture.md) — component boundaries,
   bank contract, backend hooks, and the current generality limit.
-- [Masking cost](docs/masking-cost.md) — retained-time and excision models,
+- [Masking cost](docs/tolerance.md) — retained-time and excision models,
   weighting conventions, and mask-product provenance.
-- [Contamination residuals](docs/contamination-residuals.md) — variance and
+- [Contamination residuals](docs/tolerance.md) — variance and
   bias paths, histogram threshold selection, coherence, and refusal rules.
-- [Threshold decision register](docs/threshold-decision-register.md): the
+- [Threshold decision register](docs/decision-register.md): the
   earlier single register of preparation and selection choices, kept as a
   record; the current entries are the two project registers.
-- [CHIME/BAO reference application](docs/chime-bao-application.md) — fiducial
+- [CHIME/BAO reference application](docs/application-chime.md) — fiducial
   configuration, headline results, inputs, and application-specific caveats.
 - [Reproducibility](docs/reproducibility.md) — installation, verification,
   bank builds, dissertation checks, and evidence regeneration.

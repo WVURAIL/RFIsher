@@ -63,7 +63,7 @@ These values come from a known half-sample-rate-mistuned detector epoch. They
 are not DTV occupancy measurements. The reference outputs retain them as a
 historical reproducibility baseline. Use corrected survey products for any
 current occupancy statement. The full detector and product distinction is in
-[masking-cost.md](masking-cost.md).
+[tolerance.md](tolerance.md).
 
 ## System-temperature input
 
@@ -123,7 +123,7 @@ For the measured channel-35 scalar chain, adding the contamination residual
 moves the legacy rate-table survey penalty from 1.032x to 1.133x and the
 `z = 1.40--1.50` penalty from 1.347x to 2.14x. The full budget, interval, and
 coherence assumptions are in
-[contamination-residuals.md](contamination-residuals.md).
+[tolerance.md](tolerance.md).
 
 The model-only bias release evaluates four unit-normalized analytic residual
 families over every DTV-overlapping redshift bin. It is a sensitivity envelope,

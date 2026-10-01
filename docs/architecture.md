@@ -150,7 +150,7 @@ promoted to this strict contract; the detector processing must be rerun with
 the exact fields retained.
 
 The numerical values and unresolved decisions are in the
-[threshold decision register](threshold-decision-register.md). The pure
+[threshold decision register](decision-register.md). The pure
 selector remains available as a numerical kernel; it does not by itself prove
 that preparation occurred.
 
