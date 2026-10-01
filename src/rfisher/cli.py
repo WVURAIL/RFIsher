@@ -305,6 +305,8 @@ CAPTURE_RECORDS = {
                            "sensitivity against revision 2"),
     "capture-release": ("capture_release", "the capture ruling release r5.2 "
                         "from the capture handoff"),
+    "cadence-report": ("cadence_report", "the cadence report of record: the "
+                       "detector's report with the table of record's section"),
 }
 
 
