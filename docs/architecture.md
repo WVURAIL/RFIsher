@@ -280,7 +280,6 @@ CHIME/BAO bank, but other scientific targets cannot be claimed as supported.
 ```text
 src/                 installed package namespaces and package data
 scripts/             bank, evidence, verification, and application commands
-scripts/dissertation dissertation-specific figures and compact tables
 data/                 research comparison banks
 docs/                 architecture, methods, release contracts, and schemas
 paper/                BAO masking-cost manuscript source

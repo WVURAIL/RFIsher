@@ -318,12 +318,7 @@ intended recorded value is `null`; zero is a distinct setting. Keep the scalar
 baseline as `--p-res 1.0`, because changing it to a named template changes the
 provenance classification.
 
-## Deterministic dissertation figures
-
-```bash
-SOURCE_DATE_EPOCH=1786492800 FORCE_SOURCE_DATE=1 \
-  python scripts/dissertation/figures.py --out /tmp/rfisher-figures
-```
+## Deterministic figures
 
 The PDF subset tags and metadata are stabilized so repeated rendering from
 the same inputs is byte-identical. The forecast-template renderer additionally

@@ -10,7 +10,6 @@
 requirements/*.txt text eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf
-scripts/dissertation/data/*.csv text eol=lf
 src/rfisher/data/*.csv text eol=lf
 src/rfisher/data/*.json text eol=lf
 src/rfisher/data/*.npz binary

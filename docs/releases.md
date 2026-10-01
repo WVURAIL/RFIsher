@@ -44,7 +44,7 @@ callers. Compose their underlying explicit operations if an external workflow
 still needs equivalent behavior.
 
 The ordinary dissertation inputs `three_worlds.csv` (in the results tree) and
-`scripts/dissertation/data/bao_era_points.csv` are also authenticated pre-v3
+`scripts/dissertation/data/bao_era_points.csv@f56916a` are also authenticated pre-v3
 scientific snapshots. Their embedded source hashes identify the code that
 produced their values; they are checked against those recorded identities, not
 against the current cleanup tree. Do not restamp them. Regenerate a new

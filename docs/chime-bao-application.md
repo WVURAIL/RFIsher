@@ -75,8 +75,8 @@ a band median of 54.6 K and a DTV-band median of 56.5 K. The forecast uses
 Because the released comparisons are expressed as ratios, the missing
 absolute calibration file changes no verdict. It is needed for absolute shelf
 and floor conversion and for an independent system-temperature check.
-`scripts/tsys_calibration.py` performs that validation when the file is
-available.
+The validation script (`scripts/tsys_calibration.py@f56916a`) is kept in the
+history.
 
 ## Masking-only results
 
@@ -142,9 +142,9 @@ The main masking-cost driver writes:
   multipliers; and
 - `fig4_perbin_significance`: the redshift-bin significance profile.
 
-The dissertation-specific driver under `scripts/dissertation/` writes the
-time-versus-masking, policy-case, convergence, two-walls, and analytic-template
-figures from their committed tables.
+The dissertation's figures are drawn in the dissertation repository; the
+earlier driver here (`scripts/dissertation/figures.py@f56916a`) is kept in the
+history.
 
 ## Application-specific caveats
 
