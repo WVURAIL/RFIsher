@@ -217,6 +217,10 @@ def run(characterization: str | Path, tolerances: str | Path,
     oc = handoff.read_characterization(characterization,
                                        r_reference=r_reference,
                                        residual_shapes=residual_shapes)
+    if oc.manifest.get("fine_surface_scope") == handoff.COMPLETE_SCOPE:
+        raise handoff.HandoffError(
+            "complete calibration handoffs are forward-only; use 'rfisher "
+            "response threshold'. The archive selector does not accept this scope.")
     alpha = (oc.manifest.get("null_policy") or {}).get("alpha")
     tol_path = _tolerance_path(Path(tolerances))
     tol_rows = handoff.read_tolerances(tol_path, oc.bands)

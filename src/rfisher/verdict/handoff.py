@@ -23,6 +23,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
+from fractions import Fraction
 from importlib.resources import files
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -30,10 +31,11 @@ from typing import Mapping, Sequence
 SCHEMA = "operating_characteristic"
 SCHEMA_VERSION = 1
 SCHEMA_FILE = "operating_characteristic_v1.schema.json"
-SCHEMA_SHA256 = "ab41499f06267245693eb0ac16621ddadff7c67b4791f0fce73f924991a9456c"
+SCHEMA_SHA256 = "8267e9e0990ad531675ba5f9ab01aede92cfe4787ada938c7978f7d400143cd2"
 TABLE = "oc_table.csv"
 SUMMARY = "oc_summary.csv"
 MANIFEST = "manifest.json"
+COMPLETE_SCOPE = "supported_calibration_candidates"
 TOLERANCE_COLUMNS = ("band_id", "band_low_mhz", "band_high_mhz", "scenario",
                      "role", "r_tol", "binding_parameter", "binding_bin",
                      "zeta", "target_time_years", "suppression_db",
@@ -104,6 +106,7 @@ class Characterization:
     table: list
     summary: list
     sha256: Mapping[str, str]
+    complete_calibration_grid: bool = False
 
     @property
     def bands(self) -> dict[str, dict]:
@@ -114,8 +117,120 @@ class Characterization:
         """Whether the fine surface may be written thinned (not every
         candidate). A manifest that does not say it is complete is read as
         thinned, so a missing statement never completes a set."""
-        rows = self.manifest.get("fine_surface_rows")
-        return rows is None or str(rows).startswith("thinned")
+        return not self.complete_calibration_grid
+
+
+def _integer(value, name: str, minimum: int = 0) -> int:
+    if type(value) is not int or value < minimum:
+        raise HandoffError(f"{name}: expected an integer >= {minimum}")
+    return value
+
+
+def _close(actual, expected, name: str) -> None:
+    if not math.isfinite(actual) or not math.isclose(
+            actual, expected, rel_tol=1e-12, abs_tol=1e-14):
+        raise HandoffError(f"{name}: {actual!r} disagrees with {expected!r}")
+
+
+def _complete_grid(manifest: Mapping, table: list, summary: list) -> bool:
+    """Validate the producer's complete supported calibration candidate set."""
+    if manifest.get("fine_surface_rows") != "complete":
+        return False
+    if manifest.get("fine_surface_scope") != COMPLETE_SCOPE:
+        raise HandoffError("complete fine surface requires supported calibration scope")
+    if manifest.get("mask_rule") != "statistic > eta":
+        raise HandoffError("complete fine surface requires mask_rule 'statistic > eta'")
+    bands = {str(b["band_id"]): b for b in manifest["bands"]}
+    counts = manifest.get("fine_surface_counts")
+    if not isinstance(counts, dict) or set(counts) != set(bands):
+        raise HandoffError("fine_surface_counts must include every manifest band")
+    summaries = {}
+    for row in summary:
+        if row["candidate_set"] != "fine_surface":
+            continue
+        key = (row["band_id"], row["threshold_family"])
+        if key in summaries:
+            raise HandoffError(f"duplicate fine summary: {key}")
+        if row["population"] != "current_era_calibration_block":
+            raise HandoffError(f"fine summary population: {key}")
+        summaries[key] = row
+    for band, families in counts.items():
+        if not isinstance(families, dict):
+            raise HandoffError(f"fine_surface_counts[{band}]: expected families")
+        expected = {f for b, f in summaries if b == band}
+        if set(families) != expected:
+            raise HandoffError(f"fine_surface_counts[{band}]: summary families differ")
+        for family, count in families.items():
+            _integer(count, f"fine_surface_counts[{band}][{family}]")
+            row = summaries[band, family]
+            total = _integer(row["candidates_total"], "candidates_total")
+            evaluable = _integer(row["candidates_evaluable"], "candidates_evaluable")
+            if count != evaluable or count > total:
+                raise HandoffError(f"fine surface summary count differs: {band}/{family}")
+    found, previous, denominators, orders = {}, {}, {}, set()
+    for row in table:
+        if row["candidate_set"] != "fine_surface":
+            continue
+        band, family, block = row["band_id"], row["threshold_family"], row["block"]
+        if block not in ("calibration", "evaluation") or row["population"] != (
+                f"current_era_{block}_block"):
+            raise HandoffError(f"fine row population/block differ: {band}/{family}")
+        rho = _integer(row["rho"], "rho", 1)
+        bulk = _integer(row["bulk_size"], "bulk_size", 1)
+        if rho > bulk or family != f"rho={rho}" or row["statistic"] != "Z_rho":
+            raise HandoffError(f"fine family/rank/statistic differ: {band}/{family}")
+        _close(row["rank_fraction"], rho / (bulk + 1), "rank_fraction")
+        eta_q16 = _integer(row["eta_q16"], "eta_q16", 1)
+        if eta_q16 > 2**64 - 1:
+            raise HandoffError("eta_q16 exceeds the unsigned 64-bit deployment range")
+        exact = Fraction(eta_q16, 65536)
+        try:
+            if Fraction(row["eta_exact"]) != exact or row["eta"] != float(exact):
+                raise ValueError
+        except (ValueError, ZeroDivisionError):
+            raise HandoffError(f"eta_q16, eta_exact and eta differ: {band}/{family}") from None
+        frames = _integer(row["frames"], "frames", 1)
+        kept = _integer(row["kept"], "kept")
+        masked = _integer(row["masked"], "masked")
+        if kept + masked != frames:
+            raise HandoffError(f"kept + masked differs from frames: {band}/{family}")
+        _close(row["masked_fraction"], masked / frames, "masked_fraction")
+        if kept:
+            _close(row["exposure_cost_uniform_loss"], frames / kept,
+                   "exposure_cost_uniform_loss")
+        if kept:
+            for name in ("r_var", "r_sys", "r_sys_incoherent", "r_unmasked"):
+                if not math.isfinite(row[name]) or row[name] < 0:
+                    raise HandoffError(f"{name}: expected a finite nonnegative residual")
+            if not 0 <= row["floor_share"] <= 1:
+                raise HandoffError("floor_share must be in [0, 1]")
+        cohort = (band, block)
+        identity = (frames, row["era_label"], row["era_start"], row["era_end"],
+                    row["era_state"], bulk, row["r_unmasked"])
+        if denominators.setdefault(cohort, identity) != identity:
+            raise HandoffError(f"fine cohort denominator or geometry changes: {band}/{block}")
+        if block != "calibration":
+            continue
+        key = (band, family)
+        if key not in summaries:
+            raise HandoffError(f"fine calibration row has no summary: {key}")
+        if kept < 30:
+            raise HandoffError(f"fine calibration support is below 30 frames: {key}")
+        order = _integer(row["candidate_order"], "candidate_order")
+        if (band, order) in orders:
+            raise HandoffError(f"duplicate fine candidate_order: {band}/{order}")
+        orders.add((band, order))
+        if key in previous:
+            old_order, old_eta, old_kept = previous[key]
+            if order <= old_order or eta_q16 <= old_eta or kept < old_kept:
+                raise HandoffError(f"fine candidate order/threshold/keep is not monotone: {key}")
+        previous[key] = (order, eta_q16, kept)
+        found[key] = found.get(key, 0) + 1
+    for band, families in counts.items():
+        for family, count in families.items():
+            if found.get((band, family), 0) != count:
+                raise HandoffError(f"fine surface row count differs: {band}/{family}")
+    return True
 
 
 def read_characterization(directory: str | Path, *,
@@ -141,6 +256,10 @@ def read_characterization(directory: str | Path, *,
                            f"{SUMMARY}")
     digests = {}
     for name, expected in listed.items():
+        relative = Path(name)
+        if (relative.is_absolute() or ".." in relative.parts or "\\" in name
+                or (root / relative).resolve().is_relative_to(root.resolve()) is False):
+            raise HandoffError(f"unsafe handoff file path: {name!r}")
         found = sha256_file(root / name)
         if found != expected:
             raise HandoffError(f"{root / name}: sha256 {found}, the manifest "
@@ -159,6 +278,9 @@ def read_characterization(directory: str | Path, *,
                            f"science model describes {tuple(residual_shapes)}")
     table = _read_table(root / TABLE, spec["x-oc-table-columns"])
     summary = _read_table(root / SUMMARY, spec["x-oc-summary-columns"])
+    band_ids = [str(b["band_id"]) for b in manifest["bands"]]
+    if len(set(band_ids)) != len(band_ids):
+        raise HandoffError("duplicate manifest bands")
     out = Characterization(root, manifest, table, summary, digests)
     edges = {k: (float(b["low_mhz"]), float(b["high_mhz"]))
              for k, b in out.bands.items()}
@@ -169,7 +291,8 @@ def read_characterization(directory: str | Path, *,
                 raise HandoffError(f"{name}: band {band} edges "
                                    f"{(row['band_low_mhz'], row['band_high_mhz'])}"
                                    f" are not the manifest's {edges.get(band)}")
-    return out
+    complete = _complete_grid(manifest, table, summary)
+    return Characterization(root, manifest, table, summary, digests, complete)
 
 
 def read_tolerances(path: str | Path, bands: Mapping[str, Mapping] | None = None

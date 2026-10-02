@@ -150,6 +150,8 @@ the full inputs, results, and caveats.
   bank contract, backend hooks, and the current generality limit.
 - [The handoff](docs/HANDOFF.md): what the verdict reads, the reading path,
   and how the selector chooses.
+- [Threshold response](docs/threshold_response.md): exact saved fine thresholds,
+  residual proxies, and uniform exposure costs.
 - [Where cosmology enters](docs/cosmology-entry.md): the tolerance, the
   suppression S and the refused bands, for an engineer.
 - [Tolerance](docs/tolerance.md): the masking-cost and contamination-residual
