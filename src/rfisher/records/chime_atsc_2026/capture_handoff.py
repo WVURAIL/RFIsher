@@ -190,18 +190,38 @@ def open_handoff(directory, *, borrowed: bool = False, measurements: bool = Fals
     return CaptureHandoff(directory, borrowed=borrowed, measurements=measurements)
 
 
-def table_rows(h: CaptureHandoff, rel: str, path) -> list[dict]:
+RECORD_SHA256 = {
+    "table_of_record.csv": "9867551ad591757ed8b8864940376c68666483833478b4711292e0517a27b195",
+    "table_of_record_before_amendment8.csv": "fd718463005beace5f4b52882a6b70d7a6f0c44b54d244b1c8a8aa3d99e6548f",
+    "gain_bao.csv": "7dff5619ea34f855812834e8310835a01284a54c1f0307a0236b4408700a9cf8",
+}
+
+
+def table_rows(h: CaptureHandoff, rel: str, path, *, in_run: bool = False) -> list[dict]:
     """The rows of one of the record's own tables (the table of record, its v7 input, the BAO-basis coherence times)
-    from the file at ``path``, its header checked as the record's (:data:`HEADERS`). ``rel`` names the table."""
+    from ``path``. Frozen inputs must match the recorded bytes; an explicitly declared in-run input still needs
+    the record's header. The input digest and mode are logged to stderr, leaving the recorded tables unchanged."""
+    import sys
+
     if path is None:
         raise HandoffError(f"{rel}: the records take this table as an explicit input, not from the handoff")
-    with open(path, newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        rows = list(reader)
+    try:
+        data = Path(path).read_bytes()
+    except OSError as exc:
+        raise HandoffError(f"{path}: cannot read {rel}: {exc}") from exc
+    reader = csv.DictReader(io.StringIO(data.decode("utf-8"), newline=""))
+    rows = list(reader)
     expected = HEADERS[_header_key(rel)].split(",")
     if reader.fieldnames != expected:
         got, want = set(reader.fieldnames or ()), set(expected)
         raise HandoffError(f"{path}: columns differ from {rel} (missing {sorted(want - got)}, extra {sorted(got - want)})")
+    digest = hashlib.sha256(data).hexdigest()
+    expected_sha = RECORD_SHA256[Path(rel).name]
+    if not in_run and digest != expected_sha:
+        raise HandoffError(f"{path}: sha256 differs from the frozen {rel} ({expected_sha}); "
+                           "declare an in-run table to use different bytes")
+    print(json.dumps({"record_input": str(path), "table": rel, "sha256": digest,
+                      "mode": "in_run" if in_run else "frozen"}, sort_keys=True), file=sys.stderr)
     return rows
 
 

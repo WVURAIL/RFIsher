@@ -17,7 +17,9 @@ usage: rfisher records table-of-record --handoff DIR --gain-bao CSV --out CSV [<
                                        [gain=<cadence_tau csv>] [lowbound=<frame_residual csv>,...]
 With no dump arguments the record's: pilot, D1, D2 and D3 on the four science dumps, gain=cadence_tau.csv and lowbound=
 the fourteen frame residuals (the command that wrote table_of_record_before_amendment8.csv, fd718463, with the
-record's gain_bao.csv, 7dff5619, the only file --gain-bao accepts then).
+record's gain_bao.csv, 7dff5619, the only file --gain-bao accepts then). Custom specs declare an in-run table;
+``bao=<path>`` reads that path relative to the working directory, while ``bao=gain_bao.csv`` uses --gain-bao.
+--gain-bao is required only when a spec uses it. Input digests and modes are logged to stderr.
 """
 import csv, os
 import numpy as np
@@ -51,14 +53,12 @@ def main(argv=None):
         elif x == "--out": out = args.pop(0)
         elif x == "--gain-bao": gain_bao = args.pop(0)
         else: specs.append(x)
-    if not (handoff_dir and out and gain_bao):
-        raise SystemExit("table-of-record: --handoff, --gain-bao and --out are required")
-    if not specs:
-        import hashlib
-        with open(gain_bao, "rb") as fh:
-            if hashlib.sha256(fh.read()).hexdigest() != GAIN_BAO_SHA256:
-                raise SystemExit(f"table-of-record: {gain_bao} is not the record's gain_bao.csv ({GAIN_BAO_SHA256[:8]})")
+    if not (handoff_dir and out):
+        raise SystemExit("table-of-record: --handoff and --out are required")
+    custom = bool(specs)
     specs = specs or list(RECORD_SPECS)
+    if "bao=gain_bao.csv" in specs and not gain_bao:
+        raise SystemExit("table-of-record: --gain-bao is required for bao=gain_bao.csv")
     H = capture_handoff.open_handoff(handoff_dir)
     # tolerances per world (the vendored references)
     lam_none = {int(c): float(r["conditional_reference_amplitude"]) for c, r in reference.exact_time_bands().items()}
@@ -98,7 +98,7 @@ def main(argv=None):
             continue
         if label == "bao":
             # amendment 7: BAO-basis coherence time per channel (gain_bao.csv built from the east-west classes)
-            for r in capture_handoff.table_rows(H, FA + "gain_bao.csv", gain_bao if rest == "gain_bao.csv" else rest):
+            for r in capture_handoff.table_rows(H, FA + "gain_bao.csv", gain_bao if rest == "gain_bao.csv" else rest, in_run=custom):
                 if r["bins"] == "inband" and r["tau_c_s"]:
                     bao_gain[int(r["channel"])] = dict(status=r["status"], tau=float(r["tau_c_s"]), G=float(r["G"]), basis=r["basis"])
             continue

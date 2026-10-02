@@ -40,7 +40,7 @@ Both live in the results tree, outside the repository, with the rest of the
 generated tables, ledgers and figures that were tracked under `out/` until
 September 2026. The repository keeps their manifests under `docs/releases/`
 and the manifest schema under `docs/`. The tree is resolved by
-`rfisher_results.results_tree.out_dir()`: `$RFISHER_OUT`, else `out_dir` in
+`rfisher.records.results_tree.out_dir()`: `$RFISHER_OUT`, else `out_dir` in
 `data/products.local.json`, else the repository's own ignored `out/`. Paths
 below are relative to that tree; manifest entries keep their recorded `out/`
 prefix, which resolves to the same place.
@@ -84,7 +84,7 @@ snapshot only when the archived products are available to run the full
 pipeline.
 
 <!-- BEGIN CALIBRATION_PROGRESS -->
-## Calibration progress and producer evidence — September 9, 2026
+## Calibration progress and producer evidence: September 9, 2026
 
 `calibration_progress_2026-09-09` separately preserves waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; [physical-calibration.md](physical-calibration.md) describes their scope.
 
@@ -94,7 +94,7 @@ The waveform audit explains the startup discrepancy and preserves newly generate
 
 <!-- END CALIBRATION_PROGRESS -->
 
-## Joint calibration and evidence follow-up — September 8, 2026
+## Joint calibration and evidence follow-up: September 8, 2026
 
 `calibration_next_2026-09-08` separately releases a signed joint digital
 tolerance experiment, regulatory-history sidecars, a 23-channel monthly-prefix
@@ -116,7 +116,7 @@ audit quantifies 126 prior assignment revisions across 1,722 prefixes; the
 saved filters demonstrate vector-dependent response outside the nominal DTV
 band. Neither supplies prospective or in-band physical certification.
 
-## Calibration follow-up — September 8, 2026
+## Calibration follow-up: September 8, 2026
 
 `calibration_followup_2026-09-08` is a separate conditional evidence release.
 It contains a frozen fresh-draw digital protocol, 18 generated frame shards,
@@ -132,7 +132,7 @@ establish physical confidence coverage or science-tolerance compliance. The
 collaboration data are outside the DTV band, and the all-days/p1 HyFoRes pairs
 require matched-day re-stacking. No operational policy is authorized.
 
-## Corrected retrospective archive — September 8, 2026
+## Corrected retrospective archive: September 8, 2026
 
 `archive_v5_2026-09-08_corrected/` in the results tree is a separate 23-channel
 analysis. Its input products match both September 7b and September 7c by hash.

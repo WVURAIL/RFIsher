@@ -27,6 +27,7 @@ requires_release_renderer = pytest.mark.skipif(
     reason="frozen release assets require Matplotlib 3.11.1")
 SUBSET_TAG = re.compile(r"^[A-Z]{6}\+")
 ROOT = Path(__file__).resolve().parents[1]
+FIXTURE = ROOT / "tests" / "golden" / "forecast_template"
 SPEC = importlib.util.spec_from_file_location(
     "rfisher_test_render_forecast_template_assets",
     ROOT / "scripts" / "render_forecast_template_assets.py")
@@ -59,6 +60,37 @@ def test_the_renderer_loads_the_dissertation_style_contract():
     assert renderer.FIGURE_STYLE_PATH.is_file()
     style = renderer._dissertation_style()
     assert callable(style.configure) and len(style.SERIES) >= len(renderer.FAMILIES) and style.GRID
+
+
+def test_render_fixture_matches_the_release_manifest():
+    source = json.loads((FIXTURE / "SOURCE.json").read_text(encoding="utf-8"))
+    manifest_path = ROOT / source["manifest"]
+    assert hashlib.sha256(manifest_path.read_bytes()).hexdigest() == source["manifest_sha256"]
+    artifacts = {Path(item["path"]).name: item for item in json.loads(manifest_path.read_text())["artifacts"]}
+    for name, record in source["files"].items():
+        data = (FIXTURE / name).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == record["sha256"] == artifacts[name]["sha256"]
+        assert len(data) == record["size_bytes"] == artifacts[name]["size_bytes"]
+
+
+@requires_figure_toolchain
+def test_fixture_renderer_exports_and_audits_pdf(tmp_path):
+    comparisons = renderer._read_rows(FIXTURE / "forecast_completion_template_comparison.csv", renderer.COMPARISON_SCHEMA)
+    channels = renderer._read_rows(FIXTURE / "forecast_completion_channel_mapping.csv", renderer.CHANNEL_SCHEMA)
+    status = renderer._read_rows(FIXTURE / "forecast_completion_template_status.csv", renderer.STATUS_SCHEMA)
+    renderer._validate(comparisons, channels)
+    assert len([row for row in status if row["category"] == "empirical_visibility"
+                and row["execution_status"] == "data_dependent_incomplete"]) == 3
+    figure = tmp_path / "comparison.png"
+    renderer._render_figure(figure, channels)
+    renderer._write_tex(tmp_path / "summary.tex", renderer._aggregate(comparisons, channels))
+    assert figure.stat().st_size > 20_000
+    pdf = figure.with_suffix(".pdf")
+    assert pdf.stat().st_size > 10_000
+    audit = renderer._verify_pdf_contract(pdf)
+    assert audit["all_fonts_embedded_type1"]
+    assert audit["font_names"] and all(name.startswith("LM") for name in audit["font_names"])
+    assert not audit["creation_modification_dates_included"]
 
 
 @requires_figure_toolchain

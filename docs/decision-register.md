@@ -17,7 +17,7 @@ verdict and never the layouts of record.
 
 The tables below give each entry's id, value, status and evidence; the JSON
 files hold the rest. A test (`tests/test_decision_register.py`) holds this page
-to the registers: every id appears here.
+to the registers: every table cell must match.
 
 ## Science register (`projects/chime_bao/science_register.json`)
 

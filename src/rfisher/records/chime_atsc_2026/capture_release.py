@@ -95,7 +95,7 @@ def main(argv=None):
     assert os.path.abspath(REL) not in (R5, R51REL), "the frozen releases are only read"
     H = capture_handoff.open_handoff(handoff_dir)
     IN = INPUT; capture_handoff.table_rows(H, "frame_analysis/table_of_record_before_amendment8.csv", IN)
-    assert sha(RECORD) == RECORD_SHA
+    capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RECORD)
     os.makedirs(RUN, exist_ok=True); os.makedirs(REL, exist_ok=True)
     R = capture_ruling.main
     RARGS = ["--input", IN, "--handoff", handoff_dir, "--ch33-rescan"]

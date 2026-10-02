@@ -45,7 +45,8 @@ accepted; its exclusion-side ratio columns are then named R_exclusion_* in place
 r4 (item 17): a units-only json run with --set GROUND_CREDIT=off (no ground-filter credit) is accepted; its rescue
 coherence is then the coherence a ground filter would need with no credit taken, and the log says so. A units-only json
 with the ground credit gives revision 3's (or revision 2's) output byte for byte.
-The table of record is read from --record-table TABLE (the frozen table, or the table written in the same run).
+The table of record is read from --record-table TABLE. Different bytes require --in-run-record-table;
+the input digest and mode are logged to stderr.
 usage: rfisher records phase-limit --handoff DIR --record-table TABLE <out dir> [--units booked|power --units-json RUN.json]
                                    [--a18-json A18.json]
 
@@ -63,6 +64,8 @@ from rfisher.records.chime_atsc_2026._files import load_json
 def main(argv=None):
     import sys
     argv = ["phase-limit"] + list(sys.argv[1:] if argv is None else argv)
+    in_run = "--in-run-record-table" in argv
+    if in_run: argv.remove("--in-run-record-table")
     _args = argv[1:]; OUT = None; UNITS = "booked"; UJSON = A18JSON = None; H = None; RT = None
     while _args:
         k = _args.pop(0)
@@ -88,7 +91,7 @@ def main(argv=None):
     EXCISED = (15, 17, 30, 31, 33, 35)
     BOOKING = {15: "bao_short", 17: "bao_long", 30: "bao_long", 31: "bao_long", 33: "bao_long", 35: "bao_long"}
 
-    record = {int(r["channel"]): r for r in capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RT) if r["role"] == "data"}
+    record = {int(r["channel"]): r for r in capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RT, in_run=in_run) if r["role"] == "data"}
     # every range the record excises, and the channels, not excised, that carry one: the limit is evaluated on all of them
     EXCISED_RANGES = {(ch, rng) for ch, r in record.items() for rng in RANGES if r[f"{rng}_verdict"] == "excise"}
     assert {ch for ch, r in record.items() if r["disposition"] == "excise"} == set(EXCISED)

@@ -86,7 +86,7 @@ and refuses unsupported or numerically unstable evaluations.
 
 Threshold selection is split at the handoff. The detector (pilot-proxy)
 characterizes each band: every candidate threshold with its masked fraction,
-kept residual and evaluability, the false-alarm limit eta_Pfa (the higher
+kept residual and evaluability, the false-alarm limit eta_Pfa (at this commit, the higher
 1 - alpha quantile of Q, alpha = 1e-3, on the band's own verified
 signal-free population; a control band's quantile, such as Q37(1e-3), is a
 surrogate and never a band's eta_Pfa), and the stability screen
@@ -103,7 +103,7 @@ surface against the band's tolerance and nothing else:
   refused, detector refused, keep only with a certified eta_Pfa, excise only
   when every family's deployable set is empty, otherwise undetermined);
 - `rfisher.verdict.sensitivity` is the one place a sensitivity factor (a
-  delay-filter or other post-processing credit) multiplies a residual.
+  delay-filter or other post-processing sensitivity) multiplies a residual.
 
 The selector's constants are data (`projects/chime_bao/selector_policy.json`),
 read through `rfisher.policy`; `selector.fine_rank` chooses the fine ranks the

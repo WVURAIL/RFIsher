@@ -20,7 +20,7 @@ Files only, and two of them in kind:
   the tolerance basis.
 
 `rfisher.verdict` imports nothing from `rfisher.forecast`, `rfisher.tolerance`
-or `rfisher.records`, and a verdict run opens no file but those
+or `rfisher.records`, and a verdict run opens no data file but those, besides the project's registers
 (`tests/verdict/test_verdict_boundary.py`). Cosmology enters through
 `rfisher.forecast` and `rfisher.tolerance`, and two things leave them:
 `tolerances.csv`, for both verdicts, and the BAO-band coherence gain, for the

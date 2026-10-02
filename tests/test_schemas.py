@@ -93,6 +93,13 @@ def test_the_vendored_capture_schema_is_pinned():
     assert schema["properties"]["schema_version"] == {"const": 1}
 
 
+def test_capture_golden_source_records_every_file():
+    source = json.loads((CAPTURE_GOLDEN.parent / "SOURCE.json").read_text(encoding="utf-8"))
+    assert source["commit"] == "1b57419d73c788d139a0b81237430eeb3a9a1ab0"
+    assert source["archive_sha256"] == CAPTURE_GOLDEN_SHA256["capture_oc.tar.gz"]
+    assert source["files"] == {name: sha for name, sha in CAPTURE_GOLDEN_SHA256.items() if name != "capture_oc.tar.gz"}
+
+
 def test_the_golden_capture_handoff_has_the_schemas_columns(tmp_path):
     from rfisher.records.chime_atsc_2026 import capture_oc
     root = _capture_golden(tmp_path)
