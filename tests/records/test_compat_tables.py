@@ -58,8 +58,13 @@ def _inputs(golden, release):
         summary=summary, fine=fine, coarse={}, ladder=ladder, ledger=ledger,
         ledger_names={}, run={}, chain_csv=((), []), tolerances=rule,
         per_bin=tolerance_table.load(packaged_table()),
-        model=RadioFisherBAO(PROJECT), policy=policy.load(PROJECT),
+        model=RadioFisherBAO(PROJECT), policy=ct.frozen_policy(),
         bands=bands)
+
+
+def test_recorded_rank_policy_is_independent_of_the_current_policy():
+    assert ct.frozen_policy().value("selector.fine_rank") == "all"
+    assert policy.load(PROJECT).value("selector.fine_rank") == 63
 
 
 def _render(row):

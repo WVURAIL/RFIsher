@@ -1,6 +1,4 @@
-"""The project registers against the frozen archive policy copy (the registers at f56916a, byte for byte): every key of
-every entry is the same but the evidence strings that named deleted files (now cited at the last commit that holds
-them, or by the file that holds the code now) and the tie-break's renamed tail."""
+"""Project registers preserve the archive policy except for declared amendments."""
 from __future__ import annotations
 
 import json
@@ -17,7 +15,15 @@ EVIDENCE = {
     "src/rfisher/thresholds.py": ["src/rfisher/thresholds.py@7b0067b", "src/rfisher/verdict/interval.py"],
     "docs/contamination-residuals.md": ["docs/tolerance.md"],
 }
-VALUES = {"selection.tie_break": ["systematic_residual", "masked_fraction", "candidate_order"]}
+VALUES = {"selection.tie_break": ["systematic_residual", "masked_fraction", "candidate_order"],
+          "selector.fine_rank": 63}
+AMENDMENTS = {
+    "selector.fine_rank": {
+        "status": "locked",
+        "rationale": "The detector fixes rho = 63 from the intended bulk geometry. "
+                     "The verdict reads that family; eta is the only per-channel threshold parameter.",
+    },
+}
 
 
 def _evidence(old):
@@ -29,7 +35,7 @@ def _evidence(old):
     return out
 
 
-def test_only_the_declared_strings_differ_from_the_frozen_registers():
+def test_only_declared_amendments_differ_from_the_frozen_registers():
     for name in ("science_register.json", "selector_policy.json"):
         new = json.loads((PROJECT / name).read_text(encoding="utf-8"))
         old = json.loads((FROZEN / name).read_text(encoding="utf-8"))
@@ -40,11 +46,12 @@ def test_only_the_declared_strings_differ_from_the_frozen_registers():
         assert source == old["source"]
         assert {k: v for k, v in new.items() if k not in ("decisions", "source")} == \
             {k: v for k, v in old.items() if k not in ("decisions", "source")}
-        for a, b in zip(new["decisions"], old["decisions"]):
+        for a, b in zip(new["decisions"], old["decisions"], strict=True):
             assert a["evidence"] == _evidence(b["evidence"]), a["id"]
             assert a["value"] == VALUES.get(a["id"], b["value"]), a["id"]
+            expected = {**b, **AMENDMENTS.get(a["id"], {})}
             assert {k: v for k, v in a.items() if k not in ("evidence", "value")} == \
-                {k: v for k, v in b.items() if k not in ("evidence", "value")}, a["id"]
+                {k: v for k, v in expected.items() if k not in ("evidence", "value")}, a["id"]
 
 
 def source_rename():

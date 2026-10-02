@@ -95,11 +95,11 @@
     {
       "id": "selector.fine_rank",
       "side": "science",
-      "value": "all",
+      "value": 63,
       "units": "background rank of the fine families",
       "basis": "policy",
-      "status": "provisional",
-      "rationale": "The fine families the verdict reads: every rank the detector enumerates. A fixed rank (the declared order-statistic change fixes rho = 63) is a change of this value alone.",
+      "status": "locked",
+      "rationale": "The detector fixes rho = 63 from the intended bulk geometry. The verdict reads that family; eta is the only per-channel threshold parameter.",
       "evidence": [
         "src/rfisher/verdict/interval.py"
       ],

@@ -47,7 +47,7 @@ to the registers: every table cell must match.
 | `selection.tie_break` | ["systematic_residual", "masked_fraction", "candidate_order"] | locked | src/rfisher/thresholds.py@7b0067b; src/rfisher/verdict/interval.py |
 | `selection.tolerance_equality_is_feasible` | true | derived | src/rfisher/thresholds.py@7b0067b; src/rfisher/verdict/interval.py |
 | `selector.archive_exclusion_gain` | {"measured": "booked", "bounded": 1, "cap": 1} | locked | src/rfisher/verdict/screening.py |
-| `selector.fine_rank` | "all" | provisional | src/rfisher/verdict/interval.py |
+| `selector.fine_rank` | 63 | locked | src/rfisher/verdict/interval.py |
 | `selector.precedence` | ["tolerance refused", "detector refused", "keep", "excise", "undetermined"] | locked | src/rfisher/verdict/screening.py |
 | `selector.sensitivity_limited_share` | 0.95 | provisional | src/rfisher/verdict/screening.py |
 | `selector.unmeasured` | {"exclude": "most_favorable", "keep": "least_favorable"} | locked | src/rfisher/verdict/screening.py |

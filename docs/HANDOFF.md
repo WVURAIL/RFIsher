@@ -73,8 +73,8 @@ For one band, family and scenario (`rfisher.verdict.interval`):
   multiplier);
 - the fine families it reads are set by `selector.fine_rank`
   (`projects/chime_bao/selector_policy.json`), read in one place,
-  `fine_candidates`; its value at this commit is `"all"`, every rank the
-  detector enumerates.
+  `fine_candidates`; its value is 63, the detector's fixed median rank.
+  The threshold multiplier is the only per-channel parameter.
 
 `rfisher.verdict.screening` then reads the families of a band in the declared
 precedence (`selector.precedence`): a refused tolerance or a refused detector

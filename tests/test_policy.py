@@ -88,7 +88,7 @@ def test_the_selector_policy_holds_the_selector_values():
     assert loaded.value("selection.cost_plateau_ratio") == 1.02
     assert loaded.value("selection.tolerance_equality_is_feasible") is True
     assert loaded.value("selector.sensitivity_limited_share") == 0.95
-    assert loaded.value("selector.fine_rank") == "all"
+    assert loaded.value("selector.fine_rank") == 63
     assert loaded.value("selector.precedence") == (
         "tolerance refused", "detector refused", "keep", "excise",
         "undetermined")

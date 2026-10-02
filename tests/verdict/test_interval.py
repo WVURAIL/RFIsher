@@ -144,14 +144,14 @@ def test_the_fine_rank_is_read_in_one_place(pol, monkeypatch):
                                   "counts": [40, 10],
                                   "systematic_residual_sums": [1.0, 1.0]}})
     assert {r["threshold_family"] for r in interval.fine_candidates(
-        rows, pol)} == {"rho=1", "rho=63"}
+        rows, pol)} == {"rho=63"}
 
-    class Fixed:
+    class RecordedRankStudy:
         def value(self, ident):
-            return 63 if ident == "selector.fine_rank" else pol.value(ident)
+            return "all" if ident == "selector.fine_rank" else pol.value(ident)
 
     assert {r["threshold_family"] for r in interval.fine_candidates(
-        rows, Fixed())} == {"rho=63"}
+        rows, RecordedRankStudy())} == {"rho=1", "rho=63"}
     readers = []
     for path in sorted((ROOT / "src" / "rfisher").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))

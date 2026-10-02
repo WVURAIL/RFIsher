@@ -30,7 +30,7 @@ from typing import Mapping, Sequence
 SCHEMA = "operating_characteristic"
 SCHEMA_VERSION = 1
 SCHEMA_FILE = "operating_characteristic_v1.schema.json"
-SCHEMA_SHA256 = "7fa22223e7977b745e750b5b612958ce2e28b6727a6d27ccd465059fca3526a2"
+SCHEMA_SHA256 = "ab41499f06267245693eb0ac16621ddadff7c67b4791f0fce73f924991a9456c"
 TABLE = "oc_table.csv"
 SUMMARY = "oc_summary.csv"
 MANIFEST = "manifest.json"
