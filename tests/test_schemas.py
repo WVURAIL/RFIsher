@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 SCHEMA = "operating_characteristic_v1.schema.json"
-SCHEMA_SHA256 = "ab41499f06267245693eb0ac16621ddadff7c67b4791f0fce73f924991a9456c"
+SCHEMA_SHA256 = "8267e9e0990ad531675ba5f9ab01aede92cfe4787ada938c7978f7d400143cd2"
 GOLDEN = Path(__file__).resolve().parent / "golden" / "handoff" / "archive"
 GOLDEN_SHA256 = {
     "manifest.json":

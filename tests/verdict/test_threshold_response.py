@@ -120,6 +120,41 @@ def test_wrong_mask_comparison_is_refused(complete):
         threshold.read_forward([complete])
 
 
+@pytest.mark.parametrize("scope", [None, "all_operational_thresholds"])
+def test_complete_surface_requires_supported_calibration_scope(complete, scope):
+    edit_manifest(complete, fine_surface_scope=scope)
+    with pytest.raises(handoff.HandoffError, match="supported calibration scope"):
+        threshold.read_forward([complete])
+
+
+def test_duplicate_fine_summary_is_refused(complete):
+    rewrite(complete, "oc_summary.csv", lambda rows: rows.append(dict(rows[0])))
+    with pytest.raises(handoff.HandoffError, match="duplicate fine summary"):
+        threshold.read_forward([complete])
+
+
+def test_evaluation_summary_cannot_complete_calibration_surface(complete):
+    rewrite(complete, "oc_summary.csv", lambda rows: rows[0].update(
+        population="current_era_evaluation_block"))
+    with pytest.raises(handoff.HandoffError, match="fine summary population"):
+        threshold.read_forward([complete])
+
+
+def test_under_supported_calibration_candidate_is_refused(complete):
+    rewrite(complete, "oc_table.csv", lambda rows: rows[0].update(
+        kept="29", masked="163", masked_fraction=repr(163 / 192),
+        exposure_cost_uniform_loss=repr(192 / 29)))
+    with pytest.raises(handoff.HandoffError, match="below 30 frames"):
+        threshold.read_forward([complete])
+
+
+def test_duplicate_candidate_order_is_refused(complete):
+    rewrite(complete, "oc_table.csv", lambda rows: rows[1].update(
+        candidate_order=rows[0]["candidate_order"]))
+    with pytest.raises(handoff.HandoffError, match="duplicate fine candidate_order"):
+        threshold.read_forward([complete])
+
+
 @pytest.mark.parametrize("changes,match", [
     ({"eta_q16": "262145"}, "eta_q16"),
     ({"eta_exact": "262145/65536"}, "eta_q16"),
@@ -130,6 +165,8 @@ def test_wrong_mask_comparison_is_refused(complete):
     ({"masked_fraction": "0.6"}, "masked_fraction"),
     ({"exposure_cost_uniform_loss": "3"}, "exposure_cost"),
     ({"r_sys": "nan"}, "r_sys"),
+    ({"floor_share": "1.1"}, "floor_share"),
+    ({"population": "current_era_evaluation_block"}, "population/block"),
     ({"bulk_size": "125", "rank_fraction": str(1 / 126)}, "geometry"),
 ])
 def test_corrupt_complete_rows_are_refused(complete, changes, match):
@@ -139,6 +176,7 @@ def test_corrupt_complete_rows_are_refused(complete, changes, match):
 
 
 @pytest.mark.parametrize("counts", [
+    {"29": [], "34": {"rho=1": 3}},
     {"29": {"rho=1": True}, "34": {"rho=1": 3}},
     {"29": {"rho=1": 3}},
     {"29": {"rho=1": 2}, "34": {"rho=1": 3}},
