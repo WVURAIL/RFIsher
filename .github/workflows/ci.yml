@@ -85,14 +85,16 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install ".[test]" -c requirements/render.txt
-      - name: Render the dissertation figure and audit its fonts
+      - name: Render the forecast template figure and audit its fonts
         run: |
           set -o pipefail
           python -m pytest -q -rs --no-header \
-            tests/test_dissertation_figures.py \
-            tests/test_render_forecast_template_assets.py | tee /tmp/figure.log
-          if grep -Eq "dissertation figure.*need" /tmp/figure.log; then
-            echo "::error::figure audit skipped even though the toolchain installed"
+            tests/test_render_forecast_template_assets.py::test_the_renderer_loads_the_dissertation_style_contract \
+            tests/test_render_forecast_template_assets.py::test_render_fixture_matches_the_release_manifest \
+            tests/test_render_forecast_template_assets.py::test_fixture_renderer_exports_and_audits_pdf \
+            | tee /tmp/figure.log
+          if grep -Eq "SKIPPED|[0-9]+ skipped" /tmp/figure.log; then
+            echo "::error::required figure audit skipped"
             exit 1
           fi
 

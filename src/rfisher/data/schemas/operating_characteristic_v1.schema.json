@@ -1,6 +1,26 @@
 {
   "$id": "https://github.com/WVURAIL/pilot-proxy/docs/schemas/operating_characteristic_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "fine_surface_rows": {
+            "const": "complete"
+          }
+        },
+        "required": [
+          "fine_surface_rows"
+        ]
+      },
+      "then": {
+        "required": [
+          "fine_surface_scope",
+          "fine_surface_counts"
+        ]
+      }
+    }
+  ],
   "description": "The operating-characteristic handoff: ``oc_table.csv``, ``oc_summary.csv`` and ``manifest.json``.",
   "properties": {
     "bands": {
@@ -32,6 +52,23 @@
         "oc_summary.csv"
       ],
       "type": "object"
+    },
+    "fine_surface_counts": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": "object"
+      },
+      "description": "Fine calibration row counts by band and threshold family; empty bands are included.",
+      "type": "object"
+    },
+    "fine_surface_rows": {
+      "type": "string"
+    },
+    "fine_surface_scope": {
+      "const": "supported_calibration_candidates"
     },
     "inputs": {
       "type": "object"
@@ -192,7 +229,7 @@
       "unit": ""
     },
     {
-      "description": "The false-alarm limit, in Q: the higher (1 - alpha) quantile of the verified signal-free population. Filled only when eta_pfa_status is available; empty on Z_rho rows.",
+      "description": "The smallest matching-statistic threshold with one-sided 95% Clopper-Pearson upper bound <= alpha on an independently sampled, verified null. Filled only when available.",
       "name": "eta_pfa",
       "type": "float",
       "unit": "statistic units"
@@ -216,13 +253,13 @@
       "unit": "frames"
     },
     {
-      "description": "n_eff = n / max(DEFF, 1), from a day-block bootstrap.",
+      "description": "Independent integer trial count for an available exact limit; bootstrap effective count for a coarse diagnostic.",
       "name": "pfa_effective_samples",
       "type": "float",
       "unit": ""
     },
     {
-      "description": "One-sided 95% Clopper-Pearson upper bound on P_fa at eta_Pfa, n_eff trials.",
+      "description": "One-sided 95% Clopper-Pearson upper bound on P_fa at eta_Pfa, using integer trials.",
       "name": "pfa_upper_95",
       "type": "float",
       "unit": ""
@@ -980,13 +1017,13 @@
       "unit": ""
     },
     {
-      "description": "Empirical P_fa of this eta on the verified signal-free population eta_Pfa reads (Q rows; empty when there is none, and on Z_rho rows).",
+      "description": "Empirical P_fa of this eta on the matching statistic's verified signal-free population; empty when that population is unavailable.",
       "name": "pfa",
       "type": "float",
       "unit": ""
     },
     {
-      "description": "measured (pfa is filled), unavailable: <reason>, undefined: no alpha declared, not defined: control band ..., or not computed: statistic Z_rho (fine rows: P_fa is estimated on Q only).",
+      "description": "measured (pfa is filled), unavailable: <reason>, undefined: no alpha declared, not defined: control band ..., or not computed: statistic Z_rho (recorded rows).",
       "name": "pfa_status",
       "type": "str",
       "unit": ""
@@ -1070,8 +1107,8 @@
       ]
     },
     "evaluable": "kept >= 30 and eligible (both era halves keep enough frames)",
-    "false_alarm": "eta_Pfa and P_fa are estimated on Q only: Z_rho rows carry 'not computed: statistic Z_rho' and no Q value; eta_pfa is filled only when available; pfa_status measured implies a pfa in [0, 1]; pfa_design_model on Z_rho rows only",
-    "fine_surface": "thinned: at most 200 candidates per rank, with each rank's least-residual candidate and the marked points",
+    "false_alarm": "Q and Z_rho use their own verified null scores; eta_pfa is filled only when an independently sampled null supports a one-sided 95% Clopper-Pearson upper bound at most pfa_target; measured pfa is in [0, 1]; coarse diagnostic values remain on Q rows and pfa_design_model on Z_rho rows only",
+    "fine_surface": "thinned: at most 200 candidates per rank, with each rank's least-residual candidate and the marked points; complete: every supported empirical calibration candidate, not every operational Q16 threshold or null-only plateau",
     "marks": [
       "knee",
       "least_residual"
@@ -1096,6 +1133,7 @@
     },
     "populations": [
       "current_era_calibration_block",
+      "current_era_evaluation_block",
       "all_valid_frames"
     ]
   }

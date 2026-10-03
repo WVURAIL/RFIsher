@@ -18,7 +18,10 @@
       "selector.precedence",
       "selector.sensitivity_limited_share",
       "selector.unmeasured"
-    ]
+    ],
+    "renamed": {
+      "selection.tie_break": "the tail rho, multiplier_q16 of the 7b0067b value is named candidate_order, the order it stands for (M6)"
+    }
   },
   "decisions": [
     {
@@ -30,7 +33,8 @@
       "status": "provisional",
       "rationale": "Candidates within two percent of minimum cost are treated as practically tied before residual margin breaks the tie.",
       "evidence": [
-        "src/rfisher/thresholds.py"
+        "src/rfisher/thresholds.py@7b0067b",
+        "src/rfisher/verdict/interval.py"
       ],
       "sensitivity_values": [
         1.0,
@@ -45,15 +49,15 @@
       "value": [
         "systematic_residual",
         "masked_fraction",
-        "rho",
-        "multiplier_q16"
+        "candidate_order"
       ],
       "units": "lexicographic order",
       "basis": "policy",
       "status": "locked",
       "rationale": "The order favors science margin, then exposure, then the simpler rank and multiplier when forecast cost is practically tied.",
       "evidence": [
-        "src/rfisher/thresholds.py"
+        "src/rfisher/thresholds.py@7b0067b",
+        "src/rfisher/verdict/interval.py"
       ],
       "sensitivity_values": []
     },
@@ -66,7 +70,8 @@
       "status": "derived",
       "rationale": "The tolerance defines a closed upper bound, so equality passes.",
       "evidence": [
-        "src/rfisher/thresholds.py"
+        "src/rfisher/thresholds.py@7b0067b",
+        "src/rfisher/verdict/interval.py"
       ],
       "sensitivity_values": []
     },
@@ -90,11 +95,11 @@
     {
       "id": "selector.fine_rank",
       "side": "science",
-      "value": "all",
+      "value": 63,
       "units": "background rank of the fine families",
       "basis": "policy",
-      "status": "provisional",
-      "rationale": "The fine families the verdict reads: every rank the detector enumerates. A fixed rank (the declared order-statistic change fixes rho = 63) is a change of this value alone.",
+      "status": "locked",
+      "rationale": "The detector fixes rho = 63 from the intended bulk geometry. The verdict reads that family; eta is the only per-channel threshold parameter.",
       "evidence": [
         "src/rfisher/verdict/interval.py"
       ],

@@ -1,5 +1,37 @@
 # Release index
 
+## Science-side releases and how to replay them
+
+Each frozen output the science side reproduces, with the commit to replay it
+from (a worktree, `git worktree add <dir> <commit>`), the interpreter of
+record and the row of the refactor's equivalence table (DESIGN F.2) that
+reproduces it. A release directory under the workspace `results/` tree is
+named, not its path. The release environment is Python 3.12.3 with
+numpy 2.5.2; the capture release r5.2 was built under numpy 2.3.5 (the
+dissertation environment), and the record tests hold every byte of it under
+numpy 2.3 and later.
+
+| Row | Release | What is reproduced | Replay commit | Interpreter of record |
+|---|---|---|---|---|
+| 1c to 1f | `archive_author_eras_2026-09-23` (science layer) | the chain, selection, screening and operating-point tables, the tolerance and worlds tables, the ledger, from pilot-proxy's characterization and the verdict (`rfisher records archive-layout --release archive_author_eras_2026_09_23`, under the frozen policy copy) | f56916a | release environment |
+| 20 | `archive_no_split_2026-09-24_r2` (science layer) | the same at the off setting (`--release archive_no_split_2026_09_24_r2`) | f56916a | release environment |
+| 2 | the shipped tolerance table `src/rfisher/data/tolerances/filter_scenarios_T1yr.csv` | `rfisher tolerance build`, byte for byte, with its provenance | f56916a | release environment |
+| 3 | the coarse ladder pricing of `archive_author_eras_2026-09-23` | `records/chime_atsc_2026/ladder_pricing.py` on pilot-proxy's coarse ladder | f56916a | release environment |
+| 7 | the table of record (9867551a) and its v7 input (fd718463) | `rfisher records table-of-record` and `records capture-ruling --rule record`, from the capture handoff, `gain_bao.csv` and the v7 table | this commit | release environment |
+| 8 | the channel 24 basis and the robustness copy of the era redate | `records cohort-basis`, `records robustness` | this commit | archive environment |
+| 21 | `capture_ruling_a19_2026-09-25_r5_2` (49 files), and the rulings of revisions a18 to r5.1 through their rule files (`projects/chime_bao/capture_rules/`) | `rfisher records capture-release --rule r5_2` with the capture handoff and the explicit record tables; the credit readings r3 and r2 | this commit | dissertation environment (numpy 2.3.5) |
+| 6 | the cadence report of record (`CADENCE_REPORT.md`) | pilot-proxy's `capture cadence-report`, then `rfisher records cadence-report` with the table of record | this commit | release environment |
+| 12c | the forecast-template figure of `forecast_completion_20260824_reconciliation` | `scripts/render_forecast_template_assets.py --preserve-release-metadata` | f56916a | release environment |
+| 13 | the visibility response endpoint validation | `rfisher response visibility` (`response/visibility.py`, 0d041bfd) | f56916a | baonoise environment (numpy 2.5.1) |
+
+The earlier capture revisions are frozen releases (`capture_ruling_a18_2026-09-24`
+and its revisions r2 to r4, `capture_ruling_a19_2026-09-25_r5` and `_r5_1`);
+their rulings are reproduced through the rule files, and their tables are not
+rebuilt. The forecast-completion and calibration releases below keep their own
+manifests in `docs/releases/`.
+
+## Release notes
+
 RFIsher has two immutable forecast-completion release roots. They share
 artifact basenames but represent different provenance states. Neither
 directory should be renamed, moved, rewritten, or collapsed into the other.
@@ -8,7 +40,7 @@ Both live in the results tree, outside the repository, with the rest of the
 generated tables, ledgers and figures that were tracked under `out/` until
 September 2026. The repository keeps their manifests under `docs/releases/`
 and the manifest schema under `docs/`. The tree is resolved by
-`rfisher_results.results_tree.out_dir()`: `$RFISHER_OUT`, else `out_dir` in
+`rfisher.records.results_tree.out_dir()`: `$RFISHER_OUT`, else `out_dir` in
 `data/products.local.json`, else the repository's own ignored `out/`. Paths
 below are relative to that tree; manifest entries keep their recorded `out/`
 prefix, which resolves to the same place.
@@ -44,7 +76,7 @@ callers. Compose their underlying explicit operations if an external workflow
 still needs equivalent behavior.
 
 The ordinary dissertation inputs `three_worlds.csv` (in the results tree) and
-`scripts/dissertation/data/bao_era_points.csv` are also authenticated pre-v3
+`scripts/dissertation/data/bao_era_points.csv@f56916a` are also authenticated pre-v3
 scientific snapshots. Their embedded source hashes identify the code that
 produced their values; they are checked against those recorded identities, not
 against the current cleanup tree. Do not restamp them. Regenerate a new
@@ -52,7 +84,7 @@ snapshot only when the archived products are available to run the full
 pipeline.
 
 <!-- BEGIN CALIBRATION_PROGRESS -->
-## Calibration progress and producer evidence — September 9, 2026
+## Calibration progress and producer evidence: September 9, 2026
 
 `calibration_progress_2026-09-09` separately preserves waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; [physical-calibration.md](physical-calibration.md) describes their scope.
 
@@ -62,13 +94,13 @@ The waveform audit explains the startup discrepancy and preserves newly generate
 
 <!-- END CALIBRATION_PROGRESS -->
 
-## Joint calibration and evidence follow-up — September 8, 2026
+## Joint calibration and evidence follow-up: September 8, 2026
 
 `calibration_next_2026-09-08` separately releases a signed joint digital
 tolerance experiment, regulatory-history sidecars, a 23-channel monthly-prefix
 era audit and four bounded saved-filter examples. Its
 [manifest](releases/calibration_next_2026-09-08.manifest.json) binds the source
-snapshots and evidence; the [workflow](physical-calibration.md) explains the
+snapshots and evidence; the workflow (`docs/physical-calibration.md@f56916a`) explains the
 method and remaining physical requirements.
 
 The new experiment uses 60 calibration and 60 fresh evaluation blocks, each
@@ -84,14 +116,14 @@ audit quantifies 126 prior assignment revisions across 1,722 prefixes; the
 saved filters demonstrate vector-dependent response outside the nominal DTV
 band. Neither supplies prospective or in-band physical certification.
 
-## Calibration follow-up — September 8, 2026
+## Calibration follow-up: September 8, 2026
 
 `calibration_followup_2026-09-08` is a separate conditional evidence release.
 It contains a frozen fresh-draw digital protocol, 18 generated frame shards,
 coverage and post-hoc batch diagnostics, a six-frame GPU/CPU arithmetic audit,
 the eight-product collaboration preflight and a pending physical-data plan.
 Its [manifest](releases/calibration_followup_2026-09-08.manifest.json) preserves
-the input and output identities. The [workflow](physical-calibration.md)
+the input and output identities. The workflow (`docs/physical-calibration.md@f56916a`)
 explains the new validation helpers and the remaining physical requirements.
 
 All twelve fixed digital cases have 60 supported batches without under-booking;
@@ -100,7 +132,7 @@ establish physical confidence coverage or science-tolerance compliance. The
 collaboration data are outside the DTV band, and the all-days/p1 HyFoRes pairs
 require matched-day re-stacking. No operational policy is authorized.
 
-## Corrected retrospective archive — September 8, 2026
+## Corrected retrospective archive: September 8, 2026
 
 `archive_v5_2026-09-08_corrected/` in the results tree is a separate 23-channel
 analysis. Its input products match both September 7b and September 7c by hash.
@@ -253,5 +285,5 @@ and historical verification.
 
 - [Reproducibility commands](reproducibility.md)
 - [Forecast-completion contract](forecast-completion.md)
-- [CHIME/BAO application](chime-bao-application.md)
+- [CHIME/BAO application](application-chime.md)
 - [Architecture and provenance boundary](architecture.md)

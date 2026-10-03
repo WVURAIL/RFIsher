@@ -105,6 +105,6 @@ def test_a_manifest_that_does_not_call_the_surface_complete_reads_thinned(
     assert oc.thinned
     manifest["fine_surface_rows"] = "complete: every evaluable candidate"
     path.write_text(json.dumps(manifest))
-    assert not handoff.read_characterization(
+    assert handoff.read_characterization(
         handoff_copy.path, r_reference=R_REFERENCE,
         residual_shapes=("band_thermal",)).thinned

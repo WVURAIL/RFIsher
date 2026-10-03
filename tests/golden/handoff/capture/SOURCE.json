@@ -1,9 +1,16 @@
 {
  "about": "The capture handoff of the ruling of record, derived from the frozen inputs by the gate tool derive_capture_handoff.py (refactor-equivalence M5b) under the r5.2 MANIFEST's interpreter, and the objects the release producer's own input block builds from the same inputs (its text executed, every float as repr).",
  "capture_handoff.tar.gz": {
-  "sha256": "a7589946a6483bcf361baf70f2cc4a9ca3b1030b1ab85519d257fcda63f311df",
-  "manifest_sha256": "2a3e5e1499e669c69a27468ce7d7e52a1f3b7339b80385dd14ede76920963a61",
-  "files": 66
+  "sha256": "0685c7904dfdb406d10f15cf2bb15667cd5844fb483d1eb92a6462e148bd0f08",
+  "manifest_sha256": "88172ccdbdb9a8bfabc916619da30e97b8630421b01065326c098736fd8890aa",
+  "files": 63,
+  "projected_from": {
+   "sha256": "a7589946a6483bcf361baf70f2cc4a9ca3b1030b1ab85519d257fcda63f311df",
+   "manifest_sha256": "2a3e5e1499e669c69a27468ce7d7e52a1f3b7339b80385dd14ede76920963a61",
+   "files": 66,
+   "tool": "M6/tools/project_capture_handoff.py",
+   "note": "the record's own tables, gain_bao.csv and board_final.csv dropped; board_detector.csv added from the board's detector columns"
+  }
  },
  "reader_objects.json.gz": {
   "sha256": "3dab6f395958b77f25a01f35976a2e3917d55890ccbcdfc4e3c083a302b0ef3c"
@@ -16,5 +23,14 @@
   },
   "tool": "M5b/tools/derive_capture_handoff.py",
   "tool_sha256": "9f34819bf33afed3a738b53b77d5dc6b97b2788981b176d18582f5e2d9abea99"
+ },
+ "record_inputs.tar.gz": {
+  "sha256": "9036dac2a88c138e83c750a83933c9d125965baff92da38d45c5d4614a1f3a18",
+  "files": {
+   "table_of_record.csv": "9867551ad591757ed8b8864940376c68666483833478b4711292e0517a27b195",
+   "table_of_record_before_amendment8.csv": "fd718463005beace5f4b52882a6b70d7a6f0c44b54d244b1c8a8aa3d99e6548f",
+   "gain_bao.csv": "7dff5619ea34f855812834e8310835a01284a54c1f0307a0236b4408700a9cf8"
+  },
+  "about": "the explicit inputs the capture records take: the table of record, its v7 input and the BAO-basis coherence times, byte copies of the frame analysis's files"
  }
 }

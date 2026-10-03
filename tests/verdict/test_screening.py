@@ -26,6 +26,18 @@ def pol():
     return policy.load(PROJECT)
 
 
+@pytest.fixture
+def recorded_rank_policy(pol):
+    class RecordedRankPolicy:
+        def value(self, ident):
+            return "all" if ident == "selector.fine_rank" else pol.value(ident)
+
+        def __getattr__(self, name):
+            return getattr(pol, name)
+
+    return RecordedRankPolicy()
+
+
 def test_the_golden_handoff_screens_23_bands_undetermined(pol):
     spec = handoff.schema()
     summary = handoff._read_table(GOLDEN / "oc_summary_extract.csv",
@@ -54,9 +66,13 @@ def test_the_golden_handoff_screens_23_bands_undetermined(pol):
 
 def _band(r_values, *, statuses=("measured",), floor_share=0.0, **summary):
     """One band with one family per residual list: rows and summaries."""
+    if summary.get("eta_pfa_status") == "available":
+        summary = {"pfa_target": 1e-3, "pfa_upper_95": 9e-4,
+                   "null_frames": 200000, "pfa_effective_samples": 200000.0,
+                   "null_source": "transmitter-off epoch fixture", **summary}
     rows, summaries = [], []
     for index, values in enumerate(r_values):
-        rho = str(index + 1)
+        rho = str(index + 63)
         spec = {"candidate_multiplier_q16": [65536 * (k + 1)
                                              for k in range(len(values))],
                 "counts": [30] + [10] * (len(values) - 1) + [5],
@@ -79,7 +95,8 @@ def _screen(pol, rows, summaries, r_tol=1.0):
                             families, pol)
 
 
-def test_an_excision_needs_every_family_empty(pol):
+def test_an_excision_needs_every_recorded_family_empty(recorded_rank_policy):
+    pol = recorded_rank_policy
     rows, summaries = _band([[5.0, 6.0], [7.0, 8.0]])
     out = _screen(pol, rows, summaries)
     assert (out.outcome, out.step) == ("excise", 4)
@@ -142,7 +159,8 @@ def test_the_policy_must_declare_the_implemented_precedence(pol):
     assert interval.STATUS_THINNED in screening.NONEMPTY
 
 
-def test_an_empty_floor_flag_does_not_verify_the_floor(pol):
+def test_an_empty_floor_flag_does_not_verify_the_floor(recorded_rank_policy):
+    pol = recorded_rank_policy
     rows, summaries = _band([[5.0, 6.0]], floor_share=0.99, floor_verified=None)
     out = _screen(pol, rows, summaries)
     assert out.outcome == "undetermined" and "sensitivity-limited" in out.reason
@@ -163,8 +181,9 @@ def test_an_exclusion_without_a_finite_r_does_not_excise(pol):
                                          "no finite R in the exclusion reading")
 
 
-def test_a_refused_family_carries_no_keep_and_no_excision(pol):
-    # family rho=1 keeps with a certified limit but is refused; rho=2 is empty
+def test_a_refused_family_carries_no_keep_and_no_excision(recorded_rank_policy):
+    pol = recorded_rank_policy
+    # One recorded family keeps but is refused; the other is empty.
     rows, summaries = _band([[0.5, 6.0], [7.0, 8.0]], eta_pfa=0.5,
                             eta_pfa_status="available")
     summaries[0]["stability_status"] = "refused_drift"
@@ -193,3 +212,74 @@ def test_a_limit_on_the_bulk_or_at_another_alpha_is_not_certified(pol):
     families = screening.family_readings(rows, summaries, 1.0, pol)
     out = screening.screen("99", tol, summaries, families, pol, alpha=1e-3)
     assert out.reason == "keep-eligible; P_fa unverified"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("pfa_upper_95", None), ("pfa_upper_95", math.nan),
+    ("pfa_upper_95", math.inf), ("pfa_upper_95", 0.0),
+    ("pfa_upper_95", 0.5), ("pfa_target", None),
+    ("pfa_target", math.nan), ("pfa_target", 1.0),
+    ("null_frames", 0), ("null_frames", -1),
+    ("null_frames", 2.5), ("null_frames", True),
+    ("pfa_effective_samples", None), ("pfa_effective_samples", 12.5),
+    ("pfa_effective_samples", 199999.0), ("pfa_effective_samples", math.inf),
+    ("null_source", ""), ("null_source", None),
+    ("null_source", "transmitter-off epoch "),
+    ("null_source", "verified signal-free transmitter-off epoch fixture"),
+    ("null_source", "bulk of the mixture (declared)"),
+])
+def test_malformed_null_certificate_cannot_keep(pol, field, value):
+    rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5,
+                            eta_pfa_status="available", **{field: value})
+    families = screening.family_readings(rows, summaries, 1.0, pol)
+    out = screening.screen("99", {"r_tol": 1.0, "refusal": ""},
+                           summaries, families, pol, alpha=1e-3)
+    assert (out.outcome, out.step, out.reason) == (
+        "undetermined", 5, "keep-eligible; P_fa unverified")
+
+
+def test_certificate_needs_its_summary_and_accepts_bound_equality(pol):
+    rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5,
+                            eta_pfa_status="available", pfa_upper_95=1e-3)
+    reading = screening.family_readings(rows, summaries, 1.0, pol)[0].keep
+    assert not screening.certified(reading)
+    assert screening.certified(reading, summaries[0], alpha=1e-3)
+    assert not screening.certified(reading, summaries[0], alpha=math.nan)
+    for field in ("pfa_target", "pfa_upper_95", "pfa_effective_samples",
+                  "null_frames", "null_source"):
+        missing = {key: value for key, value in summaries[0].items() if key != field}
+        assert not screening.certified(reading, missing, alpha=1e-3)
+
+
+
+def test_coarse_certificate_uses_its_own_source_description(pol):
+    rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5, eta_pfa_status="available")
+    reading = screening.family_readings(rows, summaries, 1.0, pol)[0].keep
+    summary = dict(summaries[0], candidate_set="coarse_frontier",
+                   null_source="verified signal-free transmitter-off epoch fixture")
+    assert screening.certified(reading, summary, alpha=1e-3)
+    summary["pfa_effective_samples"] = 199999.5
+    assert not screening.certified(reading, summary, alpha=1e-3)
+
+
+
+@pytest.mark.parametrize("eta", [0.0, -1.0])
+def test_fine_certificate_requires_a_positive_threshold(pol, eta):
+    rows, summaries = _band([[0.5, 6.0]], eta_pfa=eta, eta_pfa_status="available")
+    reading = screening.family_readings(rows, summaries, 1.0, pol)[0].keep
+    assert not screening.certified(reading, summaries[0], alpha=1e-3)
+
+
+def test_certificate_bound_cannot_beat_zero_exceedances(pol):
+    from scipy.stats import beta
+
+    rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5, eta_pfa_status="available",
+                            null_frames=1, pfa_effective_samples=1.0)
+    reading = screening.family_readings(rows, summaries, 1.0, pol)[0].keep
+    assert not screening.certified(reading, summaries[0], alpha=1e-3)
+    for n in (10000, 200000):
+        upper = float(beta.ppf(0.95, 1, n))
+        summaries[0].update(null_frames=n, pfa_effective_samples=float(n), pfa_upper_95=upper)
+        assert screening.certified(reading, summaries[0], alpha=1e-3)
+        summaries[0]["pfa_upper_95"] = 0.99 * upper
+        assert not screening.certified(reading, summaries[0], alpha=1e-3)

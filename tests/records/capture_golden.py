@@ -18,6 +18,31 @@ def sha256(path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+_RECORD_INPUTS = None
+
+
+def record_input(name: str) -> Path:
+    """One of the explicit inputs the capture records take (the table of record, its v7 input and the BAO-basis
+    coherence times), unpacked once from the golden and checked against its recorded sha256."""
+    global _RECORD_INPUTS
+    if _RECORD_INPUTS is None:
+        import atexit
+        import shutil
+        import tarfile
+        import tempfile
+
+        archive = GOLDEN / "record_inputs.tar.gz"
+        assert sha256(archive) == SOURCE["record_inputs.tar.gz"]["sha256"]
+        root = Path(tempfile.mkdtemp(prefix="rfisher_record_inputs_"))
+        atexit.register(shutil.rmtree, root, True)
+        with tarfile.open(archive, "r:gz") as tar:
+            tar.extractall(root, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
+        for f, s in SOURCE["record_inputs.tar.gz"]["files"].items():
+            assert sha256(root / f) == s, f
+        _RECORD_INPUTS = root
+    return _RECORD_INPUTS / name
+
+
 def quiet(fn, args):
     """Run a record's main in process; return its stdout."""
     buf = io.StringIO()

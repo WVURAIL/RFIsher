@@ -144,14 +144,14 @@ def test_the_fine_rank_is_read_in_one_place(pol, monkeypatch):
                                   "counts": [40, 10],
                                   "systematic_residual_sums": [1.0, 1.0]}})
     assert {r["threshold_family"] for r in interval.fine_candidates(
-        rows, pol)} == {"rho=1", "rho=63"}
+        rows, pol)} == {"rho=63"}
 
-    class Fixed:
+    class RecordedRankStudy:
         def value(self, ident):
-            return 63 if ident == "selector.fine_rank" else pol.value(ident)
+            return "all" if ident == "selector.fine_rank" else pol.value(ident)
 
     assert {r["threshold_family"] for r in interval.fine_candidates(
-        rows, Fixed())} == {"rho=63"}
+        rows, RecordedRankStudy())} == {"rho=1", "rho=63"}
     readers = []
     for path in sorted((ROOT / "src" / "rfisher").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -180,6 +180,24 @@ def test_the_tie_break_is_the_policys(pol):
 
     with pytest.raises(ValueError, match="tie_break"):
         interval.tie_key(Other())
+
+
+def test_the_frozen_tie_break_names_the_same_order(pol):
+    """The archive's frozen policy copy names the tail by rho and multiplier_q16; the key is the same."""
+    class Frozen:
+        def value(self, ident):
+            return ["systematic_residual", "masked_fraction", "rho", "multiplier_q16"] \
+                if ident == "selection.tie_break" else pol.value(ident)
+
+    assert pol.value("selection.tie_break") == ("systematic_residual", "masked_fraction", "candidate_order")
+    rows = histogram_rows({"3": {"candidate_multiplier_q16": [65536, 70000],
+                                 "counts": [40, 10, 5],
+                                 "systematic_residual_sums": [4.0, 1.0, 0.5]},
+                           "2": {"candidate_multiplier_q16": [65536],
+                                 "counts": [40, 10],
+                                 "systematic_residual_sums": [4.0, 1.0]}})
+    pts = interval.points(rows, 1.0, pol)
+    assert [interval.tie_key(pol)(p) for p in pts] == [interval.tie_key(Frozen())(p) for p in pts]
 
 
 def test_the_empty_status_names_the_lower_bound(pol):

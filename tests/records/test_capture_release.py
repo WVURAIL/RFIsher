@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from capture_golden import assert_frozen, duration_reference, quiet, sha256
+from capture_golden import assert_frozen, duration_reference, quiet, sha256, record_input
 from rfisher.records.chime_atsc_2026 import capture_release, capture_ruling, filter_sensitivity
 
 GOLDEN = Path(__file__).resolve().parents[1] / "golden" / "records"
@@ -95,7 +95,8 @@ def test_a_credit_reading_is_the_releases(capture_handoff_dir, tmp_path, reading
     rel = tmp_path / "rel"
     unused = str(tmp_path / "unused")   # a credit reading reads no evidence, release or duration run
     quiet(capture_release.main, ["--rule", "r5_2", "--handoff", str(capture_handoff_dir), "--record-table",
-                                 str(capture_handoff_dir / "frame_analysis" / "table_of_record.csv"), "--evidence", unused,
+                                 str(record_input("table_of_record.csv")), "--input-table",
+                                 str(record_input("table_of_record_before_amendment8.csv")), "--evidence", unused,
                                  "--releases", unused, "--duration-reference", unused, "--rel", str(rel),
                                  "--run", str(tmp_path / "run"), "--tables-only", "--credit-reading", reading])
     got = {p.relative_to(rel).as_posix(): sha256(p) for p in rel.rglob("*") if p.is_file()}
@@ -141,7 +142,8 @@ def test_the_release_is_the_frozen_one(capture_handoff_dir, evidence, tmp_path, 
     _banks_without_radiofisher(monkeypatch)
     rel = tmp_path / "rel"
     quiet(capture_release.main, ["--rule", "r5_2", "--handoff", str(capture_handoff_dir), "--record-table",
-                                 str(capture_handoff_dir / "frame_analysis" / "table_of_record.csv"),
+                                 str(record_input("table_of_record.csv")), "--input-table",
+                                 str(record_input("table_of_record_before_amendment8.csv")),
                                  "--evidence", str(evidence / "evidence"), "--releases", str(evidence / "releases"),
                                  "--duration-reference", str(duration_reference(tmp_path)),
                                  "--rel", str(rel), "--run", str(tmp_path / "run")])
@@ -157,7 +159,7 @@ def test_the_release_is_the_frozen_one(capture_handoff_dir, evidence, tmp_path, 
 
 def test_revision_3s_filter_sensitivity(capture_handoff_dir, evidence, tmp_path):
     """Revision 3 (no filter, the ground credit) against revision 2, from the ruling's own json."""
-    table = capture_handoff_dir / "frame_analysis" / "table_of_record_before_amendment8.csv"
+    table = record_input("table_of_record_before_amendment8.csv")
     quiet(capture_ruling.main, ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off", "--sensitivity", "r3", "--json",
                                 str(tmp_path / "a18.json"), "--input", str(table), "--handoff", str(capture_handoff_dir),
                                 "--out", str(tmp_path / "full.csv"), "--ch33-rescan"])

@@ -270,18 +270,19 @@ def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
 
 
 def response_main(argv=None, prog: str = "rfisher response") -> int:
-    """``rfisher response visibility``."""
+    """``rfisher response {visibility,threshold}``."""
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         prog=prog, description="The linear parameter response of masked "
         "visibilities: 'visibility' runs its known-moment synthetic check "
-        "(see 'rfisher response visibility --help').")
-    parser.add_argument("action", choices=("visibility",))
+        "and 'threshold' exports saved calibration residuals and exposure costs.")
+    parser.add_argument("action", choices=("visibility", "threshold"))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
-    from .response import validate
+    from .response import threshold, validate
 
-    return validate.main(args.arguments, prog=f"{prog} {args.action}")
+    module = threshold if args.action == "threshold" else validate
+    return module.main(args.arguments, prog=f"{prog} {args.action}")
 
 
 # The capture records keep the release producer's own argument handling:
@@ -305,6 +306,8 @@ CAPTURE_RECORDS = {
                            "sensitivity against revision 2"),
     "capture-release": ("capture_release", "the capture ruling release r5.2 "
                         "from the capture handoff"),
+    "cadence-report": ("cadence_report", "the cadence report of record: the "
+                       "detector's report with the table of record's section"),
 }
 
 

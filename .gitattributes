@@ -10,7 +10,6 @@
 requirements/*.txt text eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf
-scripts/dissertation/data/*.csv text eol=lf
 src/rfisher/data/*.csv text eol=lf
 src/rfisher/data/*.json text eol=lf
 src/rfisher/data/*.npz binary
@@ -29,5 +28,6 @@ tests/golden/**/*.csv text eol=lf
 # Release evidence hashes identify the checked-in bytes, independent of a
 # contributor's core.autocrlf setting.
 docs/*.schema.json text eol=lf
+docs/schemas/*.json text eol=lf
 docs/releases/*.json text eol=lf
 tests/golden/**/*.gz binary

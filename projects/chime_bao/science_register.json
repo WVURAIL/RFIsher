@@ -40,7 +40,7 @@
       "status": "historical",
       "rationale": "These samples reproduce the standalone bias-tolerance report; they do not set an operating threshold.",
       "evidence": [
-        "scripts/bias_tolerance.py"
+        "scripts/bias_tolerance.py@e041d5e"
       ],
       "sensitivity_values": []
     },
@@ -59,7 +59,7 @@
       "status": "historical",
       "rationale": "These are the integration-time samples used by the released three-scenario table; they do not define a threshold operating knob.",
       "evidence": [
-        "scripts/three_worlds.py"
+        "scripts/three_worlds.py@e041d5e"
       ],
       "sensitivity_values": []
     },
@@ -76,7 +76,7 @@
       "status": "historical",
       "rationale": "The released three-scenario table reports the two dilation parameters and the growth-rate combination used in the chapter.",
       "evidence": [
-        "scripts/three_worlds.py"
+        "scripts/three_worlds.py@e041d5e"
       ],
       "sensitivity_values": []
     },
@@ -89,7 +89,7 @@
       "status": "locked",
       "rationale": "The paper default evaluates each redshift bin with the Appendix-A parameter set. The combined multibin estimator remains an explicit alternative.",
       "evidence": [
-        "scripts/bias_tolerance.py",
+        "scripts/bias_tolerance.py@e041d5e",
         "dissertation/chapters/ch09_tolerance.tex"
       ],
       "sensitivity_values": []
@@ -103,7 +103,7 @@
       "status": "provisional",
       "rationale": "The default treats one response unit as contemporaneous thermal power. The fixed-physical alternative tests a persistent residual defined at a reference time.",
       "evidence": [
-        "scripts/bias_tolerance.py"
+        "scripts/bias_tolerance.py@e041d5e"
       ],
       "sensitivity_values": [
         "noise_normalized_at_each_time",
@@ -120,7 +120,7 @@
       "rationale": "Modes beyond this condition number are treated as numerically unresolved. The limit is conservative relative to the released banks but remains a material numerical choice.",
       "evidence": [
         "https://doi.org/10.1137/1.9780898718027",
-        "src/rfisher/forecast.py"
+        "src/rfisher/forecast.py@e041d5e"
       ],
       "sensitivity_values": [
         10000000000.0,
@@ -137,7 +137,7 @@
       "status": "provisional",
       "rationale": "Forecast slices below this retained-volume fraction are treated as carrying no useful information. The cutoff avoids nearly empty matrices but remains a sensitivity choice.",
       "evidence": [
-        "src/rfisher/forecast.py"
+        "src/rfisher/forecast.py@e041d5e"
       ],
       "sensitivity_values": [
         0.0,
@@ -156,7 +156,7 @@
       "rationale": "The square root of float64 machine epsilon separates numerical null-space overlap from roundoff. This is standard numerical screening rather than a science-derived tolerance.",
       "evidence": [
         "https://doi.org/10.1137/1.9780898718027",
-        "src/rfisher/forecast.py"
+        "src/rfisher/forecast.py@e041d5e"
       ],
       "sensitivity_values": [
         2.220446049250313e-16,
@@ -173,7 +173,7 @@
       "status": "provisional",
       "rationale": "A response is refused when its inferred tolerance moves by more than twenty percent across the time perturbations.",
       "evidence": [
-        "scripts/bias_tolerance.py"
+        "scripts/bias_tolerance.py@e041d5e"
       ],
       "sensitivity_values": [
         1.1,
@@ -190,7 +190,7 @@
       "status": "provisional",
       "rationale": "The Fisher response is re-evaluated at plus and minus ten percent in integration time to expose interpolation and cancellation failures.",
       "evidence": [
-        "scripts/bias_tolerance.py"
+        "scripts/bias_tolerance.py@e041d5e"
       ],
       "sensitivity_values": [
         0.05,
@@ -241,7 +241,7 @@
       "status": "locked",
       "rationale": "The default claims no delay-filter credit because the forecast does not model that foreground-removal stage. This is conservative for the residual budget.",
       "evidence": [
-        "src/rfisher/residual.py"
+        "src/rfisher/residual.py@7b0067b"
       ],
       "sensitivity_values": []
     },
@@ -254,7 +254,7 @@
       "status": "conditional",
       "rationale": "Unity is a screening closure, not a measured shelf-to-visibility systematic transfer.",
       "evidence": [
-        "docs/contamination-residuals.md"
+        "docs/tolerance.md"
       ],
       "sensitivity_values": []
     },
@@ -267,7 +267,7 @@
       "status": "conditional",
       "rationale": "Unity is a screening closure, not a measured shelf-to-visibility variance transfer.",
       "evidence": [
-        "docs/contamination-residuals.md"
+        "docs/tolerance.md"
       ],
       "sensitivity_values": []
     }

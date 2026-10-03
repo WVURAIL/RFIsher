@@ -22,8 +22,8 @@ whose stability screen or preparation refused carries no keep and no
 excision, whatever its set.
 
 A false-alarm limit is certified (:func:`certified`) only when the detector
-reports it available, it is finite, its null population is not the bulk of
-the mixture, and it was estimated at the alpha the handoff declares.
+reports it available, its integer null support and source are recorded,
+and its 95% upper bound is at most the alpha the handoff declares.
 
 The two readings differ only for a quantity that is not measured
 (``selector.unmeasured``): an exclusion reads it at its most favorable value
@@ -127,19 +127,34 @@ def detector_refusal(summaries: Sequence[Mapping],
 
 def certified(reading: FamilyInterval, summary: Mapping | None = None,
               alpha: float | None = None) -> bool:
-    """A false-alarm limit is certified only when it is available and finite,
-    and (given the family's summary and the declared alpha) read on a null
-    population other than the bulk of the mixture at that alpha."""
+    """Accept only a complete exact-null certificate at the declared target."""
     if not (reading.eta_pfa_status == "available"
-            and math.isfinite(reading.eta_pfa)):
+            and math.isfinite(reading.eta_pfa)) or summary is None:
         return False
-    if summary is not None and str(summary.get("null_source") or
-                                   "").startswith(BULK_NULL):
+    if summary.get("candidate_set") == "fine_surface" and reading.eta_pfa <= 0.0:
         return False
-    if alpha is not None and (summary is None or summary.get("pfa_target")
-                              != alpha):
+    source = summary.get("null_source")
+    prefix = ("transmitter-off epoch " if summary.get("candidate_set") == "fine_surface"
+              else "verified signal-free transmitter-off epoch ")
+    if (not isinstance(source, str) or not source.startswith(prefix)
+            or not source[len(prefix):].strip()):
         return False
-    return True
+    frames = summary.get("null_frames")
+    if isinstance(frames, bool) or not isinstance(frames, int) or frames <= 0:
+        return False
+    try:
+        target = float(summary["pfa_target"])
+        upper = float(summary["pfa_upper_95"])
+        trials = float(summary["pfa_effective_samples"])
+        declared = target if alpha is None else float(alpha)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+    if not (0.0 < upper <= target < 1.0 and declared == target
+            and math.isfinite(trials) and trials == frames):
+        return False
+    zero_upper = -math.expm1(math.log(0.05) / frames)
+    return upper + 8 * math.ulp(zero_upper) >= zero_upper
+
 
 
 @dataclass(frozen=True)

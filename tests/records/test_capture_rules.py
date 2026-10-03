@@ -13,7 +13,7 @@ import re
 import numpy as np
 import pytest
 
-from capture_golden import quiet
+from capture_golden import quiet, record_input
 from rfisher.records.chime_atsc_2026 import capture_ruling
 from rfisher.records.chime_atsc_2026 import capture_units as U
 
@@ -24,7 +24,7 @@ ANY = "excised at any τ"
 def rulings(capture_handoff_dir, tmp_path_factory):
     """{name: (a18.json, thresholds rows, full rows)} for the rulings the tests read."""
     out = tmp_path_factory.mktemp("rulings")
-    table = capture_handoff_dir / "frame_analysis" / "table_of_record_before_amendment8.csv"
+    table = record_input("table_of_record_before_amendment8.csv")
     runs = {"r5_2": ["--rule", "r5_2"], "r5_1": ["--rule", "r5_1"], "r5": ["--rule", "r5"],
             "coded_policy": ["--rule", "r5_2", "--set", "EVERY_POLICY=coded"],
             "r4": ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off"],

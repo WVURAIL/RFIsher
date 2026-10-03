@@ -95,7 +95,7 @@ records CAMB settings/version and independently verifies the numerical table.
 all select the current fiducial. Use `PLANCK2018_BANK`, `PLANCK2018_BANK_NAME`,
 or `bank_file("planck2018")` for the Foreman reference. Historical dissertation
 checks select that reference explicitly; forecast commands use the new default.
-The delay-cut sweep driver `scripts/run_taucut_sweep.py` was removed in 4.0.0.
+The delay-cut sweep driver `scripts/run_taucut_sweep.py@2d682c1` was removed in 4.0.0.
 Its retained historical tables were computed with `planck2018`, which the
 CSVs themselves do not record.
 

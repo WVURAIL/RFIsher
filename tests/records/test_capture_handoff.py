@@ -18,6 +18,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from capture_golden import record_input  # noqa: E402
+
 from rfisher.records.chime_atsc_2026 import capture_handoff as ch
 from rfisher.records.chime_atsc_2026 import capture_units as U
 
@@ -142,12 +144,12 @@ def test_the_ruling_reads_only_the_handoff_and_its_input_table(capture_handoff_d
     """A file-open audit of a ruling run: nothing is read outside the handoff, the input table, the package and the
     interpreter."""
     log, out = tmp_path / "opened.txt", tmp_path / "a18_full.csv"
-    table = capture_handoff_dir / "frame_analysis" / "table_of_record_before_amendment8.csv"
+    table = record_input("table_of_record_before_amendment8.csv")
     env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), PYTHONDONTWRITEBYTECODE="1")
     subprocess.run([sys.executable, "-c", AUDIT, str(log), "records", "capture-ruling", "--rule", "r5_2",
                     "--json", str(tmp_path / "a18.json"), "--input", str(table), "--handoff", str(capture_handoff_dir),
                     "--out", str(out), "--ch33-rescan"], check=True, capture_output=True, env=env)
-    allowed = (str(capture_handoff_dir), str(tmp_path), str(ROOT / "src"), str(ROOT / "projects"), sys.prefix,
+    allowed = (str(capture_handoff_dir), str(table), str(tmp_path), str(ROOT / "src"), str(ROOT / "projects"), sys.prefix,
                sys.base_prefix, "/dev/", "/proc/", "/etc/localtime", "/usr/share/zoneinfo")
     opened = [p for p in log.read_text().split("\n") if p]
     outside = sorted({p for p in opened if not os.path.abspath(p).startswith(allowed)})

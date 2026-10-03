@@ -34,7 +34,6 @@ build/
 dist/
 *.egg-info/
 
-# harness worktrees for parallel agents
 *.log
 
 # Test coverage reports

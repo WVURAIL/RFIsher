@@ -12,11 +12,13 @@ first:
 - ``tau_bounds.csv``: the within-dump lower bounds per lane setting, band and class. The detector does not group its
   classes into ranges; each class takes its range from the ruling's range rule (:data:`capture_ruling.RANGES`).
 
+- ``board_detector.csv``: the archive's gain bound per band (the summary's ``board_*`` columns).
+
 Every other file is copied from a measurement handoff (``--measurements``): the frame-analysis and Stokes I tables,
-the archive's gain bound, the 2020 cohort, the phasor tables, the channel 24 lane and the archive shares, which come
-from lanes pilot-proxy does not run, and the record's own tables (the table of record and its v7 input), which the
-capture records can also take as explicit inputs. Both inputs are checked against their manifests first, and the
-detector's integration constants and science dumps must be the record's.
+the 2020 cohort, the phasor tables, the channel 24 lane and the archive shares, which come from lanes pilot-proxy does
+not run. The record's own tables (the table of record and its v7 input), the BAO-basis coherence times and the
+channel ruling's board are not copied: the capture records take them as explicit inputs. Both inputs are checked
+against their manifests first, and the detector's integration constants and science dumps must be the record's.
 
 usage: rfisher records capture-handoff --oc DIR --measurements DIR --out DIR
 """
@@ -27,6 +29,7 @@ import hashlib
 import io
 import json
 import sys
+from importlib.resources import files as _package_files
 from pathlib import Path
 
 from rfisher.records.chime_atsc_2026 import capture_handoff as ch
@@ -37,12 +40,27 @@ OC_SCHEMA = "capture_operating_characteristic"
 OC_SCHEMA_VERSION = 1
 OC_FILES = ("capture_oc_table.csv", "capture_oc_summary.csv", "capture_tau_bounds.csv")
 BANKS = ("nominal", "measured_marker")
-READINGS = ("ladder_eta.csv", "dump_q.csv", "tau_bounds.csv")
+READINGS = ("ladder_eta.csv", "dump_q.csv", "tau_bounds.csv", "board_detector.csv")
 TAU_COLUMNS = ("censor", "source", "calibrate", "channel", "ew", "ns", "lane", "check", "variants", "lb", "least_variant",
                "span", "lb_priced", "capped", "b4", "calibration_fcr", "calibration_n_at_or_above", "calibration_n_cells",
                "calibration_fcr_same_class", "calibration_null_max_s", "calibration_null_max_same_class_s",
                "calibration_passes")
 RANGE_OF = {c: name for name, classes in RANGES.items() for c in classes}
+# pilot-proxy's schema of the layout, vendored byte for byte (its sha256 is pinned by tests/test_schemas.py)
+SCHEMA_FILE = "capture_operating_characteristic_v1.schema.json"
+SCHEMA_COLUMNS = {"capture_oc_table.csv": "x-capture-oc-table-columns", "capture_oc_summary.csv": "x-capture-oc-summary-columns",
+                  "capture_tau_bounds.csv": "x-capture-tau-bounds-columns"}
+
+
+def schema() -> dict:
+    """The vendored schema of pilot-proxy's capture operating characteristic."""
+    return json.loads(_package_files("rfisher.data").joinpath("schemas", SCHEMA_FILE).read_text(encoding="utf-8"))
+
+
+def schema_columns() -> dict:
+    """{file: [column, ...]}: each table's columns, in the schema's order."""
+    s = schema()
+    return {name: [c["name"] for c in s[key]] for name, key in SCHEMA_COLUMNS.items()}
 
 
 class OCError(ValueError):
@@ -83,6 +101,9 @@ def read_oc(directory) -> dict:
             raise OCError(f"{root}: {name}: sha256 differs from the manifest")
         out["sha256"][name] = want
         out[name] = _rows(data)
+    for name, columns in schema_columns().items():
+        if out[name][0] != columns:
+            raise OCError(f"{root}: {name}: its columns are not the vendored schema's")
     header = out["capture_tau_bounds.csv"][0]
     if tuple(header) != TAU_COLUMNS:
         raise OCError(f"{root}: capture_tau_bounds.csv: columns {header}, expected {list(TAU_COLUMNS)}")
@@ -167,6 +188,15 @@ def tau_bound_rows(bounds: list[dict]) -> list[dict]:
     return sorted(rows, key=lambda x: (order[x["setting"]], x["channel"], x["ew"], x["ns"]))
 
 
+def board_rows(summary: list[dict]) -> list[dict]:
+    """``channel,tau_quality,tau_booked_s,G_nocredit``: the archive's gain bound of each band the summary reads it for,
+    band ascending."""
+    rows = [{"channel": int(s["band_id"]), "tau_quality": s["board_tau_quality"], "tau_booked_s": s["board_tau_booked_s"],
+             "G_nocredit": _float(s["board_G_nocredit"])}
+            for s in summary if s.get("board_G_nocredit", "") != ""]
+    return sorted(rows, key=lambda r: r["channel"])
+
+
 def _csv(rows: list[dict], header: str) -> bytes:
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=header.split(","), lineterminator="\n")
@@ -181,14 +211,15 @@ def build(oc_dir, measurements_dir, out) -> dict:
     if out.exists():
         raise OCError(f"{out} exists")
     oc = read_oc(oc_dir)
-    H = ch.open_handoff(measurements_dir, borrowed=True)
+    H = ch.open_handoff(measurements_dir, borrowed=True, measurements=True)
     readings = {"ladder_eta.csv": (ladder_eta_rows(oc["capture_oc_summary.csv"][1]), "capture_oc_summary.csv"),
                 "dump_q.csv": (dump_q_rows(oc["capture_oc_table.csv"][1]), "capture_oc_table.csv"),
-                "tau_bounds.csv": (tau_bound_rows(oc["capture_tau_bounds.csv"][1]), "capture_tau_bounds.csv")}
+                "tau_bounds.csv": (tau_bound_rows(oc["capture_tau_bounds.csv"][1]), "capture_tau_bounds.csv"),
+                "board_detector.csv": (board_rows(oc["capture_oc_summary.csv"][1]), "capture_oc_summary.csv")}
     files = {}
     out.mkdir(parents=True)
     for rel, entry in sorted(H.files.items()):
-        if rel in READINGS:
+        if rel in READINGS or rel in ch.RECORD_FILES:
             continue
         data = H.data(rel)
         (out / rel).parent.mkdir(parents=True, exist_ok=True)

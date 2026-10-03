@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from capture_golden import assert_frozen, duration_reference, quiet, sha256
+from capture_golden import assert_frozen, duration_reference, quiet, sha256, record_input
 from rfisher.records.chime_atsc_2026 import (capture_ruling, cohort_basis, duration, phase_limit, robustness)
 from rfisher.records.chime_atsc_2026 import capture_units as U
 
@@ -55,14 +55,14 @@ def _write(path, text):
 
 def _basis(handoff, *args):
     return quiet(cohort_basis.main, ["--handoff", str(handoff), "--record-table",
-                                     str(handoff / "frame_analysis" / "table_of_record.csv"), *args])
+                                     str(record_input("table_of_record.csv")), *args])
 
 
 @pytest.fixture(scope="module")
 def ruled(capture_handoff_dir, tmp_path_factory):
     """The r5.2 ruling's json and the units-only run's, which the copies read."""
     out = tmp_path_factory.mktemp("ruled")
-    table = capture_handoff_dir / "frame_analysis" / "table_of_record_before_amendment8.csv"
+    table = record_input("table_of_record_before_amendment8.csv")
     common = ["--input", str(table), "--handoff", str(capture_handoff_dir), "--ch33-rescan"]
     quiet(capture_ruling.main, ["--rule", "r5_2", "--json", str(out / "a18.json"), "--out", str(out / "a18.csv"), *common])
     quiet(capture_ruling.main, ["--rule", "record", "--set", "UNITS=power", "--set", "WORLD=none", "--set",
@@ -75,10 +75,11 @@ def ruled(capture_handoff_dir, tmp_path_factory):
 def test_the_identity_copies_are_the_frozen_records(capture_handoff_dir, tmp_path):
     _write(tmp_path / "ch24.txt", _basis(capture_handoff_dir, "--tau-archive", "7777"))
     assert sha256(tmp_path / "ch24.txt") == IDENTITY["ch24"]
-    quiet(robustness.main, ["--handoff", str(capture_handoff_dir), str(tmp_path / "robustness.csv")])
+    quiet(robustness.main, ["--handoff", str(capture_handoff_dir), "--record-table", str(record_input("table_of_record.csv")),
+                            str(tmp_path / "robustness.csv")])
     assert sha256(tmp_path / "robustness.csv") == IDENTITY["robustness"]
     (tmp_path / "pl").mkdir()
-    _write(tmp_path / "pl" / "phase_limit.log", quiet(phase_limit.main, ["--handoff", str(capture_handoff_dir), str(tmp_path / "pl")]))
+    _write(tmp_path / "pl" / "phase_limit.log", quiet(phase_limit.main, ["--handoff", str(capture_handoff_dir), "--record-table", str(record_input("table_of_record.csv")), str(tmp_path / "pl")]))
     for name in ("phase_limit_ranges.csv", "phase_limit_classes.csv", "phase_limit.log"):
         assert sha256(tmp_path / "pl" / name) == IDENTITY[name], name
 
@@ -98,10 +99,10 @@ def test_the_release_copies_are_the_frozen_files(capture_handoff_dir, ruled, tmp
         _write(t / k / "ch24_basis_a18.txt", _basis(capture_handoff_dir, *MEASURED, "--world", world, "--json", str(t / k / "ch24_a18.json")))
     (t / "pl").mkdir()
     _write(t / "pl" / "phase_limit_a18.log", quiet(phase_limit.main, [
-        "--handoff", str(capture_handoff_dir), str(t / "pl"), "--units", "power", "--units-json", str(ruled / "units_only.json"),
+        "--handoff", str(capture_handoff_dir), "--record-table", str(record_input("table_of_record.csv")), str(t / "pl"), "--units", "power", "--units-json", str(ruled / "units_only.json"),
         "--a18-json", str(ruled / "a18.json")]))
     _write(t / "robustness_a18.log", quiet(robustness.main, [
-        "--handoff", str(capture_handoff_dir), str(t / "robustness_a18.csv"), "--a18", str(ruled / "a18.json"),
+        "--handoff", str(capture_handoff_dir), "--record-table", str(record_input("table_of_record.csv")), str(t / "robustness_a18.csv"), "--a18", str(ruled / "a18.json"),
         "--ch24", str(ruled / "ch24_a18.json"), "--variant-labels"]))
     assert_frozen({name: sha256(t / name) for name in RELEASE}, RELEASE)
 
@@ -149,7 +150,7 @@ def test_revision_2s_duration_reading(capture_handoff_dir, tmp_path, monkeypatch
         find_radiofisher_dir()
     except FileNotFoundError:
         monkeypatch.setattr(response, "evaluation_identity", lambda bank, rf_dir=None: ({}, {}))
-    table = capture_handoff_dir / "frame_analysis" / "table_of_record_before_amendment8.csv"
+    table = record_input("table_of_record_before_amendment8.csv")
     quiet(capture_ruling.main, ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off", "--sensitivity", "r2", "--json",
                                 str(tmp_path / "a18.json"), "--input", str(table), "--handoff", str(capture_handoff_dir),
                                 "--out", str(tmp_path / "full.csv"), "--ch33-rescan"])

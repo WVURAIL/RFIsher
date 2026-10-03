@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from capture_golden import assert_frozen, quiet, sha256
+from capture_golden import assert_frozen, quiet, sha256, record_input
 from rfisher.records.chime_atsc_2026 import capture_ruling, table_of_record
 
 RECORD = "9867551ad591757ed8b8864940376c68666483833478b4711292e0517a27b195"   # table_of_record.csv
@@ -65,7 +65,7 @@ def _sections(path):
 
 
 def ruling(handoff, out, *args, table=None):
-    table = table or handoff / "frame_analysis" / "table_of_record_before_amendment8.csv"
+    table = table or record_input("table_of_record_before_amendment8.csv")
     return quiet(capture_ruling.main, [*args, "--input", str(table), "--handoff", str(handoff), "--out", str(out),
                                        "--ch33-rescan"])
 
@@ -82,7 +82,8 @@ def test_the_identity_rule_writes_the_table_of_record(capture_handoff_dir, tmp_p
 
 
 def test_the_v7_table_and_the_record_are_rebuilt(capture_handoff_dir, tmp_path):
-    quiet(table_of_record.main, ["--handoff", str(capture_handoff_dir), "--out", str(tmp_path / "v7.csv")])
+    quiet(table_of_record.main, ["--handoff", str(capture_handoff_dir), "--gain-bao", str(record_input("gain_bao.csv")),
+                                 "--out", str(tmp_path / "v7.csv")])
     assert sha256(tmp_path / "v7.csv") == RECORD_V7
     ruling(capture_handoff_dir, tmp_path / "record.csv", "--rule", "record", table=tmp_path / "v7.csv")
     assert sha256(tmp_path / "record.csv") == RECORD

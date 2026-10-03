@@ -27,10 +27,10 @@ booking range above the control floor (its reading would be priced at the 3e-5 a
 
 The release's ``robustness_credit_a18.py``, with its logic unchanged; the frame-analysis tables and the archive shares
 come from the capture handoff.
-With --record-table TABLE the table of record is read from TABLE (the table written in the same run) in place of the
-handoff's copy.
-usage: rfisher records robustness --handoff DIR <output csv> [--a18 A18.json] [--ch24 CH24.json] [--variant-labels]
-                                  [--record-table TABLE]"""
+The table of record is read from --record-table TABLE. Different bytes require --in-run-record-table;
+the input digest and mode are logged to stderr.
+usage: rfisher records robustness --handoff DIR --record-table TABLE <output csv> [--a18 A18.json] [--ch24 CH24.json]
+                                  [--variant-labels]"""
 import csv, re
 
 import numpy as np
@@ -43,6 +43,8 @@ from rfisher.records.chime_atsc_2026._files import load_json
 def main(argv=None):
     import sys
     argv = ["robustness"] + list(sys.argv[1:] if argv is None else argv)
+    in_run = "--in-run-record-table" in argv
+    if in_run: argv.remove("--in-run-record-table")
     _h = [argv[i + 1] for i, x in enumerate(argv) if x == "--handoff"]
     if not _h: raise SystemExit("robustness: --handoff is required")
     H = capture_handoff.open_handoff(_h[0])
@@ -57,7 +59,7 @@ def main(argv=None):
     SCIENCE = ["20260916162300", "20260917040230", "20260917090230", "20260917140230"]
     tor = {}
     RT = argv[argv.index("--record-table") + 1] if "--record-table" in argv else None
-    for r in capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RT):
+    for r in capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RT, in_run=in_run):
         ch = int(r["channel"])
         if r["role"] != "pilot" and ch not in tor: tor[ch] = r
     shares = {}
