@@ -29,6 +29,12 @@ From this repository, using an environment with NumPy and pytest:
 
 The simulation uses known six-dimensional Gaussian visibility moments and fixed illustrative kernels and derivatives. It validates moment accounting and the linear fit. Its arbitrary units and synthetic derivatives are not a CHIME BAO forecast. The output records source hashes, seed, acceptance limits, separate bias contributions, covariance and fit results.
 
+The separate [same-mask synthetic validation](same-mask-validation.md) carries
+observable score decisions through selected endpoints, recomputed signal
+injections, empirical fourth moments and a fixed-grid observing-time comparison.
+Its conditional uncertainty checks and finite study scope are declared before
+trials; it does not supply the physical calibration listed below.
+
 ## Still needed for physical channel decisions
 
 - Calibrated, identity-matched baseline/frequency/polarization visibilities and joint valid counts under the actual frame policy.
