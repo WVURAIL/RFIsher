@@ -1,5 +1,12 @@
 # Same-mask synthetic science validation
 
+Reproduce the completed original study from source commit
+`185e033adb082f1b496eb183a46c249cb47e4b60`; its manifest authenticates that
+implementation. The separately frozen
+[candidate-specific follow-up](same-mask-candidatewise.md) uses its own
+command, seed namespace, protocol and outputs. New source does not silently
+replace the original study's authenticated source or refusal outcome.
+
 The [fixed protocol](SAME_MASK_SYNTHETIC_PROTOCOL.md) declares a bounded
 score-level experiment connecting observable threshold decisions, supported
 10-second complex visibility endpoints, signal response and observing time.
