@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / "projects" / "chime_bao"
 FROZEN = ROOT / "src" / "rfisher" / "records" / "chime_atsc_2026" / "data" / "policy_2026_archive"
 EVIDENCE = {
+    "https://doi.org/10.1111/j.1365-2966.2007.12731.x": ["https://doi.org/10.1111/j.1365-2966.2008.13880.x"],
     "scripts/bias_tolerance.py": ["scripts/bias_tolerance.py@e041d5e"],
     "scripts/three_worlds.py": ["scripts/three_worlds.py@e041d5e"],
     "src/rfisher/forecast.py": ["src/rfisher/forecast.py@e041d5e"],
