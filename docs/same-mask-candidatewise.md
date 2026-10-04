@@ -1,0 +1,63 @@
+# Candidate-specific same-mask inference
+
+This is one separately frozen synthetic follow-up to the original study's
+[whole-family uncertainty refusal](same-mask-results-2026-10-03.md). It keeps
+the signal/noise model, exact thresholds, support and response gates, both
+dilation tolerances, and independent stage sizes unchanged. It changes the
+calibration inference method and uses new independent seeds. The
+[reviewed protocol](CANDIDATEWISE_SYNTHETIC_PROTOCOL.md) fixes the entire budget
+and stopping rule before the trial.
+
+The [completed single-campaign result](same-mask-candidatewise-results-2026-10-03.md)
+selected only clean keep-all for conditional evaluation. Neither contaminated
+scenario admitted a candidate; the entire-grid optimum remains unresolved.
+The [assumption audit](same-mask-assumptions.md) separates the science objective
+from the chosen confidence/coverage diagnostics and operational qualification.
+
+Each of the 21 fixed scenario/threshold slots retains its allocation of
+statistical and Monte Carlo error. Its three-coordinate max root uses scales
+fixed from the original point estimate. Failed resamples become positive
+infinity; none are discarded or replaced. The conservative order statistic
+for the declared 4,096-root budget is the maximum, so any infinite root refuses
+that slot. Failure of a candidate does not stop computation for other slots.
+The finite-sample Monte Carlo quantile bound does not prove the nominal
+bootstrap's statistical coverage.
+
+Selection uses the minimum point-estimated number of whole 10-second blocks
+among admitted candidates, with a deterministic index tie-break. Its frozen
+validation exposure uses the conservative upper time bound. Unsupported or
+uncertain competitors prevent a claim of the entire-grid optimum; validation
+cannot change the selected threshold. Reject-all retains no samples and
+provides no science information or finite observing time. It is not a remedy
+for unavailable inference.
+
+Run the single fixed campaign into a new directory:
+
+```sh
+rfisher response same-mask-candidatewise \
+  --protocol docs/CANDIDATEWISE_SYNTHETIC_PROTOCOL.md \
+  --out /new/evidence/science-candidatewise-validation
+```
+
+The original `SAME_MASK_SYNTHETIC_PROTOCOL.md` must be beside the new protocol.
+The output binds both protocols, all participating source files, numerical
+environment, fixed settings, every stage summary, calibration roots and
+reports. Calibration freezes before evaluation data are generated. All
+4,096 roots per slot remain in `calibration_roots.npz`, including infinity;
+JSON uses explicit unavailable bounds rather than nonstandard infinite values.
+
+Authenticate and reconstruct the saved outputs without generating new data:
+
+```sh
+rfisher response same-mask-candidatewise --validate /saved/evidence/science-candidatewise-validation
+```
+
+Historical reproduction of the original study is pinned to source commit
+`185e033adb082f1b496eb183a46c249cb47e4b60`. The follow-up's explicit RNG and
+inference hooks change the authenticated source identity; it does not promise
+that an original artifact will validate against new source. The original
+source, protocol and saved outcome remain unchanged.
+
+After this one follow-up, stop regardless of admission or validation outcome.
+This score-level model does not supply a physical channel response, accepted
+telescope operating policy, or validated physical observing-time optimum.

@@ -169,9 +169,9 @@ def fixed_coordinates(data, index, response, target):
     return values
 
 
-def fixed_interval(data, index, response, target, stage, scenario, replicate=0):
+def fixed_interval(data, index, response, target, stage, scenario, replicate=0, *, rng_factory=None):
     point = fixed_coordinates(data, index, response, target)
-    generator = sm.rng(60, scenario, 1000*stage+replicate)
+    generator = (sm.rng if rng_factory is None else rng_factory)(60, scenario, 1000*stage+replicate)
     samples, failures = [], Counter()
     for _ in range(sm.BOOTSTRAPS):
         try:
@@ -215,7 +215,8 @@ def containment(interval, reference):
             "intersects_reference_rectangle": bool(np.all((lo <= ref_hi) & (ref_lo <= hi)))}
 
 
-def evaluate(calibration, load):
+def evaluate(calibration, load, *, interval_factory=None):
+    interval_factory = fixed_interval if interval_factory is None else interval_factory
     target = np.asarray(calibration["target_variance"])
     results = []
     for scenario, selected in enumerate(calibration["selections"]):
@@ -244,13 +245,13 @@ def evaluate(calibration, load):
                   "fixed_grid_diagnostics": grid,
                   "coverage_condition": "frozen response, target, policy and realized shared reference center"}
         try:
-            interval = fixed_interval(load(30, scenario), index, response, target, 30, scenario)
+            interval = interval_factory(load(30, scenario), index, response, target, 30, scenario)
             result.update(interval=interval, status=evaluation_status(interval, selected["validation_time_blocks"]))
         except ValueError as exc:
             result.update(status="evaluation_refused", reason=str(exc),
                           bootstrap_accounting=getattr(exc, "accounting", {}))
         try:
-            reference = fixed_interval(load(40, scenario), index, response, target, 40, scenario)
+            reference = interval_factory(load(40, scenario), index, response, target, 40, scenario)
             result["reference_interval"] = reference
         except ValueError as exc:
             result.update(coverage_status="reference_refused", coverage_reason=str(exc),
@@ -260,7 +261,7 @@ def evaluate(calibration, load):
         coverage, failures = [], Counter()
         for replicate in range(sm.REPLICATES):
             try:
-                interval = fixed_interval(load(50, scenario, replicate), index, response, target,
+                interval = interval_factory(load(50, scenario, replicate), index, response, target,
                                           50, scenario, replicate)
                 coverage.append({"replicate": replicate, "status": "computed", "interval": interval,
                                  **containment(interval, reference)})

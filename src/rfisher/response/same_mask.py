@@ -96,9 +96,9 @@ def _streams(draw, theta):
     return clean, clean + contamination
 
 
-def generate(stage, scenario, replicate=0, *, injections=False, words=WORDS):
+def generate(stage, scenario, replicate=0, *, injections=False, words=WORDS, rng_factory=None):
     """Generate only the fixed protocol budget; no public reduced-trial option."""
-    generator = rng(stage, scenario, replicate)
+    generator = (rng if rng_factory is None else rng_factory)(stage, scenario, replicate)
     n, k = SIZES[stage], len(words)
     output = {"kept": np.zeros((n, k), dtype=np.int16),
               "clean": np.full((n, k, 3), np.nan+1j*np.nan),
