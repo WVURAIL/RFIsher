@@ -273,19 +273,20 @@ def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
 
 
 def response_main(argv=None, prog: str = "rfisher response") -> int:
-    """``rfisher response {visibility,threshold,same-mask,same-mask-candidatewise}``."""
+    """Evaluate visibility responses, calendar budgets, or synthetic checks."""
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         prog=prog, description="The linear parameter response of masked "
         "visibilities: 'visibility' runs its known-moment synthetic check "
         "'threshold' exports saved calibration residuals and exposure costs, "
-        "'same-mask' runs the original study, and 'same-mask-candidatewise' runs the separately frozen follow-up.")
-    parser.add_argument("action", choices=("visibility", "threshold", "same-mask", "same-mask-candidatewise"))
+        "'same-mask' runs the original study, 'same-mask-candidatewise' runs the separately frozen follow-up, "
+        "and 'calendar' checks supplied physical responses against fixed precision and calendar budgets.")
+    parser.add_argument("action", choices=("visibility", "threshold", "same-mask", "same-mask-candidatewise", "calendar"))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
-    from .response import same_mask_candidatewise, same_mask_report, threshold, validate
+    from .response import calendar, same_mask_candidatewise, same_mask_report, threshold, validate
 
-    module = {"threshold": threshold, "visibility": validate,
+    module = {"threshold": threshold, "visibility": validate, "calendar": calendar,
               "same-mask": same_mask_report, "same-mask-candidatewise": same_mask_candidatewise}[args.action]
     return module.main(args.arguments, prog=f"{prog} {args.action}")
 
