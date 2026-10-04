@@ -234,10 +234,11 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
 def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
     """``rfisher verdict archive``."""
     parser = argparse.ArgumentParser(
-        prog=prog, description="The screen of each band: the deployable set "
+        prog=prog, description="The historical conditional screen of each band: the deployable set "
         "of thresholds [eta_Pfa, eta_sci] from the detector's handoff and one "
         "tolerance table, the selector inside it, and keep, excise or "
-        "undetermined under the declared precedence.")
+        "undetermined under the declared precedence. These categories are "
+        "not qualified physical operating recommendations.")
     actions = parser.add_subparsers(dest="action", required=True,
                                     metavar="{archive}")
     archive = actions.add_parser(
@@ -266,23 +267,26 @@ def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
         counts[row["screen_outcome"]] = counts.get(row["screen_outcome"], 0) + 1
     print(f"wrote {args.out}: " + ", ".join(
         f"{n} {k}" for k, n in sorted(counts.items())))
+    print("Historical conditional screening only; physical operating "
+          "recommendations are not established.")
     return 0
 
 
 def response_main(argv=None, prog: str = "rfisher response") -> int:
-    """``rfisher response {visibility,threshold,same-mask,same-mask-candidatewise}``."""
+    """Evaluate visibility responses, calendar budgets, or synthetic checks."""
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         prog=prog, description="The linear parameter response of masked "
         "visibilities: 'visibility' runs its known-moment synthetic check "
         "'threshold' exports saved calibration residuals and exposure costs, "
-        "'same-mask' runs the original study, and 'same-mask-candidatewise' runs the separately frozen follow-up.")
-    parser.add_argument("action", choices=("visibility", "threshold", "same-mask", "same-mask-candidatewise"))
+        "'same-mask' runs the original study, 'same-mask-candidatewise' runs the separately frozen follow-up, "
+        "and 'calendar' checks supplied physical responses against fixed precision and calendar budgets.")
+    parser.add_argument("action", choices=("visibility", "threshold", "same-mask", "same-mask-candidatewise", "calendar"))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
-    from .response import same_mask_candidatewise, same_mask_report, threshold, validate
+    from .response import calendar, same_mask_candidatewise, same_mask_report, threshold, validate
 
-    module = {"threshold": threshold, "visibility": validate,
+    module = {"threshold": threshold, "visibility": validate, "calendar": calendar,
               "same-mask": same_mask_report, "same-mask-candidatewise": same_mask_candidatewise}[args.action]
     return module.main(args.arguments, prog=f"{prog} {args.action}")
 

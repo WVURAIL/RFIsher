@@ -16,6 +16,8 @@ Reads a characterization directory (checked by :mod:`.handoff`) and one
 - ``manifest.json``: the sha256 of every file read and the producer.
 
 Nothing here reads a detector product, a response bank or a forecast.
+New exports preserve the historical numerical and category columns but label
+every row as conditional screening evidence, not a physical recommendation.
 """
 from __future__ import annotations
 
@@ -28,6 +30,7 @@ from typing import Mapping, Sequence
 
 from .. import policy as _policy
 from ..provenance import producer_identity
+from ..response.evidence import HISTORICAL_SCREENING_EVIDENCE
 from . import handoff, interval, screening, sensitivity
 
 UNION = "union"
@@ -308,17 +311,28 @@ def run(characterization: str | Path, tolerances: str | Path,
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     written = {}
+    for records in (verdict_rows, point_rows, screen_rows, sens_rows):
+        for record in records:
+            record.update(HISTORICAL_SCREENING_EVIDENCE)
     for name, rows, columns in (
             ("verdict.csv", verdict_rows, VERDICT_COLUMNS),
             ("verdict_points.csv", point_rows, POINT_COLUMNS),
             ("screen.csv", screen_rows, screening.SCREEN_COLUMNS),
             ("sensitivity.csv", sens_rows, sensitivity.COLUMNS)):
+        columns = tuple(columns) + tuple(
+            key for key in HISTORICAL_SCREENING_EVIDENCE if key not in columns)
         data = render(rows, columns)
         (out / name).write_bytes(data)
         written[name] = handoff.sha256_file(out / name)
     read = {**{f"characterization/{k}": v for k, v in oc.sha256.items()},
             "tolerances.csv": handoff.sha256_file(tol_path)}
     manifest = {"schema": SCHEMA, "files": written, "read": read,
+                **HISTORICAL_SCREENING_EVIDENCE,
+                "outcome_interpretation": "keep/excise/undetermined retain the "
+                                          "historical conditional screening "
+                                          "reading, not a qualified physical "
+                                          "operating recommendation; verified "
+                                          "sensitivity floors are not detected RFI",
                 "rule_version": screening.RULE_VERSION,
                 "producer": producer_identity(read, pol.sha256())}
     (out / "manifest.json").write_text(

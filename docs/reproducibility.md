@@ -223,6 +223,23 @@ rfisher verdict archive --project projects/chime_bao --characterization CHAR \
 screen's step and outcome, `sensitivity.csv` the named sensitivities, and
 `manifest.json` the sha256 of every file read and the producer's identity.
 
+This command reproduces the historical conditional screen. Its `keep`,
+`excise`, and `undetermined` categories and numerical columns retain that
+historical meaning; they are not current physical operating recommendations.
+Every newly generated table row and manifest declares
+`decision_scope: historical_conditional_screen`,
+`evidence_kind: conditional_screening_allowance`,
+`science_selection_eligible: false`, `physical_response_qualified: false`,
+`residual_contains_sensitivity_floor: true`, and
+`physical_operating_recommendation: not_established`.
+In particular, a verified sensitivity floor can permit the historical
+`excise` category even when the floor supplies the entire proxy. That floor
+is not detected RFI and cannot establish physical all-threshold infeasibility.
+The science-evidence guard described in [threshold_response.md](threshold_response.md)
+refuses these exports. Old untagged rows are also ineligible. Complete
+calibration handoffs remain refused by this command; use `response threshold`
+for their diagnostic curves. These additions do not rewrite frozen outputs.
+
 The two frozen archive releases are written in their own layouts from the same
 inputs:
 

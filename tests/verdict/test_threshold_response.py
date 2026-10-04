@@ -10,6 +10,9 @@ import pytest
 
 from rfisher import cli
 from rfisher.response import threshold
+from rfisher.response.evidence import (
+    UnqualifiedResponseError, require_science_selection_evidence,
+)
 from rfisher.verdict import archive, handoff
 
 
@@ -56,9 +59,16 @@ def test_forward_sweep_preserves_proxy_and_uniform_time(complete, tmp_path):
     assert first["r_sys"] == response.sources[0].table[0]["r_sys"]
     assert first["source_refusal"]
     assert "not a physical bound" in first["residual_status"]
+    for key, value in threshold.EVIDENCE.items():
+        assert first[key] == value
+    with pytest.raises(UnqualifiedResponseError, match="not proof of infeasibility"):
+        require_science_selection_evidence(first)
     manifest = json.loads((tmp_path / "result" / "manifest.json").read_text())
     assert manifest["sources"][0]["manifest"]["integration_model"]
     assert manifest["sources"][0]["summaries"]
+    for key, value in threshold.EVIDENCE.items():
+        assert manifest[key] == value
+    assert "not a measured interference point estimate" in manifest["residual_interpretation"]
     assert set(manifest["read"]) == {"source_0/manifest.json", "source_0/oc_table.csv",
                                       "source_0/oc_summary.csv"}
 

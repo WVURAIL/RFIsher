@@ -122,7 +122,10 @@ def test_the_command_writes_the_verdict(handoff_copy, tolerances, tmp_path,
     assert main(["verdict", "archive", "--project", str(PROJECT),
                  "--characterization", str(handoff_copy.path),
                  "--tolerances", str(tol), "--out", str(out)]) == 0
-    assert "2 undetermined" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "2 undetermined" in output
+    assert "Historical conditional screening only" in output
+    assert "physical operating recommendations are not established" in output
     assert {p.name for p in out.iterdir()} == {
         "verdict.csv", "verdict_points.csv", "screen.csv", "sensitivity.csv",
         "manifest.json"}

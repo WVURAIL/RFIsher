@@ -1,4 +1,8 @@
-"""The screen of a band: keep, excise or undetermined, with its precedence.
+"""Historical conditional screen: keep, excise or undetermined.
+
+The outcome is a reading under the archived allowance assumptions, not a
+qualified physical operating recommendation. ``as_row`` records this boundary
+even when a verified floor permits the historical ``excise`` category.
 
 The steps, in the order the selector policy declares them
 (``selector.precedence``); the first that matches decides:
@@ -38,6 +42,7 @@ import math
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
+from ..response.evidence import HISTORICAL_SCREENING_EVIDENCE
 from .interval import (STATUS_NONEMPTY, STATUS_THINNED, FamilyInterval,
                        fine_candidates, interval, points)
 
@@ -46,7 +51,8 @@ OUTCOMES = ("keep", "excise", "undetermined")
 STEPS = ("tolerance refused", "detector refused", "keep", "excise",
          "undetermined")
 SCREEN_COLUMNS = ("band_id", "screen_outcome", "precedence_step",
-                  "screen_reason", "families_checked", "rule_version")
+                  "screen_reason", "families_checked", "rule_version",
+                  *HISTORICAL_SCREENING_EVIDENCE)
 RESIDUAL = {"booked": "r_sys", 1: "r_sys_incoherent"}
 NONEMPTY = (STATUS_NONEMPTY, STATUS_THINNED)
 BULK_NULL = "bulk of the mixture"
@@ -169,7 +175,7 @@ class Screen:
         return {"band_id": self.band_id, "screen_outcome": self.outcome,
                 "precedence_step": self.step, "screen_reason": self.reason,
                 "families_checked": self.families_checked,
-                "rule_version": RULE_VERSION}
+                "rule_version": RULE_VERSION, **HISTORICAL_SCREENING_EVIDENCE}
 
 
 def screen(band_id: str, tolerance: Mapping | None,

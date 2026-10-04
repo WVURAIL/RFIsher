@@ -16,9 +16,11 @@ from typing import Sequence
 from ..provenance import producer_identity
 from ..verdict import handoff
 from ..verdict.archive import render
+from .evidence import CONDITIONAL_SCREENING_EVIDENCE
 
 MODEL_KEYS = ("r_reference", "residual_shape", "integration_model", "statistics",
               "mask_rule")
+EVIDENCE = CONDITIONAL_SCREENING_EVIDENCE
 RESPONSE_COLUMNS = (
     "source_id", "band_id", "band_low_mhz", "band_high_mhz", "band_role",
     "era_label", "era_start", "era_end", "era_state", "candidate_set",
@@ -28,6 +30,8 @@ RESPONSE_COLUMNS = (
     "exposure_cost_uniform_loss", "clean_years", "T_required_uniform_years",
     "r_sys", "r_var", "r_sys_incoherent", "r_unmasked", "floor_share",
     "residual_status", "source_claim_status", "source_refusal",
+    "evidence_kind", "physical_response_qualified", "science_selection_eligible",
+    "residual_contains_sensitivity_floor",
 )
 STATUS_COLUMNS = (
     "source_id", "band_id", "band_low_mhz", "band_high_mhz", "band_role",
@@ -101,6 +105,7 @@ def sweep(response: ForwardResponse, *, band: str | None = None,
                          "kept_fraction": saved["kept"] / saved["frames"],
                          "clean_years": years, "T_required_uniform_years": years * cost,
                          "residual_status": "diagnostic proxy; not a physical bound",
+                         **EVIDENCE,
                          "source_claim_status": summary["claim_status"],
                          "source_refusal": summary["refusal"]})
     return rows
@@ -196,6 +201,12 @@ def write_forward(response: ForwardResponse, out: str | Path, *,
         "filters": {"band": band, "family": family,
                     "eta_q16": list(eta_q16) if eta_q16 is not None else None},
         "residual_status": "diagnostic proxy; not a physical bound",
+        **EVIDENCE,
+        "residual_interpretation": "r_sys combines a sensitivity floor and "
+                                   "source coherence assumptions; it is not a "
+                                   "measured interference point estimate. A "
+                                   "proxy exceeding tolerance does not establish "
+                                   "physical infeasibility or justify reject-all.",
         "time_model": "T_required_uniform_years = clean_years * frames / kept; "
                       "uniformly distributed loss only, without a science-cost adjustment",
         "selection": "none; tolerance and threshold optimization are outside this export",

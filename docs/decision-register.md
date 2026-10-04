@@ -33,7 +33,7 @@ to the registers: every table cell must match.
 | `science.response_solver.relative_nullspace_cutoff` | 1.4901161193847656e-08 | provisional | https://doi.org/10.1137/1.9780898718027; src/rfisher/forecast.py@e041d5e |
 | `science.response_stability.maximum_tolerance_ratio` | 1.2 | provisional | scripts/bias_tolerance.py@e041d5e |
 | `science.response_stability.time_fraction` | 0.1 | provisional | scripts/bias_tolerance.py@e041d5e |
-| `science.systematic_budget.primary_zeta` | 1.0 | provisional | https://doi.org/10.1111/j.1365-2966.2007.12731.x |
+| `science.systematic_budget.primary_zeta` | 1.0 | provisional | https://doi.org/10.1111/j.1365-2966.2008.13880.x |
 | `science.systematic_budget.sensitivity_zeta` | [0.5, 0.3, 0.1] | locked | dissertation/chapters/ch09_tolerance.tex |
 | `transfer.delay_suppression.default_key` | "none" | locked | src/rfisher/residual.py@7b0067b |
 | `transfer.systematic_gain` | 1.0 | conditional | docs/tolerance.md |

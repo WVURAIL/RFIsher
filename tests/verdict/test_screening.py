@@ -9,6 +9,9 @@ import pytest
 
 from oc_rows import histogram_rows, summary_row
 from rfisher import policy
+from rfisher.response.evidence import (
+    UnqualifiedResponseError, require_science_selection_evidence,
+)
 from rfisher.verdict import handoff, interval, screening
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -131,6 +134,23 @@ def test_an_r_that_only_measures_the_floor_cannot_excise(pol):
     rows, summaries = _band([[5.0, 6.0]], floor_share=0.95,
                             floor_verified=True)
     assert _screen(pol, rows, summaries).outcome == "excise"
+
+
+def test_verified_floor_only_screen_is_not_a_physical_excision(pol):
+    rows, summaries = _band([[5.0, 6.0]], floor_share=1.0,
+                            floor_verified=True)
+    result = _screen(pol, rows, summaries)
+    # Preserve the archived rule's category while making its scope explicit.
+    assert result.outcome == "excise"
+    record = result.as_row()
+    assert record["decision_scope"] == "historical_conditional_screen"
+    assert record["physical_operating_recommendation"] == "not_established"
+    assert record["evidence_kind"] == "conditional_screening_allowance"
+    assert record["science_selection_eligible"] is False
+    assert record["physical_response_qualified"] is False
+    assert record["residual_contains_sensitivity_floor"] is True
+    with pytest.raises(UnqualifiedResponseError, match="does not justify reject-all"):
+        require_science_selection_evidence(record)
 
 
 def test_the_precedence_is_first_match(pol):
