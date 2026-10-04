@@ -1,12 +1,18 @@
 """The archive verdict's union row and its tolerance rows (rfisher.verdict.archive)."""
 from __future__ import annotations
 
+import csv
+import json
 from pathlib import Path
 
 import pytest
 
 from oc_rows import histogram_rows, summary_row
 from rfisher import policy
+from rfisher.response.evidence import (
+    HISTORICAL_SCREENING_EVIDENCE, UnqualifiedResponseError,
+    require_science_selection_evidence,
+)
 from rfisher.verdict import archive, handoff, screening
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -48,3 +54,27 @@ def test_a_band_with_two_rule_scenarios_is_refused(handoff_copy, tolerances, tmp
                       "34": [("none", "rule", 100.0, 0.0)]})
     with pytest.raises(handoff.HandoffError, match="2 rule scenarios"):
         archive.verdict_archive(handoff_copy.path, tol, PROJECT, tmp_path / "out")
+
+
+def test_all_new_archive_exports_declare_historical_screening_scope(
+        handoff_copy, tolerances, tmp_path):
+    tol = tolerances({"29": [("none", "rule", 1.0, 0.0)],
+                      "34": [("none", "rule", 1.0, 0.0)]})
+    out = tmp_path / "out"
+    result = archive.verdict_archive(handoff_copy.path, tol, PROJECT, out)
+    for record in result["screen"]:
+        assert all(record[key] == value
+                   for key, value in HISTORICAL_SCREENING_EVIDENCE.items())
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert all(manifest[key] == value
+               for key, value in HISTORICAL_SCREENING_EVIDENCE.items())
+    assert "verified sensitivity floors are not detected RFI" in manifest["outcome_interpretation"]
+    for name in ("verdict.csv", "verdict_points.csv", "screen.csv", "sensitivity.csv"):
+        with (out / name).open(newline="") as stream:
+            reader = csv.DictReader(stream)
+            assert set(HISTORICAL_SCREENING_EVIDENCE) <= set(reader.fieldnames)
+            for record in reader:
+                assert all(record[key] == str(value)
+                           for key, value in HISTORICAL_SCREENING_EVIDENCE.items())
+                with pytest.raises(UnqualifiedResponseError):
+                    require_science_selection_evidence(record)
