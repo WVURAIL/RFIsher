@@ -94,7 +94,7 @@ def reference_main(argv=None, prog: str = "rfisher tolerance reference") -> int:
         prog=prog, description="Write tolerances.csv and "
         "tolerance_components.csv for the bands on one or more frozen "
         "reference bases (the vendored exact-time reference and the "
-        "coarse-world sensitivity).")
+        "coarse-scenario sensitivity).")
     parser.add_argument("--basis", action="append", required=True,
                         choices=reference.BASES,
                         help="a reference basis; repeat for several, whose "
@@ -307,7 +307,7 @@ CAPTURE_RECORDS = {
                     "coherence gain"),
     "duration": ("duration", "the keep gap and the survey-duration reading"),
     "postprocessing": ("postprocessing", "the post-processing sensitivity "
-                       "against the credit readings"),
+                       "against the sensitivity readings of the record"),
     "filter-sensitivity": ("filter_sensitivity", "revision 3's filter "
                            "sensitivity against revision 2"),
     "capture-release": ("capture_release", "the capture ruling release r5.2 "

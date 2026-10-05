@@ -260,6 +260,73 @@ def test_repin_after_a_rebuild_covers_only_the_rebuilt_banks(checkout,
     assert f"{OTHER_ANCHOR}\n        \"{'0' * 64}\"" in text
 
 
+def test_a_rebind_replaces_only_the_radiofisher_section(checkout, monkeypatch):
+    assert restamp.restamp(checkout.args) == 0     # the bank has its block
+    _git(checkout.root, "commit", "-q", "-am", "restamped")
+    before = _members(checkout.bank)
+    old_meta = restamp.decode_meta(before[-1][3])
+    section = {**old_meta["provenance"]["radiofisher"],
+               "git_commit": "f" * 40, "working_tree_sha256": "a" * 64,
+               "capabilities": [c for c in old_meta["provenance"]["radiofisher"]
+                                ["capabilities"] if c != "vol_frac"]}
+    monkeypatch.setattr(restamp, "radiofisher_section",
+                        lambda explicit=None: dict(section))
+    authenticated = []
+    monkeypatch.setattr(restamp, "authenticate_rebound",
+                        lambda path, explicit=None: authenticated.append(
+                            restamp.decode_meta(_members(path)[-1][3])))
+    args = SimpleNamespace(radiofisher_dir=None, banks=[BANK])
+
+    assert restamp.rebind(args) == 0
+
+    after = _members(checkout.bank)
+    assert [m[:3] for m in after] == [m[:3] for m in before]
+    assert [m[3] for m in after[:-1]] == [m[3] for m in before[:-1]]
+    meta = restamp.decode_meta(after[-1][3])
+    assert meta["provenance"]["radiofisher"] == section
+    assert meta["restamp"]["radiofisher"] == [{
+        "from": old_meta["provenance"]["radiofisher"],
+        "date": meta["restamp"]["radiofisher"][0]["date"],
+        "reason": restamp.REBIND_REASON}]
+    assert authenticated == [meta]           # checked before it was written
+    meta["provenance"]["radiofisher"] = old_meta["provenance"]["radiofisher"]
+    del meta["restamp"]["radiofisher"]
+    assert meta == old_meta
+    assert f'"{restamp.sha256_file(checkout.bank)}"' in checkout.pins.read_text()
+    assert restamp.check(SimpleNamespace(radiofisher_dir=None)) == 0
+    # a second run is a no-op
+    assert restamp.rebind(args) == 0
+    assert _members(checkout.bank) == after
+
+
+def test_a_rebind_refuses_a_bank_whose_source_digest_is_stale(checkout,
+                                                              monkeypatch):
+    monkeypatch.setattr(restamp, "radiofisher_section",
+                        lambda explicit=None: {"git_commit": "f" * 40})
+    with pytest.raises(SystemExit, match="stale bank source digest"):
+        restamp.rebind(SimpleNamespace(radiofisher_dir=None, banks=[BANK]))
+    assert checkout.bank.read_bytes() == checkout.original
+
+
+def test_a_rebind_refuses_a_bank_that_does_not_authenticate(checkout,
+                                                             monkeypatch):
+    assert restamp.restamp(checkout.args) == 0
+    _git(checkout.root, "commit", "-q", "-am", "restamped")
+    rebound = checkout.bank.read_bytes()
+    section = {**banks.FisherBank(checkout.bank).meta["provenance"]
+               ["radiofisher"], "working_tree_sha256": "b" * 64}
+    monkeypatch.setattr(restamp, "radiofisher_section",
+                        lambda explicit=None: section)
+
+    def refuse(path, explicit=None):
+        raise ValueError("radiofisher.working_tree_sha256 differs")
+
+    monkeypatch.setattr(restamp, "authenticate_rebound", refuse)
+    with pytest.raises(SystemExit, match="does not authenticate"):
+        restamp.rebind(SimpleNamespace(radiofisher_dir=None, banks=[BANK]))
+    assert checkout.bank.read_bytes() == rebound
+
+
 def test_same_arrays_compares_the_numerical_members_only(checkout, tmp_path):
     original = tmp_path / "original.npz"
     original.write_bytes(checkout.original)

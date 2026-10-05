@@ -24,8 +24,8 @@ policy's R scales by G_amended / G_record and the verdict rule is the record's (
 at the least trim probe both exceed the 3 dB allowance).
 The limit is applied only where it can weaken an exclusion: on a range the record excises. On a range it does not
 excise, a lower G moves toward a keep, which the rule does not credit.
-It is evaluated on every range the record excises: every priced range of the six excised channels (15, 17, 30,
-31, 33, 35), and the 0.3 m range on each channel whose label is undetermined and whose 0.3 m range the record
+It is evaluated on every range the record excises: at amendment 18, every priced range of the six excised channels
+(15, 17, 30, 31, 33, 35), and the 0.3 m range on each channel whose label is undetermined and whose 0.3 m range the record
 excises (14, 16, 18, 19, 21, 22, 23, 25, 26, 27, 32), read from the table of record, not listed by hand.
 Reads the ruling's own products read-only and phasor14.csv; computes the 0.3 m class (0, 1), which phasor14.py
 does not carry, with the same definition from the reduced products, on every channel above. Writes phase_limit_classes.csv and

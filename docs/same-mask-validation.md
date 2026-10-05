@@ -53,8 +53,9 @@ information. An unavailable or failed calculation is preserved as a refusal.
 
 The primary response uses signal injections with recomputed observed-stream
 masks and empirical fourth-order covariance. The clean counterfactual is
-available only through the synthetic generator and receives no subtraction
-credit. Coverage statements condition on the frozen response, target, policy
-and realized independent reference center, locally at theta=0. They do not
-certify unconditional coverage of a chosen optimum or a physical telescope
-response. See the protocol for support, exposure and uncertainty limits.
+available only through the synthetic generator, and no post-processing
+sensitivity is applied for subtraction. Coverage statements condition on the
+frozen response, target, policy and realized independent reference center,
+locally at theta=0. They do not certify unconditional coverage of a chosen
+optimum or a physical telescope response. See the protocol for support,
+exposure and uncertainty limits.

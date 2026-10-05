@@ -86,11 +86,11 @@ pipeline.
 <!-- BEGIN CALIBRATION_PROGRESS -->
 ## Calibration progress and producer evidence: September 9, 2026
 
-`calibration_progress_2026-09-09` separately preserves waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; [physical-calibration.md](physical-calibration.md) describes their scope.
+`calibration_progress_2026-09-09` separately preserved waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; [physical-calibration.md](physical-calibration.md) describes their scope.
 
-The fresh digital result is **197/200 joint successes**, with a **96.1690%** one-sided 95% lower limit; its predeclared 95% evaluation target is **demonstrated**. Calibration's 99% content target is distinct. The prior 59/60 result and all earlier release bytes remain unchanged.
+The digital result of this release was **197/200 joint successes**, with a **96.1690%** one-sided 95% lower limit; its predeclared 95% evaluation target was **demonstrated**. Calibration's 99% content target is distinct. The prior 59/60 result and all earlier release bytes remained unchanged.
 
-The waveform audit explains the startup discrepancy and preserves newly generated IQ with explicit discard and provenance. Corus reports an October 2018 shutdown month for 44 named transmitters; continuous off intervals and the separate multiplex cutover remain unverified. The causal replay preserves as-known assignments and accepts no operating policy. Recovered visibility histories show that saved matrices omit a later data-dependent median subtraction, and the nominal cleaner comparison uses different upstream revisions. Physical in-band transfer, untouched telescope evaluation and Pathfinder validation remain open.
+The waveform audit explained the startup discrepancy and preserved newly generated IQ with explicit discard and provenance. Corus reported an October 2018 shutdown month for 44 named transmitters; continuous off intervals and the separate multiplex cutover were unverified. The causal replay preserved as-known assignments and accepted no operating policy. Recovered visibility histories showed that saved matrices omit a later data-dependent median subtraction, and the nominal cleaner comparison used different upstream revisions. As of this release, physical in-band transfer, untouched telescope evaluation and Pathfinder validation were open.
 
 <!-- END CALIBRATION_PROGRESS -->
 

@@ -80,51 +80,35 @@ ordinary fitted parameter.
 
 ## Direct backend path
 
-The supported RadioFisher backend exposes five experiment-dictionary hooks:
+The supported RadioFisher backend exposes three experiment-dictionary hooks:
 
 - `noise_freq_weight`: surviving-time weight as a function of frequency;
-- `noise_freq_mode`: `invvar` or `fourier` band reduction;
-- `vol_frac`: surviving survey-volume fraction;
-- `kpar_min_fn`: callable of redshift giving the smallest retained
-  `|k_par|` in Mpc^-1, a hard line-of-sight excision applied beside the
-  backend's own foreground, wedge, and non-linear cuts; and
-- `kpar_transfer_fn`: callable of `(|k_par|, z)` giving the surviving
-  signal-power fraction in `[0, 1]`, a soft version of the same cut.
+- `noise_freq_mode`: `invvar` or `fourier` band reduction; and
+- `vol_frac`: surviving survey-volume fraction.
 
 A `NaN` weight marks an excised slice. Unknown or missing required
 capabilities fail before a masked direct evaluation begins. The hooks are
 no-ops when absent, so the unmodified backend result remains the clean
-forecast.
+forecast. The `P_res` capability adds the unit-residual response row of the
+bias-response banks (see above).
 
-The division of labour behind these hooks is fixed. The backend owns a
-*dimension of the Fisher integrand*, expressed in quantities it already
-uses: `radiofisher.delay_cut_kpar_min` and `delay_transfer_fn` map a
-delay to `k_par` through `nu_line` and `H(z)` and know nothing about any
-instrument. RFIsher owns every *number*, *decision*, and *dataset* that
-fills that dimension in: which field, band, time, and duty cycle define a
-configuration (the experiment registry,
+The delay filter has no hook. It enters the forecast only through the
+`kfg_fac` response banks, which price the radial modes the filter removes
+(`kfg_fac = tau_cut * bandwidth`), and through the assumed suppression S
+listed beside every tolerance; both are named by
+`rfisher.forecast.radiofisher_bao.filter_scenarios.SCENARIOS`. RFIsher owns every
+*number*, *decision*, and *dataset* behind those scenarios: which field,
+band, time, and duty cycle define a configuration (the experiment registry,
 `rfisher.forecast.radiofisher_bao.bank.experiments`), what a published
-analysis's cut was, and the digitised filter response the soft cut reads
-(`src/rfisher/data/chime2025_fig10_filter_residual.csv`, via
-`rfisher.forecast.radiofisher_bao.filter_scenarios.delay_transfer`). The
-hooks are forecast options, off by default; the shipped banks do not carry
-them, and the sweep driver `scripts/run_taucut_sweep.py@2d682c1` was removed in 4.0.0.
-
-The wedge-limited scenario (the foreground wedge, not the canceller, sets
-the cut on long baselines) needs no new hook: it is the hard cut beside the
-backend's existing horizon wedge, `expt['wedge'] = 'horizon'` (Seo &
-Hirata 2016, the region `c tau <= |b|`), whose boundary is the horizon
-delay `b/c` of a baseline mapped through the same delay-to-`k_par`
-relation the cut uses. The decision to run it, and for which
-configurations, lives in the driver (`WEDGE_CUT_CONFIGS`; `cut = "wedge"`
-in the tables).
+analysis's cut was, and the digitised filter response
+(`src/rfisher/data/chime2025_fig10_filter_residual.csv`).
 
 For the scenarios represented by the current bank, the masking hooks reduce
 to the same effective-time and volume factors used by bank interpolation.
 `scripts/verify_bank.py` checks the two paths, including a full-survey
-comparison. Direct evaluation is how the model is extended to a new
-dimension; the delay cut is the first such extension, and radial-mode
-coupling from spectral gaps would be the next.
+comparison. Direct evaluation is how the model would be extended to a new
+dimension of the Fisher integrand; radial-mode coupling from spectral gaps
+would be the first.
 
 ## Provenance boundary
 

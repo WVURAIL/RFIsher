@@ -10,7 +10,7 @@ built the bank. It claims that the new bank code computes the same arrays,
 which the equivalence gate proves separately; the ``restamp`` block records
 where the bank came from.
 
-Four modes:
+Five modes:
 
 ``restamp BANK=OUT ...``
     For each bank: authenticate it at the baseline commit in a subprocess
@@ -34,6 +34,20 @@ Four modes:
     After ``scripts/rebuild_shipped_banks.sh``: refuse unless each named bank
     records the current source digests, then rewrite the pins of those banks
     alone and the RadioFisher pin.
+
+``--rebind BANK ...``
+    After RadioFisher moves without changing what a bank holds: refuse unless
+    the RadioFisher checkout is clean and each named bank records the
+    current bank-source digest; rewrite only ``meta.npy``, copying every
+    numerical member's bytes as read; replace ``provenance.radiofisher`` with
+    the checkout's identity (commit, digest, backend version and
+    capabilities) and append the section it replaces to
+    ``restamp.radiofisher``; require a rebound chime2022 bank to authenticate
+    against the checkout (``response.evaluation_identity``; the Bull banks
+    are checked against the direct backend by the test suite); then re-pin
+    as ``--repin`` does. The claim is the same as a re-stamp's: the arrays are
+    the ones the recorded build computed, and the checkout named now
+    computes them too.
 
 ``--same-arrays COMMITTED REBUILT``
     Exit non-zero unless the two banks hold byte-identical numerical members.
@@ -66,7 +80,8 @@ from numpy.lib import format as npy_format
 
 from rfisher import __version__
 from rfisher.forecast.radiofisher_bao.bank import banks
-from rfisher.forecast.radiofisher_bao.bank.backend import find_radiofisher_dir
+from rfisher.forecast.radiofisher_bao.bank.backend import (
+    backend_capabilities, find_radiofisher_dir, import_radiofisher)
 
 ROOT = banks.source_root()
 PINS = Path("tests/forecast/test_resources.py")
@@ -103,6 +118,9 @@ REASON = ("The bank source manifest became the forecast/radiofisher_bao/bank "
           "subpackage; the arrays are the ones the recorded source built.")
 EVIDENCE = ("refactor-equivalence-2026-09/M5a: decoded members, mini-bank "
             "golden, evaluation identity and the tolerance table")
+REBIND_REASON = ("The RadioFisher checkout moved without changing what the "
+                 "bank holds; the rebound bank authenticates against it and "
+                 "the tolerance table rebuilds byte for byte.")
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -458,6 +476,89 @@ def repin_after_rebuild(args) -> int:
     return 0
 
 
+def radiofisher_section(explicit=None) -> dict:
+    """``provenance.radiofisher`` of a bank built against the checkout now."""
+    rf, rf_dir = import_radiofisher(explicit)
+    state = banks._git_state(rf_dir, **banks.RADIOFISHER_SOURCE_MANIFEST)
+    if state["git_dirty"] is not False or state["git_commit"] is None \
+            or state["working_tree_sha256"] is None:
+        sys.exit(f"the RadioFisher checkout must be clean: {rf_dir} {state}")
+    return {
+        "backend_id": getattr(rf, "BACKEND_ID", None),
+        "backend_version": getattr(rf, "BACKEND_VERSION", None),
+        "api_version": getattr(rf, "BACKEND_API_VERSION", None),
+        "capabilities": sorted(backend_capabilities(rf)),
+        "source_manifest": {key: list(value) for key, value in
+                            banks.RADIOFISHER_SOURCE_MANIFEST.items()},
+        **state,
+    }
+
+
+def authenticate_rebound(path: Path, explicit=None) -> None:
+    """Raise unless the bank at ``path`` authenticates against the checkout."""
+    from rfisher.forecast.radiofisher_bao.response import evaluation_identity
+
+    evaluation_identity(banks.FisherBank(path), rf_dir=explicit)
+
+
+def rebind(args) -> int:
+    if ROOT is None:
+        sys.exit("run from a git checkout of RFIsher")
+    rebound = list(dict.fromkeys(args.banks))
+    if not rebound:
+        sys.exit("--rebind takes the paths of the banks to re-bind")
+    unknown = sorted(set(rebound) - set(BANKS.values()))
+    if unknown:
+        sys.exit(f"--rebind: not a pinned bank: {', '.join(unknown)}")
+    section = radiofisher_section(args.radiofisher_dir)
+    bank_digest = banks.bank_source_state()["working_tree_sha256"]
+    date = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    staged = []
+    for relative in rebound:
+        path = ROOT / relative
+        infos, data = read_members(path)
+        meta = decode_meta(data["meta.npy"])
+        if meta["provenance"]["baonoise"]["working_tree_sha256"] \
+                != bank_digest:
+            sys.exit(f"{relative}: stale bank source digest; a change under "
+                     "bank/ takes a rebuild, not a re-bind")
+        if "restamp" not in meta:
+            sys.exit(f"{relative}: no restamp block to record the re-bind in")
+        old = meta["provenance"]["radiofisher"]
+        if old == section:
+            print(f"{relative}: already bound to {section['git_commit']}")
+            continue
+        new = json.loads(json.dumps(meta))
+        new["provenance"]["radiofisher"] = section
+        new["restamp"].setdefault("radiofisher", []).append(
+            {"from": old, "date": date, "reason": REBIND_REASON})
+        new_data = dict(data, **{"meta.npy": encode_meta(new)})
+        with tempfile.TemporaryDirectory() as scratch:
+            first, second = Path(scratch) / "a.npz", Path(scratch) / "b.npz"
+            write_bank(first, infos, new_data)
+            write_bank(second, infos, new_data)
+            if first.read_bytes() != second.read_bytes():
+                sys.exit(f"{relative}: the two writes differ")
+            _, written = read_members(first)
+            if any(written[f"{name}.npy"] != data[f"{name}.npy"]
+                   for name in NUMERICAL):
+                sys.exit(f"{relative}: a numerical member changed")
+            if decode_meta(written["meta.npy"]) != new:
+                sys.exit(f"{relative}: the metadata did not round-trip")
+            banks.FisherBank(first)       # the rebound bank still loads
+            if meta["config"] == "chime2022":
+                try:
+                    authenticate_rebound(first, args.radiofisher_dir)
+                except (RuntimeError, ValueError) as exc:
+                    sys.exit(f"{relative}: the rebound bank does not "
+                             f"authenticate against the checkout: {exc}")
+            staged.append((path, first.read_bytes()))
+    for path, payload in staged:
+        path.write_bytes(payload)
+        print(f"re-bound {path.relative_to(ROOT)} to {section['git_commit']}")
+    return repin_after_rebuild(args)
+
+
 def same_arrays(args) -> int:
     committed, rebuilt = (Path(path) for path in args.banks)
     _, old = read_members(committed)
@@ -482,6 +583,9 @@ def main(argv=None) -> int:
     mode.add_argument("--repin", action="store_true",
                       help="re-pin the named banks, rebuilt from the current "
                            "source")
+    mode.add_argument("--rebind", action="store_true",
+                      help="re-stamp the named banks' RadioFisher section to "
+                           "the checkout found now, then re-pin them")
     mode.add_argument("--same-arrays", action="store_true",
                       help="compare the numerical members of two banks")
     ap.add_argument("--subset", action="store_true",
@@ -495,13 +599,15 @@ def main(argv=None) -> int:
     ap.add_argument("--record", type=Path,
                     help="write a JSON record of the re-stamp here")
     ap.add_argument("banks", nargs="*", metavar="BANK=OUT",
-                    help="re-stamp pairs; with --repin, the rebuilt bank "
+                    help="re-stamp pairs; with --repin or --rebind, the bank "
                          "paths; with --same-arrays, the two banks")
     args = ap.parse_args(argv)
     if args.check:
         return check(args)
     if args.repin:
         return repin_after_rebuild(args)
+    if args.rebind:
+        return rebind(args)
     if args.same_arrays:
         if len(args.banks) != 2:
             ap.error("--same-arrays takes COMMITTED REBUILT")
