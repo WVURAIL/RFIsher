@@ -234,7 +234,7 @@ def product_texts(outcome):
              "Calibration chooses the whole-block point minimum among admitted candidates only.",
              "Unavailable competitors prevent a claim of the entire-grid optimum.",
              "Independent evaluation cannot reselect. Coverage conditions on a frozen response and shared reference.",
-             "A clean 1024-block reference sets precision; no time cap, automatic knee or cleaning credit.", ""]
+             "A clean 1024-block reference sets precision; no time cap, automatic knee or post-processing sensitivity.", ""]
     for scenario_index, (scenario, selection, evaluation) in enumerate(zip(
             sm.SCENARIOS, outcome["calibration"]["selections"], outcome["evaluation"])):
         lines.extend([scenario, f"  Selection: {selection['status']}; index={selection['selected_index']}.",

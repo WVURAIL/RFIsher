@@ -42,7 +42,7 @@ Use the reviewed commit recorded by the released banks:
 
 ```bash
 git clone https://github.com/WVURAIL/RadioFisher ../RadioFisher
-git -C ../RadioFisher checkout 12a1616637dd46638055f2d6d77788c7214914b2
+git -C ../RadioFisher checkout 806b0159b5d2b4327cf38af8fcbee093803d080b
 export RADIOFISHER_DIR=../RadioFisher
 ```
 
@@ -145,6 +145,15 @@ subpackage: `scripts/restamp_bank_provenance.py` rewrote only their
 `meta.npy` members, recording the new source digest and, in a `restamp`
 block, the commit and digest that built them. Their arrays are the ones that
 build computed.
+
+Their RadioFisher section was re-pinned once more, from 12a1616 to 806b015
+(`restamp_bank_provenance.py --rebind` on the nine banks, then `--repin`).
+Between the two commits RadioFisher removed the delay-filter hooks
+`kpar_min_fn`, `kpar_transfer_fn` and `wedge`, which no shipped bank's
+experiment settings carry, so the numerics are unchanged: the dilation
+errors and the `P_res` biases under the Overview convention are identical at
+12a1616 and 806b015, and the re-pin changed no numerical member. Each bank's
+`restamp.radiofisher` entry records the section it replaced.
 
 The Bull banks retain their released 27-point logarithmic grid over
 1--1,000,000 hours plus the exact `10**3.5`-hour point needed by the 3,300-hour

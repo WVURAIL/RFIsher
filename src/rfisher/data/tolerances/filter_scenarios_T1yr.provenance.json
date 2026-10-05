@@ -2,20 +2,20 @@
   "bank_source_sha256": "755632f6f6dd1a8b99e8bf867e851ea11c993540587df765f7c165264ab16438",
   "banks": {
     "fisher_bank_chime2022_pres_dense.npz": {
-      "evaluation_sha256": "81aff78fb5743c6d07c6f6532fe082baa501d28e527e6b03996face11c8bc231",
-      "sha256": "fc6f014bee4aafca74b774881a05c2da63eb524660042f814218f35f1869d2ce"
+      "evaluation_sha256": "5169b177f864531a9f5eb713a16a4497cfa55795cc5699bc0bc43d5a9f84aa2e",
+      "sha256": "1f9d3fa7daa332925772e551784409f6a84b574f44a9899c99b628e232ad1d4b"
     },
     "fisher_bank_chime2022_pres_kfg22_dense.npz": {
-      "evaluation_sha256": "4b7bd3c172c54f35b6f58675edbb40312018e3197925cfc69dac55986bb09fcf",
-      "sha256": "642172cb1fdb072fca51632516e13e013743f70595baaa5db8b000989e493a08"
+      "evaluation_sha256": "a927e9d9691f0c87bb8d240d14f763bc9660e828d86bd954e25d78dd92ad01e2",
+      "sha256": "068111635ac8083e7705a2fe1f27e6688c96e230d559672dfcc52f0efe4b9f0d"
     },
     "fisher_bank_chime2022_pres_kfg44_dense.npz": {
-      "evaluation_sha256": "22f3ad36ea1edc9e36c69796404d8e2b78566ebd28764956b42065e39c2e444e",
-      "sha256": "d6c2bdd4fc8526ded22a36aeb0d69c44ff7c89c1b337202e6cc9f4063492ee71"
+      "evaluation_sha256": "048d4db2f61cb69bd0414d3622fb90c48ed15c9056a16da983636421557f2a98",
+      "sha256": "82eefab4a0c7e75645a506ea7ed29feff265a6466a5f684fc041c286c2686f91"
     },
     "fisher_bank_chime2022_pres_kfg80_dense.npz": {
-      "evaluation_sha256": "780b7050ef99d26f0e9b937f162866c01993254ce7e20c3e9901ab607dee1483",
-      "sha256": "a862fc0f56ca6c4c5bb9c359ebead956c97aeee12504d0ca24f9066f53d7233a"
+      "evaluation_sha256": "f2056184f95053eb813a060989005619de1303c9abeac77a96dce9f971a46892",
+      "sha256": "dcae550abd0cadfc1e732cea8254f6bf873cda964460c85b5592f7a6636468ab"
     }
   },
   "csv_sha256": "3985dd593bbb19904e600e20adbd44248c2449b980bdb27856166c85b298f162",
@@ -23,7 +23,7 @@
   "schema": 3,
   "science_register_sha256": "ef5cbf45b0f5ea160b894f2666d70ccb0b9cfecd6cb01bcbb06f1a35548234f5",
   "sources": {
-    "rfisher/forecast/radiofisher_bao/filter_scenarios.py": "66b0acae0c134fdb58311dab96a43144e200cfa93b3f8ae9afee264d92e0e147",
+    "rfisher/forecast/radiofisher_bao/filter_scenarios.py": "6859b385f4165db0410afac8bcaaa2739a6d202ee52dc808cb2bc80bf99b7c1f",
     "rfisher/forecast/radiofisher_bao/model.py": "b22716dab5eee1c1852e74386475212a29cab1d3f0f06a075a7508c9aa30c2bf",
     "rfisher/forecast/radiofisher_bao/response.py": "377ea033ba04be395964d529747af17f89fdb40b2f7612d2b8fcadb44711f612",
     "rfisher/tolerance/bands.py": "a344effd74c3593af9b66b753763e654ddd85dae1514dae179e64d6a72f0a2d0",

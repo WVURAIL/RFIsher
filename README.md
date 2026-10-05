@@ -86,10 +86,12 @@ and refuses unsupported or numerically unstable evaluations.
 
 Threshold selection is split at the handoff. The detector (pilot-proxy)
 characterizes each band: every candidate threshold with its masked fraction,
-kept residual and evaluability, the false-alarm limit eta_Pfa (at this commit, the higher
-1 - alpha quantile of Q, alpha = 1e-3, on the band's own verified
-signal-free population; a control band's quantile, such as Q37(1e-3), is a
-surrogate and never a band's eta_Pfa), and the stability screen
+kept residual and evaluability, the false-alarm limit eta_Pfa (the smallest
+fixed-rank threshold whose one-sided 95% Clopper-Pearson upper bound is at
+most alpha = 0.001 on the band's own independently sampled verified null,
+the rank fixed before the scores are read; see pilot-proxy's
+`docs/HANDOFF.md`; a control band's threshold is a surrogate and never a
+band's eta_Pfa), and the stability screen
 (`oc_table.csv`, `oc_summary.csv` and
 `manifest.json`, schema `operating_characteristic` v1). RFIsher prices that
 surface against the band's tolerance and nothing else:

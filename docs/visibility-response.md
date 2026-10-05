@@ -2,7 +2,7 @@
 
 `rfisher.response.visibility` carries the coherent complex mean and centered covariance through an explicitly supplied, fixed idealized science response. It does not infer telescope calibration or equate a normalized coherent amplitude with the forecast's additive covariance power.
 
-The input is the same-policy, same-support visibility ensemble at the 10-second boundary. No delay cut or sidereal-mean subtraction receives cleaning credit. A fixed idealized response translates endpoint contamination into a science requirement; it is not an additional proposed mitigation stage.
+The input is the same-policy, same-support visibility ensemble at the 10-second boundary. No delay cut or sidereal-mean subtraction receives a post-processing sensitivity. A fixed idealized response translates endpoint contamination into a science requirement; it is not an additional proposed mitigation stage.
 
 ## Quantities and assumptions
 

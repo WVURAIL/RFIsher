@@ -1,9 +1,9 @@
 """Named sensitivities: the only place a sensitivity factor multiplies a residual.
 
-A rule never takes a credit. A sensitivity scenario of the tolerance table
-(its ``role`` is ``sensitivity``) names an assumed suppression S of the
-residual and prices the band against its own tolerance; this module reads
-each one beside the rule, and nothing else applies S.
+A rule never applies a post-processing sensitivity. A sensitivity scenario
+of the tolerance table (its ``role`` is ``sensitivity``) names an assumed
+suppression S of the residual and prices the band against its own tolerance;
+this module reads each one beside the rule, and nothing else applies S.
 
 For each band and sensitivity the least-R candidate of the exclusion reading
 is priced as R_S = r * 10^(-S/10) / r_tol (the operands in that order, never

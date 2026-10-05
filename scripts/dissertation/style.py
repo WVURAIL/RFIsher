@@ -1,8 +1,8 @@
 """Dissertation-wide plotting style.
 
-The single style source. The dissertation bundle (figure_src/style.py) is the
-audited original; pilot-proxy and RFIsher carry byte-identical copies, checked
-by a test in each repository.
+The 2026-09-08 copy of the dissertation's figure_src/style.py, used by
+RFIsher's own report figures. The dissertation's copy is the validated
+palette and has moved on since; this one is not kept in step with it.
 
 The body text is Latin Modern (LaTeX ``lmodern``).  Submission figures render
 all text through the same LaTeX stack, at a fixed physical size, so labels are

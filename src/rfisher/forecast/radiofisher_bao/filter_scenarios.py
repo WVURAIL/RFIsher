@@ -8,10 +8,9 @@ the delay-to-wavenumber map. S is listed beside every tolerance and is never
 folded into one. Which scenario a verdict rests on is the science profile's
 choice (its ``role``); no rule reads a sensitivity scenario.
 
-The delay-cut hooks at the end are forecast options and are off by default:
-a bank or a forecast uses them only when a caller passes the hook into the
-experiment. The digitised filter response of the CHIME 2025 detection
-(Fig. 10) stays in package data.
+The delay filter enters the forecast only through the ``kfg_fac`` response
+banks and S; the backend has no delay-cut hook. The digitised filter response
+of the CHIME 2025 detection (Fig. 10) stays in package data.
 """
 from __future__ import annotations
 
@@ -21,8 +20,6 @@ from pathlib import Path
 import numpy as np
 
 from rfisher import policy
-
-from .bank._validation import nonnegative_scalar, positive_scalar
 
 # Delay-filter suppression of the residual, dB, as a function of which BAO
 # feature the filter must preserve. Derived from the k_par <-> delay relation
@@ -119,40 +116,3 @@ def filter_residual_table(path: str | Path | None = None):
     if np.any(response < 0.0):
         raise ValueError(f"{source}: RMS residual must be non-negative")
     return ratio, response
-
-
-def delay_transfer(rf, expt: dict, cosmo_fns, tau_cut_seconds: float,
-                   table=None):
-    """Return the ``expt['kpar_transfer_fn']`` hook for the soft delay cut.
-
-    The measured filter response (Fig. 10, at 200 ns) is scaled in
-    tau / tau_cut to ``tau_cut_seconds``, normalised to its plateau and
-    squared, and multiplies the signal power. Signal only: the same
-    filter attenuates the noise too, so this brackets the hard cut from
-    the conservative side rather than replacing it."""
-    from .bank.backend import require_backend_capabilities
-
-    require_backend_capabilities(rf, {"kpar_transfer_fn"})
-    ratio, response = filter_residual_table() if table is None else table
-    return rf.delay_transfer_fn(
-        positive_scalar(tau_cut_seconds, "tau_cut_seconds"),
-        cosmo_fns[0], expt["nu_line"], ratio, response)
-
-
-def delay_cut(rf, expt: dict, cosmo_fns, tau_cut_seconds: float,
-              transition: float | None = None):
-    """Return the ``expt['kpar_min_fn']`` hook for a hard delay-domain cut.
-
-    ``tau_cut_seconds`` is the high-pass filter delay; the backend applies
-    the transition-zone factor (1.4 by default, CHIME's 200 ns cut against
-    its 280 ns mask) before converting delay to k_par. A zero cut is a
-    valid no-op, so a no-cut reference runs through exactly the same
-    code path as every masked point."""
-    from .bank.backend import require_backend_capabilities
-
-    require_backend_capabilities(rf, {"kpar_min_fn"})
-    if transition is None:
-        transition = rf.DELAY_TRANSITION_FACTOR
-    return rf.delay_cut_kpar_min(
-        nonnegative_scalar(tau_cut_seconds, "tau_cut_seconds"),
-        cosmo_fns[0], expt["nu_line"], transition=transition)

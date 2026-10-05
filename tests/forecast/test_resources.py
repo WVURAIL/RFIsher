@@ -21,11 +21,11 @@ from rfisher.forecast.radiofisher_bao.bank.banks import (
 
 EXPECTED_SHA256 = {
     resources.CMBSPA2026_BANK_NAME:
-        "1616f7e38c4c0ba00955f907f817caeb8f66890a02ff216ef27c4a3ff61de6b7",
+        "e14773d4efc37e920718f11c4f5cf7f0139620f75ce70cf243f355a5597e752f",
     resources.PLANCK2018_BANK_NAME:
-        "7df2c6613cdb27ee2e97ca631e76289094f57a7e61045fe442d4af79a3ef6481",
+        "7c4a66438f623e52ec617c56c3ccf1f070244fe1ef6a89285467352570311665",
     resources.PACT2025_BANK_NAME:
-        "8c5e246f666aedd1d545ecdd294677bc92c8b81005cf105570a4f9db1ef42548",
+        "b32caab502af811ca0ac403133da1bc879c66d11f3bd99bc8270b80187c0d58a",
     channels.DEFAULT_RATES_NAME:
         "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
     resources.SYNTHETIC_BASELINE_NAME:
@@ -45,19 +45,19 @@ CANONICAL_TEXT_RESOURCES = frozenset({
 })
 BULL_BANK_SHA256 = {
     "fisher_bank_bull2015_planck2013_epsfg1e-6.npz":
-        "c5460e3866a6638dae201f9b08fcb47e489b698546d50075f006e9a225b7666e",
+        "d6a1afdfb666675761b684da63241e6d79fedcc034e95783eafb777c610d4d16",
     "fisher_bank_bull2015_planck2013_epsfg1e-5.npz":
-        "ac1bb92a6d5685e4cd52ca50195e9aed38cbeaca56f5a3be7dc453097a3e0d0d",
+        "075eb53a5b3676a804538184565db39deed0007957bff2c4c866a1ce3a54e445",
 }
 RESPONSE_BANK_SHA256 = {
     "fisher_bank_chime2022_pres_dense.npz":
-        "fc6f014bee4aafca74b774881a05c2da63eb524660042f814218f35f1869d2ce",
+        "1f9d3fa7daa332925772e551784409f6a84b574f44a9899c99b628e232ad1d4b",
     "fisher_bank_chime2022_pres_kfg22_dense.npz":
-        "642172cb1fdb072fca51632516e13e013743f70595baaa5db8b000989e493a08",
+        "068111635ac8083e7705a2fe1f27e6688c96e230d559672dfcc52f0efe4b9f0d",
     "fisher_bank_chime2022_pres_kfg44_dense.npz":
-        "d6c2bdd4fc8526ded22a36aeb0d69c44ff7c89c1b337202e6cc9f4063492ee71",
+        "82eefab4a0c7e75645a506ea7ed29feff265a6466a5f684fc041c286c2686f91",
     "fisher_bank_chime2022_pres_kfg80_dense.npz":
-        "a862fc0f56ca6c4c5bb9c359ebead956c97aeee12504d0ca24f9066f53d7233a",
+        "dcae550abd0cadfc1e732cea8254f6bf873cda964460c85b5592f7a6636468ab",
 }
 RESPONSE_BANK_KFG = {
     "fisher_bank_chime2022_pres_dense.npz": None,
@@ -71,7 +71,7 @@ BUILD_SOURCE_SHA256 = (
     "814aeb93c00c38c32b044533172af89c15b369ad5342e96b5b200ac8025fde96"
 )
 EXPECTED_RADIOFISHER_SOURCE_SHA256 = (
-    "574f16f12463f4305f089dfcf62889c6106513c909a6cedb35e7c76d6b2e6054"
+    "f53b06f749bf4b59cab1f1766fb9970fbdb0fd2732f4dd975ad80ecd7ad11865"
 )
 
 

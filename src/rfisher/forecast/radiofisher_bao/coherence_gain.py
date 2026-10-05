@@ -69,7 +69,7 @@ def bin_overlaps(ch):
 
 def fill_factor(ch, lam_dep, lb):
     """lambda / min_b (lambda_b / f_b): the factor a footprint-diluted residual carries against the binding bin, for
-    the per-bin tolerances lb ({bin: lambda_b}) of the world the band's lambda is read in."""
+    the per-bin tolerances lb ({bin: lambda_b}) of the scenario the band's lambda is read in."""
     return lam_dep / min(lb[b] / (o / w) for b, (o, w) in bin_overlaps(ch).items())
 
 
