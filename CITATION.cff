@@ -7,5 +7,5 @@ authors:
     affiliation: "WVU Radio Astronomy Instrumentation Lab"
 version: "4.0.0"
 date-released: "2026-09-29"
-repository-code: "https://github.com/WVURAIL/RFIsher"
+repository-code: "https://github.com/djgormley/RFIsher"
 license: "MIT"

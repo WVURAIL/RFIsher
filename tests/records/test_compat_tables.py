@@ -1,4 +1,7 @@
-"""The frozen archive layouts, on a two-band golden extract of both releases.
+"""The frozen archive layout, on a two-band golden extract of both archive releases.
+
+The author-eras release, whose characterization booked the variance split, is retired with stage P; its extract stays
+in the golden, and only the no-split release r2 is compared.
 
 The golden (tests/golden/records/archive_layout_18_33.json.gz) holds, for
 bands 18 and 33, the detector's handoff inputs and the rows the releases
@@ -205,12 +208,12 @@ def test_the_command_refuses_an_existing_directory_and_a_wrong_record(
 
     with pytest.raises(SystemExit):
         main(["records", "archive-layout", "--release",
-              "archive_author_eras_2026_09_23", "--characterization",
+              "archive_no_split_2026_09_24_r2", "--characterization",
               str(tmp_path), "--tolerances", str(tmp_path), "--project",
               str(PROJECT), "--out", str(tmp_path)])
     golden = ROOT / "tests" / "golden" / "handoff" / "archive"
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit):   # the author-eras layout (booked variance split) is retired
         main(["records", "archive-layout", "--release",
               "archive_author_eras_2026_09_23", "--characterization",
               str(golden), "--tolerances", str(tmp_path / "t.csv"),
-              "--project", str(PROJECT), "--out", str(tmp_path / "new")])
+              "--project", str(PROJECT), "--out", str(tmp_path / "new2")])

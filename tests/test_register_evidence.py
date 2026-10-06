@@ -14,7 +14,7 @@ EVIDENCE = {
     "src/rfisher/forecast.py": ["src/rfisher/forecast.py@e041d5e"],
     "src/rfisher/residual.py": ["src/rfisher/residual.py@7b0067b"],
     "src/rfisher/thresholds.py": ["src/rfisher/thresholds.py@7b0067b", "src/rfisher/verdict/interval.py"],
-    "docs/contamination-residuals.md": ["docs/tolerance.md"],
+    "docs/contamination-residuals.md": ["docs/contamination-residuals.md@f56916a"],
 }
 VALUES = {"selection.tie_break": ["systematic_residual", "masked_fraction", "candidate_order"],
           "selector.fine_rank": 63}

@@ -28,9 +28,9 @@ test = ["jsonschema", "pytest", "ruff"]
 rfisher = "rfisher.cli:main"
 
 [project.urls]
-Documentation = "https://github.com/WVURAIL/RFIsher/tree/main/docs"
-Issues = "https://github.com/WVURAIL/RFIsher/issues"
-Repository = "https://github.com/WVURAIL/RFIsher"
+Documentation = "https://github.com/djgormley/RFIsher/tree/main/docs"
+Issues = "https://github.com/djgormley/RFIsher/issues"
+Repository = "https://github.com/djgormley/RFIsher"
 
 # The packages are listed (tests/test_packaging.py holds the list equal to the
 # packages under src/): the project directory projects/chime_bao ships inside
@@ -74,3 +74,6 @@ ignore = ["N802", "N803", "N806", "N816", "N818"]
 # unused locals, placeholder-free f-strings and "U" for the units).
 "src/rfisher/records/chime_atsc_2026/*.py" = ["F541", "F841", "N812"]
 "tests/records/*.py" = ["N812"]
+# Byte copies of the threshold-calibration bridge's producers, kept as they ran
+# (their sha256 is recorded in the package's outputs).
+"scripts/threshold_calibration_bridge/*.py" = ["F401"]

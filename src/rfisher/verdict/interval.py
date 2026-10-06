@@ -7,12 +7,12 @@ tolerance r_tol:
   (equality is feasible when the selector policy says so);
 - eta_sci is the loosest feasible threshold; eta_eval the tightest evaluable
   one (from the handoff's summary);
-- the lower bound L is max(eta_Pfa, eta_eval) where the false-alarm limit
-  eta_Pfa is available, and eta_eval otherwise;
-- the deployable set D holds the feasible candidates at or above L. Its
-  bounds are reported as [eta_Pfa, eta_sci]; the low end is left empty when
-  eta_Pfa is unavailable, because the edge of the candidate grid is not a
-  false-alarm bound.
+- the deployable set D holds the feasible candidates at or above eta_eval,
+  the one lower bound. No false-alarm rate is required for admission: the
+  detector's false-alarm limit eta_Pfa, where it is available, is reported
+  beside the set as a diagnostic and bounds nothing. The set's low end
+  (``interval_low``) is a false-alarm bound only, so it is left empty, and
+  its high end is eta_sci.
 
 The selector inside D takes the least cost C = (1 + r_var) / (1 - f), keeps
 the members within the plateau ratio of it, and breaks ties by residual,
@@ -42,7 +42,6 @@ TIE_FIELDS = {"systematic_residual": "r_sys", "masked_fraction":
 AVAILABLE = "available"
 
 STATUS_NONEMPTY = "nonempty"
-STATUS_PFA_ABOVE = "empty: eta_Pfa > eta_sci"
 STATUS_EVAL_ABOVE = "empty: eta_eval > eta_sci"
 STATUS_NO_CANDIDATE = "empty: no candidate meets r_tol"
 STATUS_NO_EVALUABLE = "empty: no evaluable candidate"
@@ -240,14 +239,14 @@ def interval(candidates: Sequence[Point], summary: Mapping, *,
     ``summary`` is the family's ``oc_summary`` row. On a thinned surface the
     set is reported incomplete when the family's least-residual candidate is
     feasible: candidates that were not written could then belong to it.
+    eta_Pfa is read and reported, never used as a bound.
     """
     eta_eval = float(summary["eta_eval"])
     eta_pfa = float(summary["eta_pfa"])
     status_pfa = str(summary["eta_pfa_status"] or "")
     has_pfa = status_pfa == AVAILABLE and math.isfinite(eta_pfa)
-    lower = max(eta_pfa, eta_eval) if has_pfa else eta_eval
-    source = ("pfa" if has_pfa and eta_pfa >= eta_eval else
-              "evaluability" if math.isfinite(eta_eval) else "none")
+    lower = eta_eval
+    source = "evaluability" if math.isfinite(eta_eval) else "none"
     ok = [p for p in candidates if p.feasible]
     eta_sci = max((p.eta for p in ok), default=math.nan)
     members = tuple(p for p in ok if not (math.isfinite(lower)
@@ -258,7 +257,7 @@ def interval(candidates: Sequence[Point], summary: Mapping, *,
     elif not ok:
         status = STATUS_NO_CANDIDATE
     elif not members:
-        status = STATUS_PFA_ABOVE if source == "pfa" else STATUS_EVAL_ABOVE
+        status = STATUS_EVAL_ABOVE
     else:
         status = STATUS_NONEMPTY
     if thinned and least is not None and least.feasible:
@@ -275,6 +274,6 @@ def interval(candidates: Sequence[Point], summary: Mapping, *,
         eta_pfa=eta_pfa if has_pfa else math.nan,
         eta_pfa_status=status_pfa, eta_sci=eta_sci, lower_bound=lower,
         lower_bound_source=source,
-        interval_low=eta_pfa if has_pfa else math.nan, interval_high=eta_sci,
+        interval_low=math.nan, interval_high=eta_sci,
         status=status, feasible_count=len(ok), contiguous=contiguous,
         members=members, least=least)

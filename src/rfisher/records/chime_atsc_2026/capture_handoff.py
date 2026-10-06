@@ -19,7 +19,8 @@ archive ledger. The records here read one directory instead, in the layout
 - ``cohort24.json``: the channel 24 lane's per-event tables (2020 cohort);
 - ``phasor/raw_epochs.json``: the reference-free class means of the reduced
   dumps the phase limit reads;
-- ``archive_shares.json``: the archive ledger's booked shares per channel.
+- ``archive_shares.json``: the archive ledger's booked shares per channel (checked with the handoff; no reading uses
+  them since post-processing is not modelled).
 
 The record's own tables (the table of record and its v7 input), the BAO-basis coherence times (``gain_bao.csv``) and
 the channel ruling's board are not measurements of the capture: the records take them as explicit inputs
@@ -379,8 +380,3 @@ def raw_epochs(h: CaptureHandoff) -> tuple[list, dict]:
         raw[label] = {int(f): dict(ch=v["ch"], raw={names[k]: [scalar(x) for x in m] for k, m in v["raw"].items()}, t0=float(v["t0"]))
                       for f, v in d["raw"][label]}
     return list(d["epochs"]), raw
-
-
-def archive_shares(h: CaptureHandoff) -> list[tuple]:
-    """[(ledger file name, intraday share, fast share, ground-filter dB)] in the ledger's file order."""
-    return [tuple(x) for x in h.json("archive_shares.json")["records"]]

@@ -3,7 +3,7 @@
 RFIsher is the science side of a detector/science split for radio-frequency
 interference in 21 cm intensity mapping: it decides what a detector's masking
 is worth to a cosmological measurement. The detector side,
-[pilot-proxy](https://github.com/WVURAIL/pilot-proxy), characterizes each
+[pilot-proxy](https://github.com/djgormley/pilot-proxy), characterizes each
 band (every candidate threshold with its masked fraction and kept residual);
 RFIsher turns a Fisher forecast into a tolerance on that residual and prices
 the detector's surface against it, band by band: keep, excise or
@@ -98,9 +98,11 @@ surface against the band's tolerance and nothing else:
 
 - `rfisher.verdict.interval` gives each family its science threshold eta_sci
   (the largest eta whose kept residual meets r_tol), the deployable set between
-  max(eta_Pfa, eta_eval) and eta_sci, and the selection inside it: the least
-  cost `(1 + r_var) / (1 - f)` within 2% of the minimum, ties broken by kept
-  residual, masked fraction and candidate order;
+  eta_eval and eta_sci, and the selection inside it: the least cost
+  `(1 + r_var) / (1 - f)` within 2% of the minimum, ties broken by kept
+  residual, masked fraction and candidate order. No false-alarm rate is
+  required for admission: eta_Pfa is reported beside the set and bounds
+  nothing;
 - `rfisher.verdict.screening` applies the screen's precedence (tolerance
   refused, detector refused, keep only with a certified eta_Pfa, excise only
   when every family's deployable set is empty, otherwise undetermined).
@@ -177,7 +179,7 @@ the full inputs, results, and caveats.
 ## Install and verify
 
 ```bash
-git clone https://github.com/WVURAIL/RFIsher
+git clone https://github.com/djgormley/RFIsher
 cd RFIsher
 python -m pip install -e ".[test]"
 python -m pytest tests/ -q
@@ -210,9 +212,9 @@ validation. After installing the pinned checkout, run
 
 ## Project boundary
 
-[pilot-proxy](https://github.com/WVURAIL/pilot-proxy) owns detector kernels,
+[pilot-proxy](https://github.com/djgormley/pilot-proxy) owns detector kernels,
 survey-product generation, and the underlying masking measurements.
-[RadioFisher](https://github.com/WVURAIL/RadioFisher) supplies the supported
+[RadioFisher](https://github.com/djgormley/RadioFisher) supplies the supported
 Fisher backend: the integrand and the instrument-agnostic hooks that cut or
 weight it, in the backend's own units. RFIsher validates those inputs, maps
 them to masking and contamination-residual scenarios, supplies every

@@ -138,10 +138,8 @@ def _union_row(key, tol, families: Sequence[screening.Readings],
                 return interval.STATUS_NONEMPTY
             if statuses == {interval.STATUS_NO_EVALUABLE}:
                 return interval.STATUS_NO_EVALUABLE
-            for above in (interval.STATUS_PFA_ABOVE,
-                          interval.STATUS_EVAL_ABOVE):
-                if above in statuses:
-                    return above
+            if interval.STATUS_EVAL_ABOVE in statuses:
+                return interval.STATUS_EVAL_ABOVE
             return interval.STATUS_NO_CANDIDATE
         members = [p for part in keep for p in part.members]
         chosen = interval.select(members, pol)

@@ -1,6 +1,6 @@
 # Adapting the science side
 
-The detector side ([pilot-proxy](https://github.com/WVURAIL/pilot-proxy),
+The detector side ([pilot-proxy](https://github.com/djgormley/pilot-proxy),
 `docs/ADAPTING.md` there) describes four tiers of adaptation. Tiers (a) to (c)
 (a new telescope, another emitter with a narrowband marker, an emitter with no
 marker) change only that repository: as long as its handoff validates against

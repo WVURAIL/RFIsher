@@ -68,15 +68,19 @@ current occupancy statement. The full detector and product distinction is in
 ## System-temperature input
 
 The absolute CHIME calibration file is not distributed in this repository.
-It contains 400--800 MHz measurements from two 2019 calibrator transits, with
-a band median of 54.6 K and a DTV-band median of 56.5 K. The forecast uses
-`Tsys_tot = 55 K`, which lies inside the measured 10th--90th percentile.
+It holds 400--800 MHz system temperatures of four inputs (chan_id 689, 945,
+1203 and 1459: B177Y, B177X, C179Y and C179X), the B pair from 2019-05-31 and
+the C pair from 2019-06-14 UTC, each in two sky windows near RA 212.5 and
+307.5 deg. Over the samples its flag marks usable, the median is 54.5 K (50.1 K
+dim, 58.4 K bright) and 55.9 K in 470--608 MHz, with a 10th--90th percentile
+range of 46.7--73.8 K. The forecast uses `Tsys_tot = 55 K`, inside that range.
 
 Because the released comparisons are expressed as ratios, the missing
 absolute calibration file changes no verdict. It is needed for absolute shelf
 and floor conversion and for an independent system-temperature check.
 The validation script (`scripts/tsys_calibration.py@f56916a`) is kept in the
-history.
+history. It ignores the flag (its medians, 54.6 K and 56.5 K, include unusable
+samples) and mislabels an axis at its line 46.
 
 ## Masking-only results
 
@@ -122,8 +126,8 @@ The masking-only tables do not decide whether a detector threshold is useful.
 For the measured channel-35 scalar chain, adding the contamination residual
 moves the legacy rate-table survey penalty from 1.032x to 1.133x and the
 `z = 1.40--1.50` penalty from 1.347x to 2.14x. The full budget, interval, and
-coherence assumptions are in
-[tolerance.md](tolerance.md).
+coherence assumptions are in the history copy
+`docs/contamination-residuals.md@f56916a` (lines 133-220).
 
 The model-only bias release evaluates four unit-normalized analytic residual
 families over every DTV-overlapping redshift bin. It is a sensitivity envelope,

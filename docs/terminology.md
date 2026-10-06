@@ -12,7 +12,7 @@ frozen tokens; the rows below appear there with the same code names.
 | f | `masked_fraction` |
 | C = (1 + r_var)/(1 − f) | `rfisher.verdict.interval.cost` |
 | r_sys, r_sys at G = 1 | `r_sys`, `r_sys_incoherent` |
-| η_Pfa (the false-alarm limit) | `eta_pfa` |
+| η_Pfa (the false-alarm limit, reported only) | `eta_pfa` |
 | η_eval | `eta_eval` |
 | r_tol | `r_tol` (`tolerance_basis` says which basis) |
 | η_sci | `eta_sci` |
@@ -36,8 +36,8 @@ The science side's own terms:
 - **Post-processing** is not modelled: no delay filter, ground filter or other
   downstream suppression multiplies a residual. "Credit" is not a term of the
   model; it survives in frozen tokens and in the text of the 2026 records.
-- **The deployable set** is the feasible candidates at or above
-  `max(eta_pfa, eta_eval)`; `lower_bound_source` says which bound applied.
+- **The deployable set** is the feasible candidates at or above `eta_eval`;
+  the false-alarm limit `eta_pfa` is a reported diagnostic, not a bound.
 
 ## Frozen tokens of the science side
 

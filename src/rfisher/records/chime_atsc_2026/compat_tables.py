@@ -1,4 +1,4 @@
-"""The frozen layouts of the two 2026 archive releases, written from the handoff.
+"""The frozen layout of the 2026 no-split archive release, written from the handoff.
 
 The archive releases of record wrote one tree in which the detector's
 characterization and the science pricing were mixed: ``tables/{selection,
@@ -20,7 +20,9 @@ with the tokens and column orders the releases have:
   selection, operating and screening sections.
 
 Post-processing is not modelled, and the growth rate sets no tolerance
-(stage P, 2026-10-06). The releases' delay-filter scenarios (``worlds.csv``,
+(stage P, 2026-10-06). The author-eras release
+(``archive_author_eras_2026_09_23``) priced a characterization with the booked
+variance split and is no longer written; its frozen release keeps it. The releases' delay-filter scenarios (``worlds.csv``,
 the ledger's ``worlds`` section and ``run.json``'s ``worlds_contract``) and
 their f sigma_8 tolerance columns (``r_tol_fs8`` and ``fs8_status`` of
 ``channel_tolerances.csv`` and of the ledger's tolerance section, the growth
@@ -60,13 +62,14 @@ from rfisher.verdict import handoff, interval
 
 from . import ladder_pricing
 
-RELEASES = ("archive_author_eras_2026_09_23", "archive_no_split_2026_09_24_r2")
+# The author-eras layout (archive_author_eras_2026_09_23) priced a
+# characterization with the booked variance split, which post-processing
+# readings needed; it is no longer written (stage P), and its frozen release
+# keeps it.
+RELEASES = ("archive_no_split_2026_09_24_r2",)
 # The characterization each release needs: (record, variance split, tie rule)
 # of the handoff manifest. The no-split release is the detector's default.
 RELEASE_CHOICES = {
-    "archive_author_eras_2026_09_23": {
-        ("archive_author_eras_2026_09_23", "booked_when_tau_usable",
-         "first_minimum")},
     "archive_no_split_2026_09_24_r2": {
         ("archive_no_split_2026_09_24_r2", "off", "selector_order"),
         (None, "off", "selector_order")},
@@ -77,7 +80,7 @@ FROZEN_POLICY = ("data", "policy_2026_archive")
 
 
 def frozen_policy():
-    """The selector policy and science register of the two archive releases."""
+    """The selector policy and science register of the archive releases."""
     return _policy.load(files(__package__).joinpath(*FROZEN_POLICY))
 PRODUCER_REPOSITORY = "WVURAIL/RFIsher"
 PRODUCER_MODULE = "rfisher.records.chime_atsc_2026.compat_tables"
@@ -475,15 +478,13 @@ def _tied(a: float, b: float) -> bool:
     return math.isclose(float(a), float(b), rel_tol=TIE_REL_TOL, abs_tol=0.0)
 
 
-def _rank_least(indices, rows, release: str):
-    """The rank's least-residual index under the release's own rule: the first
-    exact minimum (author eras, e041d5e), or residuals within 1e-9 tied and
-    broken by masked fraction, then multiplier (no split r2, f72bf34)."""
+def _rank_least(indices, rows):
+    """The rank's least-residual index under the release's rule: residuals
+    within 1e-9 tied and broken by masked fraction, then multiplier (no split
+    r2, f72bf34)."""
     finite = [i for i in indices if math.isfinite(rows[i]["r_sys"])]
     if not finite:
         return None
-    if release == "archive_author_eras_2026_09_23":
-        return min(finite, key=lambda i: rows[i]["r_sys"])
     low = min(rows[i]["r_sys"] for i in finite)
     return min((i for i in finite if _tied(rows[i]["r_sys"], low)),
                key=lambda i: (rows[i]["masked_fraction"], rows[i]["eta_q16"]))
@@ -517,7 +518,7 @@ def frozen_thinning(inp: Inputs, band: str, points: Sequence) -> list:
             spaced = {int(round(i * (n - 1) / (MAX_POINTS_PER_RHO - 1)))
                       for i in range(MAX_POINTS_PER_RHO)}
         rows = [q.row for q in members]
-        least = _rank_least(range(len(rows)), rows, inp.release)
+        least = _rank_least(range(len(rows)), rows)
         out += [q for k, q in enumerate(members)
                 if index[k] in spaced or k == least]
     return out
