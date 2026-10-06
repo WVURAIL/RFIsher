@@ -1,0 +1,1714 @@
+{
+  "schema": "conditional_calibration_scenario_v1",
+  "model": "independent_averaging_covariance",
+  "shape": "noise_shaped",
+  "budget_calendar_years": 10,
+  "declared_constant_coefficient": 0.0,
+  "declared_score_coefficient": 0.0,
+  "coefficients_estimated_from_data": false,
+  "physical_response_qualified": false,
+  "threshold_assignments_changed": false,
+  "minimum_observing_time_established": false,
+  "scope": "A declared scenario on the saved bounded grid. Budget feasibility is the union of whole-domain passes at sampled durations at or below the budget; earliest sampled success is not the continuous minimum time.",
+  "provenance": {
+    "regions_sha256": "a8d3103c85556dd2b5adcda6b3683c8e410b7ca7138d918d6a7660bf8232b26b",
+    "evaluator_sha256": "eee305b2c81f5cec7afab7f1f8e6023ed95a2085ebbabd31e21732e8043acd20",
+    "score_manifest_sha256": "ff5dad033491206f774a3b67262bcb809aa85cfb06425f1341e4c0a25f3e8e20",
+    "current_threshold_source_sha256": {
+      "ch14.json": "44c1f34f7d864ec03a932279effdf68748f8478fd9d7a7d0c5aa1b7c4d0012da",
+      "ch15.json": "6f59f0be69df09d3fda00f6f5d5baa294a2689350672f4c51387c2dd3588d288",
+      "ch16.json": "0c844197bce9d61ac08263f6e03eaaf86fbd1f3bdd36221f54b727a306e90c8d",
+      "ch17.json": "fdefdb7c2e6c21b77192fa2b2727dacafc6db98a915ecfe384d7a1da8a109a05",
+      "ch18.json": "69b9652b0824c7191ad7b20e5672bcb02b34a4b3873adfa2e59945b28233eb39",
+      "ch19.json": "902497cc9c2162d51314d1b968eb416d8b63f2371b3f98df9b1d82a832c0dd95",
+      "ch20.json": "bf2267e4f3ad7cbdd49c3d94a90a4db3b9de150806fa7c3246c3f4a76f042517",
+      "ch21.json": "53b64cc68b3fe62616ef20565e18c0aee91bf7bcfa6e48f3b1daa75513f9e8e2",
+      "ch22.json": "149f597f364fc8021435f55d1dcfabccf6ba58ee97560dc939c69a0505933293",
+      "ch23.json": "87cfdf2e56a3c4c4b0982f1e192689fc05451a350c82f4c3f4c90d17bb94a0bc",
+      "ch24.json": "8801c2aae3879d0dfcb2440fb4815979787739e0ef8af7a96ba26bae6b79beab",
+      "ch25.json": "811a01c89f8cbd87bfa6a6de8238dcb1d5008570ad683868168a2e7e5c8236c9",
+      "ch26.json": "6aa3fd2b8d1d09e3ed64066f4f8e06d96b5f000a89fcc7308b8cde7fbababdb5",
+      "ch27.json": "762d19eb9495af7bf311a7d7f4ee98980d97a682c547ca2515fb90ca03b7faac",
+      "ch28.json": "1f064053954aa37665a170b3e1c4b23c50f100896c000a12d932d1e1d91a4026",
+      "ch29.json": "bd833dc98a29c123bd671f358e2b436de7194f67f2b5180ee024fb15af6a7d3b",
+      "ch30.json": "141c1a50e2757dfd4db4cff0ac682d1232d45a4e6e776bcc458ac0a7d6c0ec3b",
+      "ch31.json": "665129baad312c599c73c862d85b9ca09b914d8f1f778e626c02dad610dd9b1c",
+      "ch32.json": "f6e1645c98ab5697c5e9a384995d5fa88173bb4b2465b3282981efacb61f439f",
+      "ch33.json": "e2e3d9494a933a1efe3c8334bd43e89ef6f17126b062bed4da7aec2d3e789478",
+      "ch34.json": "0c380c92c923e40ac5103616923fcf65231c9be357c87b043e208548f0ef20e9",
+      "ch35.json": "c8ca4b6d927f6cdc57ee2546d80bf12f5d97ccb1835e0a6a8f5d7c95257de5e2",
+      "ch36.json": "3fa79893b379a1dfe2e4a9135403aa58a9970cb622c8e20d82456232795d9fcc",
+      "ch37.json": "6bac83ae4d301cb136837e7dd33bdf4a1a3f9daa2513540aacb560278241e29d"
+    }
+  },
+  "rows": [
+    {
+      "channel": 14,
+      "candidate_id": "q16_767451",
+      "threshold": {
+        "eta_q16": "767451",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "45981936",
+        "float": 0.9140318711243476,
+        "numerator": "42028955"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin11:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.010167829761768192,
+          "fixed_reference_sigma": 0.012284769115368254,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8276777256683018,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin11:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010902641919700485,
+          "fixed_reference_sigma": 0.012808549856678437,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8512003342841967,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8512003342841967
+    },
+    {
+      "channel": 15,
+      "candidate_id": "q16_1632434",
+      "threshold": {
+        "eta_q16": "1632434",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "8665272",
+        "float": 0.9050819177978487,
+        "numerator": "7842781"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin11:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.010223519217904101,
+          "fixed_reference_sigma": 0.012284769115368254,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8322109371281934,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin11:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010953433286297946,
+          "fixed_reference_sigma": 0.012808549856678437,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8551657610628556,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8551657610628556
+    },
+    {
+      "channel": 16,
+      "candidate_id": "q16_267180",
+      "threshold": {
+        "eta_q16": "267180",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "246818880",
+        "float": 0.9165853803404342,
+        "numerator": "226230577"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin11:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.01015211857588369,
+          "fixed_reference_sigma": 0.012284769115368254,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8263988098224315,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin11:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010888306241006757,
+          "fixed_reference_sigma": 0.012808549856678437,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8500811069825788,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8500811069825788
+    },
+    {
+      "channel": 17,
+      "candidate_id": "q16_1475571319",
+      "threshold": {
+        "eta_q16": "1475571319",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "1",
+        "float": 1.0,
+        "numerator": "1"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin10:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.010494193100816167,
+          "fixed_reference_sigma": 0.013388683047386583,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.7838107051809394,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin10:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011794735337047453,
+          "fixed_reference_sigma": 0.014401091197948421,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8190167796956754,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin11:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.009678369956359591,
+          "fixed_reference_sigma": 0.012284769115368254,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.7878349088589662,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin11:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010454677637350316,
+          "fixed_reference_sigma": 0.012808549856678437,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8162264857718611,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8190167796956754
+    },
+    {
+      "channel": 18,
+      "candidate_id": "q16_17315440",
+      "threshold": {
+        "eta_q16": "17315440",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "20163528",
+        "float": 0.9860089464502442,
+        "numerator": "19881419"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin10:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.010576547327534509,
+          "fixed_reference_sigma": 0.013388683047386583,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.7899617378423943,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin10:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011870537066348733,
+          "fixed_reference_sigma": 0.014401091197948421,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8242803898110033,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8242803898110033
+    },
+    {
+      "channel": 19,
+      "candidate_id": "q16_131526",
+      "threshold": {
+        "eta_q16": "131526",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "5932080",
+        "float": 0.8905441261749673,
+        "numerator": "5282779"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin10:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.011200114731303253,
+          "fixed_reference_sigma": 0.013388683047386583,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8365359529135669,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin10:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.012441220188243514,
+          "fixed_reference_sigma": 0.014401091197948421,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8639081592661457,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8639081592661457
+    },
+    {
+      "channel": 20,
+      "candidate_id": "q16_6644482",
+      "threshold": {
+        "eta_q16": "6644482",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "1160775",
+        "float": 0.984711938144774,
+        "numerator": "1143029"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin9:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.009464545747095071,
+          "fixed_reference_sigma": 0.011823142729918662,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8005101488917052,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin9:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011314682883503308,
+          "fixed_reference_sigma": 0.013648907544966138,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8289808430621455,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin10:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.010584288224241236,
+          "fixed_reference_sigma": 0.013388683047386583,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.7905399049914208,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin10:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011877656698804013,
+          "fixed_reference_sigma": 0.014401091197948421,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8247747712684511,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8289808430621455
+    },
+    {
+      "channel": 21,
+      "candidate_id": "q16_96190",
+      "threshold": {
+        "eta_q16": "96190",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "48886992",
+        "float": 0.9242496449771342,
+        "numerator": "45183785"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin9:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.009785791751122201,
+          "fixed_reference_sigma": 0.011823142729918662,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.827681097544318,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin9:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011639239203734122,
+          "fixed_reference_sigma": 0.013648907544966138,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8527597659657968,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8527597659657968
+    },
+    {
+      "channel": 22,
+      "candidate_id": "q16_25154215",
+      "threshold": {
+        "eta_q16": "25154215",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "75416",
+        "float": 0.999032035642304,
+        "numerator": "75343"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin9:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.009393603851174853,
+          "fixed_reference_sigma": 0.011823142729918662,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.7945098918077154,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin9:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.01124272009445392,
+          "fixed_reference_sigma": 0.013648907544966138,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8237084218949343,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8237084218949343
+    },
+    {
+      "channel": 23,
+      "candidate_id": "q16_89630",
+      "threshold": {
+        "eta_q16": "89630",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "58565430",
+        "float": 0.9040071420973089,
+        "numerator": "52943567"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin8:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.009259422894663562,
+          "fixed_reference_sigma": 0.010984907050371915,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8429222798339533,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin8:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011286788912310296,
+          "fixed_reference_sigma": 0.013051880552257422,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8647634237166045,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin9:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.00990197079106259,
+          "fixed_reference_sigma": 0.011823142729918662,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8375075068666376,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin9:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.01175609684008946,
+          "fixed_reference_sigma": 0.013648907544966138,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8613214501863362,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8647634237166045
+    },
+    {
+      "channel": 24,
+      "candidate_id": "q16_371137164",
+      "threshold": {
+        "eta_q16": "371137164",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "1",
+        "float": 1.0,
+        "numerator": "1"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin8:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.008793428469619297,
+          "fixed_reference_sigma": 0.010984907050371915,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8005009445502389,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin8:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.0108019537783633,
+          "fixed_reference_sigma": 0.013051880552257422,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8276166591560647,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8276166591560647
+    },
+    {
+      "channel": 25,
+      "candidate_id": "q16_105644",
+      "threshold": {
+        "eta_q16": "105644",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "57512070",
+        "float": 0.8999751008788243,
+        "numerator": "51759431"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin8:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.009280892288364201,
+          "fixed_reference_sigma": 0.010984907050371915,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.844876724564545,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin8:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011309049230809548,
+          "fixed_reference_sigma": 0.013051880552257422,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8664689494766762,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8664689494766762
+    },
+    {
+      "channel": 26,
+      "candidate_id": "q16_127624",
+      "threshold": {
+        "eta_q16": "127624",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "158358200",
+        "float": 0.9067276655076908,
+        "numerator": "143587761"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin7:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.008600422961093942,
+          "fixed_reference_sigma": 0.010160503154165607,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8464564038413726,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin7:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010912999758040323,
+          "fixed_reference_sigma": 0.012583177382544148,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.867269007363692,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin8:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.009245031588537334,
+          "fixed_reference_sigma": 0.010984907050371915,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.841612181709296,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin8:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.011271863673448252,
+          "fixed_reference_sigma": 0.013051880552257422,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8636198920391359,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.867269007363692
+    },
+    {
+      "channel": 27,
+      "candidate_id": "q16_3941357",
+      "threshold": {
+        "eta_q16": "3941357",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "160720560",
+        "float": 0.976526792838452,
+        "numerator": "156947933"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin7:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.008288285942420448,
+          "fixed_reference_sigma": 0.010160503154165607,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.815735777713175,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin7:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010575160885901729,
+          "fixed_reference_sigma": 0.012583177382544148,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8404205523298102,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8404205523298102
+    },
+    {
+      "channel": 28,
+      "candidate_id": "q16_230957640",
+      "threshold": {
+        "eta_q16": "230957640",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "31480",
+        "float": 0.9999682337992376,
+        "numerator": "31479"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin7:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.008191879051259565,
+          "fixed_reference_sigma": 0.010160503154165607,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8062473803672858,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin7:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.01047058572200493,
+          "fixed_reference_sigma": 0.012583177382544148,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8321098402800963,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8321098402800963
+    },
+    {
+      "channel": 29,
+      "candidate_id": "q16_92429",
+      "threshold": {
+        "eta_q16": "92429",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "40096980",
+        "float": 0.944020297788013,
+        "numerator": "37852363"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin7:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.008428730692109311,
+          "fixed_reference_sigma": 0.010160503154165607,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8295583953097536,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin7:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.0107273074137036,
+          "fixed_reference_sigma": 0.012583177382544148,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8525118169743772,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8525118169743772
+    },
+    {
+      "channel": 30,
+      "candidate_id": "q16_65191617",
+      "threshold": {
+        "eta_q16": "65191617",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "109296",
+        "float": 0.9996065729761382,
+        "numerator": "109253"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin6:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.007647093869406554,
+          "fixed_reference_sigma": 0.009495649052976054,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8053260842669686,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin6:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010084272602061068,
+          "fixed_reference_sigma": 0.012065384702368856,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8358019947827419,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin7:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.008193337002242949,
+          "fixed_reference_sigma": 0.010160503154165607,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8063908723736621,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin7:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010472168044533063,
+          "fixed_reference_sigma": 0.012583177382544148,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8322355893242389,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8358019947827419
+    },
+    {
+      "channel": 31,
+      "candidate_id": "q16_300272956986",
+      "threshold": {
+        "eta_q16": "300272956986",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "1",
+        "float": 1.0,
+        "numerator": "1"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin6:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.007645614502943682,
+          "fixed_reference_sigma": 0.009495649052976054,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8051702901285565,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin6:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010082655507142456,
+          "fixed_reference_sigma": 0.012065384702368856,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8356679671525831,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8356679671525831
+    },
+    {
+      "channel": 32,
+      "candidate_id": "q16_163097",
+      "threshold": {
+        "eta_q16": "163097",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "120914640",
+        "float": 0.9191305783981162,
+        "numerator": "111136343"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin6:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.00797281109870615,
+          "fixed_reference_sigma": 0.009495649052976054,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8396278184067231,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin6:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010439056738029114,
+          "fixed_reference_sigma": 0.012065384702368856,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8652071190054605,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8652071190054605
+    },
+    {
+      "channel": 33,
+      "candidate_id": "q16_321467",
+      "threshold": {
+        "eta_q16": "321467",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "138498360",
+        "float": 0.943757030769173,
+        "numerator": "130708801"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin6:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.007867986188173252,
+          "fixed_reference_sigma": 0.009495649052976054,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8285885613798382,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin6:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010325145758946544,
+          "fixed_reference_sigma": 0.012065384702368856,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8557659795894744,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8557659795894744
+    },
+    {
+      "channel": 34,
+      "candidate_id": "q16_1073681",
+      "threshold": {
+        "eta_q16": "1073681",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "39168360",
+        "float": 0.9715964365115108,
+        "numerator": "38055839"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin5:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.007236798732842557,
+          "fixed_reference_sigma": 0.008825734015277212,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8199656504847945,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin5:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.00978420852506016,
+          "fixed_reference_sigma": 0.011512446943644438,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8498808787528555,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin6:aperp",
+          "signed_bias": -0.0,
+          "sigma": 0.007755102238246414,
+          "fixed_reference_sigma": 0.009495649052976054,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8167005957129249,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin6:apar",
+          "signed_bias": 0.0,
+          "sigma": 0.010202194645088201,
+          "fixed_reference_sigma": 0.012065384702368856,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8455755781318066,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8498808787528555
+    },
+    {
+      "channel": 35,
+      "candidate_id": "q16_9485287290",
+      "threshold": {
+        "eta_q16": "9485287290",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "1",
+        "float": 1.0,
+        "numerator": "1"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin5:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.007137046046844318,
+          "fixed_reference_sigma": 0.008825734015277212,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8086631700536407,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin5:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.009673132328783567,
+          "fixed_reference_sigma": 0.011512446943644438,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8402325219074054,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8402325219074054
+    },
+    {
+      "channel": 36,
+      "candidate_id": "q16_8673784",
+      "threshold": {
+        "eta_q16": "8673784",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "111628440",
+        "float": 0.9846298756840103,
+        "numerator": "109912697"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin5:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.007190400421525592,
+          "fixed_reference_sigma": 0.008825734015277212,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8147084887306957,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin5:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.009732579933854688,
+          "fixed_reference_sigma": 0.011512446943644438,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8453962899023527,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8453962899023527
+    },
+    {
+      "channel": 37,
+      "candidate_id": "q16_75503",
+      "threshold": {
+        "eta_q16": "75503",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "evaluated_calendar_years": 10,
+      "retained_probability": {
+        "denominator": "469022400",
+        "float": 0.9869948578148933,
+        "numerator": "462922697"
+      },
+      "passes_at_evaluated_duration": true,
+      "parameters": [
+        {
+          "parameter": "bin5:aperp",
+          "signed_bias": 0.0,
+          "sigma": 0.0071820962637353086,
+          "fixed_reference_sigma": 0.008825734015277212,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8137675859371253,
+          "bias_passes": true,
+          "precision_passes": true
+        },
+        {
+          "parameter": "bin5:apar",
+          "signed_bias": -0.0,
+          "sigma": 0.009723332967084029,
+          "fixed_reference_sigma": 0.011512446943644438,
+          "absolute_bias_ratio": 0.0,
+          "sigma_ratio": 0.8445930751891015,
+          "bias_passes": true,
+          "precision_passes": true
+        }
+      ],
+      "status": "evaluated_conditional_scenario",
+      "effective_coefficient": 0.0,
+      "worst_absolute_bias_ratio": 0.0,
+      "worst_sigma_ratio": 0.8445930751891015
+    }
+  ],
+  "candidates": [
+    {
+      "channel": 14,
+      "candidate_id": "q16_767451",
+      "threshold": {
+        "eta_q16": "767451",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 15,
+      "candidate_id": "q16_1632434",
+      "threshold": {
+        "eta_q16": "1632434",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 16,
+      "candidate_id": "q16_267180",
+      "threshold": {
+        "eta_q16": "267180",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 17,
+      "candidate_id": "q16_1475571319",
+      "threshold": {
+        "eta_q16": "1475571319",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 18,
+      "candidate_id": "q16_17315440",
+      "threshold": {
+        "eta_q16": "17315440",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 19,
+      "candidate_id": "q16_131526",
+      "threshold": {
+        "eta_q16": "131526",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 20,
+      "candidate_id": "q16_6644482",
+      "threshold": {
+        "eta_q16": "6644482",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 21,
+      "candidate_id": "q16_96190",
+      "threshold": {
+        "eta_q16": "96190",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 22,
+      "candidate_id": "q16_25154215",
+      "threshold": {
+        "eta_q16": "25154215",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 23,
+      "candidate_id": "q16_89630",
+      "threshold": {
+        "eta_q16": "89630",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 24,
+      "candidate_id": "q16_371137164",
+      "threshold": {
+        "eta_q16": "371137164",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 25,
+      "candidate_id": "q16_105644",
+      "threshold": {
+        "eta_q16": "105644",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 26,
+      "candidate_id": "q16_127624",
+      "threshold": {
+        "eta_q16": "127624",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 27,
+      "candidate_id": "q16_3941357",
+      "threshold": {
+        "eta_q16": "3941357",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 28,
+      "candidate_id": "q16_230957640",
+      "threshold": {
+        "eta_q16": "230957640",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 29,
+      "candidate_id": "q16_92429",
+      "threshold": {
+        "eta_q16": "92429",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment",
+        "recorded_knee"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 30,
+      "candidate_id": "q16_65191617",
+      "threshold": {
+        "eta_q16": "65191617",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 31,
+      "candidate_id": "q16_300272956986",
+      "threshold": {
+        "eta_q16": "300272956986",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 32,
+      "candidate_id": "q16_163097",
+      "threshold": {
+        "eta_q16": "163097",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 33,
+      "candidate_id": "q16_321467",
+      "threshold": {
+        "eta_q16": "321467",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 34,
+      "candidate_id": "q16_1073681",
+      "threshold": {
+        "eta_q16": "1073681",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 35,
+      "candidate_id": "q16_9485287290",
+      "threshold": {
+        "eta_q16": "9485287290",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 36,
+      "candidate_id": "q16_8673784",
+      "threshold": {
+        "eta_q16": "8673784",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    },
+    {
+      "channel": 37,
+      "candidate_id": "q16_75503",
+      "threshold": {
+        "eta_q16": "75503",
+        "kind": "finite"
+      },
+      "roles": [
+        "current_assignment"
+      ],
+      "passes_by_budget_on_evaluated_grid": true,
+      "first_passing_evaluated_calendar_years": 10,
+      "passing_evaluated_calendar_years": [
+        10
+      ],
+      "tested_calendar_years": [
+        10
+      ],
+      "minimum_observing_time_established": false
+    }
+  ]
+}

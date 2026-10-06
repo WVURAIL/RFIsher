@@ -74,3 +74,6 @@ ignore = ["N802", "N803", "N806", "N816", "N818"]
 # unused locals, placeholder-free f-strings and "U" for the units).
 "src/rfisher/records/chime_atsc_2026/*.py" = ["F541", "F841", "N812"]
 "tests/records/*.py" = ["N812"]
+# Byte copies of the threshold-calibration bridge's producers, kept as they ran
+# (their sha256 is recorded in the package's outputs).
+"scripts/threshold_calibration_bridge/*.py" = ["F401"]
