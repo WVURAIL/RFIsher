@@ -12,14 +12,14 @@ and in `docs/HANDOFF.md` there.
 ```text
  pilot-proxy handoff (files only)          RFIsher
    oc_table.csv, oc_summary.csv,           forecast/radiofisher_bao  the science model: RadioFisher, chime2022,
-   manifest.json                              |                       Planck 2018, banks, delay-filter scenarios
+   manifest.json                              |                       Planck 2018, banks, the no-filter response bank
    (operating_characteristic_v1)              v  sigma(T*) and the bias per unit residual, per parameter and bin
           |                                tolerance/   r_tol = min over required parameters and bins of zeta sigma / |b|
           |                                   v
           |                               tolerances.csv  (the only science input of the verdict)
           v                                   v
        verdict/  handoff.py checks the files; interval.py eta_sci, the deployable set, the selector;
-                 screening.py keep / excise / undetermined; sensitivity.py the post-processing readings
+                 screening.py keep / excise / undetermined
    capture_operating_characteristic_v1 --> records/chime_atsc_2026/  the capture ruling of record and its copies
 ```
 
@@ -32,9 +32,9 @@ campaign, kept runnable and not part of the library's interface.
 | Package | Role |
 |---|---|
 | `rfisher.science_model` | the `ScienceModel` protocol a science model satisfies |
-| `rfisher.forecast.radiofisher_bao` | the one science model: the RadioFisher BAO adapter (`model.py`), its banks (`bank/`, the whole bank source manifest), the response (`response.py`), the delay-filter scenarios (`filter_scenarios.py`), the BAO-band coherence gain (`coherence_gain.py`) and the forecast API (`api.py`, `scenarios.py`, `significance.py`) |
+| `rfisher.forecast.radiofisher_bao` | the one science model: the RadioFisher BAO adapter (`model.py`), its banks (`bank/`, the whole bank source manifest), the response (`response.py`), the BAO-band coherence gain (`coherence_gain.py`) and the forecast API (`api.py`, `scenarios.py`, `significance.py`) |
 | `rfisher.tolerance` | the rule (`rule.py`), its reduction to bands (`bands.py`), the table and its provenance (`table.py`), and the frozen reference tolerances of the capture (`reference.py`) |
-| `rfisher.verdict` | the archive verdict: `handoff.py`, `interval.py`, `screening.py`, `sensitivity.py`, `archive.py` |
+| `rfisher.verdict` | the archive verdict: `handoff.py`, `interval.py`, `screening.py`, `archive.py` |
 | `rfisher.response` | the linear response of the masked visibility (`visibility.py`, byte-pinned) and its validation |
 | `rfisher.records.chime_atsc_2026` | the capture ruling of record, its copies, the capture release r5.2, the cadence report's table of record section, and the writers of the frozen archive layouts |
 | `rfisher.policy` | the side-checked loader of the two project registers |
@@ -92,16 +92,13 @@ no-ops when absent, so the unmodified backend result remains the clean
 forecast. The `P_res` capability adds the unit-residual response row of the
 bias-response banks (see above).
 
-The delay filter has no hook. It enters the forecast only through the
-`kfg_fac` response banks, which price the radial modes the filter removes
-(`kfg_fac = tau_cut * bandwidth`), and through the assumed suppression S
-listed beside every tolerance; both are named by
-`rfisher.forecast.radiofisher_bao.filter_scenarios.SCENARIOS`. RFIsher owns every
-*number*, *decision*, and *dataset* behind those scenarios: which field,
-band, time, and duty cycle define a configuration (the experiment registry,
-`rfisher.forecast.radiofisher_bao.bank.experiments`), what a published
-analysis's cut was, and the digitised filter response
-(`src/rfisher/data/chime2025_fig10_filter_residual.csv`).
+The delay filter has no hook and does not enter the forecast: no
+post-processing of the residual is modelled. The tolerance is priced on the
+no-filter response bank (`model.SCENARIO_BANKS`); the bank builder still
+accepts a mode cut (`--kfg-fac`), which prices lost radial modes and nothing
+else. RFIsher owns every *number*, *decision*, and *dataset* behind a
+configuration: which field, band, time, and duty cycle define it (the
+experiment registry, `rfisher.forecast.radiofisher_bao.bank.experiments`).
 
 For the scenarios represented by the current bank, the masking hooks reduce
 to the same effective-time and volume factors used by bank interpolation.

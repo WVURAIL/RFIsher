@@ -58,7 +58,7 @@ python -m pytest tests/ -q
 python scripts/verify_bank.py
 python scripts/restamp_bank_provenance.py --check
 rfisher tolerance build --project projects/chime_bao --out /tmp/tolerances
-cmp src/rfisher/data/tolerances/filter_scenarios_T1yr.csv /tmp/tolerances/filter_scenarios_T1yr.csv
+cmp src/rfisher/data/tolerances/tolerance_T1yr.csv /tmp/tolerances/tolerance_T1yr.csv
 ```
 
 `scripts/verify_bank.py` covers interpolation, physics checks, and agreement
@@ -171,28 +171,21 @@ The main driver regenerates the reference figures, CSV tables, and
 
 ## Response banks and the tolerance table
 
-The four filter-scenario response banks (`_Pres` banks) are packaged in
-`src/rfisher/data/response_banks/`. They were built with:
+The no-filter response bank (a `_Pres` bank) is packaged in
+`src/rfisher/data/response_banks/`. It was built with:
 
 ```bash
 rfisher build-bank --config chime2022 --cosmology planck2018 \
   --epsilon-fg 0 --p-res 1.0 --dense-knee \
   --out fisher_bank_chime2022_pres_dense.npz
-rfisher build-bank --config chime2022 --cosmology planck2018 \
-  --epsilon-fg 0 --p-res 1.0 --kfg-fac 22 --dense-knee \
-  --out fisher_bank_chime2022_pres_kfg22_dense.npz
-rfisher build-bank --config chime2022 --cosmology planck2018 \
-  --epsilon-fg 0 --p-res 1.0 --kfg-fac 44 --dense-knee \
-  --out fisher_bank_chime2022_pres_kfg44_dense.npz
-rfisher build-bank --config chime2022 --cosmology planck2018 \
-  --epsilon-fg 0 --p-res 1.0 --kfg-fac 80 --dense-knee \
-  --out fisher_bank_chime2022_pres_kfg80_dense.npz
 ```
 
-These are strict-v2 `bias_response` artifacts with the CHIME Overview
-profile, Planck-2018, and unit normalization `P_res = 1.0`. The per-bin
-tolerance table `src/rfisher/data/tolerances/filter_scenarios_T1yr.csv` is
-computed from them by
+It is a strict-v2 `bias_response` artifact with the CHIME Overview profile,
+Planck-2018, and unit normalization `P_res = 1.0`. The three delay-filter
+response banks (`--kfg-fac 22`, `44` and `80`) were removed with the
+post-processing scenarios (stage P, 2026-10-06); they stay at f56916a. The
+per-bin tolerance table `src/rfisher/data/tolerances/tolerance_T1yr.csv` is
+computed from it by
 
 ```bash
 rfisher tolerance build --project projects/chime_bao --out DIR
@@ -229,8 +222,8 @@ rfisher verdict archive --project projects/chime_bao --characterization CHAR \
 
 `verdict.csv` holds each family's deployable set and the band's union,
 `verdict_points.csv` the rule scenario's priced candidates, `screen.csv` the
-screen's step and outcome, `sensitivity.csv` the named sensitivities, and
-`manifest.json` the sha256 of every file read and the producer's identity.
+screen's step and outcome, and `manifest.json` the sha256 of every file read
+and the producer's identity. The tolerance file must hold rule rows only.
 
 This command reproduces the historical conditional screen. Its `keep`,
 `excise`, and `undetermined` categories and numerical columns retain that
@@ -292,17 +285,21 @@ rfisher records capture-ruling --rule record --input table_of_record_v7.csv \
   --handoff HANDOFF --out table_of_record.csv --ch33-rescan
 ```
 
-and the release of record r5.2, its credit readings included:
+and the release of record r5.2, without its post-processing readings:
 
 ```bash
 rfisher records capture-release --rule r5_2 --handoff HANDOFF \
-  --record-table table_of_record.csv --evidence DECISION_EVIDENCE \
+  --record-table table_of_record.csv \
   --releases RESULTS --duration-reference SURVEY_DURATION_RUN --rel REL --run RUN \
   --input-table table_of_record_v7.csv
 ```
 
-`--input-table` names the v7 table written above. The robustness copy and the
-phase limit read the table of record given as `--record-table`.
+`--input-table` names the v7 table written above. The cleaner-polarization
+margins and the phase limit read the table of record given as
+`--record-table`. The release's credit readings, post-processing sensitivity
+and least-corner promotion evidence are not written (see
+[releases.md](releases.md)); its `MANIFEST.json` lists them under
+`not_written`.
 
 The cadence report of record is the detector's report with the table of
 record's section appended:
@@ -325,10 +322,11 @@ handoff's manifest. They are byte copies that the sha pins and the release's
 equal manifest keys need; nothing opens a file at those paths.
 
 The rule files are `projects/chime_bao/capture_rules/` (`record`, `a18`, `r5`,
-`r5_1`, `r5_2`, and the sensitivities `g1`, `r3` and `r2`). Under numpy 2.3 or
-later every file equals the frozen release byte for byte. `records
-cohort-basis`, `robustness`, `phase-limit`, `duration` and `postprocessing` run
-the release's copies one at a time; each prints its usage on `--help`.
+`r5_1`, `r5_2`, and the sensitivity `g1`). Under numpy 2.3 or later every file
+written equals the frozen release byte for byte, except the five that lost
+their post-processing content. `records cohort-basis`, `robustness`,
+`phase-limit` and `duration` run the release's copies one at a time; each
+prints its usage on `--help`.
 
 ## Forecast-completion evidence
 

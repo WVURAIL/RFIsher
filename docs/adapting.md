@@ -12,8 +12,8 @@ this repository's.
 A science model is any object with the attributes and methods of the
 `ScienceModel` protocol (`src/rfisher/science_model.py`): its `parameters`
 (`required`, which set a tolerance, and `reported`, which are listed), its
-`scenarios` (each with a `role`, `rule` or `sensitivity`, and the suppression
-`suppression_db` it assumes), `target_years`, `zeta`, the stability test's
+`scenarios` (each with the `role` `rule`; a verdict reads one), `target_years`,
+`zeta`, the stability test's
 `year_grid` and `maximum_tolerance_ratio`, its `bins()` and
 `bins_for_band(low_mhz, high_mhz)`, the `response(scenario, bin, hours)` that
 gives each parameter's error and bias per unit residual, the `accept` test, and
@@ -41,7 +41,7 @@ and `rfisher.verdict` name no parameter, bin or scenario of a particular model.
 ## What stays project-specific
 
 RadioFisher, the `chime2022` experiment, the BAO parameter names and the
-filter-scenario names (`src/rfisher/forecast/radiofisher_bao/`,
+scenario name (`src/rfisher/forecast/radiofisher_bao/`,
 `projects/chime_bao/`); the capture ruling of the 2026 campaign and its
 amendments (`src/rfisher/records/chime_atsc_2026/`); the frozen tokens of
 [terminology.md](terminology.md).

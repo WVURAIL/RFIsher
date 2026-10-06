@@ -18,11 +18,25 @@ numpy 2.3 and later.
 | 2 | the shipped tolerance table `src/rfisher/data/tolerances/filter_scenarios_T1yr.csv` | `rfisher tolerance build`, byte for byte, with its provenance | f56916a | release environment |
 | 3 | the coarse ladder pricing of `archive_author_eras_2026-09-23` | `records/chime_atsc_2026/ladder_pricing.py` on pilot-proxy's coarse ladder | f56916a | release environment |
 | 7 | the table of record (9867551a) and its v7 input (fd718463) | `rfisher records table-of-record` and `records capture-ruling --rule record`, from the capture handoff, `gain_bao.csv` and the v7 table | this commit | release environment |
-| 8 | the channel 24 basis and the robustness copy of the era redate | `records cohort-basis`, `records robustness` | this commit | archive environment |
-| 21 | `capture_ruling_a19_2026-09-25_r5_2` (49 files), and the rulings of revisions a18 to r5.1 through their rule files (`projects/chime_bao/capture_rules/`) | `rfisher records capture-release --rule r5_2` with the capture handoff and the explicit record tables; the credit readings r3 and r2 | this commit | dissertation environment (numpy 2.3.5) |
+| 8 | the channel 24 basis of the era redate | `records cohort-basis` | this commit | archive environment |
+| 21 | `capture_ruling_a19_2026-09-25_r5_2` (49 files), and the rulings of revisions a18 to r5.1 through their rule files (`projects/chime_bao/capture_rules/`) | `rfisher records capture-release --rule r5_2` with the capture handoff and the explicit record tables, without the post-processing readings (below) | this commit | dissertation environment (numpy 2.3.5) |
 | 6 | the cadence report of record (`CADENCE_REPORT.md`) | pilot-proxy's `capture cadence-report`, then `rfisher records cadence-report` with the table of record | this commit | release environment |
 | 12c | the forecast-template figure of `forecast_completion_20260824_reconciliation` | `scripts/render_forecast_template_assets.py --preserve-release-metadata` | f56916a | release environment |
 | 13 | the visibility response endpoint validation | `rfisher response visibility` (`response/visibility.py`, 0d041bfd) | f56916a | baonoise environment (numpy 2.5.1) |
+
+Post-processing is not modelled, so the replays at this commit leave out the
+releases' post-processing content (stage P, 2026-10-06), which the frozen
+releases keep: the credit readings `credit_readings/r3` and `r2`,
+`postprocessing_sensitivity.csv`, `promotion_least_corners.csv` and
+`PROMOTION_EVIDENCE.md` of r5.2, the credit columns of its
+`robustness_a18.csv` and `ch24_per_bin_a19.csv`, channel 24's archive-share
+reading, the amendment 8 robustness record with both credits, revision 2's
+200 ns duration reading, and the archive layouts' delay-filter scenarios
+(`worlds.csv`) and f sigma_8 tolerance columns. Every other file of row 21
+is the release's byte for byte. The shipped tolerance table is now
+`src/rfisher/data/tolerances/tolerance_T1yr.csv`: the no-filter dilation rows
+of the archive table of row 2 (`filter_scenarios_T1yr.csv` at f56916a, csv
+sha256 3985dd59), value for value.
 
 The earlier capture revisions are frozen releases (`capture_ruling_a18_2026-09-24`
 and its revisions r2 to r4, `capture_ruling_a19_2026-09-25_r5` and `_r5_1`);
