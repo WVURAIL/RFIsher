@@ -66,7 +66,9 @@ def _characterization(golden, release, root):
         table += _surface(entry["rows"], entry["summary"])
         summary += entry["summary"]
         chain += entry["chain"]
-        tolerances += entry["tolerance"]
+        # the band tolerance layout no longer has a suppression column (stage P); the frozen rule row's is 0
+        assert all(float(t["suppression_db"]) == 0.0 for t in entry["tolerance"])
+        tolerances += [{k: v for k, v in t.items() if k != "suppression_db"} for t in entry["tolerance"]]
         record = entry["record"]
         path = root / "ledger" / "channels" / f"ch{int(band):02d}_fid{record['freq_id']}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,11 +101,13 @@ def test_the_layout_is_written_end_to_end(golden, tmp_path, release):
     def rows(path):
         with path.open(newline="", encoding="utf-8") as fh:
             return list(csv.DictReader(fh))
-    assert rows(out / "tables" / "channel_tolerances.csv") == [frozen[b]["frozen"]["channel_tolerances"][0]
-                                                               for b in golden["bands"]]
+    retired = ("r_tol_fs8", "fs8_status")   # stage P: the growth rate sets no tolerance
+    assert rows(out / "tables" / "channel_tolerances.csv") == [
+        {k: v for k, v in frozen[b]["frozen"]["channel_tolerances"][0].items() if k not in retired}
+        for b in golden["bands"]]
     chain = rows(out / "tables" / "chain.csv")
     assert [r["channel"] for r in chain] == golden["bands"]
-    assert all(r["delay_key"] and float(r["delay_suppression_db"]) >= 0 for r in chain)
+    assert all(r["delay_key"] == "none" and float(r["delay_suppression_db"]) == 0.0 for r in chain)
     listed = knees = 0
     for band in golden["bands"]:
         ch = out / "channels" / f"ch{int(band):02d}"
@@ -119,8 +123,10 @@ def test_the_layout_is_written_end_to_end(golden, tmp_path, release):
             assert [r["channel"] for r in rows(ch / "operating_point.csv")] == [band]
             knees += 1
         record = json.loads(next((out / "ledger" / "channels").glob(f"ch{int(band):02d}_*.json")).read_text())
-        assert record["sections"]["tolerance"] == frozen[band]["frozen"]["ledger"]["sections"]["tolerance"]
+        assert record["sections"]["tolerance"] == {
+            k: v for k, v in frozen[band]["frozen"]["ledger"]["sections"]["tolerance"].items() if k not in retired}
         assert set(record) == set(frozen[band]["frozen"]["ledger"])
+        assert "worlds" not in record["sections"]
     assert listed
     run = json.loads((out / "ledger" / "run.json").read_text())
     assert run["schema"] == ct.LEDGER_SCHEMA and len(run["channels"]) == 2
@@ -128,8 +134,10 @@ def test_the_layout_is_written_end_to_end(golden, tmp_path, release):
     assert run["provisional"]["occupancy_wall_masked_fraction"] == ct.OCCUPANCY_WALL_MASKED_FRACTION
     assert len(rows(out / "ledger" / "ledger.csv")) == 2
     assert len(rows(out / "coarse" / "ladder_pricing.csv")) == 2 * len(ladder_pricing.POLICIES)
-    for name in ("selection.csv", "screening.csv", "worlds.csv"):
+    for name in ("selection.csv", "screening.csv"):
         assert len(rows(out / "tables" / name)) == 2, name
+    assert not (out / "tables" / "worlds.csv").exists()
+    assert "worlds_contract" not in run
     assert len(rows(out / "tables" / "operating_points.csv")) == knees
 
 
