@@ -87,10 +87,10 @@ digest are not channel measurements and are not an executable physical claim.
     "hours_per_calendar_year": 8766,
     "budgets_calendar_years": [10, 100]
   },
-  "fallback_threshold": {"kind": "finite", "eta_q16": "8112306"},
+  "fallback_threshold": {"kind": "finite", "eta_q16": "6644482"},
   "candidates": [{
     "id": "reviewed-word",
-    "threshold": {"kind": "finite", "eta_q16": "8112306"},
+    "threshold": {"kind": "finite", "eta_q16": "6644482"},
     "science_bins": ["declared-sister-domain-bin-a", "declared-sister-domain-bin-b"],
     "excluded_pilot_bins": ["pilot-bearing-bin"],
     "response_provenance": {"evidence_ids": ["response"], "description": "Same-mask bias and statistical errors, including information loss"},

@@ -39,8 +39,8 @@ to the registers: every table cell must match.
 | `science.response_stability.time_fraction` | 0.1 | provisional | scripts/bias_tolerance.py@e041d5e |
 | `science.systematic_budget.primary_zeta` | 1.0 | provisional | https://doi.org/10.1111/j.1365-2966.2008.13880.x |
 | `science.systematic_budget.sensitivity_zeta` | [0.5, 0.3, 0.1] | locked | dissertation/chapters/ch09_tolerance.tex |
-| `transfer.systematic_gain` | 1.0 | conditional | docs/tolerance.md |
-| `transfer.variance_gain` | 1.0 | conditional | docs/tolerance.md |
+| `transfer.systematic_gain` | 1.0 | conditional | docs/contamination-residuals.md@f56916a |
+| `transfer.variance_gain` | 1.0 | conditional | docs/contamination-residuals.md@f56916a |
 
 ## Selector policy (`projects/chime_bao/selector_policy.json`)
 

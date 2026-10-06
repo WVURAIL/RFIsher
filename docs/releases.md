@@ -92,15 +92,17 @@ still needs equivalent behavior.
 The ordinary dissertation inputs `three_worlds.csv` (in the results tree) and
 `scripts/dissertation/data/bao_era_points.csv@f56916a` are also authenticated pre-v3
 scientific snapshots. Their embedded source hashes identify the code that
-produced their values; they are checked against those recorded identities, not
-against the current cleanup tree. Do not restamp them. Regenerate a new
+produced their values. No test of this repository checks them any more (the
+checker, `tests/test_dissertation_figures.py`, left with the old figure driver
+in 8a58343); the dissertation's `figure_src/data/frozen_export/v1` keeps its own
+copies with their provenance. Do not restamp them. Regenerate a new
 snapshot only when the archived products are available to run the full
 pipeline.
 
 <!-- BEGIN CALIBRATION_PROGRESS -->
 ## Calibration progress and producer evidence: September 9, 2026
 
-`calibration_progress_2026-09-09` separately preserved waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; [physical-calibration.md](physical-calibration.md) describes their scope.
+`calibration_progress_2026-09-09` separately preserved waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; `docs/physical-calibration.md@f56916a` describes their scope.
 
 The digital result of this release was **197/200 joint successes**, with a **96.1690%** one-sided 95% lower limit; its predeclared 95% evaluation target was **demonstrated**. Calibration's 99% content target is distinct. The prior 59/60 result and all earlier release bytes remained unchanged.
 
