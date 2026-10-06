@@ -38,8 +38,8 @@ MANIFEST = "manifest.json"
 COMPLETE_SCOPE = "supported_calibration_candidates"
 TOLERANCE_COLUMNS = ("band_id", "band_low_mhz", "band_high_mhz", "scenario",
                      "role", "r_tol", "binding_parameter", "binding_bin",
-                     "zeta", "target_time_years", "suppression_db",
-                     "tolerance_basis", "refusal")
+                     "zeta", "target_time_years", "tolerance_basis",
+                     "refusal")
 
 
 class HandoffError(ValueError):
@@ -301,7 +301,7 @@ def read_tolerances(path: str | Path, bands: Mapping[str, Mapping] | None = None
     path = Path(path)
     kinds = {"band_low_mhz": "float", "band_high_mhz": "float",
              "r_tol": "float", "zeta": "float", "target_time_years": "float",
-             "suppression_db": "float", "binding_bin": "int"}
+             "binding_bin": "int"}
     with path.open(newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         if tuple(reader.fieldnames or ()) != TOLERANCE_COLUMNS:

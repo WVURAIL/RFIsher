@@ -15,17 +15,19 @@ from types import SimpleNamespace
 import pytest
 
 from rfisher.forecast.radiofisher_bao import model as radiofisher_model
-from rfisher.forecast.radiofisher_bao import filter_scenarios, response
+from rfisher.forecast.radiofisher_bao import response
 from rfisher.forecast.radiofisher_bao.bank import banks
 from rfisher.science_model import Bin, Parameters, Scenario
 from rfisher.tolerance import table
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = ROOT / "projects" / "chime_bao"
-COMMITTED = ROOT / "src/rfisher/data/tolerances/filter_scenarios_T1yr.csv"
-# The table of both archive releases (author eras 2026-09-23 and no-split r2).
+COMMITTED = ROOT / "src/rfisher/data/tolerances/tolerance_T1yr.csv"
+# The no-filter rows of the table of both archive releases (author eras
+# 2026-09-23 and no-split r2, csv sha256 3985dd59), without the growth rows: the
+# delay-filter scenarios and the f sigma_8 tolerance were removed (stage P).
 COMMITTED_SHA256 = (
-    "3985dd593bbb19904e600e20adbd44248c2449b980bdb27856166c85b298f162")
+    "a98182e0600d4b22a077cafa062a2646f7ce8885aed68f883f2c247eb34ba849")
 
 
 def _keys(value):
@@ -57,7 +59,7 @@ def _model(tolerance=0.5, inputs=None):
     return SimpleNamespace(
         parameters=Parameters(("a",), ("c",)), zeta=1.0, target_years=1.0,
         year_grid=(1.0,), maximum_tolerance_ratio=1.2,
-        scenarios=(Scenario("none", "rule", 0.0, "x.npz"),),
+        scenarios=(Scenario("none", "rule", "x.npz"),),
         load=lambda name: None, bins=lambda: (Bin(0, "z 0.8-0.9", 0.8, 0.9),),
         hours=lambda years: years,
         response=lambda *a: ({"a": 1.0, "c": 1.0},
@@ -65,12 +67,15 @@ def _model(tolerance=0.5, inputs=None):
         accept=lambda *a: (1.0, 1), identity=identity)
 
 
-def test_the_committed_table_is_the_archive_table():
+def test_the_committed_table_is_the_archive_tables_no_filter_rows():
     assert hashlib.sha256(COMMITTED.read_bytes()).hexdigest() \
         == COMMITTED_SHA256
     record = json.loads(table.sidecar(COMMITTED).read_text())
     assert record["csv_sha256"] == COMMITTED_SHA256
-    assert len(table.load(COMMITTED)) == 180
+    rows = table.load(COMMITTED)
+    assert len(rows) == 30
+    assert {(r["world"], r["parameter"]) for r in rows} == {
+        ("none", "aperp"), ("none", "apar")}
 
 
 def test_the_committed_provenance_is_identity_v3_without_commits():
@@ -86,7 +91,6 @@ def test_the_committed_provenance_is_identity_v3_without_commits():
         "rfisher/tolerance/rule.py", "rfisher/tolerance/bands.py",
         "rfisher/tolerance/table.py",
         "rfisher/forecast/radiofisher_bao/response.py",
-        "rfisher/forecast/radiofisher_bao/filter_scenarios.py",
         "rfisher/forecast/radiofisher_bao/model.py"}
     assert record["bank_source_sha256"] \
         == banks.bank_source_state()["working_tree_sha256"]
@@ -129,7 +133,7 @@ def test_loading_never_opens_a_bank(monkeypatch):
     monkeypatch.setattr(response, "load_response_bank", refuse)
     monkeypatch.setattr(banks, "FisherBank", refuse)
     rows = table.load(COMMITTED)
-    assert {r["world"] for r in rows} == {"none", "peak1", "peak2", "deployed"}
+    assert {r["world"] for r in rows} == {"none"}
 
 
 def test_a_table_without_its_digest_is_refused(tmp_path):
@@ -228,8 +232,8 @@ def test_verify_sees_a_one_byte_edit_to_each_kind_of_input(tmp_path):
     shutil.copytree(PROJECT, root / "projects" / "chime_bao")
     bank_dir = tmp_path / "banks"
     bank_dir.mkdir()
-    for item in filter_scenarios.SCENARIOS:
-        (bank_dir / item.bank).write_bytes(item.name.encode())
+    for name, (bank, _) in radiofisher_model.SCENARIO_BANKS.items():
+        (bank_dir / bank).write_bytes(name.encode())
     subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
     csv_path = tmp_path / "table.csv"
     csv_path.write_text("world\n")
@@ -252,8 +256,8 @@ def test_verify_sees_a_one_byte_edit_to_each_kind_of_input(tmp_path):
         root / banks.BANK_SOURCE_DIRECTORY / "physics.py":
             "bank_source_sha256",
         root / "projects/chime_bao/science_model.yaml": "profile_sha256",
-        bank_dir / filter_scenarios.SCENARIOS[0].bank:
-            f"banks/{filter_scenarios.SCENARIOS[0].bank}/sha256",
+        bank_dir / radiofisher_model.SCENARIO_BANKS["none"][0]:
+            f"banks/{radiofisher_model.SCENARIO_BANKS['none'][0]}/sha256",
     }
     for path, field in edits.items():
         original = path.read_bytes()

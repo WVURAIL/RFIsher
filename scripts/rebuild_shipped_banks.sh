@@ -8,11 +8,10 @@
 # bank subpackage src/rfisher/forecast/radiofisher_bao/bank at build time,
 # so run this from a clean bank/ and commit the banks and pins together.
 #
-# The four filter-scenario response banks are never rebuilt here. They take
-# the metadata re-stamp, before this script runs: restamp_bank_provenance.py
-# --subset with their four BANK=OUT pairs, then a commit. The re-pin below
-# covers only the five banks rebuilt here, and the closing --check covers
-# all nine.
+# The packaged no-filter response bank is never rebuilt here. It takes the
+# metadata re-stamp, before this script runs: restamp_bank_provenance.py
+# --subset with its BANK=OUT pair, then a commit. The re-pin below covers
+# only the five banks rebuilt here, and the closing --check covers all six.
 #
 # Requires an installed rfisher (the rfisher command on PATH, from this
 # checkout) and a RadioFisher checkout: $RADIOFISHER_DIR, or the

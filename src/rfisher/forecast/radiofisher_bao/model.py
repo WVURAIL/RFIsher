@@ -1,7 +1,7 @@
 """The RadioFisher BAO forecast as a science model (``rfisher.science_model``).
 
 The profile (``projects/chime_bao/science_model.yaml``) declares the
-parameters, the target time, the role of each delay-filter scenario, the
+parameters, the target time, the one scenario and its response bank, the
 residual reference and shape the handoff must match, and the band a report
 covers by default. It names the science register entries (``register``) that
 hold zeta, the year grid and the stability test; those values are read from
@@ -26,7 +26,6 @@ import yaml
 from rfisher import policy
 from rfisher.science_model import SCENARIO_ROLES, Bin, Parameters, Scenario
 
-from . import filter_scenarios
 from .bank import experiments
 from .bank.banks import bank_source_state
 from .bank.physics import HI_REST_FREQUENCY_MHZ
@@ -58,8 +57,11 @@ RULE_ROLE = "rule"
 RESPONSE_EPSILON_FG = 0.0
 BIN_EDGE_DECIMALS = 4
 COVERAGE_SLACK = 1e-10
-# The per-bin tolerance table of the four scenarios at T* = 1 year.
-TABLE_NAME = "filter_scenarios_T1yr.csv"
+# The forecast's one scenario: no mode cut, priced by the no-filter response
+# bank. Its name is the tolerance table's ``world`` column.
+SCENARIO_BANKS = {"none": ("fisher_bank_chime2022_pres_dense.npz", None)}
+# The per-bin tolerance table at T* = 1 year.
+TABLE_NAME = "tolerance_T1yr.csv"
 TABLE_DIRECTORY = "tolerances"
 # The register values the table depends on; their digest is the table's
 # science_register_sha256.
@@ -70,7 +72,7 @@ REGISTER_IDS = (
     "science.response_stability.maximum_tolerance_ratio",
     "science.systematic_budget.primary_zeta",
 )
-SOURCES = ("response.py", "filter_scenarios.py", "model.py")
+SOURCES = ("response.py", "model.py")
 
 
 def redshift_range(low_mhz: float, high_mhz: float) -> tuple[float, float]:
@@ -174,26 +176,26 @@ class RadioFisherBAO:
                                      for v in data["report_band_mhz"])
         scenarios = []
         for entry in data["scenarios"]:
-            known = filter_scenarios.scenario(entry["name"])
-            declared = (entry["bank"], entry["kfg_fac"],
-                        entry["suppression_key"])
-            if declared != (known.bank, known.kfg_fac, known.suppression_key):
+            if set(entry) != {"name", "bank", "kfg_fac", "role"}:
+                raise ValueError(f"{self.profile_path}: a scenario holds "
+                                 "exactly name, bank, kfg_fac and role")
+            known = SCENARIO_BANKS.get(entry["name"])
+            declared = (entry["bank"], entry["kfg_fac"])
+            if declared != known:
                 raise ValueError(
                     f"{self.profile_path}: scenario {entry['name']!r} declares "
                     f"{declared}; the forecast defines "
-                    f"{(known.bank, known.kfg_fac, known.suppression_key)}")
+                    f"{SCENARIO_BANKS}")
             if entry["role"] not in SCENARIO_ROLES:
                 raise ValueError(f"{self.profile_path}: role must be one of "
                                  f"{SCENARIO_ROLES}")
-            scenarios.append(Scenario(
-                name=known.name, role=entry["role"],
-                suppression_db=filter_scenarios.suppression_db(known.name),
-                response_source=known.bank))
+            scenarios.append(Scenario(name=entry["name"], role=entry["role"],
+                                      response_source=entry["bank"]))
         rules = [item for item in scenarios if item.role == RULE_ROLE]
-        if len(rules) != 1 or rules[0].suppression_db != 0.0:
+        if len(scenarios) != 1 or len(rules) != 1:
             raise ValueError(
-                f"{self.profile_path}: exactly one scenario has the role "
-                f"{RULE_ROLE!r}, and it assumes no suppression (S = 0)")
+                f"{self.profile_path}: the profile declares one scenario, of "
+                f"role {RULE_ROLE!r}")
         self.scenarios = tuple(scenarios)
         self.response_banks_dir = Path(
             response_banks_dir if response_banks_dir is not None
@@ -253,13 +255,13 @@ class RadioFisherBAO:
     def bank(self, name: str):
         """The authenticated response bank of a scenario (loaded once)."""
         if name not in self._banks:
-            known = filter_scenarios.scenario(self.scenario(name).name)
+            source, kfg_fac = SCENARIO_BANKS[self.scenario(name).name]
             bank = load_response_bank(
-                self.response_banks_dir / known.bank,
-                expected_kfg_fac=known.kfg_fac,
+                self.response_banks_dir / source,
+                expected_kfg_fac=kfg_fac,
                 expected_epsilon_fg=RESPONSE_EPSILON_FG, rf_dir=self.rf_dir)
             if not np.array_equal(bank.zs, self._edges()):
-                raise ValueError(f"{known.bank}: redshift bins differ from the "
+                raise ValueError(f"{source}: redshift bins differ from the "
                                  f"{self.experiment} experiment")
             self._banks[name] = bank
         return self._banks[name]

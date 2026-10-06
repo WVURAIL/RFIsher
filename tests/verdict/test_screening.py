@@ -1,6 +1,7 @@
 """The screen of a band and its precedence (rfisher.verdict.screening)."""
 from __future__ import annotations
 
+import csv
 import json
 import math
 from pathlib import Path
@@ -41,11 +42,27 @@ def recorded_rank_policy(pol):
     return RecordedRankPolicy()
 
 
-def test_the_golden_handoff_screens_23_bands_undetermined(pol):
+def _rule_tolerances(tmp_path):
+    """The golden's rule rows, read as a tolerance table: the archive's layout
+    had a suppression column, 0 on every rule row, which the layout dropped
+    with the post-processing scenarios (stage P)."""
+    with (GOLDEN / "tolerances_rule.csv").open(newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    assert {r.pop("suppression_db") for r in rows} == {"0.0"}
+    path = tmp_path / "tolerances.csv"
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(handoff.TOLERANCE_COLUMNS),
+                                lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    return handoff.read_tolerances(path)
+
+
+def test_the_golden_handoff_screens_23_bands_undetermined(pol, tmp_path):
     spec = handoff.schema()
     summary = handoff._read_table(GOLDEN / "oc_summary_extract.csv",
                                   spec["x-oc-summary-columns"])
-    tolerances = handoff.read_tolerances(GOLDEN / "tolerances_rule.csv")
+    tolerances = _rule_tolerances(tmp_path)
     source = json.loads((GOLDEN / "SOURCE.json").read_text())
     assert source["summary_rows"] == len(summary)
     outcomes = {}

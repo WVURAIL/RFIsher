@@ -198,11 +198,13 @@ def test_every_pinned_bank_must_be_restamped(checkout, monkeypatch):
         restamp.restamp(checkout.args)
 
 
-def test_the_live_pins_name_the_nine_banks():
+def test_the_live_pins_name_the_six_banks():
+    """Three CHIME banks, two Bull banks and the no-filter response bank (the
+    three delay-filter response banks went with the post-processing scenarios)."""
     text = (ROOT / restamp.PINS).read_text(encoding="utf-8")
     for anchor in restamp.BANKS:
         assert anchor in text
-    assert len(restamp.BANKS) == 9
+    assert len(restamp.BANKS) == 6
     assert restamp.RADIOFISHER_PIN.search(text)
 
 

@@ -18,6 +18,8 @@ EVIDENCE = {
 }
 VALUES = {"selection.tie_break": ["systematic_residual", "masked_fraction", "candidate_order"],
           "selector.fine_rank": 63}
+# Entries the project register no longer carries, each recorded in its source.removed.
+REMOVED = {"science_register.json": {"transfer.delay_suppression.default_key"}}
 AMENDMENTS = {
     "selector.fine_rank": {
         "status": "locked",
@@ -40,10 +42,14 @@ def test_only_declared_amendments_differ_from_the_frozen_registers():
     for name in ("science_register.json", "selector_policy.json"):
         new = json.loads((PROJECT / name).read_text(encoding="utf-8"))
         old = json.loads((FROZEN / name).read_text(encoding="utf-8"))
+        removed = REMOVED.get(name, set())
+        old["decisions"] = [d for d in old["decisions"] if d["id"] not in removed]
         assert [d["id"] for d in new["decisions"]] == [d["id"] for d in old["decisions"]]
         source = dict(new["source"])
         if name == "selector_policy.json":
             assert source.pop("renamed") == {"selection.tie_break": source_rename()}
+        if removed:
+            assert set(source.pop("removed")) == removed
         assert source == old["source"]
         assert {k: v for k, v in new.items() if k not in ("decisions", "source")} == \
             {k: v for k, v in old.items() if k not in ("decisions", "source")}

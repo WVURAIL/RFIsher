@@ -19,7 +19,7 @@ def test_show_prints_the_authenticated_packaged_table(capsys):
     assert cli.main(["tolerance", "show"]) == 0
     out = capsys.readouterr().out.splitlines()
     assert "csv_sha256 authenticated" in out[0]
-    assert len(out) == 1 + 180
+    assert len(out) == 1 + 30
     assert any("refused" in line for line in out)
 
 
@@ -31,8 +31,8 @@ def test_bands_writes_both_tables_and_their_provenance(tmp_path):
                      "--bands", str(bands), "--out", str(out)]) == 0
     with (out / "tolerances.csv").open(newline="") as fh:
         rows = list(csv.DictReader(fh))
-    assert [(r["band_id"], r["scenario"]) for r in rows][:2] == [
-        ("18", "none"), ("18", "peak1")]
+    assert [(r["band_id"], r["scenario"]) for r in rows] == [
+        ("18", "none"), ("33", "none")]
     assert rows[0]["r_tol"] == "0.011958214197006222"
     record = json.loads((out / "tolerances.provenance.json").read_text())
     assert record["bands_sha256"] == table.sha256_file(bands)
@@ -69,7 +69,7 @@ def test_bands_refuses_a_band_whose_role_is_not_screened(tmp_path, capsys):
 
 
 @pytest.mark.parametrize("argv,name", [
-    ([], "filter_scenarios_T1yr.csv"),
+    ([], "tolerance_T1yr.csv"),
     (["other.csv"], "other.csv"),
 ])
 def test_build_writes_into_a_directory_or_a_named_file(tmp_path, monkeypatch,

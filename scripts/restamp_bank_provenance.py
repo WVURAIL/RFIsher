@@ -102,15 +102,6 @@ BANKS = {
         "data/fisher_bank_bull2015_planck2013_epsfg1e-5.npz",
     '"fisher_bank_chime2022_pres_dense.npz":':
         "src/rfisher/data/response_banks/fisher_bank_chime2022_pres_dense.npz",
-    '"fisher_bank_chime2022_pres_kfg22_dense.npz":':
-        "src/rfisher/data/response_banks/"
-        "fisher_bank_chime2022_pres_kfg22_dense.npz",
-    '"fisher_bank_chime2022_pres_kfg44_dense.npz":':
-        "src/rfisher/data/response_banks/"
-        "fisher_bank_chime2022_pres_kfg44_dense.npz",
-    '"fisher_bank_chime2022_pres_kfg80_dense.npz":':
-        "src/rfisher/data/response_banks/"
-        "fisher_bank_chime2022_pres_kfg80_dense.npz",
 }
 RADIOFISHER_PIN = re.compile(
     r'(EXPECTED_RADIOFISHER_SOURCE_SHA256 = \(\s*\n\s*")([0-9a-f]{64})(")')

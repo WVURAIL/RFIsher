@@ -12,8 +12,6 @@ locates any of them, and each file is read by the module that owns it:
   :mod:`rfisher.forecast.radiofisher_bao.model`, and the two frozen
   reference tolerances in ``tolerances/`` by :mod:`rfisher.tolerance.reference`;
 - ``schemas/``, the detector handoff schema, vendored byte for byte;
-- the Fig. 10 filter residual by
-  :mod:`rfisher.forecast.radiofisher_bao.filter_scenarios`;
 - the survey rates of the July 2026 scenarios by
   :mod:`rfisher.forecast.radiofisher_bao.legacy_masks`.
 

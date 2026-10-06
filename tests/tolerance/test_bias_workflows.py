@@ -34,7 +34,7 @@ def test_bias_workflows_fail_with_exact_build_prerequisite(
         capture_output=True, check=False)
 
     assert completed.returncode == 2
-    assert "Only the four filter-scenario response banks are packaged" \
+    assert "Only the no-filter response bank is packaged" \
         in completed.stderr
     assert "--config chime2022 --cosmology planck2018" in completed.stderr
     assert "--p-res 1.0" in completed.stderr

@@ -23,7 +23,10 @@
       "archive_reference.three_worlds_parameters",
       "archive_reference.forecast_year_grid",
       "archive_reference.bias_year_grid"
-    ]
+    ],
+    "removed": {
+      "transfer.delay_suppression.default_key": "post-processing is not modelled (author decision, 2026-10-01): the scenario key went with the delay-filter scenarios"
+    }
   },
   "decisions": [
     {
@@ -229,19 +232,6 @@
       "rationale": "These values expose progressively tighter systematic budgets and have direct root-mean-square error interpretations.",
       "evidence": [
         "dissertation/chapters/ch09_tolerance.tex"
-      ],
-      "sensitivity_values": []
-    },
-    {
-      "id": "transfer.delay_suppression.default_key",
-      "side": "science",
-      "value": "none",
-      "units": "scenario key",
-      "basis": "policy",
-      "status": "locked",
-      "rationale": "The default claims no delay-filter credit because the forecast does not model that foreground-removal stage. This is conservative for the residual budget.",
-      "evidence": [
-        "src/rfisher/residual.py@7b0067b"
       ],
       "sensitivity_values": []
     },

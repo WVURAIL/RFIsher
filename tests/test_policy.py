@@ -30,6 +30,8 @@ SOURCES = sorted((ROOT / "src").rglob("*.py")) + sorted(
 # The one declared rename against the golden: the tie-break's tail rho, multiplier_q16 is named candidate_order, the
 # detector's enumeration order it stands for.
 RENAMED = {"selection.tie_break": (("rho", "multiplier_q16"), ("candidate_order",))}
+# Entries removed after the golden, each recorded in the register's source.removed.
+REMOVED = {"transfer.delay_suppression.default_key"}
 
 
 def _golden():
@@ -50,7 +52,9 @@ def test_every_old_entry_is_carried_moved_or_deleted():
                "selector_policy": "selector_policy.json"}
     for entry in _golden():
         target = entry["target"]
-        if target in targets:
+        if entry["id"] in REMOVED:
+            assert entry["id"] not in loaded.decisions, entry["id"]
+        elif target in targets:
             decision = loaded.decision(entry["id"])
             assert decision.register == targets[target], entry["id"]
             assert decision.side == "science"

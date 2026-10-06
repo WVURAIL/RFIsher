@@ -1,4 +1,8 @@
-"""The two frozen reference tolerances, vendored and written as band rows."""
+"""The frozen reference tolerance, vendored and written as band rows.
+
+The coarse-world table (the record's deployed 200 ns tolerance and its suppression) stays vendored for the capture
+records at identity; it is no longer a basis of the reference rows (stage P: post-processing is not modelled).
+"""
 from __future__ import annotations
 
 import csv
@@ -84,24 +88,26 @@ def test_the_rows_carry_the_records_strings():
     rows, _ = reference.reference_rows(reference.EXACT_TIME, _bands())
     assert [repr(r["r_tol"]) for r in rows] == [RECORD[c][0]
                                                for c in range(14, 37)]
-    assert {(r["scenario"], r["role"], r["suppression_db"], r["zeta"],
-             r["target_time_years"], r["refusal"]) for r in rows} == {
-        ("none", "rule", 0.0, 1.0, 1.0, "")}
-    rows, _ = reference.reference_rows(reference.COARSE_WORLD, _bands())
-    assert [(repr(r["r_tol"]), repr(r["suppression_db"])) for r in rows] == [
-        RECORD[c][1:] for c in range(14, 37)]
-    assert {(r["scenario"], r["role"]) for r in rows} == {
-        ("deployed", "sensitivity")}
+    assert {(r["scenario"], r["role"], r["zeta"], r["target_time_years"],
+             r["refusal"]) for r in rows} == {("none", "rule", 1.0, 1.0, "")}
+    assert "suppression_db" not in rows[0]
+
+
+def test_the_deployed_tolerance_is_read_for_the_records_alone():
+    assert reference.BASES == (reference.EXACT_TIME,)
+    with pytest.raises(ValueError, match="unknown reference basis"):
+        reference.reference_rows(reference.COARSE_WORLD, _bands())
+    deployed = reference.coarse_world_bands()
+    assert [(deployed[str(c)]["r_tol"], deployed[str(c)]["suppression_db"])
+            for c in range(14, 37)] == [RECORD[c][1:] for c in range(14, 37)]
 
 
 def test_the_components_carry_the_per_bin_tolerances():
-    for basis, expected in ((reference.EXACT_TIME, PER_BIN_NONE),
-                            (reference.COARSE_WORLD, PER_BIN_DEPLOYED)):
-        _, parts = reference.reference_rows(basis, _bands())
-        seen = {}
-        for part in parts:
-            seen.setdefault(part["bin"], set()).add(repr(part["r_tol_component"]))
-        assert seen == {b: {v} for b, v in expected.items()}
+    _, parts = reference.reference_rows(reference.EXACT_TIME, _bands())
+    seen = {}
+    for part in parts:
+        seen.setdefault(part["bin"], set()).add(repr(part["r_tol_component"]))
+    assert seen == {b: {v} for b, v in PER_BIN_NONE.items()}
     assert {b: repr(v["value"]) for b, v in reference.exact_time_bins().items()} \
         == PER_BIN_NONE
     assert {b: repr(v) for b, v in reference.coarse_world_bins().items()} == \
@@ -127,22 +133,20 @@ def test_a_band_it_does_not_price_is_written_refused():
         reference.reference_rows("grid", bands)
 
 
-def test_the_command_writes_both_bases(tmp_path, capsys):
+def test_the_command_writes_the_basis(tmp_path, capsys):
     bands = tmp_path / "bands.csv"
     bands.write_text("band_id,low_mhz,high_mhz\n18,494.0,500.0\n"
                      "33,584.0,590.0\n", encoding="utf-8")
     out = tmp_path / "out"
+    with pytest.raises(SystemExit):
+        main(["tolerance", "reference", "--basis", reference.COARSE_WORLD,
+              "--bands", str(bands), "--out", str(out)])
     assert main(["tolerance", "reference", "--basis", reference.EXACT_TIME,
-                 "--basis", reference.COARSE_WORLD, "--bands", str(bands),
-                 "--out", str(out)]) == 0
+                 "--bands", str(bands), "--out", str(out)]) == 0
     with (out / "tolerances.csv").open(newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
-    assert [(r["band_id"], r["scenario"], r["r_tol"], r["suppression_db"])
-            for r in rows] == [
-        ("18", "none", RECORD[18][0], "0.0"),
-        ("33", "none", RECORD[33][0], "0.0"),
-        ("18", "deployed", RECORD[18][1], "11.4"),
-        ("33", "deployed", RECORD[33][1], "11.4")]
+    assert [(r["band_id"], r["scenario"], r["r_tol"]) for r in rows] == [
+        ("18", "none", RECORD[18][0]), ("33", "none", RECORD[33][0])]
     assert (out / "tolerance_components.csv").is_file()
     assert (out / "tolerances.provenance.json").is_file()
     assert "wrote" in capsys.readouterr().out

@@ -25,8 +25,7 @@ def _model(response=None, accept=None, *, years=(1.0, 2.0), zeta=1.0):
     return SimpleNamespace(
         parameters=Parameters(("a", "b"), ("c",)), zeta=zeta,
         target_years=1.0, year_grid=years, maximum_tolerance_ratio=1.2,
-        scenarios=(Scenario("s", "rule", 0.0, "x"),
-                   Scenario("t", "sensitivity", 3.0, "y")),
+        scenarios=(Scenario("s", "rule", "x"), Scenario("t", "rule", "y")),
         load=lambda name: None,
         bins=lambda: (Bin(0, "z 1.0-1.1", 1.0, 1.1), Bin(1, "z 1.1-1.2", 1.1, 1.2)),
         hours=lambda years: years * HOURS,
