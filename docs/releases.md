@@ -15,7 +15,7 @@ numpy 2.3 and later.
 |---|---|---|---|---|
 | 1c to 1f | `archive_author_eras_2026-09-23` (science layer) | the chain, selection, screening and operating-point tables, the tolerance and worlds tables, the ledger, from pilot-proxy's characterization and the verdict (`rfisher records archive-layout --release archive_author_eras_2026_09_23`, under the frozen policy copy) | f56916a | release environment |
 | 20 | `archive_no_split_2026-09-24_r2` (science layer) | the same at the off setting (`--release archive_no_split_2026_09_24_r2`) | f56916a | release environment |
-| 2 | the shipped tolerance table `src/rfisher/data/tolerances/filter_scenarios_T1yr.csv` | `rfisher tolerance build`, byte for byte, with its provenance | f56916a | release environment |
+| 2 | the shipped tolerance table `src/rfisher/data/tolerances/filter_scenarios_T1yr.csv@f56916a` | `rfisher tolerance build`, byte for byte, with its provenance | f56916a | release environment |
 | 3 | the coarse ladder pricing of `archive_author_eras_2026-09-23` | `records/chime_atsc_2026/ladder_pricing.py` on pilot-proxy's coarse ladder | f56916a | release environment |
 | 7 | the table of record (9867551a) and its v7 input (fd718463) | `rfisher records table-of-record` and `records capture-ruling --rule record`, from the capture handoff, `gain_bao.csv` and the v7 table | this commit | release environment |
 | 8 | the channel 24 basis of the era redate | `records cohort-basis` | this commit | archive environment |
@@ -93,7 +93,7 @@ The ordinary dissertation inputs `three_worlds.csv` (in the results tree) and
 `scripts/dissertation/data/bao_era_points.csv@f56916a` are also authenticated pre-v3
 scientific snapshots. Their embedded source hashes identify the code that
 produced their values. No test of this repository checks them any more (the
-checker, `tests/test_dissertation_figures.py`, left with the old figure driver
+checker, `tests/test_dissertation_figures.py@f56916a`, left with the old figure driver
 in 8a58343); the dissertation's `figure_src/data/frozen_export/v1` keeps its own
 copies with their provenance. Do not restamp them. Regenerate a new
 snapshot only when the archived products are available to run the full

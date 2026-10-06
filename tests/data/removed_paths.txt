@@ -22,6 +22,8 @@ paper/.gitignore	2d682c1
 paper/forecast_section.tex	2d682c1
 paper/main.tex	2d682c1
 paper/refs.bib	2d682c1
+projects/chime_bao/capture_rules/sensitivities/r2.json	96f3585
+projects/chime_bao/capture_rules/sensitivities/r3.json	96f3585
 scripts/analyze_fine_null_calibration.py	877aeb1
 scripts/audit_era_hindsight.py	877aeb1
 scripts/bias_tolerance.py	ff75809
@@ -91,9 +93,16 @@ src/rfisher/backend.py	2d682c1
 src/rfisher/channels.py	877aeb1
 src/rfisher/constants.py	877aeb1
 src/rfisher/cosmologies.py	2d682c1
+src/rfisher/data/chime2025_fig10_filter_residual.csv	96f3585
 src/rfisher/data/products.json	877aeb1
+src/rfisher/data/response_banks/fisher_bank_chime2022_pres_kfg22_dense.npz	96f3585
+src/rfisher/data/response_banks/fisher_bank_chime2022_pres_kfg44_dense.npz	96f3585
+src/rfisher/data/response_banks/fisher_bank_chime2022_pres_kfg80_dense.npz	96f3585
+src/rfisher/data/tolerances/filter_scenarios_T1yr.csv	96f3585
+src/rfisher/data/tolerances/filter_scenarios_T1yr.provenance.json	96f3585
 src/rfisher/fisherbank.py	2d682c1
 src/rfisher/forecast.py	2d682c1
+src/rfisher/forecast/radiofisher_bao/filter_scenarios.py	96f3585
 src/rfisher/incumbent.py	877aeb1
 src/rfisher/layout.py	2d682c1
 src/rfisher/npzio.py	877aeb1
@@ -101,6 +110,9 @@ src/rfisher/pilotproxy.py	877aeb1
 src/rfisher/pkcache.py	2d682c1
 src/rfisher/preparation.py	877aeb1
 src/rfisher/products.py	877aeb1
+src/rfisher/records/chime_atsc_2026/filter_sensitivity.py	96f3585
+src/rfisher/records/chime_atsc_2026/postprocessing.py	96f3585
+src/rfisher/records/chime_atsc_2026/promotion_evidence.py	96f3585
 src/rfisher/residual.py	877aeb1
 src/rfisher/residual_scores/__init__.py	877aeb1
 src/rfisher/residual_scores/bundle.py	877aeb1
@@ -111,6 +123,7 @@ src/rfisher/selection_policy.py	877aeb1
 src/rfisher/survey.py	2d682c1
 src/rfisher/thresholds.py	877aeb1
 src/rfisher/tolerances.py	877aeb1
+src/rfisher/verdict/sensitivity.py	96f3585
 src/rfisher_results/__init__.py	877aeb1
 src/rfisher_results/archive/__init__.py	877aeb1
 src/rfisher_results/archive/anchors.py	877aeb1
@@ -181,6 +194,7 @@ src/rfisher_results/validation/tolerance.py	877aeb1
 src/rfisher_results/validation/visibility.py	877aeb1
 src/rfisher_results/validation/visibility_response.py	efcaab4
 src/rfisher_results/validation/voltage_coherence.py	877aeb1
+tests/forecast/test_filter_scenarios.py	96f3585
 tests/test_api.py	2d682c1
 tests/test_archive_acceptance_bench.py	877aeb1
 tests/test_archive_pipeline_bench.py	877aeb1
@@ -292,3 +306,4 @@ tests/test_validation_regulatory.py	877aeb1
 tests/test_validation_tolerance.py	877aeb1
 tests/test_visibility_response.py	efcaab4
 tests/test_voltage_coherence.py	877aeb1
+tests/verdict/test_sensitivity.py	96f3585
