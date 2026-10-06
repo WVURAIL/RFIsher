@@ -81,9 +81,9 @@ def duration_reference(tmp_path) -> Path:
     import shutil
 
     from rfisher import policy
-    from rfisher.forecast.radiofisher_bao import filter_scenarios
     from rfisher.forecast.radiofisher_bao import response as bt
     from rfisher.forecast.radiofisher_bao.bank.experiments import OVERVIEW_ONSKY_YEAR_HOURS as HPY
+    from rfisher.forecast.radiofisher_bao.model import SCENARIO_BANKS
     from rfisher.records.chime_atsc_2026 import capture_units as U
 
     out = Path(tmp_path) / "duration_reference"
@@ -91,9 +91,9 @@ def duration_reference(tmp_path) -> Path:
     shutil.copy(DURATION / "ruling_factors.csv", out / "ruling_factors.csv")
     frac = float(policy.value("science.response_stability.time_fraction"))
     limit = float(policy.value("science.response_stability.maximum_tolerance_ratio"))
-    scenario = next(s for s in filter_scenarios.SCENARIOS if s.name == "none")
-    bank = bt.load_response_bank(bt.packaged_response_banks() / scenario.bank, build_command="see scripts/three_worlds.py",
-                                 expected_kfg_fac=scenario.kfg_fac, expected_epsilon_fg=0.0)
+    source, kfg_fac = SCENARIO_BANKS["none"]
+    bank = bt.load_response_bank(bt.packaged_response_banks() / source, build_command="see scripts/three_worlds.py",
+                                 expected_kfg_fac=kfg_fac, expected_epsilon_fg=0.0)
     names = list(bank.paramnames)
     years = (1.0, 2.0, 3.0, 5.0, 8.0, 10.0)
     bins = {b for ch in range(14, 37) for b in U.bin_overlaps(ch)}

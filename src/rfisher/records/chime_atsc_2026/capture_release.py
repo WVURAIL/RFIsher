@@ -1,25 +1,30 @@
-"""The capture ruling release r5.2, written from the capture handoff.
+"""The capture ruling release r5.2, written from the capture handoff, without its post-processing readings.
 
 The release producer's ``build_release.py --r52``, with its tables' logic unchanged and every run in process: the
 ruling (:mod:`capture_ruling`) at identity, under r5.2, under the G = 1 sensitivity and with the units switch alone;
 channel 24 on its own 2020 in-band measurement (:mod:`cohort_basis`); the phase limit (:mod:`phase_limit`); the
-robustness copy (:mod:`robustness`); the duration and keep-gap readings (:mod:`duration`); the two credit readings
-(``credit_readings/r3``, the ground credit, and ``credit_readings/r2``, the 200 ns filter plus S with it, each this
-command with ``--credit-reading``); the post-processing sensitivity (:mod:`postprocessing`); the within-dump bounds
-table; and the promotion evidence (:mod:`promotion_evidence`). Then ``table_of_record_a18.csv``,
-``dispositions_a18.csv``, ``thresholds_a18.csv``, ``run/``, ``CHANGES.md`` and ``MANIFEST.json``, whose prose and fixed
-fields are the release's (``projects/chime_bao/capture_rules/release_r5_2.json``) and whose ``producer`` names this
-repository's commit and modules in place of a source snapshot.
+cleaner-polarization margins (:mod:`robustness`); the duration and keep-gap readings (:mod:`duration`); and the
+within-dump bounds table. Then ``table_of_record_a18.csv``, ``dispositions_a18.csv`` (with the literal G = 1
+readings), ``thresholds_a18.csv``, ``run/``, ``CHANGES.md`` and ``MANIFEST.json``, whose prose and fixed fields are the
+release's (``projects/chime_bao/capture_rules/release_r5_2.json``) and whose ``producer`` names this repository's
+commit and modules in place of a source snapshot.
+
+Post-processing is not modelled. The release's credit readings (``credit_readings/r3`` and ``credit_readings/r2``),
+its post-processing sensitivity (``postprocessing_sensitivity.csv``), its least-corner promotion evidence
+(``promotion_least_corners.csv`` and ``PROMOTION_EVIDENCE.md``) and the credit columns of ``robustness_a18.csv`` are
+not written, and channel 24's reading takes no archive-share reading or both-credits column; the frozen release keeps
+them. Every file written here is the release's own, byte for byte, except ``robustness_a18.csv`` (the release's bar,
+cleaner-polarization and basis columns), ``ch24_per_bin_a19.csv`` (its columns but the both-credits ones),
+``ch24_basis_a18.txt`` (its text but the archive-share clause) and ``run/ch24_a18.json`` (its fields but the archive
+shares and the deployed tolerance and S).
 
 Read-only on every input: the capture handoff, the frozen table of record (``--record-table``, 9867551a; the
-robustness copy and the phase limit read it too), the ruling's v7 input (``--input-table``, fd718463), the
-decision-evidence directory (``--evidence``: the B-list, the static mask and B-2's rerun), the directory of the frozen
-releases (``--releases``: revisions 5 and 5.1, which the bounds table and the promotion evidence compare with) and the
+cleaner-polarization margins and the phase limit read it too), the ruling's v7 input (``--input-table``, fd718463),
+the directory of the frozen releases (``--releases``: revision 5.1, which the bounds table compares with) and the
 survey-duration compute run (``--duration-reference``).
 
-usage: rfisher records capture-release --rule r5_2 --handoff DIR --record-table TABLE --input-table TABLE --evidence DIR
+usage: rfisher records capture-release --rule r5_2 --handoff DIR --record-table TABLE --input-table TABLE
                                        --releases DIR --duration-reference DIR --rel DIR --run DIR
-                                       [--credit-reading r3|r2] [--tables-only]
 """
 import contextlib, csv, datetime, glob, hashlib, io, json, math, os, shutil, sys
 from importlib.resources import files as _files
@@ -28,15 +33,25 @@ import numpy as np
 
 from rfisher import provenance
 from rfisher.records.chime_atsc_2026 import (capture_handoff, capture_ruling, cohort_basis, duration, phase_limit,
-                                             postprocessing, promotion_evidence, robustness)
+                                             robustness)
 from rfisher.records.chime_atsc_2026 import capture_units as U
 from rfisher.records.chime_atsc_2026._files import load_json, read_rows
 
 RULE = "r5_2"
 RECORD_SHA = "9867551ad591757ed8b8864940376c68666483833478b4711292e0517a27b195"
+# The release's files this producer does not write: post-processing is not modelled. The frozen release keeps them.
+NOT_WRITTEN = {"credit_readings/": "the ground-credit (r3) and 200 ns filter (r2) readings",
+               "postprocessing_sensitivity.csv": "the post-processing sensitivity against the credit readings",
+               "run/postprocessing_sensitivity.log": "its log",
+               "promotion_least_corners.csv": "the least corners of the credited variant grid",
+               "PROMOTION_EVIDENCE.md": "the grounds each excision carries on that grid",
+               "robustness_a18.csv": "written without the ground-credit and archive-share columns",
+               "ch24_per_bin_a19.csv": "written without the both-credits columns",
+               "ch24_basis_a18.txt": "written without the archive-share reading",
+               "run/ch24_a18.json": "written without the archive-share reading and the deployed tolerance and S"}
 RANGES = ("shortest", "bao_short", "bao_long")
 RTXT = {"bao_short": "short BAO range", "bao_long": "long BAO range", "shortest": "0.3 m range"}
-MODULES = (capture_ruling, U, capture_handoff, cohort_basis, phase_limit, robustness, duration, postprocessing, promotion_evidence)
+MODULES = (capture_ruling, U, capture_handoff, cohort_basis, phase_limit, robustness, duration)
 
 
 def sha(p):
@@ -66,33 +81,23 @@ def main(argv=None):
     def opt(k, d=None):
         if k in a: i = a.index(k); v = a[i + 1]; del a[i:i + 2]; return v
         return d
-    rule = opt("--rule", RULE); handoff_dir = opt("--handoff"); RECORD = opt("--record-table"); EVID = opt("--evidence")
+    rule = opt("--rule", RULE); handoff_dir = opt("--handoff"); RECORD = opt("--record-table")
     RELEASES = opt("--releases"); DUR = opt("--duration-reference"); REL = opt("--rel"); RUN = opt("--run"); project = opt("--project")
-    reading = opt("--credit-reading"); INPUT = opt("--input-table")
-    TABLES_ONLY = "--tables-only" in a
-    if TABLES_ONLY: a.remove("--tables-only")
+    INPUT = opt("--input-table")
     if a: raise SystemExit(f"capture-release: unknown arguments {a}")
     if rule != RULE: raise SystemExit(f"capture-release: the release of record is {RULE}; its earlier revisions are frozen")
-    if not all((handoff_dir, RECORD, INPUT, EVID, RELEASES, DUR, REL, RUN)):
-        raise SystemExit("capture-release: --handoff, --record-table, --input-table, --evidence, --releases, --duration-reference, --rel "
+    if not all((handoff_dir, RECORD, INPUT, RELEASES, DUR, REL, RUN)):
+        raise SystemExit("capture-release: --handoff, --record-table, --input-table, --releases, --duration-reference, --rel "
                          "and --run are required")
-    if reading not in (None, "r3", "r2"): raise SystemExit("capture-release: --credit-reading is r3 or r2")
-    CREDIT = reading is not None   # only the rulings, channel 24 and the dispositions and thresholds (a credit reading of the release)
-    if CREDIT: assert TABLES_ONLY, "a credit reading is built with --tables-only"
-    WORLD = "200ns" if reading == "r2" else "none"; GROUND = "on" if CREDIT else "off"
-    # the release's switches (build_release.py --r52): r5.1 on r5's, and the settled ground credit
-    CH24 = "measured2020"; TLB = "on"; TC = "off"; R51 = True; CF, CG = "one_minus_gamma", "reconciled"
-    SETTLED = (CF, CG) == ("one_minus_gamma", "reconciled"); OLDCREDIT = (CF, CG) == ("one_minus_gamma_sq", "released")
-    REV = "r5.2" if SETTLED else "r5.1" if R51 else "r5"
-    CFX = [] if CF == "one_minus_gamma_sq" else ["--credit-form", CF]   # r5.2: channel 24's ceiling and the post-processing labels in the same form
+    # the release's switches (build_release.py --r52): r5.1 on r5's; no credit and no delay filter (r4's world)
+    WORLD = "none"; GROUND = "off"
+    CH24 = "measured2020"; TC = "off"; R51 = True
     BOFF = ["--set", "BOUND_SOURCE=summary", "--set", "BOUND_CALIBRATION=off"] if R51 else []   # r5.1: the bound switches go off with the bounds
     G1T = "literal G = 1" if R51 else "G = 1"                                                  # r5.1, triage row 22
     C24X = ["--per-bin-own-events", "--g1-names", "literal"] if R51 else []                    # r5.1, triage rows 24 and 22
-    SENS = ["--sensitivity", reading] if CREDIT else []                                        # the credit reading's world and credit
-    RCOL = "_R_exclusion" if WORLD == "none" else "_R_deployed"
-    R5 = os.path.join(RELEASES, "capture_ruling_a19_2026-09-25_r5"); R51REL = os.path.join(RELEASES, "capture_ruling_a19_2026-09-25_r5_1")
-    B2R51 = os.path.join(EVID, "b_list", "B-2", "r51"); EVB = os.path.join(EVID, "b_list")
-    assert os.path.abspath(REL) not in (R5, R51REL), "the frozen releases are only read"
+    RCOL = "_R_exclusion"
+    R5 = os.path.join(RELEASES, "capture_ruling_a19_2026-09-25_r5")
+    assert os.path.abspath(REL) != R5, "the frozen releases are only read"
     H = capture_handoff.open_handoff(handoff_dir)
     IN = INPUT; capture_handoff.table_rows(H, "frame_analysis/table_of_record_before_amendment8.csv", IN)
     capture_handoff.table_rows(H, "frame_analysis/table_of_record.csv", RECORD)
@@ -100,22 +105,19 @@ def main(argv=None):
     R = capture_ruling.main
     RARGS = ["--input", IN, "--handoff", handoff_dir, "--ch33-rescan"]
     # 1. the ruling: identity, r5.2, the G = 1 sensitivity, units alone
-    if not CREDIT: run(R, ["--rule", "record", "--out", f"{RUN}/identity.csv", *RARGS], f"{RUN}/identity.log"); assert sha(f"{RUN}/identity.csv") == RECORD_SHA
-    run(R, ["--rule", RULE, *SENS, "--json", f"{RUN}/a18.json", "--thresholds", f"{RUN}/thresholds.csv", "--out", f"{RUN}/a18_full.csv", *RARGS], f"{RUN}/a18.log")
-    if not CREDIT:
-        run(R, ["--rule", RULE, "--sensitivity", "g1", "--json", f"{RUN}/a18_g1.json", "--out", f"{RUN}/a18_g1_full.csv", *RARGS], f"{RUN}/a18_g1.log")
-        run(R, ["--rule", "record", "--set", "UNITS=power", "--set", "WORLD=none", "--set", "GROUND_CREDIT=off", "--json", f"{RUN}/units_only.json",
-                "--out", f"{RUN}/units_only_full.csv", *RARGS], f"{RUN}/units_only.log")
-    A = load_json(f"{RUN}/a18.json"); G1 = load_json(f"{RUN}/a18_g1.json") if not CREDIT else None
+    run(R, ["--rule", "record", "--out", f"{RUN}/identity.csv", *RARGS], f"{RUN}/identity.log"); assert sha(f"{RUN}/identity.csv") == RECORD_SHA
+    run(R, ["--rule", RULE, "--json", f"{RUN}/a18.json", "--thresholds", f"{RUN}/thresholds.csv", "--out", f"{RUN}/a18_full.csv", *RARGS], f"{RUN}/a18.log")
+    run(R, ["--rule", RULE, "--sensitivity", "g1", "--json", f"{RUN}/a18_g1.json", "--out", f"{RUN}/a18_g1_full.csv", *RARGS], f"{RUN}/a18_g1.log")
+    run(R, ["--rule", "record", "--set", "UNITS=power", "--set", "WORLD=none", "--set", "GROUND_CREDIT=off", "--json", f"{RUN}/units_only.json",
+            "--out", f"{RUN}/units_only_full.csv", *RARGS], f"{RUN}/units_only.log")
+    A = load_json(f"{RUN}/a18.json"); G1 = load_json(f"{RUN}/a18_g1.json")
     # 2. the copies
     PB24 = os.path.join(REL, "ch24_per_bin_a19.csv")
-    run(cohort_basis.main, ["--handoff", handoff_dir, "--record-table", RECORD, "--a18", "--world", WORLD, *(["--ground", "off"] if GROUND == "off" else []),
-                            "--set", "CH24_BASIS=measured2020", *(["--per-bin", PB24] if not CREDIT else []), *C24X, *CFX, "--json", f"{RUN}/ch24_a18.json"],
+    run(cohort_basis.main, ["--handoff", handoff_dir, "--record-table", RECORD, "--a18", "--world", WORLD, "--ground", GROUND,
+                            "--set", "CH24_BASIS=measured2020", "--per-bin", PB24, *C24X, "--json", f"{RUN}/ch24_a18.json"],
         os.path.join(REL, "ch24_basis_a18.txt"))
     C24 = load_json(f"{RUN}/ch24_a18.json")
-    _CE = "its ceiling" if CF == "one_minus_gamma_sq" else "its ceiling, (1 - 0.95),"   # r5.2: the settled form
-    _W = {("none", "off"): "", ("none", "on"): f" with the ground credit at {_CE} (no measured coherence)",
-          ("200ns", "on"): f" with the 200 ns filter plus S and the ground credit at {_CE} (no measured coherence)"}[(WORLD, GROUND)]
+    _W = ""   # the release's world clause: empty in the no-credit, no-filter world
     def _st24(rng):
         o = C24["reading"]["ranges"][rng]
         if o["verdict"] in ("excise", "marginal"):
@@ -130,19 +132,17 @@ def main(argv=None):
                 (f"no 2026 capture products; on its own 2020 in-band measurement (item 34){_W}: long BAO range {_st24('bao_long')}; short BAO range {_st24('bao_short')}"))
     REASON24 += f"; no keep: the stated keep reading is {C24['keep_stated_db']:+.1f} dB (ch24_basis_a18.txt)"
     C24FLAG = ["--ch24", f"{RUN}/ch24_a18.json"]
-    if not CREDIT:
-        pl = os.path.join(REL, "phase_limit_a18"); os.makedirs(pl, exist_ok=True)
-        run(phase_limit.main, ["--handoff", handoff_dir, pl, "--units", "power", "--units-json", f"{RUN}/units_only.json", "--a18-json", f"{RUN}/a18.json",
-                               "--record-table", RECORD],
-            os.path.join(pl, "phase_limit_a18.log"))
-        for f in ("phase_limit_ranges.csv", "phase_limit_classes.csv"): os.replace(os.path.join(pl, f), os.path.join(pl, f.replace(".csv", "_a18.csv")))
-        run(robustness.main, ["--handoff", handoff_dir, os.path.join(REL, "robustness_a18.csv"), "--a18", f"{RUN}/a18.json", *C24FLAG, *(["--variant-labels"] if R51 else []),
-                              "--record-table", RECORD],
-            f"{RUN}/robustness_a18.log")
-        run(duration.main, [f"{RUN}/a18.json", REL, *C24FLAG, "--duration-reference", DUR], f"{RUN}/sensitivity_a18.stdout")
-        shutil.move(os.path.join(REL, "sensitivity_a18.log"), os.path.join(RUN, "sensitivity_a18.log"))
-    if not TABLES_ONLY:
-        with open(os.path.join(REL, "CHANGES.md"), "wb") as fh: fh.write(_files("rfisher.records.chime_atsc_2026").joinpath("data", "CHANGES_r5_2.md").read_bytes())
+    pl = os.path.join(REL, "phase_limit_a18"); os.makedirs(pl, exist_ok=True)
+    run(phase_limit.main, ["--handoff", handoff_dir, pl, "--units", "power", "--units-json", f"{RUN}/units_only.json", "--a18-json", f"{RUN}/a18.json",
+                           "--record-table", RECORD],
+        os.path.join(pl, "phase_limit_a18.log"))
+    for f in ("phase_limit_ranges.csv", "phase_limit_classes.csv"): os.replace(os.path.join(pl, f), os.path.join(pl, f.replace(".csv", "_a18.csv")))
+    run(robustness.main, ["--handoff", handoff_dir, os.path.join(REL, "robustness_a18.csv"), "--a18", f"{RUN}/a18.json", *C24FLAG,
+                          "--record-table", RECORD],
+        f"{RUN}/robustness_a18.log")
+    run(duration.main, [f"{RUN}/a18.json", REL, *C24FLAG, "--duration-reference", DUR], f"{RUN}/sensitivity_a18.stdout")
+    shutil.move(os.path.join(REL, "sensitivity_a18.log"), os.path.join(RUN, "sensitivity_a18.log"))
+    with open(os.path.join(REL, "CHANGES.md"), "wb") as fh: fh.write(_files("rfisher.records.chime_atsc_2026").joinpath("data", "CHANGES_r5_2.md").read_bytes())
 
     # 3. table_of_record_a18.csv: the frozen record, every column and value as recorded, then the amendment 18 columns
     def f1(x): return "" if x is None else f"{x:.1f}"
@@ -173,7 +173,7 @@ def main(argv=None):
     rc = ["_A_net", "_measured", "_floor_level", "_gate_db", "_tau_s", "_tau_status", "_tau_least_s", "_probe_db", "_G", "_rho", "_ground_credit_db", RCOL, "_R_none", "_rescue_rho", "_verdict"]
     new = ["a18_disposition", "a18_deciding_range", "a18_deciding_bar_db", "a18_reason"]
     for rng in RANGES: new += [f"a18_{rng}_bar_db"] + [f"a18_{rng}{c}" for c in rc]
-    with open(os.path.join(REL, "table_of_record_a18.csv") if not CREDIT else os.devnull, "w", newline="") as fh:   # a credit reading carries no table of record
+    with open(os.path.join(REL, "table_of_record_a18.csv"), "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rec[0]) + new); w.writeheader()
         for r, a in zip(rec, full):
             o = dict(r); ch = int(r["channel"]); o["a18_disposition"], o["a18_reason"] = a["disposition"], a["policy_or_reason"]
@@ -228,7 +228,7 @@ def main(argv=None):
         t = next((r for r in read_rows(f"{RUN}/thresholds.csv") if r["channel"] == s and r["range"] == "channel"), None)
         rows.append(dict(channel=ch, record_disposition=recd.get(s, ""), a18_disposition=disp, deciding_range=dr, deciding_bar_db=f1(range_bar(ch, dr)) if dr else "",
                          reason=reason, bao_short=state(ch, "bao_short", A), bao_long=state(ch, "bao_long", A), policies_excluded="; ".join(exc),
-                         sensitivity_G1_disposition=G1["summary"][s][0] if G1 else "",
+                         sensitivity_G1_disposition=G1["summary"][s][0],
                          threshold=(f"tau > {float(t['tau_threshold_s']):.4g} s" if t and t["tau_threshold_s"] else
                                     "excised at any τ" if t and t["threshold_text"].startswith("excised at any τ") else "not excisable at any τ")))
     if R51:
@@ -282,26 +282,10 @@ def main(argv=None):
         w = csv.DictWriter(fh, fieldnames=fields); w.writeheader(); w.writerows(thr)
     # 5b. the run outputs the release tables are built from (unrounded results, full ruling tables, thresholds, logs)
     rr = os.path.join(REL, "run"); os.makedirs(rr, exist_ok=True)
-    RUNFILES = ("a18.json", "a18.log", "thresholds.csv", "ch24_a18.json") if CREDIT else \
-               ("a18.json", "a18.log", "a18_full.csv", "thresholds.csv", "a18_g1.json", "a18_g1.log", "a18_g1_full.csv", "units_only.json", "units_only.log",
+    RUNFILES = ("a18.json", "a18.log", "a18_full.csv", "thresholds.csv", "a18_g1.json", "a18_g1.log", "a18_g1_full.csv", "units_only.json", "units_only.log",
                 "units_only_full.csv", "identity.log", "ch24_a18.json", "robustness_a18.log", "sensitivity_a18.log")
     for f in RUNFILES:
         shutil.copy2(os.path.join(RUN, f), os.path.join(rr, f))
-    if CREDIT: print("credit reading:", REL); return 0
-    # r5: the credit readings are the rule itself with the ground credit ("r3") and with the 200 ns filter plus S and the ground
-    # credit ("r2"), built here into credit_readings/, and the post-processing sensitivity is computed against them
-    for k in ("r3", "r2"):
-        d = os.path.join(REL, "credit_readings", k); shutil.rmtree(d, ignore_errors=True)
-        run(main, ["--rule", RULE, "--handoff", handoff_dir, "--record-table", RECORD, "--input-table", IN, "--evidence", EVID, "--releases", RELEASES, "--duration-reference", DUR,
-                   "--rel", d, "--run", os.path.join(RUN, f"credit_{k}"), "--tables-only", "--credit-reading", k, *(["--project", project] if project else [])],
-            os.path.join(RUN, f"credit_{k}.log"))
-    run(postprocessing.main, ["--handoff", handoff_dir, f"{RUN}/a18.json", f"{RUN}/a18_g1.json", os.path.join(REL, "dispositions_a18.csv"),
-                              os.path.join(REL, "robustness_a18.csv"), os.path.join(REL, "credit_readings", "r3"), os.path.join(REL, "credit_readings", "r2"),
-                              os.path.join(REL, "postprocessing_sensitivity.csv"),
-                              "--ch24", f"{RUN}/ch24_a18.json", os.path.join(REL, "credit_readings", "r3", "run", "ch24_a18.json"),
-                              os.path.join(REL, "credit_readings", "r2", "run", "ch24_a18.json"), *(["--r51"] if R51 else []), *CFX],
-        f"{RUN}/postprocessing_sensitivity.log")
-    shutil.copy2(f"{RUN}/postprocessing_sensitivity.log", os.path.join(rr, "postprocessing_sensitivity.log"))
     # r5: the bounds read and where each prices a class (item 35), with the bars it moves (r4's readings: the bounds off)
     run(R, ["--rule", RULE, "--set", "TAU_LOWER_BOUNDS=off", *BOFF, *([] if TC == "off" else ["--set", "TAU_CENSOR=on"]), "--json", f"{RUN}/a18_bounds_off.json",
             "--out", f"{RUN}/a18_bounds_off_full.csv", *RARGS], f"{RUN}/a18_bounds_off.log")
@@ -337,17 +321,12 @@ def main(argv=None):
     with open(os.path.join(REL, "tau_lower_bounds_a19.csv"), "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(brows[0]), lineterminator="\n"); w.writeheader(); w.writerows(brows)
     for f in ("a18_bounds_off.json", "a18_bounds_off.log", "a18_g1_bounds_off.json", "a18_g1_bounds_off.log"): shutil.copy2(os.path.join(RUN, f), os.path.join(rr, f))
-    # 5c. r5.1: B-2's least corners on the r5.1 readings, and the grounds each excision carries (PROMOTION_EVIDENCE.md)
-    PE_INPUTS = promotion_evidence.inputs(EVID)
-    PROMO = promotion_evidence.write(REL, B2R51, EVB, A, C24, rev=REV, r51_rel=(None if OLDCREDIT else R51REL), evid=EVID, r5=R5)
-    print("item 18 as coded:", PROMO["coded"], "under B-2's admissible grid:", PROMO["grid"])
-    if TABLES_ONLY: print("tables:", REL); return 0
-    write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUTS, project, IN)
+    write_manifest(REL, H, handoff_dir, RECORD, RELEASES, DUR, A, project, IN)
     print("release:", REL)
     return 0
 
 
-def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUTS, project=None, INPUT=None):
+def write_manifest(REL, H, handoff_dir, RECORD, RELEASES, DUR, A, project=None, INPUT=None):
     """MANIFEST.json: the release's prose and fixed fields, then what this build read and wrote."""
     doc = _release_doc(project); fixed = doc["fields"]
     assert fixed["r5_1"]["ruling_switches"] == {k: A["switches"][k] for k in fixed["r5_1"]["ruling_switches"]}
@@ -359,10 +338,7 @@ def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUT
     inputs["handoff/manifest.json"] = sha(os.path.join(handoff_dir, "manifest.json"))
     inputs[RECORD] = sha(RECORD)
     if INPUT is not None: inputs[INPUT] = sha(INPUT)
-    for p in PE_INPUTS + tuple(sorted(glob.glob(os.path.join(EVID, "b_list", "B-2", "r51", "*.csv")) + glob.glob(os.path.join(EVID, "b_list", "B-2", "*.csv")))):
-        if os.path.isfile(p): inputs[p] = sha(p)
-    for rel in ("capture_ruling_a19_2026-09-25_r5/run/a18.json", "capture_ruling_a19_2026-09-25_r5/dispositions_a18.csv",
-                "capture_ruling_a19_2026-09-25_r5_1/credit_readings/r2/run/a18.json", "capture_ruling_a19_2026-09-25_r5_1/credit_readings/r2/run/ch24_a18.json"):
+    for rel in ("capture_ruling_a19_2026-09-25_r5/run/a18.json",):
         p = os.path.join(RELEASES, rel)
         if os.path.isfile(p): inputs[p] = sha(p)
     for name in ("bin_sigma_lambda.csv", "channel_lambda.csv"):
@@ -372,10 +348,10 @@ def write_manifest(REL, H, handoff_dir, RECORD, EVID, RELEASES, DUR, A, PE_INPUT
                     switches_a18=A["switches"],
                     producer=dict(provenance.producer_identity(), modules={m.__name__: sha(m.__file__) for m in MODULES}),
                     commands=[(f"rfisher records capture-release --rule {RULE} --handoff <handoff> --record-table <table of record> --input-table <v7 table>"
-                               f" --evidence <evidence> --releases <releases> --duration-reference <duration> --rel <release> --run <run>   (this release)"),
+                               f" --releases <releases> --duration-reference <duration> --rel <release> --run <run>   (this release)"),
                               ("rfisher records capture-ruling --rule r5_2 --json a18.json --thresholds thresholds.csv --input "
-                               "<v7 table> --handoff <handoff> --out a18_full.csv --ch33-rescan"),
-                              "rfisher records capture-release ... --tables-only --credit-reading r3   (and r2)"],
+                               "<v7 table> --handoff <handoff> --out a18_full.csv --ch33-rescan")],
+                    not_written=NOT_WRITTEN,
                     inputs=inputs, datasets=dict(handoff=H.manifest.get("inputs", {}), note="the reduced dumps, products and lanes the handoff was derived from"),
                     files=files,
                     tests=dict(suite="tests/records (test_capture_identity.py, test_capture_rules.py, test_capture_handoff.py)",

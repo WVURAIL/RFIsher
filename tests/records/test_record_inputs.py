@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from capture_golden import record_input, sha256
+from capture_golden import quiet, record_input, sha256
 from rfisher.records.chime_atsc_2026 import capture_handoff as ch
-from rfisher.records.chime_atsc_2026 import capture_release, phase_limit, robustness, table_of_record
+from rfisher.records.chime_atsc_2026 import capture_release, capture_ruling, phase_limit, robustness, table_of_record
 
 
 @pytest.mark.parametrize("name", sorted(ch.RECORD_SHA256))
@@ -35,12 +35,24 @@ def test_missing_record_input_has_a_clear_error(tmp_path):
         ch.table_rows(None, "frame_analysis/table_of_record.csv", tmp_path / "missing.csv")
 
 
+def _a18(handoff, tmp_path):
+    """The r5.2 ruling's json, which the cleaner-polarization margins read."""
+    path = tmp_path / "a18.json"
+    quiet(capture_ruling.main, ["--rule", "r5_2", "--json", str(path), "--out", str(tmp_path / "a18.csv"),
+                                "--input", str(record_input("table_of_record_before_amendment8.csv")),
+                                "--handoff", str(handoff), "--ch33-rescan"])
+    return path
+
+
 @pytest.mark.parametrize("module", [robustness, phase_limit])
 def test_record_commands_require_an_explicit_in_run_declaration(module, capture_handoff_dir, tmp_path, capsys):
     changed = tmp_path / "record.csv"
     changed.write_bytes(record_input("table_of_record.csv").read_bytes() + b"\n")
     out = tmp_path / "out"
     args = ["--handoff", str(capture_handoff_dir), "--record-table", str(changed), str(out)]
+    if module is robustness:
+        args += ["--a18", str(_a18(capture_handoff_dir, tmp_path))]
+        capsys.readouterr()
     with pytest.raises(ch.HandoffError, match="sha256 differs"):
         module.main(args)
     assert not out.exists()
@@ -60,8 +72,7 @@ def test_release_rejects_either_changed_input_before_writing(altered, capture_ha
     rel, run = tmp_path / "rel", tmp_path / "run"
     args = ["--handoff", str(capture_handoff_dir), "--record-table", str(inputs["table_of_record.csv"]),
             "--input-table", str(inputs["table_of_record_before_amendment8.csv"]), "--rel", str(rel),
-            "--run", str(run), "--evidence", "unused", "--releases", "unused", "--duration-reference", "unused",
-            "--tables-only", "--credit-reading", "r3"]
+            "--run", str(run), "--releases", "unused", "--duration-reference", "unused"]
     with pytest.raises(ch.HandoffError, match="sha256 differs"):
         capture_release.main(args)
     assert not rel.exists() and not run.exists()
