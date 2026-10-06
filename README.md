@@ -98,9 +98,11 @@ surface against the band's tolerance and nothing else:
 
 - `rfisher.verdict.interval` gives each family its science threshold eta_sci
   (the largest eta whose kept residual meets r_tol), the deployable set between
-  max(eta_Pfa, eta_eval) and eta_sci, and the selection inside it: the least
-  cost `(1 + r_var) / (1 - f)` within 2% of the minimum, ties broken by kept
-  residual, masked fraction and candidate order;
+  eta_eval and eta_sci, and the selection inside it: the least cost
+  `(1 + r_var) / (1 - f)` within 2% of the minimum, ties broken by kept
+  residual, masked fraction and candidate order. No false-alarm rate is
+  required for admission: eta_Pfa is reported beside the set and bounds
+  nothing;
 - `rfisher.verdict.screening` applies the screen's precedence (tolerance
   refused, detector refused, keep only with a certified eta_Pfa, excise only
   when every family's deployable set is empty, otherwise undetermined).

@@ -233,7 +233,8 @@ def verdict_main(argv=None, prog: str = "rfisher verdict") -> int:
     """``rfisher verdict archive``."""
     parser = argparse.ArgumentParser(
         prog=prog, description="The historical conditional screen of each band: the deployable set "
-        "of thresholds [eta_Pfa, eta_sci] from the detector's handoff and one "
+        "of thresholds (the feasible ones from eta_eval to eta_sci; eta_Pfa is "
+        "reported, not a bound) from the detector's handoff and one "
         "tolerance table, the selector inside it, and keep, excise or "
         "undetermined under the declared precedence. These categories are "
         "not qualified physical operating recommendations.")

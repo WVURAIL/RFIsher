@@ -91,10 +91,15 @@ def test_the_interval_of_a_family(pol):
     assert fam.feasible_count == 3 and fam.contiguous
     empty = interval.interval(interval.points(rows, 0.05, pol), summary)
     assert empty.status == interval.STATUS_NO_CANDIDATE and not empty.members
+    # eta_Pfa above eta_sci: reported beside the set, never a bound on it
     with_pfa = interval.interval(pts, {**summary, "eta_pfa": 3.5,
                                        "eta_pfa_status": "available"})
-    assert with_pfa.status == interval.STATUS_PFA_ABOVE
-    assert with_pfa.lower_bound_source == "pfa" and with_pfa.interval_low == 3.5
+    assert with_pfa.eta_pfa == 3.5 and with_pfa.eta_pfa_status == "available"
+    assert with_pfa.status == interval.STATUS_NONEMPTY
+    assert with_pfa.members == fam.members and with_pfa.lower_bound == 1.0
+    assert with_pfa.lower_bound_source == "evaluability"
+    assert math.isnan(with_pfa.interval_low)
+    assert not hasattr(interval, "STATUS_PFA_ABOVE")
 
 
 def test_a_family_that_is_not_one_contiguous_run(pol):
@@ -212,7 +217,7 @@ def test_the_empty_status_names_the_lower_bound(pol):
     assert fam.lower_bound_source == "evaluability"
     fam = interval.interval(pts, {**summary, "eta_eval": 1.0, "eta_pfa": 5.0,
                                   "eta_pfa_status": "available"})
-    assert fam.status == interval.STATUS_PFA_ABOVE
+    assert fam.status == interval.STATUS_NONEMPTY and fam.eta_pfa == 5.0
 
 
 def test_a_feasible_candidate_without_a_finite_cost_is_refused(pol):

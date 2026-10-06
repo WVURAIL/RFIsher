@@ -63,9 +63,10 @@ For one band, family and scenario (`rfisher.verdict.interval`):
   cost is `C = (1 + r_var) / (1 - f)` (`cost`);
 - `eta_sci` is the largest feasible threshold, the science limit;
 - the deployable set is the feasible candidates with `eta` at or above
-  `max(eta_pfa, eta_eval)`: the detector's false-alarm limit where its
-  handoff has one, otherwise the tightest evaluable threshold (the summary
-  says which, `lower_bound_source`);
+  `eta_eval`, the tightest evaluable threshold (`lower_bound_source`). No
+  false-alarm rate is required for admission: the detector's false-alarm
+  limit `eta_pfa`, where its handoff has one, is reported beside the set and
+  bounds nothing, and `interval_low`, a false-alarm bound only, is empty;
 - the selector takes the candidates of the deployable set whose cost is within
   `selection.cost_plateau_ratio` (1.02) of the least, then the least by
   `selection.tie_break`: the kept residual, the masked fraction, then the
