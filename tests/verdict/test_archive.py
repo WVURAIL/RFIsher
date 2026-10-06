@@ -50,16 +50,25 @@ def test_the_union_reads_the_least_point_of_the_families_it_covers():
 
 
 def test_a_band_with_two_rule_scenarios_is_refused(handoff_copy, tolerances, tmp_path):
-    tol = tolerances({"29": [("none", "rule", 1000.0, 0.0), ("other", "rule", 900.0, 0.0)],
-                      "34": [("none", "rule", 100.0, 0.0)]})
+    tol = tolerances({"29": [("none", "rule", 1000.0), ("other", "rule", 900.0)],
+                      "34": [("none", "rule", 100.0)]})
     with pytest.raises(handoff.HandoffError, match="2 rule scenarios"):
         archive.verdict_archive(handoff_copy.path, tol, PROJECT, tmp_path / "out")
 
 
+def test_a_post_processing_scenario_is_refused(handoff_copy, tolerances, tmp_path):
+    """A verdict reads rule tolerances only: no post-processing scenario is priced."""
+    tol = tolerances({"29": [("none", "rule", 1000.0), ("deployed", "sensitivity", 900.0)],
+                      "34": [("none", "rule", 100.0)]})
+    with pytest.raises(handoff.HandoffError, match="rule tolerances only"):
+        archive.verdict_archive(handoff_copy.path, tol, PROJECT, tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
 def test_all_new_archive_exports_declare_historical_screening_scope(
         handoff_copy, tolerances, tmp_path):
-    tol = tolerances({"29": [("none", "rule", 1.0, 0.0)],
-                      "34": [("none", "rule", 1.0, 0.0)]})
+    tol = tolerances({"29": [("none", "rule", 1.0)],
+                      "34": [("none", "rule", 1.0)]})
     out = tmp_path / "out"
     result = archive.verdict_archive(handoff_copy.path, tol, PROJECT, out)
     for record in result["screen"]:
@@ -69,7 +78,7 @@ def test_all_new_archive_exports_declare_historical_screening_scope(
     assert all(manifest[key] == value
                for key, value in HISTORICAL_SCREENING_EVIDENCE.items())
     assert "verified sensitivity floors are not detected RFI" in manifest["outcome_interpretation"]
-    for name in ("verdict.csv", "verdict_points.csv", "screen.csv", "sensitivity.csv"):
+    for name in ("verdict.csv", "verdict_points.csv", "screen.csv"):
         with (out / name).open(newline="") as stream:
             reader = csv.DictReader(stream)
             assert set(HISTORICAL_SCREENING_EVIDENCE) <= set(reader.fieldnames)

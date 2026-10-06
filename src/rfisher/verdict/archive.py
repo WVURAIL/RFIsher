@@ -12,7 +12,6 @@ Reads a characterization directory (checked by :mod:`.handoff`) and one
 - ``verdict_points.csv``: every fine calibration candidate of the rule
   scenario, with its cost, R, feasibility and membership of the set;
 - ``screen.csv``: one row per band, the outcome under the precedence;
-- ``sensitivity.csv``: the named sensitivities (:mod:`.sensitivity`);
 - ``manifest.json``: the sha256 of every file read and the producer.
 
 Nothing here reads a detector product, a response bank or a forecast.
@@ -31,7 +30,7 @@ from typing import Mapping, Sequence
 from .. import policy as _policy
 from ..provenance import producer_identity
 from ..response.evidence import HISTORICAL_SCREENING_EVIDENCE
-from . import handoff, interval, screening, sensitivity
+from . import handoff, interval, screening
 
 UNION = "union"
 RULE = "rule"
@@ -227,6 +226,11 @@ def run(characterization: str | Path, tolerances: str | Path,
     alpha = (oc.manifest.get("null_policy") or {}).get("alpha")
     tol_path = _tolerance_path(Path(tolerances))
     tol_rows = handoff.read_tolerances(tol_path, oc.bands)
+    other = sorted({t["role"] for t in tol_rows} - {RULE})
+    if other:
+        raise handoff.HandoffError(
+            f"{tol_path}: roles {other}; a verdict reads rule tolerances only "
+            "(no post-processing scenario is priced)")
     by_band_tol: dict[str, list] = {}
     for t in tol_rows:
         by_band_tol.setdefault(t["band_id"], []).append(t)
@@ -237,7 +241,7 @@ def run(characterization: str | Path, tolerances: str | Path,
     for s in oc.summary:
         summary_by_band.setdefault(str(s["band_id"]), []).append(s)
     screened = [b for b, v in oc.bands.items() if v.get("role") == "screened"]
-    verdict_rows, point_rows, screen_rows, sens_rows = [], [], [], []
+    verdict_rows, point_rows, screen_rows = [], [], []
     for band in screened:
         summaries = summary_by_band.get(band, [])
         fine = [s for s in summaries if s["candidate_set"] == interval.FINE]
@@ -299,26 +303,16 @@ def run(characterization: str | Path, tolerances: str | Path,
         outcome = screening.screen(band, rule_tol, summaries, rule_families,
                                    pol, alpha=alpha)
         screen_rows.append(outcome.as_row())
-        candidates = interval.fine_candidates(rows_by_band.get(band, []), pol)
-        exclusion_points = []
-        for f in rule_families:
-            column = screening.exclusion_residual(
-                f.summary["chain_gain_status"], pol)
-            exclusion_points += [(r[column], f.family) for r in candidates
-                                 if r["threshold_family"] == f.family]
-        sens_rows += sensitivity.sensitivities(
-            band, outcome.outcome, tols, exclusion_points)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     written = {}
-    for records in (verdict_rows, point_rows, screen_rows, sens_rows):
+    for records in (verdict_rows, point_rows, screen_rows):
         for record in records:
             record.update(HISTORICAL_SCREENING_EVIDENCE)
     for name, rows, columns in (
             ("verdict.csv", verdict_rows, VERDICT_COLUMNS),
             ("verdict_points.csv", point_rows, POINT_COLUMNS),
-            ("screen.csv", screen_rows, screening.SCREEN_COLUMNS),
-            ("sensitivity.csv", sens_rows, sensitivity.COLUMNS)):
+            ("screen.csv", screen_rows, screening.SCREEN_COLUMNS)):
         columns = tuple(columns) + tuple(
             key for key in HISTORICAL_SCREENING_EVIDENCE if key not in columns)
         data = render(rows, columns)
