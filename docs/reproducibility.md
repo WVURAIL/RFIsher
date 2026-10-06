@@ -242,15 +242,17 @@ refuses these exports. Old untagged rows are also ineligible. Complete
 calibration handoffs remain refused by this command; use `response threshold`
 for their diagnostic curves. These additions do not rewrite frozen outputs.
 
-The two frozen archive releases are written in their own layouts from the same
-inputs:
+The frozen no-split archive release is written in its own layout from the
+same inputs:
 
 ```bash
-rfisher records archive-layout --release archive_author_eras_2026_09_23 \
+rfisher records archive-layout --release archive_no_split_2026_09_24_r2 \
   --characterization CHAR --tolerances TOL --project projects/chime_bao --out RELEASE
 ```
 
-(`archive_no_split_2026_09_24_r2` for the release without the variance split.)
+The author-eras layout (`archive_author_eras_2026_09_23`), which priced a
+characterization with the booked variance split, is no longer written; its
+frozen release keeps it.
 A band whose selection finds a feasible point is refused, because its
 evaluation-block replay is the detector's and the handoff does not carry it.
 

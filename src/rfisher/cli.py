@@ -340,8 +340,7 @@ def records_main(argv=None, prog: str = "rfisher records") -> int:
     layout = actions.add_parser(
         "archive-layout", help="the frozen layout of an archive release")
     layout.add_argument("--release", required=True,
-                        choices=("archive_author_eras_2026_09_23",
-                                 "archive_no_split_2026_09_24_r2"))
+                        choices=("archive_no_split_2026_09_24_r2",))
     layout.add_argument("--characterization", type=Path, required=True,
                         help="the detector's characterization directory")
     layout.add_argument("--tolerances", type=Path, required=True,

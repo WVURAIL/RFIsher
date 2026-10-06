@@ -141,12 +141,15 @@ def test_the_layout_is_written_end_to_end(golden, tmp_path, release):
     assert len(rows(out / "tables" / "operating_points.csv")) == knees
 
 
-def test_a_characterization_of_another_release_is_refused(golden, tmp_path):
-    char, tol = _characterization(golden, ct.RELEASES[0], tmp_path / "characterization")
+def test_a_characterization_with_the_booked_split_is_refused(golden, tmp_path):
+    """The golden still holds the author-eras release, whose characterization booked the variance split; its
+    layout is retired with stage P, and such a characterization is refused."""
+    char, tol = _characterization(golden, "archive_author_eras_2026_09_23", tmp_path / "characterization")
     with pytest.raises(ValueError, match="characterized as"):
-        ct.read_inputs(ct.RELEASES[1], char, tol, PROJECT)
-    with pytest.raises(ValueError, match="unknown release"):
-        ct.read_inputs("archive_2020", char, tol, PROJECT)
+        ct.read_inputs(ct.RELEASES[0], char, tol, PROJECT)
+    for release in ("archive_author_eras_2026_09_23", "archive_2020"):
+        with pytest.raises(ValueError, match="unknown release"):
+            ct.read_inputs(release, char, tol, PROJECT)
 
 
 def test_a_short_coarse_grid_is_not_reproducible(golden, tmp_path):

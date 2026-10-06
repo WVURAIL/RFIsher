@@ -31,8 +31,9 @@ releases keep: the credit readings `credit_readings/r3` and `r2`,
 `PROMOTION_EVIDENCE.md` of r5.2, the credit columns of its
 `robustness_a18.csv` and `ch24_per_bin_a19.csv`, channel 24's archive-share
 reading, the amendment 8 robustness record with both credits, revision 2's
-200 ns duration reading, and the archive layouts' delay-filter scenarios
-(`worlds.csv`) and f sigma_8 tolerance columns. Every other file of row 21
+200 ns duration reading, the archive layouts' delay-filter scenarios
+(`worlds.csv`) and f sigma_8 tolerance columns, and the author-eras layout
+(rows 1c to 1f and 3), whose characterization booked the variance split. Every other file of row 21
 is the release's byte for byte. The shipped tolerance table is now
 `src/rfisher/data/tolerances/tolerance_T1yr.csv`: the no-filter dilation rows
 of the archive table of row 2 (`filter_scenarios_T1yr.csv` at f56916a, csv
