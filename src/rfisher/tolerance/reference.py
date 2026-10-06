@@ -1,7 +1,7 @@
-"""Two frozen reference tolerances, written as band tolerance rows.
+"""The frozen reference tolerance, written as band tolerance rows.
 
 The per-bin grid table (:mod:`rfisher.tolerance.table`) is one tolerance
-basis. Two earlier results price bands on bases of their own, and are kept as
+basis. An earlier result prices bands on a basis of its own, and is kept as
 data beside the grid table, byte for byte and pinned by sha256:
 
 - ``exact_time_reference_2026-09-09``: the qualified exact-time reference at
@@ -9,15 +9,16 @@ data beside the grid table, byte for byte and pinned by sha256:
   from a year grid. Its per-band tolerance is ``conditional_reference_amplitude``
   (the least over the band's bins of the binding required component), in the
   scenario without a delay filter (``none``, the rule scenario).
-- ``coarse_world_sensitivity_2026-09-09``: the tolerance of the deployed delay
-  filter (``deployed``, a sensitivity scenario) with the suppression S it
-  assumes, per band, from the primary dilation basis at zeta 1. Its per-bin
-  tolerances are those of the bands that overlap a single bin.
 
-:func:`reference_rows` writes both as rows of ``tolerances.csv`` and
+:func:`reference_rows` writes it as rows of ``tolerances.csv`` and
 ``tolerance_components.csv`` with the basis named in ``tolerance_basis``.
 Every value is the frozen file's own number: a float read from its decimal
 string and written back with ``repr`` returns the same string.
+
+``coarse_world_sensitivity_2026-09-09`` is kept beside it for one reader only:
+the capture records at identity (:mod:`rfisher.records.chime_atsc_2026`), whose
+table of record was priced with the deployed 200 ns tolerance and its
+suppression. No verdict reads it (:func:`coarse_world_bands`).
 """
 from __future__ import annotations
 
@@ -33,7 +34,7 @@ from typing import Sequence
 
 EXACT_TIME = "exact_time_reference_2026-09-09"
 COARSE_WORLD = "coarse_world_sensitivity_2026-09-09"
-BASES = (EXACT_TIME, COARSE_WORLD)
+BASES = (EXACT_TIME,)
 DATA = "rfisher.data"
 DIRECTORY = "tolerances"
 # The vendored files and the sha256 of their bytes (the coarse-world file is
@@ -49,9 +50,9 @@ EXACT_TIME_FILES = {
 COARSE_WORLD_FILE = "coarse_world_sensitivity_2026-09-09.csv.gz"
 COARSE_WORLD_SHA256 = (
     "cdc5bba4056d511cece0b4b29f9971c4631c6f666a81f085ace0a128f5ad9bf0")
-SCENARIOS = {EXACT_TIME: ("none", "rule"),
-             COARSE_WORLD: ("deployed", "sensitivity")}
-# The rows of the coarse-world table that carry the deployed tolerance.
+SCENARIOS = {EXACT_TIME: ("none", "rule")}
+# The rows of the coarse-world table that carry the deployed tolerance (read
+# only by the capture records at identity).
 COARSE_WORLD_SELECTION = {"world": "deployed", "science_group": "dilation",
                           "zeta": "1.0", "tolerance_basis": "primary"}
 REFUSED_ABSENT = "the reference prices no band with this id"
@@ -117,7 +118,8 @@ def exact_time_conditions() -> dict:
 def coarse_world_bands() -> dict[str, dict]:
     """``{band id: {r_tol, suppression_db, bins}}`` from the deployed rows.
 
-    Every selected row of a band carries the same tolerance and suppression;
+    The table of record's deployed tolerance, read only by the capture
+    records at identity. Every selected row of a band carries the same tolerance and suppression;
     a band whose rows disagree is refused here rather than read.
     """
     out: dict[str, dict] = {}
@@ -153,8 +155,8 @@ def _edges_match(band, row) -> bool:
             and float(row["frequency_high_MHz"]) == float(band.high_mhz))
 
 
-def _row(band, basis, r_tol, binding_parameter, binding_bin,
-         suppression_db, conditions, refusal):
+def _row(band, basis, r_tol, binding_parameter, binding_bin, conditions,
+         refusal):
     scenario, role = SCENARIOS[basis]
     return {"band_id": band.band_id, "band_low_mhz": band.low_mhz,
             "band_high_mhz": band.high_mhz, "scenario": scenario,
@@ -162,7 +164,7 @@ def _row(band, basis, r_tol, binding_parameter, binding_bin,
             "binding_parameter": binding_parameter,
             "binding_bin": binding_bin, "zeta": conditions["zeta"],
             "target_time_years": conditions["target_time_years"],
-            "suppression_db": suppression_db, "tolerance_basis": basis,
+            "tolerance_basis": basis,
             "refusal": refusal}
 
 
@@ -189,50 +191,24 @@ def reference_rows(basis: str, bands: Sequence) -> tuple[list[dict],
     exact = exact_time_bands()
     conditions = exact_time_conditions()
     per_bin = exact_time_bins()
-    labels = {b: v["label"] for b, v in per_bin.items()}
     tolerances, components = [], []
-    if basis == EXACT_TIME:
-        for band in bands:
-            row = exact.get(band.band_id)
-            refusal = ("" if row is not None and _edges_match(band, row) else
-                       REFUSED_ABSENT if row is None else REFUSED_EDGES)
-            if refusal:
-                tolerances.append(_row(band, basis, math.nan, "", "", 0.0,
-                                       conditions, refusal))
-                continue
-            tolerances.append(_row(
-                band, basis, float(row["conditional_reference_amplitude"]),
-                row["binding_parameter"], int(row["binding_bin"]), 0.0,
-                conditions, ""))
-            for b in row["bins"]:
-                entry = per_bin.get(b, {"value": math.nan, "parameter": "",
-                                        "label": ""})
-                components.append(_component(band, basis, entry["parameter"],
-                                             b, entry["label"],
-                                             entry["value"]))
-        return tolerances, components
-    coarse = coarse_world_bands()
-    coarse_bins = coarse_world_bins()
     for band in bands:
-        entry = coarse.get(band.band_id)
         row = exact.get(band.band_id)
-        refusal = ("" if entry is not None and row is not None
-                   and _edges_match(band, row) else
-                   REFUSED_ABSENT if entry is None or row is None
-                   else REFUSED_EDGES)
+        refusal = ("" if row is not None and _edges_match(band, row) else
+                   REFUSED_ABSENT if row is None else REFUSED_EDGES)
         if refusal:
-            tolerances.append(_row(band, basis, math.nan, "", "", math.nan,
-                                   conditions, refusal))
+            tolerances.append(_row(band, basis, math.nan, "", "", conditions,
+                                   refusal))
             continue
         tolerances.append(_row(
-            band, basis, float(entry["r_tol"]), "", "",
-            float(entry["suppression_db"]),
-            {"zeta": float(COARSE_WORLD_SELECTION["zeta"]),
-             "target_time_years": float(entry["target_time_years"])}, ""))
-        for b in entry["bins"]:
-            components.append(_component(band, basis, "dilation", b,
-                                         labels.get(b, ""),
-                                         coarse_bins.get(b, math.nan)))
+            band, basis, float(row["conditional_reference_amplitude"]),
+            row["binding_parameter"], int(row["binding_bin"]), conditions,
+            ""))
+        for b in row["bins"]:
+            entry = per_bin.get(b, {"value": math.nan, "parameter": "",
+                                    "label": ""})
+            components.append(_component(band, basis, entry["parameter"],
+                                         b, entry["label"], entry["value"]))
     return tolerances, components
 
 
@@ -241,9 +217,8 @@ def provenance(bases: Sequence[str], bands_path: str | Path) -> dict:
     return {
         "schema": 3,
         "bases": list(bases),
-        "files": {**{f"{EXACT_TIME}/{k}": v
-                     for k, v in EXACT_TIME_FILES.items()},
-                  COARSE_WORLD_FILE: COARSE_WORLD_SHA256},
+        "files": {f"{EXACT_TIME}/{k}": v
+                  for k, v in EXACT_TIME_FILES.items()},
         "bands_sha256": hashlib.sha256(
             Path(bands_path).read_bytes()).hexdigest(),
     }

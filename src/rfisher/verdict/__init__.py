@@ -3,6 +3,5 @@
 Reading order: :mod:`.handoff` (how the handoff files are checked),
 :mod:`.interval` (the deployable set [eta_Pfa, eta_sci] and the selector
 inside it), :mod:`.screening` (keep, excise or undetermined, and the
-precedence), :mod:`.sensitivity` (the one place a sensitivity factor
-applies) and :mod:`.archive` (the command that writes them).
+precedence) and :mod:`.archive` (the command that writes them).
 """

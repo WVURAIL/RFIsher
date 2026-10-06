@@ -15,9 +15,9 @@ Files only, and two of them in kind:
   vendored schema (`src/rfisher/data/schemas/operating_characteristic_v1.schema.json`,
   pinned by `tests/test_schemas.py`) and against the residual reference and
   shapes the science profile declares;
-- one tolerance file, `tolerances.csv`, one row per band and scenario with
-  `r_tol`, its binding parameter and bin, the scenario's suppression `S` and
-  the tolerance basis.
+- one tolerance file, `tolerances.csv`, one row per band with `r_tol`, its
+  binding parameter and bin and the tolerance basis, in the rule scenario (no
+  delay filter); a row of any other role is refused.
 
 `rfisher.verdict` imports nothing from `rfisher.forecast`, `rfisher.tolerance`
 or `rfisher.records`, and a verdict run opens no data file but those, besides the project's registers
@@ -78,10 +78,9 @@ For one band, family and scenario (`rfisher.verdict.interval`):
 
 `rfisher.verdict.screening` then reads the families of a band in the declared
 precedence (`selector.precedence`): a refused tolerance or a refused detector
-family first, then keep, excise and undetermined. The post-processing
-sensitivities (the delay filter `S`, the ground filter, the coherence factor
-`G -> 1`) are applied only in `rfisher.verdict.sensitivity`, as readings
-beside the rule, never inside it. The archive's frozen release layouts price
+family first, then keep, excise and undetermined. No post-processing of the
+residual is modelled: no delay filter, ground filter or other downstream
+suppression enters a verdict. The archive's frozen release layouts price
 under a frozen copy of these registers
 (`src/rfisher/records/chime_atsc_2026/data/policy_2026_archive/`), so a change
 of the selector moves the verdict and never the layouts of record.

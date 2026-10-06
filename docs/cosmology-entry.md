@@ -24,15 +24,13 @@ strictest parameter and bin it touches. A residual at `r_tol` therefore biases
 the binding parameter by one sigma of a one-year survey; `R = r_sys / r_tol`
 says how many such sigmas a kept residual is worth.
 
-## The suppression S
+## No post-processing
 
-A delay filter in the analysis can attenuate a residual further before it
-reaches the parameters. Each scenario of the science model (`none`, `peak1`,
-`peak2`, `deployed`) states that attenuation as `S` in dB, from the relation
-between delay and line-of-sight wavenumber. `S` is never folded into `r_tol`:
-the tolerance table carries it in its own column, and the verdict reads a
-scenario's `S` as a post-processing sensitivity beside the rule (this work does
-not measure the filter).
+A delay filter or other downstream stage of the analysis may remove part of a
+residual before it reaches the parameters. How much depends on the residual's
+spectral shape and stability, which the model does not carry, so nothing here
+assumes it: the tolerance is the forecast's without a delay filter (the one
+scenario, `none`), and no suppression multiplies a residual.
 
 ## Why some bands have no archive tolerance
 
@@ -48,15 +46,12 @@ inherits the refusal from any bin it overlaps. Bins 5, 7, 8 and 11 cover bands
 linear model is not trustworthy there after one year, and the method declines
 to price the band rather than extrapolate.
 
-## Why fσ8 is reported, not required
+## Why fσ8 sets no tolerance
 
 The science target is the distance scale (α⊥ and α∥). fσ8, the growth rate,
-is constrained by the same forecast and its tolerance is finite on every band,
-about six times stricter where both exist. The science model therefore lists
-`required: [aperp, apar]` and `reported: [fs8]`; the tolerance components
-carry fσ8 with `required = False`. Requiring it would make every `r_tol`
-smaller, so it would only make a keep harder and would not change an
-exclusion.
+is a nuisance parameter of the same Fisher matrix: it is marginalized, so its
+uncertainty widens the dilations' errors, but it carries no tolerance of its
+own. The science model lists `required: [aperp, apar]` and `reported: []`.
 
 ## Two bases: the grid and the exact time
 
@@ -71,8 +66,8 @@ r_tol = 0.027980 for it. Channel 33 has both: 0.015829 on the grid and
 
 ## The two entry points
 
-Cosmology enters through `rfisher.forecast` (the RadioFisher BAO adapter, its
-banks and scenarios) and `rfisher.tolerance` (the rule above and the table it
+Cosmology enters through `rfisher.forecast` (the RadioFisher BAO adapter and
+its banks) and `rfisher.tolerance` (the rule above and the table it
 writes). Two things leave them: `tolerances.csv`, the only science input of
 both verdicts, and the BAO-band coherence gain, which the capture ruling of
 record alone reads.

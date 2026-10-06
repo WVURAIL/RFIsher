@@ -3,6 +3,11 @@
 Ported from the r5.2 producer's tests/test_a18.py: each test reads the rulings the rule files give on the golden
 capture handoff, in place of the frozen trees the producer's tests read. The frozen releases themselves are pinned by
 sha in test_capture_identity.py.
+
+The credit readings (the sensitivities r3 and r2) are not rule files any more (stage P, 2026-10-06: post-processing is
+not modelled). The WORLD and GROUND_CREDIT switches stay, because the table of record at identity was priced in the
+200 ns world with the ground credit; the two switch tests set them directly. The check of r5.2's ground-credit reading
+is retired.
 """
 from __future__ import annotations
 
@@ -28,9 +33,8 @@ def rulings(capture_handoff_dir, tmp_path_factory):
     runs = {"r5_2": ["--rule", "r5_2"], "r5_1": ["--rule", "r5_1"], "r5": ["--rule", "r5"],
             "coded_policy": ["--rule", "r5_2", "--set", "EVERY_POLICY=coded"],
             "r4": ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off"],
-            "r3": ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off", "--sensitivity", "r3"],
-            "r2": ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off", "--sensitivity", "r2"],
-            "r5_2_r3": ["--rule", "r5_2", "--sensitivity", "r3"]}
+            "r3": ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off", "--set", "GROUND_CREDIT=on"],
+            "r2": ["--rule", "a18", "--set", "TAU_LOWER_BOUNDS=off", "--set", "WORLD=200ns", "--set", "GROUND_CREDIT=on"]}
     got = {}
     for name, args in runs.items():
         quiet(capture_ruling.main, [*args, "--json", str(out / f"{name}.json"), "--thresholds", str(out / f"{name}.csv"),
@@ -50,8 +54,10 @@ def test_the_rule_files_resolve_to_the_releases_switch_sets():
     assert capture_ruling.resolve("r5") == capture_ruling.resolve("a18") == {**identity, **a18}
     assert capture_ruling.resolve("r5_2") == {**identity, **a18, **r51, **r52}
     assert r52 == {"CREDIT_FORM": "one_minus_gamma", "CREDIT_GAMMA": "reconciled"}
-    for name in ("g1", "r3", "r2"):
-        assert capture_ruling.rule_file(name, sensitivity=True)["switches"]
+    assert capture_ruling.rule_file("g1", sensitivity=True)["switches"] == {"UNMEASURED_TAU": "g1"}
+    for name in ("r3", "r2"):
+        with pytest.raises(capture_ruling.RuleError):
+            capture_ruling.rule_file(name, sensitivity=True)
     with pytest.raises(capture_ruling.RuleError):
         capture_ruling.rule_file("r6")
 
@@ -220,9 +226,8 @@ def test_tau_lower_bounds_switch(rulings):
 
 
 def test_r52_credit(rulings):
-    """r5.2 changes only the credit readings: the no-credit ruling's R, bars, G, verdicts and dispositions are r5.1's;
-    the reconciled range gamma differs from the released one on 15 long, 26 short and 27 short only; and in the
-    ground-credit reading every range's credit is -10 log10(1 - gamma) at that gamma."""
+    """r5.2 changes no reading of the no-credit ruling: its R, bars, G, verdicts and dispositions are r5.1's; the
+    reconciled range gamma differs from the released one on 15 long, 26 short and 27 short only."""
     d = rulings["r5_2"][0]; r51 = rulings["r5_1"][0]
     assert d["switches"]["CREDIT_FORM"] == "one_minus_gamma" and d["switches"]["CREDIT_GAMMA"] == "reconciled"
     moved = sorted((c, rng) for c in d["results"] for rng in d["results"][c] if d["results"][c][rng]["rho"] != r51["results"][c][rng]["rho"])
@@ -234,13 +239,3 @@ def test_r52_credit(rulings):
             assert p["verdict"][0] == q["verdict"][0] and p["bar"] == q["bar"] and p["G_bar"] == q["G_bar"] and p["credit_db"] == q["credit_db"] == 0.0
             for pol, x in p["pols"].items():
                 for k in ("R_dep", "R_dep_G1", "R_floor", "R_keep_stated", "R_none"): assert x[k] == q["pols"][pol][k], (c, rng, pol, k)
-    a3 = rulings["r5_2_r3"][0]
-    assert a3["switches"]["GROUND_CREDIT"] == "on"
-    for c, per in d["results"].items():
-        for rng, p in per.items():
-            g = p["rho"]; cr = 1 - g
-            assert a3["results"][c][rng]["rho"] == g and abs(a3["results"][c][rng]["credit_db"] + 10 * np.log10(cr)) < 1e-12, (c, rng)
-            for pol, x in p["pols"].items():
-                for k in ("R_dep", "R_dep_G1", "R_floor", "R_dep_Gdump"):
-                    y3 = a3["results"][c][rng]["pols"][pol][k]
-                    assert (x[k] is None) == (y3 is None) and (x[k] is None or abs(x[k] * cr / y3 - 1) < 1e-12), (c, rng, pol, k)

@@ -86,7 +86,7 @@ def test_a_missing_bank_names_its_build_command(tmp_path):
                                          "missing") as refused:
         response.load_response_bank(tmp_path / "absent.npz")
     assert response.DEFAULT_BUILD_COMMAND in str(refused.value)
-    assert "Only the four filter-scenario response banks are packaged" \
+    assert "Only the no-filter response bank is packaged" \
         in str(refused.value)
 
 

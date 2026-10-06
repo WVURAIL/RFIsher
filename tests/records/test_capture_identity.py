@@ -4,6 +4,9 @@ The golden handoff (tests/golden/handoff/capture) is the detector's measurements
 it the ported records must write the frozen files exactly: the table of record at identity (9867551a) and its v7
 input (fd718463), the r5.2 release's ruling runs, and the ruling runs of revisions 2 to 5.1, whose switches the rule
 files keep. The whole release is compared at the gate.
+
+The release's credit readings (run/ of credit_readings/r3 and r2) are retired with stage P (2026-10-06): post-processing
+is not modelled, and their rule files were removed. Revisions 2 and 3 stay, set by their switches.
 """
 from __future__ import annotations
 
@@ -31,10 +34,6 @@ R52 = {
     "units_only_full.csv": "b76ae4b82ef31ac38e01476965b6831e462c8061f5b27b7bea27bc525c5d442e",
     "a18_bounds_off.json": "abe25ebcff88d48983027b269723d26e49dea629ce93b958d558b11b0c563b2e",
     "a18_g1_bounds_off.json": "15ad33b6e35d50454b9e17739e935496e43415c47862bbea22b265a3b262d5f8",
-    "r3/a18.json": "b304342d1b98f33974279c1fb80ec0d2538bffb45353ce6c70aa019135939c8a",
-    "r3/thresholds.csv": "81b3e25bf159b3bf65f46dd4f1d2c19924161d6253bfa4ecee38323be07e9e66",
-    "r2/a18.json": "fcef5256da654747ab1e696733524ecbb1609586a146016d91532779c48f39c4",
-    "r2/thresholds.csv": "24acef154095fff37e7bc2ae8bd4968fcd62e4087bb2f4bb191ee1f6d3b3026d",
 }
 # run/a18.json of the earlier revisions (results/capture_ruling_a1{8,9}_*)
 REVISIONS = {
@@ -101,10 +100,6 @@ def test_the_release_runs_are_the_frozen_ones(capture_handoff_dir, tmp_path):
     ruling(capture_handoff_dir, t / "bo.csv", "--rule", "r5_2", *BOUNDS_OFF, "--json", str(t / "a18_bounds_off.json"))
     ruling(capture_handoff_dir, t / "g1bo.csv", "--rule", "r5_2", *BOUNDS_OFF, "--sensitivity", "g1",
            "--json", str(t / "a18_g1_bounds_off.json"))
-    for k in ("r3", "r2"):
-        (t / k).mkdir()
-        ruling(capture_handoff_dir, t / k / "a18_full.csv", "--rule", "r5_2", "--sensitivity", k,
-               "--json", str(t / k / "a18.json"), "--thresholds", str(t / k / "thresholds.csv"))
     got = {name: sha256(t / name) for name in R52}
     assert_frozen(got, R52, _sections(t / "a18.json"))
 

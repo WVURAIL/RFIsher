@@ -42,8 +42,7 @@ def basis(model: ScienceModel) -> str:
 
 BAND_COLUMNS = ("band_id", "band_low_mhz", "band_high_mhz", "scenario", "role",
                 "r_tol", "binding_parameter", "binding_bin", "zeta",
-                "target_time_years", "suppression_db", "tolerance_basis",
-                "refusal")
+                "target_time_years", "tolerance_basis", "refusal")
 COMPONENT_COLUMNS = ("band_id", "scenario", "tolerance_basis", "parameter",
                      "required", "bin", "bin_label", "r_tol_component",
                      "status")

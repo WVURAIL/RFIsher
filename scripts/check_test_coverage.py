@@ -14,7 +14,6 @@ CRITICAL = {
     "src/rfisher/forecast/radiofisher_bao/bank/_validation.py": 100.0,
     "src/rfisher/verdict/interval.py": 95.0,
     "src/rfisher/verdict/screening.py": 95.0,
-    "src/rfisher/verdict/sensitivity.py": 95.0,
     "src/rfisher/verdict/handoff.py": 90.0,
     "src/rfisher/forecast/radiofisher_bao/significance.py": 90.0,
 }

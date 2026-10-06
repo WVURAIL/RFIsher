@@ -14,12 +14,18 @@ records rule it on the 2020 CANFAR cohort, each here with its logic unchanged:
 
 The lane's tables, frames, thresholds and dump medians are the capture handoff's ``cohort24.json``; only the borrowed
 basis opens the handoff's borrowed files (``cohort2020/`` and ``frame_analysis/pilot_to_inband.csv``); channel 24's
-lambda_none is read from the table of record given as ``--record-table``; the archive shares are the handoff's.
+lambda_none is read from the table of record given as ``--record-table``.
+
+The measured reading takes no credit and no delay filter (``--world none --ground off``; post-processing is not
+modelled). The release's credit readings of channel 24 (the ground credit at its ceiling and the 200 ns filter plus S),
+its archive-share reading and the both-credits column of the per-bin table are not computed here; the release keeps
+them. ``--world`` and ``--ground`` keep their defaults (200 ns, on) for the frozen 2020-basis record, which was priced
+that way.
 
 usage: rfisher records cohort-basis --handoff DIR --record-table TABLE [--a18 [--json OUT.json]] [--tau-archive S]
                                     [--timed-frames N] [--world 200ns|none] [--ground on|off]
                                     [--set CH24_BASIS=borrowed|measured2020] [--per-bin OUT.csv] [--per-bin-own-events]
-                                    [--g1-names r5|literal] [--credit-form one_minus_gamma_sq|one_minus_gamma]
+                                    [--g1-names r5|literal]
 """
 import csv, json, os
 
@@ -29,9 +35,7 @@ from rfisher.records.chime_atsc_2026 import capture_handoff
 from rfisher.records.chime_atsc_2026 import capture_units as U
 from rfisher.records.chime_atsc_2026._files import read_rows
 
-RHO_CEIL = 0.95   # the ground credit's ceiling: channel 24 has no measured coherence, so the credit readings take the most generous
 TAU_ARCHIVE = 8423.0
-CREDIT_FORMS = ("one_minus_gamma_sq", "one_minus_gamma")   # r5.2 (item 41, B-1): the ground credit's form, (1 - gamma^2) through r5.1
 # ---- the lane's classes, ranges and policies (ch24_inband_a18.py)
 NFFT = U.NFFT
 INB = list(range(676, 692)); C37 = [477, 480, 483, 486, 489, 491]
@@ -72,8 +76,7 @@ def load(h, record_table):
              lam_none=lam_none, FILL=FILL, POLICIES=POLICIES, CLS=CLS, LONG=LONG, RANGES=RANGES, lane=c.lane, code=c.code,
              code_sha256=c.code_sha256, products_sha256=c.products_sha256, n_products=c.n_products)
     assert L.MAXFR == 8 and len(L.EVENTS) == 12 and all(ok for _, _, ok in L.dup), (L.MAXFR, len(L.EVENTS))
-    _STATE.update(lane=L, frames=c.frames, tables=c.tables, record=record_table,
-                  shares={x[0]: dict(intraday_share=x[1], fast_share=x[2], ground_filter_db=x[3]) for x in capture_handoff.archive_shares(h)})
+    _STATE.update(lane=L, frames=c.frames, tables=c.tables, record=record_table)
     return L
 
 
@@ -155,45 +158,29 @@ def ratio(T, fl, epochs, key="inband"):
 
 
 # ---------------------------------------------------------------- channel 24's measured 2020 reading (a19_inputs.py, item 34)
-def ground_credit_ceiling(form="one_minus_gamma_sq"):
-    """The ground credit at its ceiling, in the given form: (1 - 0.95^2) through r5.1, (1 - 0.95) in r5.2 (item 41)."""
-    assert form in CREDIT_FORMS, form
-    return (1 - RHO_CEIL ** 2) if form == "one_minus_gamma_sq" else (1 - RHO_CEIL)
-
-
-def ceiling_text(form="one_minus_gamma_sq"):
-    return "(1 - 0.95^2)" if form == "one_minus_gamma_sq" else "(1 - 0.95)"
-
-
 def _record24():
     for r in read_rows(_STATE["record"]):
         if r["channel"] == "24" and r["role"] != "pilot" and r["lambda_none"]:
-            return float(r["lambda_none"]), float(r["lambda_deployed"]), float(r["suppression_db"])
+            return float(r["lambda_none"])
 
 
 def _db(x):
     return 10 * np.log10(x) if (x is not None and np.isfinite(x) and x > 0) else np.nan
 
 
-def ch24_measured2020(world="none", ground="off", form="one_minus_gamma_sq"):
-    """Channel 24 ruled on its own 2020 in-band measurement, in the given world and credit: r4/r5 (none, off), the ground
-    credit (none, on; r3's reading) or the 200 ns filter plus S with the ground credit (200ns, on; r2's reading). The lane's
-    rule is r4's (items 1 to 8, 15, 17); the credit readings multiply every exclusion reading by the same factor, the keep
-    side untouched. The ground credit takes its ceiling (1 - 0.95^2), the most generous value, because channel 24 has no
-    measured coherence. r5.2 (item 41): form="one_minus_gamma" takes the settled form, (1 - 0.95)."""
-    L = ch24_lane(); lam_none, lam_dep, sup_db = _record24()
+def ch24_measured2020():
+    """Channel 24 ruled on its own 2020 in-band measurement, r4/r5's reading: no credit and no delay filter. The lane's rule
+    is r4's (items 1 to 8, 15, 17), whose exclusion factor is one."""
+    L = ch24_lane(); lam_none = _record24()
     assert lam_none == L.lam_none
     fill_none = U.fill_factor(24, lam_none, "none"); assert fill_none == L.FILL
-    credit = ground_credit_ceiling(form) if ground == "on" else 1.0
-    if world == "none": k = credit
-    else: k = credit * 10 ** (-sup_db / 10) * U.fill_factor(24, lam_dep, "200ns") / fill_none * lam_none / lam_dep
+    k = 1.0
     T = L.tables("I", L.MAXFR, "sky"); fl = L.floor_stats(T, L.EVENTS)
     disp, out = L.rule(T, fl, L.MAXFR, credit=k)
-    res = dict(basis="measured2020", world=world, ground=ground, ground_credit_rho=(RHO_CEIL if ground == "on" else None),
-               exclusion_factor=k, lambda_none=lam_none, lambda_deployed=lam_dep, suppression_db=sup_db, fill_none=fill_none,
+    res = dict(basis="measured2020", world="none", ground="off", ground_credit_rho=None,
+               exclusion_factor=k, lambda_none=lam_none, fill_none=fill_none,
                maxfr=L.MAXFR, events=list(L.EVENTS), frames={e: L.nframes(e, L.MAXFR) for e in L.EVENTS}, eta=L.eta, Qmed=L.Qmed,
                kept={p: L.kept(p) for p in L.POLICIES}, disposition=disp, ranges={})
-    if form != "one_minus_gamma_sq" and ground == "on": res["ground_credit_form"] = form   # r5.2, where a credit is taken; the r5.1 form writes no key
     for rng, o in out.items():
         cand = [(p, d) for p, d in o["pols"].items() if d["measured"]]
         bp = min(cand, key=lambda x: x[1]["R_excl"])[0] if cand else None
@@ -243,26 +230,16 @@ def ch24_cleaner_pol(bar_db, G_bar, factor=1.0):
     return dict(bar_db=_db(R), measured=m, n=n, classes=per)
 
 
-def ch24_archive_shares(bar_db, G_bar):
-    """The archive's booked shares in place of the priced coherence, as robustness_credit_a18.py reads them."""
-    c = _STATE["shares"]["ch24_fid690.json"]
-    isd, fsd = c["intraday_share"], c["fast_share"]
-    R = 10 ** (bar_db / 10); return dict(bar_db=_db((R / G_bar) * (isd * G_bar + fsd)), intraday_share=isd, fast_share=fsd, ground_filter_db_archive=c.get("ground_filter_db"))
-
-
-def ch24_per_bin(own_events=False, form="one_minus_gamma_sq"):
+def ch24_per_bin(own_events=False):
     """Per in-band bin (676 to 691): per class the median over the 12 events of the excess net of the floor mean, in floor
     scatters, and whether it is measured (three scatters); per BAO range the reading over its measured classes (A^2 N n_b,
-    median) at the admissible minimum G of the fewest frames (4), at G = 1, and with both credits (the 200 ns filter plus S
-    and the ground credit at its ceiling). No credits unless named.
+    median) at the admissible minimum G of the fewest frames (4) and at G = 1. No credits.
     r5.1 (triage row 24, B-9): with own_events=True each bin's G is the admissible minimum of the fewest frames among the events that
     contain the bin (bin 676 is absent from two events, one of them the 4-frame event, so its fewest is 5 and G 4.71), and the bins at
-    the channel's edges are labelled.
-    r5.2 (item 41): form="one_minus_gamma" takes the ground credit of the both-credits column in the settled form, (1 - 0.95)."""
-    L = ch24_lane(); lam_none, lam_dep, sup_db = _record24()
+    the channel's edges are labelled."""
+    L = ch24_lane(); lam_none = _record24()
     T = L.tables("I", L.MAXFR, "sky"); fl = L.floor_stats(T, L.EVENTS)
     nmin = min(L.nframes(e, L.MAXFR) for e in L.EVENTS); G = U.gain_bao(U.admissible_min_G(nmin) * U.TF, 24)
-    k2 = ground_credit_ceiling(form) * 10 ** (-sup_db / 10) * U.fill_factor(24, lam_dep, "200ns") / L.FILL * lam_none / lam_dep
     rows = []; G_ch = G
     for f in L.INB:
         o = dict(freq_id=f, freq_mhz=L.freq(f), n_events=sum(1 for e in L.EVENTS if f in T[(e, L.LONG[0])]["bins"]))
@@ -278,9 +255,9 @@ def ch24_per_bin(own_events=False, form="one_minus_gamma_sq"):
                 if meas: pw.append(U.to_power(A - fm, c))
             o[f"{rng}_measured_classes"] = f"{len(pw)} of {len(L.RANGES[rng])}"
             R = float(np.median(pw)) * L.FILL / lam_none if pw else np.nan
-            o[f"{rng}_bar_db"] = _db(R * G); o[f"{rng}_bar_G1_db"] = _db(R); o[f"{rng}_bar_both_credits_db"] = _db(R * G * k2)
+            o[f"{rng}_bar_db"] = _db(R * G); o[f"{rng}_bar_G1_db"] = _db(R)
         rows.append(o)
-    return dict(rows=rows, G=G_ch, n_frames=nmin, both_credits_factor=k2, own_events=own_events)
+    return dict(rows=rows, G=G_ch, n_frames=nmin, own_events=own_events)
 
 
 def ch24_threshold(R1, g1t="G = 1"):
@@ -294,11 +271,11 @@ def ch24_threshold(R1, g1t="G = 1"):
     return t, ""
 
 
-def ch24_basis_main(world, ground, tor, json_out=None, per_bin_out=None, own_events=False, g1_names="r5", credit_form="one_minus_gamma_sq"):
+def ch24_basis_main(tor, json_out=None, per_bin_out=None, own_events=False, g1_names="r5"):
     """The measured2020 branch of ch24_2020_basis_a18.py: print the reading, write its json and the per-bin csv. r5.1: own_events
     (each bin's G from its own events, triage row 24) and g1_names="literal" (R with every class at G = 1 is "literal G = 1", row 22)."""
     assert os.path.abspath(tor) == os.path.abspath(_STATE["record"]), tor
-    r = ch24_measured2020(world, ground, credit_form); L = ch24_lane(); CT = ceiling_text(credit_form)
+    r = ch24_measured2020(); L = ch24_lane()
     g1t = "literal G = 1" if g1_names == "literal" else "G = 1"
     if g1_names == "literal":
         def P(*a):
@@ -317,14 +294,7 @@ def ch24_basis_main(world, ground, tor, json_out=None, per_bin_out=None, own_eve
     miss = {e: [f for f in L.INB + L.C37 if (e, f) not in L.R] for e in L.EVENTS}
     P(f"bins absent from CADC for an event: { {e: m for e, m in miss.items() if m} }")
     P("policy thresholds eta " + ", ".join(f"{k} {v:.2f}" for k, v in r["eta"].items()) + "; kept events " + ", ".join(f"{k} {len(v)}" for k, v in r["kept"].items()))
-    if world == "none" and ground == "off":
-        P("the rule: amendment 18 as revision 4 and 5 read it, no credit of any kind (items 1 to 8, 15, 17): R = A_net^2 N n_b x fill x G / lambda_none,")
-    elif world == "none":
-        P(f"the rule with the ground credit (r3's reading, item 18): every exclusion reading x {CT}, the ceiling, because channel 24 has no")
-        P(f"measured coherence; R = A_net^2 N n_b x fill x {CT} x G / lambda_none,")
-    else:
-        P(f"the rule with the 200 ns filter plus S and the ground credit (r2's reading, item 18): S {r['suppression_db']} dB with the 200 ns bin fill,")
-        P(f"lambda_deployed, and {CT}, the ceiling, because channel 24 has no measured coherence,")
+    P("the rule: amendment 18 as revision 4 and 5 read it, no credit of any kind (items 1 to 8, 15, 17): R = A_net^2 N n_b x fill x G / lambda_none,")
     P("tau unmeasured, so G is the admissible minimum of the fewest frames a policy's events carry (item 3), in the BAO-band gain (item 4).\n")
     P(f"{'range':10s} {'verdict':8s} {'bar':>8s} {'policy':9s} {'G':>6s} {'at G=1':>8s} {'at 8423 s':>10s} {'keep':>8s}")
     for rng, o in r["ranges"].items():
@@ -342,10 +312,10 @@ def ch24_basis_main(world, ground, tor, json_out=None, per_bin_out=None, own_eve
     thr = {rng: ch24_threshold(o["R1"], g1t) for rng, o in r["ranges"].items()}
     L_, S_ = r["ranges"]["bao_long"], r["ranges"]["bao_short"]
     booking = "bao_long" if L_["verdict"] == "excise" else ("bao_short" if S_["verdict"] == "excise" else None)
-    cp = ar = None
+    cp = None
     if booking:
         B = r["ranges"][booking]
-        cp = ch24_cleaner_pol(B["bar_db"], B["G_bar"], r["exclusion_factor"]); ar = ch24_archive_shares(B["bar_db"], B["G_bar"])
+        cp = ch24_cleaner_pol(B["bar_db"], B["G_bar"], r["exclusion_factor"])
     anyr = [rng for rng in ("bao_short", "bao_long") if thr[rng][1].startswith("excised at any")]
     thr_text = ("excised at any τ" if anyr else
                 (f"tau > {min(t for t, _ in (thr['bao_short'], thr['bao_long']) if t is not None):.4g} s" if any(t is not None for t, _ in (thr["bao_short"], thr["bao_long"])) else "not excisable at any τ"))
@@ -354,13 +324,12 @@ def ch24_basis_main(world, ground, tor, json_out=None, per_bin_out=None, own_eve
         P(f"VERDICT (amendment 19, item 34): EXCISED on its own 2020 in-band measurement, on the {'long' if booking == 'bao_long' else 'short'} BAO baselines,")
         P(f"  {B['bar_db']:+.2f} dB over tolerance ({B['bar_policy']}, G {B['G_bar']:.2f}), {B['bar_G1_db']:+.2f} dB at G = 1; every policy that keeps an event is")
         P(f"  measured and over the allowance on both BAO ranges; {thr_text}.")
-        P(f"  Rule variants on the booking range: cleaner polarization {cp['bar_db']:+.2f} dB ({cp['measured']} of {cp['n']} classes measured),"
-          f" archive shares {ar['bar_db']:+.2f} dB.")
+        P(f"  Rule variants on the booking range: cleaner polarization {cp['bar_db']:+.2f} dB ({cp['measured']} of {cp['n']} classes measured).")
     else:
         P(f"VERDICT (amendment 19, item 34): {r['disposition'].upper()} on its own 2020 in-band measurement.")
     P("  No keep: the stated keep reading (no credit, lambda_none, G at the cap) is "
       + ", ".join(f"{rng} {o['keep_stated_least_db']:+.1f} dB" for rng, o in r["ranges"].items() if rng != "shortest") + ".")
-    pb = ch24_per_bin(own_events, credit_form)
+    pb = ch24_per_bin(own_events)
     over = [x for x in pb["rows"] if np.isfinite(x["bao_long_bar_db"]) and 10 ** (x["bao_long_bar_db"] / 10) > U.ALLOW_R]
     gtxt = (f"admissible minimum G {pb['G']:.2f}" if not own_events else
             f"each bin at the admissible minimum G of its own events' fewest frames, G {min(x['G'] for x in pb['rows']):.2f} to {max(x['G'] for x in pb['rows']):.2f}")
@@ -369,16 +338,15 @@ def ch24_basis_main(world, ground, tor, json_out=None, per_bin_out=None, own_eve
       f" {lb['bao_long_bar_db']:+.1f} dB (freq_id {lb['freq_id']}{', ' + lb['edge'] + ' of the channel' if own_events and lb['edge'] else ''}).")
     if json_out:
         g1 = "excise" if any(r["ranges"][x]["verdict"] == "excise" and 10 ** (r["ranges"][x]["bar_G1_db"] / 10) > U.ALLOW_R for x in ("bao_short", "bao_long")) else "undetermined"
-        js = dict(disposition=r["disposition"], disposition_G1=g1, basis="measured2020", world=world, ground=ground, booking_range=booking,
+        js = dict(disposition=r["disposition"], disposition_G1=g1, basis="measured2020", world="none", ground="off", booking_range=booking,
                   deciding_bar_db=(r["ranges"][booking]["bar_db"] if booking else None), threshold=thr_text,
                   thresholds={rng: dict(tau_threshold_s=t, text=(why if t is None else ""), R_at_G1=r["ranges"][rng]["R1"]) for rng, (t, why) in thr.items()},
-                  cleaner_pol=cp, archive_shares=ar, reading=r,
+                  cleaner_pol=cp, reading=r,
                   per_bin=dict(G=pb["G"], n_frames=pb["n_frames"], n_over_long=len(over), n_bins=len(pb["rows"]),
                                **({"G_rule": "each bin's own events", "G_min_bins": min(x["G"] for x in pb["rows"]), "G_max_bins": max(x["G"] for x in pb["rows"])} if own_events else {})),
                   keep_stated_db=min(o["keep_stated_least_db"] for rng, o in r["ranges"].items() if rng != "shortest"),
                   inputs=dict(lane=L.lane, code=L.code, code_sha256=L.code_sha256, products_sha256=L.products_sha256,
                               n_products=L.n_products))
-        if credit_form != "one_minus_gamma_sq" and ground == "on": js["ground_credit_form"] = credit_form   # r5.2, where a credit is taken
         def clean(x):
             if isinstance(x, dict): return {str(k): clean(v) for k, v in x.items()}
             if isinstance(x, (list, tuple)): return [clean(v) for v in x]
@@ -412,15 +380,12 @@ def main(argv=None):
     _pb = [argv[i + 1] for i, x in enumerate(argv) if x == "--per-bin"]
     OWN = "--per-bin-own-events" in argv                                    # r5.1 (triage row 24): each bin's G from its own events
     _gn = [argv[i + 1] for i, x in enumerate(argv) if x == "--g1-names"]; G1N = _gn[0] if _gn else "r5"; assert G1N in ("r5", "literal")   # r5.1, row 22
-    _cf = [argv[i + 1] for i, x in enumerate(argv) if x == "--credit-form"]; CF = _cf[0] if _cf else "one_minus_gamma_sq"   # r5.2, item 41
-    assert CF in ("one_minus_gamma_sq", "one_minus_gamma")
     _nt = [argv[i + 1] for i, x in enumerate(argv) if x == "--timed-frames"]
     _h = [argv[i + 1] for i, x in enumerate(argv) if x == "--handoff"]; _t = [argv[i + 1] for i, x in enumerate(argv) if x == "--record-table"]
     if not (_h and _t): raise SystemExit("cohort-basis: --handoff and --record-table are required")
     H = capture_handoff.open_handoff(_h[0]); TOR = _t[0]
-    argv = [x for i, x in enumerate(argv) if x not in ("--a18", "--tau-archive", "--json", "--world", "--ground", "--set", "--per-bin", "--per-bin-own-events", "--g1-names", "--credit-form", "--timed-frames", "--handoff", "--record-table") and (i == 0 or argv[i - 1] not in ("--tau-archive", "--json", "--world", "--ground", "--set", "--per-bin", "--g1-names", "--credit-form", "--timed-frames", "--handoff", "--record-table"))]
+    argv = [x for i, x in enumerate(argv) if x not in ("--a18", "--tau-archive", "--json", "--world", "--ground", "--set", "--per-bin", "--per-bin-own-events", "--g1-names", "--timed-frames", "--handoff", "--record-table") and (i == 0 or argv[i - 1] not in ("--tau-archive", "--json", "--world", "--ground", "--set", "--per-bin", "--g1-names", "--timed-frames", "--handoff", "--record-table"))]
     if len(argv) > 1: raise SystemExit(f"cohort-basis: unknown arguments {argv[1:]}")
-    assert CF == "one_minus_gamma_sq" or CH24_BASIS == "measured2020", "the settled credit form (r5.2) is read on the measured 2020 basis only"
     assert not (OWN or G1N != "r5") or CH24_BASIS == "measured2020"
     assert not _pb or CH24_BASIS == "measured2020"
 
@@ -431,8 +396,11 @@ def main(argv=None):
 
     if CH24_BASIS == "measured2020":
         assert A18, "the measured 2020 basis is an amendment 18 ruling"
+        if (WORLD, GROUND) != ("none", "off"):
+            raise SystemExit("cohort-basis: the measured 2020 reading takes no credit and no delay filter (--world none --ground off); "
+                             "post-processing is not modelled")
         load(H, TOR)
-        return ch24_basis_main(WORLD, GROUND, TOR, _js[0] if _js else None, _pb[0] if _pb else None, OWN, G1N, CF)
+        return ch24_basis_main(TOR, _js[0] if _js else None, _pb[0] if _pb else None, OWN, G1N)
     H.borrowed = True   # the borrowed basis (item 9, revision 4) reads the cohort's pilot-bin table and the correction
     exc = {int(k): np.array(v) for k, v in H.json("cohort2020/cohort_exc_long.json").items()}
     pv = H.json("cohort2020/pilot_vs_inband_D1.json")

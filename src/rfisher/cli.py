@@ -3,7 +3,7 @@
     rfisher forecast     evaluate one uniform masking scenario from a Fisher bank
     rfisher build-bank   build a Fisher bank (slow; needs RadioFisher)
     rfisher tolerance    build, show and reduce the residual tolerance table,
-                         and write the two frozen reference tolerances
+                         and write the frozen reference tolerance
     rfisher verdict      the screen of each band from a detector handoff
     rfisher response     the known-moment check of the visibility response
     rfisher records      the code of record of the 2026 campaign
@@ -92,13 +92,11 @@ def reference_main(argv=None, prog: str = "rfisher tolerance reference") -> int:
 
     parser = argparse.ArgumentParser(
         prog=prog, description="Write tolerances.csv and "
-        "tolerance_components.csv for the bands on one or more frozen "
-        "reference bases (the vendored exact-time reference and the "
-        "coarse-scenario sensitivity).")
+        "tolerance_components.csv for the bands on the frozen reference "
+        "basis (the vendored exact-time reference).")
     parser.add_argument("--basis", action="append", required=True,
                         choices=reference.BASES,
-                        help="a reference basis; repeat for several, whose "
-                             "rows are written in the order given")
+                        help="the reference basis")
     parser.add_argument("--bands", type=Path, required=True,
                         help="CSV with band_id,low_mhz,high_mhz (an optional "
                              "role column must read screened), or a handoff "
@@ -138,7 +136,7 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
         prog=prog, description="The residual tolerance table: "
         "'build' prices every scenario, bin and parameter of the science "
         "model; 'bands' reduces the table to one tolerance per band and "
-        "scenario; 'reference' writes the frozen reference tolerances in the "
+        "scenario; 'reference' writes the frozen reference tolerance in the "
         "same layout; 'show' prints it; 'bias' reports the full response of "
         "one bank (see 'rfisher tolerance bias --help').")
     actions = parser.add_subparsers(dest="action", required=True,
@@ -178,7 +176,7 @@ def tolerance_main(argv=None, prog: str = "rfisher tolerance") -> int:
     shown.add_argument("--banks", type=Path,
                        help="response bank directory the table was built "
                             "from (default: packaged)")
-    actions.add_parser("reference", help="the frozen reference tolerances "
+    actions.add_parser("reference", help="the frozen reference tolerance "
                        "(see 'rfisher tolerance reference --help')")
     actions.add_parser("bias", help="the full response report of one bank")
     args = parser.parse_args(argv)
@@ -302,14 +300,11 @@ CAPTURE_RECORDS = {
                        "file (the table of record at 'record')"),
     "cohort-basis": ("cohort_basis", "channel 24 on its 2020 cohort basis "
                      "(borrowed, or its own in-band measurement)"),
-    "robustness": ("robustness", "the robustness margins of the excisions"),
+    "robustness": ("robustness", "the cleaner-polarization margins of the "
+                   "excisions"),
     "phase-limit": ("phase_limit", "the exclusion-side phase limit on the "
                     "coherence gain"),
     "duration": ("duration", "the keep gap and the survey-duration reading"),
-    "postprocessing": ("postprocessing", "the post-processing sensitivity "
-                       "against the sensitivity readings of the record"),
-    "filter-sensitivity": ("filter_sensitivity", "revision 3's filter "
-                           "sensitivity against revision 2"),
     "capture-release": ("capture_release", "the capture ruling release r5.2 "
                         "from the capture handoff"),
     "cadence-report": ("cadence_report", "the cadence report of record: the "

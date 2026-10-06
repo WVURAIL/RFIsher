@@ -52,18 +52,9 @@ BULL_BANK_SHA256 = {
 RESPONSE_BANK_SHA256 = {
     "fisher_bank_chime2022_pres_dense.npz":
         "1f9d3fa7daa332925772e551784409f6a84b574f44a9899c99b628e232ad1d4b",
-    "fisher_bank_chime2022_pres_kfg22_dense.npz":
-        "068111635ac8083e7705a2fe1f27e6688c96e230d559672dfcc52f0efe4b9f0d",
-    "fisher_bank_chime2022_pres_kfg44_dense.npz":
-        "82eefab4a0c7e75645a506ea7ed29feff265a6466a5f684fc041c286c2686f91",
-    "fisher_bank_chime2022_pres_kfg80_dense.npz":
-        "dcae550abd0cadfc1e732cea8254f6bf873cda964460c85b5592f7a6636468ab",
 }
 RESPONSE_BANK_KFG = {
     "fisher_bank_chime2022_pres_dense.npz": None,
-    "fisher_bank_chime2022_pres_kfg22_dense.npz": 22.0,
-    "fisher_bank_chime2022_pres_kfg44_dense.npz": 44.0,
-    "fisher_bank_chime2022_pres_kfg80_dense.npz": 80.0,
 }
 # The source digest of RFIsher e041d5e, which built every bank before the
 # bank code moved into its own subpackage.

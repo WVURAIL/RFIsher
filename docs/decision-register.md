@@ -15,6 +15,10 @@ copy of both registers as they were when the archive releases were written
 layouts are priced under that copy, so a change of an entry here moves the
 verdict and never the layouts of record.
 
+The delay-filter scenario key (`transfer.delay_suppression.default_key`) was
+removed from the project register with the post-processing scenarios; the
+frozen copy keeps it, because the archive layouts record it.
+
 The tables below give each entry's id, value, status and evidence; the JSON
 files hold the rest. A test (`tests/test_decision_register.py`) holds this page
 to the registers: every table cell must match.
@@ -35,7 +39,6 @@ to the registers: every table cell must match.
 | `science.response_stability.time_fraction` | 0.1 | provisional | scripts/bias_tolerance.py@e041d5e |
 | `science.systematic_budget.primary_zeta` | 1.0 | provisional | https://doi.org/10.1111/j.1365-2966.2008.13880.x |
 | `science.systematic_budget.sensitivity_zeta` | [0.5, 0.3, 0.1] | locked | dissertation/chapters/ch09_tolerance.tex |
-| `transfer.delay_suppression.default_key` | "none" | locked | src/rfisher/residual.py@7b0067b |
 | `transfer.systematic_gain` | 1.0 | conditional | docs/tolerance.md |
 | `transfer.variance_gain` | 1.0 | conditional | docs/tolerance.md |
 

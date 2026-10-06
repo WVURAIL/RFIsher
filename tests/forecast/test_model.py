@@ -63,7 +63,7 @@ def test_the_bins_are_the_experiment_bins_as_the_table_rounds_them(science):
     assert [(b.low, b.high) for b in bins] == [
         (round(float(zs[i]), 4), round(float(zs[i + 1]), 4))
         for i in range(len(zs) - 1)]
-    table = ROOT / "src/rfisher/data/tolerances/filter_scenarios_T1yr.csv"
+    table = ROOT / "src/rfisher/data/tolerances/tolerance_T1yr.csv"
     with table.open(newline="") as fh:
         edges = {(int(r["bin_index"]), float(r["z_lo"]), float(r["z_hi"]))
                  for r in csv.DictReader(fh)}

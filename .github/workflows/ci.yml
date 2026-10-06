@@ -147,8 +147,8 @@ jobs:
       - name: The tolerance table rebuilds byte for byte
         run: |
           rfisher tolerance build --project projects/chime_bao --out "$RUNNER_TEMP/tolerances"
-          cmp src/rfisher/data/tolerances/filter_scenarios_T1yr.csv "$RUNNER_TEMP/tolerances/filter_scenarios_T1yr.csv"
-          cmp src/rfisher/data/tolerances/filter_scenarios_T1yr.provenance.json "$RUNNER_TEMP/tolerances/filter_scenarios_T1yr.provenance.json"
+          cmp src/rfisher/data/tolerances/tolerance_T1yr.csv "$RUNNER_TEMP/tolerances/tolerance_T1yr.csv"
+          cmp src/rfisher/data/tolerances/tolerance_T1yr.provenance.json "$RUNNER_TEMP/tolerances/tolerance_T1yr.provenance.json"
 
   wheel-smoke:
     runs-on: ubuntu-latest
@@ -178,4 +178,4 @@ jobs:
           /tmp/rfisher-wheel-smoke/bin/rfisher verdict archive --help > /dev/null
           /tmp/rfisher-wheel-smoke/bin/rfisher records capture-release --help > /dev/null
           /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.records.chime_atsc_2026 import capture_release, capture_ruling; assert capture_ruling.resolve('r5_2')['CREDIT_FORM'] == 'one_minus_gamma'; assert capture_release._release_doc()['fields']['release'] == 'capture_ruling_a19_2026-09-25_r5_2'"
-          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.forecast.radiofisher_bao.bank.banks import BANK_SCHEMA_VERSION, FisherBank; from rfisher.forecast.radiofisher_bao.bank.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; from rfisher.forecast.radiofisher_bao.response import packaged_response_banks; assert set(BANK_NAMES) == {'planck2018', 'pact2025', 'cmbspa2026'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES); assert len(list(packaged_response_banks().glob('*.npz'))) == 4"
+          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.forecast.radiofisher_bao.bank.banks import BANK_SCHEMA_VERSION, FisherBank; from rfisher.forecast.radiofisher_bao.bank.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; from rfisher.forecast.radiofisher_bao.response import packaged_response_banks; assert set(BANK_NAMES) == {'planck2018', 'pact2025', 'cmbspa2026'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES); assert len(list(packaged_response_banks().glob('*.npz'))) == 1"

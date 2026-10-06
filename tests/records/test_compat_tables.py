@@ -4,6 +4,12 @@ The golden (tests/golden/records/archive_layout_18_33.json.gz) holds, for
 bands 18 and 33, the detector's handoff inputs and the rows the releases
 wrote. The layout writer's rows must equal the frozen ones cell for cell.
 The whole layout, every band and file, is compared at the gate.
+
+Retired with stage P (2026-10-06: post-processing is not modelled, and the
+growth rate sets no tolerance): the delay-filter scenarios (``worlds.csv`` and
+the ledger's ``worlds`` section) and the f sigma_8 tolerance columns. The
+golden keeps the frozen rows whole; :func:`retired` projects those fields out
+before the comparison, and every other cell is compared as before.
 """
 from __future__ import annotations
 
@@ -31,6 +37,20 @@ GOLDEN = ROOT / "tests" / "golden" / "records" / "archive_layout_18_33.json.gz"
 @pytest.fixture(scope="module")
 def golden():
     return json.loads(gzip.decompress(GOLDEN.read_bytes()))
+
+
+RETIRED_COLUMNS = ("r_tol_fs8", "fs8_status")
+RETIRED_SECTIONS = ("worlds",)
+
+
+def retired(frozen):
+    """A frozen row, ledger record or tradeoffs row without the retired fields."""
+    if "sections" in frozen:
+        sections = {k: v for k, v in frozen["sections"].items() if k not in RETIRED_SECTIONS}
+        sections["tolerance"] = retired(sections["tolerance"])
+        return {**frozen, "sections": sections}
+    return {k: v for k, v in frozen.items()
+            if k not in RETIRED_COLUMNS and not k.startswith("growth_")}
 
 
 def _typed(rows, key):
@@ -74,12 +94,6 @@ def _render(row):
             for k, v in row.items()}
 
 
-def _render_worlds(row):
-    """A worlds.csv cell: every float as repr, NaN included."""
-    return {k: repr(float(v)) if isinstance(v, float) else str(v)
-            for k, v in row.items()}
-
-
 def _json(value):
     """A section as the ledger writes it (NaN becomes null)."""
     return json.loads(json.dumps(ct._jsonable(value)))
@@ -94,7 +108,7 @@ def test_channel_tolerances_are_the_frozen_rows(golden, release):
     for band in golden["bands"]:
         frozen = golden["releases"][release]["bands"][band]["frozen"]
         assert _render(ct.channel_tolerance_row(inp, band)) == \
-            frozen["channel_tolerances"][0]
+            retired(frozen["channel_tolerances"][0])
 
 
 @RELEASES
@@ -116,19 +130,6 @@ def test_selection_and_screening_are_the_frozen_rows(golden, release):
 
 
 @RELEASES
-def test_worlds_are_the_frozen_rows(golden, release):
-    inp = _inputs(golden, release)
-    for band in golden["bands"]:
-        frozen = golden["releases"][release]["bands"][band]["frozen"]
-        priced = ct.price(inp, band)
-        bins = [int(b) for b in ct.channel_tolerance_row(inp, band)[
-            "bins"].split(";")]
-        row = ct.worlds_for(inp, band, priced, bins,
-                            ct.selection_row(inp, priced))
-        assert _render_worlds(row) == frozen["worlds"][0]
-
-
-@RELEASES
 def test_the_ledger_record_is_the_frozen_one(golden, release):
     inp = _inputs(golden, release)
     for band in golden["bands"]:
@@ -137,15 +138,12 @@ def test_the_ledger_record_is_the_frozen_one(golden, release):
         tol = ct.channel_tolerance_row(inp, band)
         sel = ct.selection_row(inp, priced)
         result, extra = ct.screening_for(inp, band, priced)
-        bins = [int(b) for b in tol["bins"].split(";")]
-        world = ct.worlds_for(inp, band, priced, bins, sel)
         science = {"tolerance": {k: v for k, v in tol.items() if k != "channel"},
                    "selection": ct.selection_section(inp, priced, sel),
                    "operating": inp.ledger[band]["sections"]["knee"],
-                   "screening": {**result.as_row(), **extra},
-                   "worlds": {k: v for k, v in world.items() if k != "channel"}}
+                   "screening": {**result.as_row(), **extra}}
         assert _json(ct.ledger_record(inp, band, priced, science)) == \
-            frozen["ledger"]
+            retired(frozen["ledger"])
 
 
 @RELEASES
@@ -167,8 +165,11 @@ def test_the_ladder_pricing_is_the_frozen_science(golden, release):
                                  else repr(v) if isinstance(v, float) else v)
                              for k, v in row.items()})
         got = list(csv.DictReader(io.StringIO(buf.getvalue())))
+        expected = [retired(f) for f in frozen["tradeoffs"]]
         assert [{k: r.get(k, "") for k in f} for r, f in
-                zip(got, frozen["tradeoffs"])] == frozen["tradeoffs"]
+                zip(got, expected)] == expected
+        assert not any(k.startswith("growth_") for k in got[0])
+        assert any(k.startswith("dilation_") for k in got[0])
 
 
 def test_a_feasible_point_is_not_reproducible_from_the_handoff(golden):

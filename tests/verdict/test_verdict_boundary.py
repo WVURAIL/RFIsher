@@ -93,8 +93,8 @@ def test_a_verdict_run_opens_only_the_handoff_and_one_tolerance_table(
     import subprocess
     import sys
 
-    tol = tolerances({"29": [("none", "rule", 1000.0, 0.0)],
-                      "34": [("none", "rule", None, 0.0)]})
+    tol = tolerances({"29": [("none", "rule", 1000.0)],
+                      "34": [("none", "rule", None)]})
     out = tmp_path / "science"
     log = tmp_path / "opened.json"
     env = dict(os.environ, PYTHONPATH=str(PACKAGE.parent),
@@ -116,8 +116,8 @@ def test_the_command_writes_the_verdict(handoff_copy, tolerances, tmp_path,
                                         capsys):
     from rfisher.cli import main
 
-    tol = tolerances({"29": [("none", "rule", 1000.0, 0.0)],
-                      "34": [("none", "rule", None, 0.0)]})
+    tol = tolerances({"29": [("none", "rule", 1000.0)],
+                      "34": [("none", "rule", None)]})
     out = tmp_path / "science"
     assert main(["verdict", "archive", "--project", str(PROJECT),
                  "--characterization", str(handoff_copy.path),
@@ -127,7 +127,7 @@ def test_the_command_writes_the_verdict(handoff_copy, tolerances, tmp_path,
     assert "Historical conditional screening only" in output
     assert "physical operating recommendations are not established" in output
     assert {p.name for p in out.iterdir()} == {
-        "verdict.csv", "verdict_points.csv", "screen.csv", "sensitivity.csv",
+        "verdict.csv", "verdict_points.csv", "screen.csv",
         "manifest.json"}
     screen = (out / "screen.csv").read_text().splitlines()
     assert screen[1].startswith("29,undetermined,2,detector refused:")

@@ -117,7 +117,6 @@ def band_tolerances(model: ScienceModel, rows: Sequence[dict],
                 "binding_parameter": binding_parameter,
                 "binding_bin": binding_bin, "zeta": float(model.zeta),
                 "target_time_years": float(model.target_years),
-                "suppression_db": float(scenario.suppression_db),
                 "tolerance_basis": label,
                 "refusal": ("" if priced else REFUSED_PARAMETER if covered
                             else REFUSED_COVERAGE)})

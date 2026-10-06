@@ -35,8 +35,8 @@ A response bank supports two different, explicitly named time families:
     t/t_ref. This is the non-averaging persistent-residual limit. The two
     families are identical at t_ref and are not interchangeable away from it.
 
-The four filter-scenario response banks are packaged. Build any other one and
-evaluate it with:
+The no-filter response bank is packaged. Build any other one and evaluate it
+with:
 
     rfisher build-bank --config chime2022 --cosmology planck2018 \
         --epsilon-fg 0 --p-res 1.0 --dense-knee \
@@ -78,7 +78,7 @@ RESPONSE_BANK_DIRECTORY = "response_banks"
 
 
 def packaged_response_banks() -> Path:
-    """The directory of the four packaged filter-scenario response banks."""
+    """The directory of the packaged no-filter response bank."""
     return Path(str(files(DATA_PACKAGE).joinpath(RESPONSE_BANK_DIRECTORY)))
 
 
@@ -350,8 +350,8 @@ def load_response_bank(path, *, build_command=DEFAULT_BUILD_COMMAND,
     """Load and authenticate a strict-v2 unit-response bank."""
     path = Path(path)
     instruction = (
-        "Only the four filter-scenario response banks are packaged. Build "
-        "any other response bank with:\n  " + build_command
+        "Only the no-filter response bank is packaged. Build any other "
+        "response bank with:\n  " + build_command
     )
     if not path.is_file():
         raise ValueError(f"required bias-response bank is missing: {path}\n"

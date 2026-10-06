@@ -16,9 +16,17 @@ with the tokens and column orders the releases have:
 - the science values are priced here: the tolerance of each band (the rule
   scenario), R = r / r_tol of every written candidate, the selection the
   frozen selector made (the verdict's pooled selector), the screening class
-  and its reasons (the frozen rule, verbatim), the delay-filter scenarios of
-  ``worlds.csv``, and the ledger's tolerance, selection, operating,
-  screening and worlds sections.
+  and its reasons (the frozen rule, verbatim), and the ledger's tolerance,
+  selection, operating and screening sections.
+
+Post-processing is not modelled, and the growth rate sets no tolerance
+(stage P, 2026-10-06). The releases' delay-filter scenarios (``worlds.csv``,
+the ledger's ``worlds`` section and ``run.json``'s ``worlds_contract``) and
+their f sigma_8 tolerance columns (``r_tol_fs8`` and ``fs8_status`` of
+``channel_tolerances.csv`` and of the ledger's tolerance section, the growth
+columns of ``ladder_pricing.csv``) are not written; the frozen releases keep
+them. Every other file and column is the releases'. The chain's delay key and
+its suppression are the frozen policy's (``none``, 0 dB: no filter credit).
 
 A band is priced where the frozen run priced it: where the rule scenario has
 a tolerance and the detector characterized a surface. A value the handoff
@@ -42,7 +50,6 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from rfisher import policy as _policy
-from rfisher.forecast.radiofisher_bao import filter_scenarios
 from rfisher.forecast.radiofisher_bao.model import (RadioFisherBAO,
                                                     packaged_table,
                                                     redshift_range)
@@ -74,7 +81,9 @@ def frozen_policy():
     return _policy.load(files(__package__).joinpath(*FROZEN_POLICY))
 PRODUCER_REPOSITORY = "WVURAIL/RFIsher"
 PRODUCER_MODULE = "rfisher.records.chime_atsc_2026.compat_tables"
-PARAMETERS = ("aperp", "apar", "fs8")
+PARAMETERS = ("aperp", "apar")
+# The chain's delay key, as the frozen policy records it, takes no suppression.
+NO_DELAY_FILTER = {"none": 0.0}
 TARGET_YEARS = 1.0
 DIAGNOSTIC_BASIS = "least residual on the calibration surface (no feasible point)"
 SELECTED_BASIS = "selected point"
@@ -87,7 +96,7 @@ SECTION_ORDER = (
     "evaluation_contract", "blocks", "anchor", "anchor_calibration",
     "anchor_evaluation", "anchor_era", "anchor_previous", "containment",
     "chain", "chain_archive", "tolerance", "null", "null_evaluation",
-    "selection", "operating", "held_out", "flaggers", "screening", "worlds")
+    "selection", "operating", "held_out", "flaggers", "screening")
 # Keys the detector's ledger added after the releases (left out of the
 # frozen layout, which never had them).
 DETECTOR_ADDITIONS = {
@@ -102,7 +111,7 @@ EXCHANGE_KEYS = ("exch_rho", "exch_bulk", "exch_frames", "exch_test_bins",
                  "exch_max_over_designated")
 CHANNEL_TOLERANCE_COLUMNS = (
     "channel", "z_low", "z_high", "bins", "r_tol_dilation", "r_tol_aperp",
-    "r_tol_fs8", "fs8_status", "apar_over_aperp_ledger", "dilation_binding",
+    "apar_over_aperp_ledger", "dilation_binding",
     "r_tol_apar", "tolerance_basis", "refusal")
 SELECTION_COLUMNS = (
     "channel", "freq_id", "era", "anchor_bin", "bulk_size", "r_tol",
@@ -281,7 +290,7 @@ def channel_tolerance_row(inp: Inputs, band: str) -> dict:
     refusal = ("forecast bins do not cover the full channel" if not coverage_ok
                else "one or more target-time parameter tolerances refused"
                if any(not math.isfinite(v) for v in values.values()) else "")
-    aperp, apar, fs8 = values["aperp"], values["apar"], values["fs8"]
+    aperp, apar = values["aperp"], values["apar"]
     dilation = (min(aperp, apar) if all(math.isfinite(v) and v > 0
                                         for v in (aperp, apar)) else math.nan)
     binding = ("refused: both dilation tolerances required at the target time"
@@ -300,9 +309,6 @@ def channel_tolerance_row(inp: Inputs, band: str) -> dict:
                                "year; minimum over every overlapping bin",
             "refusal": refusal, "bins": ";".join(str(b) for b in bins),
             "r_tol_dilation": dilation, "r_tol_aperp": aperp,
-            "r_tol_fs8": fs8,
-            "fs8_status": ("derived at target time" if math.isfinite(fs8)
-                           else "refused at target time"),
             "apar_over_aperp_ledger": (apar / aperp if math.isfinite(aperp)
                                        else math.nan),
             "dilation_binding": binding}
@@ -759,126 +765,6 @@ def screening_for(inp: Inputs, band: str, priced: Priced | None
     return result, extra
 
 
-# ---------------------------------------------------------------- worlds
-WORLDS = tuple((s.name, s.bank, s.kfg_fac, s.suppression_key)
-               for s in filter_scenarios.SCENARIOS)
-
-
-def _bin_span(rows, bins):
-    zs = [(float(r["z_lo"]), float(r["z_hi"])) for r in rows
-          if int(r["bin_index"]) in set(bins)]
-    return ((min(z[0] for z in zs), max(z[1] for z in zs)) if zs
-            else (math.nan, math.nan))
-
-
-def world_row(band: str, bins: Sequence[int], r_point: float,
-              masked_fraction: float, rows: Sequence[dict], *,
-              r_floor: float = math.nan, r_evaluation: float = math.nan,
-              floor_bound: bool = False, point_policy: str = "unspecified",
-              evaluation_policy: str = "unspecified",
-              evaluation_masked_fraction: float = math.nan,
-              evaluation_kept: int = 0) -> dict:
-    """The releases' ``worlds.csv`` row of one band: the operating point
-    carried through the four delay-filter scenarios (worlds.channel_worlds
-    at 7b0067b, verbatim in its arithmetic)."""
-    bins = tuple(int(b) for b in bins)
-    z_lo, z_hi = _bin_span(rows, bins)
-    ratios, residuals, tols = {}, {}, {}
-    floor_ratios, floor_residuals, ev_ratios, ev_residuals = {}, {}, {}, {}
-    notes = []
-    status = "conditional"
-    if not bins:
-        status = "no overlapping bin"
-        notes = ["the channel overlaps no forecast bin, so no world applies"]
-    elif not math.isfinite(r_point):
-        status = "no operating point"
-        notes = ["the channel has no operating point to carry through the worlds"]
-    else:
-        for world, _, _, _ in WORLDS:
-            drop = 10.0 ** (filter_scenarios.suppression_db(world) / 10.0)
-            r = r_point / drop
-            residuals[world] = r
-            floor_residuals[world] = r_floor / drop if math.isfinite(r_floor) else math.nan
-            ev_residuals[world] = r_evaluation / drop if math.isfinite(r_evaluation) else math.nan
-            for p in PARAMETERS:
-                tol = tolerance_of(rows, world, bins, p)
-                tols[(world, p)] = tol
-                usable = math.isfinite(tol) and tol > 0
-                ratios[(world, p)] = r / tol if usable else math.nan
-                for table, source in ((floor_ratios, floor_residuals), (ev_ratios, ev_residuals)):
-                    table[(world, p)] = (source[world] / tol
-                                         if usable and math.isfinite(source[world]) else math.nan)
-        missing = [f"{w}/{p}" for (w, p), t in tols.items() if not math.isfinite(t)]
-        if missing:
-            notes.append(f"no accepted target-time tolerance for {', '.join(sorted(missing))}")
-        if not math.isfinite(r_floor):
-            notes.append("the channel carries no minimum frontier allowance")
-        if not math.isfinite(r_evaluation):
-            notes.append("the point was not replayed on the held-out block, so only the calibration bases are priced")
-        if floor_bound:
-            notes.append("the evaluation allowance is within 0.1 percent of its floor-only assignment; "
-                         "it is a conditional allowance, not a measurement or confidence limit")
-    row = {"channel": int(band), "bins": ";".join(str(b) for b in bins),
-           "z_lo": z_lo, "z_hi": z_hi, "r_point": r_point, "r_floor": r_floor,
-           "r_evaluation": r_evaluation, "floor_bound": floor_bound,
-           "masked_fraction": masked_fraction, "status": status, "notes": "; ".join(notes)}
-    row.update({"residual_evidence": "conditional scalar screening allowance",
-                "delay_suppression_evidence": "hypothetical; not measured on these visibilities",
-                "physical_recovery_certified": False,
-                "point_policy": point_policy, "evaluation_policy": evaluation_policy,
-                "evaluation_masked_fraction": evaluation_masked_fraction,
-                "evaluation_kept": evaluation_kept})
-    for world, _, _, _ in WORLDS:
-        row[f"{world}_r"] = residuals.get(world, math.nan)
-        row[f"{world}_floor_r"] = floor_residuals.get(world, math.nan)
-        row[f"{world}_evaluation_r"] = ev_residuals.get(world, math.nan)
-        row[f"{world}_suppression_db"] = filter_scenarios.suppression_db(world)
-        for p in PARAMETERS:
-            row[f"{world}_{p}_R"] = ratios.get((world, p), math.nan)
-            row[f"{world}_{p}_floor_R"] = floor_ratios.get((world, p), math.nan)
-            row[f"{world}_{p}_evaluation_R"] = ev_ratios.get((world, p), math.nan)
-            row[f"{world}_{p}_r_tol"] = tols.get((world, p), math.nan)
-    return row
-
-
-def write_world_rows(rows: Sequence[Mapping], path: Path) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0]) if rows else ["channel"], lineterminator="\n")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({k: (repr(float(v)) if isinstance(v, float) else v) for k, v in row.items()})
-    return path
-
-
-def worlds_for(inp: Inputs, band: str, priced: Priced | None,
-               bins: Sequence[int], sel_row: Mapping | None) -> dict:
-    sections = inp.ledger[band]["sections"]
-    op = sections.get("knee") if priced is not None else None
-    op = op or {}
-    sel = sel_row or {}
-    null = sections.get("null") or {}
-    chain = sections.get("chain") or {}
-    floor_db, gain = _num(null.get("floor_db")), _num(chain.get("chain_gain"))
-    r_eval = _num(sel.get("r_sys_evaluation"))
-    floor_bound = False
-    if math.isfinite(floor_db) and math.isfinite(gain) and gain > 0:
-        at_floor = 10.0 ** (floor_db / 10.0) * gain
-        floor_bound = (math.isfinite(r_eval) and at_floor > 0
-                       and abs(r_eval / at_floor - 1.0) < 1e-3)
-    return world_row(
-        band, bins, _num(op.get("operating_r_sys")),
-        _num(op.get("operating_masked_fraction")), inp.per_bin,
-        r_floor=_num(op.get("r_floor")), r_evaluation=r_eval,
-        floor_bound=floor_bound,
-        point_policy=f"operating: rho={op.get('operating_rho')}, eta_q16={op.get('operating_eta_q16')}",
-        evaluation_policy=(f"selected: rho={sel.get('rho')}, eta_q16={sel.get('eta_q16')}"
-                           if sel.get("status") == "feasible" else
-                           f"diagnostic: rho={sel.get('diagnostic_rho')}, eta_q16={sel.get('diagnostic_eta_q16')}"),
-        evaluation_masked_fraction=_num(sel.get("masked_fraction_evaluation")),
-        evaluation_kept=int(sel.get("kept_evaluation") or 0))
-
-
 # ---------------------------------------------------------------- ledger
 def _drop(section: Mapping | None, keys: Sequence[str]) -> Mapping | None:
     if section is None:
@@ -915,13 +801,22 @@ def _notes(record: Mapping, priced: bool) -> list[str]:
     return [n for n in notes if not n.startswith(DRIFT_NOTE)] + [SKIPPED_NOTE]
 
 
+def _delay(inp: Inputs) -> tuple[str, float]:
+    """The chain's delay key and its suppression: the frozen policy's key,
+    which must be the no-filter one (no credit is taken)."""
+    key = str(inp.policy.value("transfer.delay_suppression.default_key"))
+    if key not in NO_DELAY_FILTER:
+        raise NotReproducible(f"the frozen policy's delay key {key!r} takes a "
+                              "filter credit; post-processing is not modelled")
+    return key, NO_DELAY_FILTER[key]
+
+
 def ledger_record(inp: Inputs, band: str, priced: Priced | None,
                   sections_science: Mapping) -> dict:
     """The frozen channel record of one band."""
     record = inp.ledger[band]
     det = record["sections"]
-    delay_key = str(inp.policy.value("transfer.delay_suppression.default_key"))
-    delay_db = filter_scenarios.DELAY_SUPPRESSION_DB[delay_key]
+    delay_key, delay_db = _delay(inp)
     flaggers = det.get("flaggers")
     if flaggers is not None and priced is not None and \
             flaggers.get("diagnostic_basis"):
@@ -950,7 +845,6 @@ def ledger_record(inp: Inputs, band: str, priced: Priced | None,
         "operating": sections_science["operating"],
         "held_out": det["held_out"], "flaggers": flaggers,
         "screening": sections_science["screening"],
-        "worlds": sections_science["worlds"],
     }
     return {"channel": record["channel"], "freq_id": record["freq_id"],
             "product": record["product"],
@@ -1036,11 +930,6 @@ def run_record(inp: Inputs, started: str | None = None) -> dict:
         "era_overrides": det.get("era_overrides"),
         "era_overrides_sha256": det.get("era_overrides_sha256"),
         "bootstrap": det.get("bootstrap"),
-        "worlds_contract": {"time_rule": "target_only",
-                            "target_years": TARGET_YEARS,
-                            "bin_rule": "every overlapping bin; both dilations required",
-                            "delay_suppression": "hypothetical",
-                            "physical_recovery_certified": False},
         "provisional": provisional,
         "errors": det.get("errors"),
         "seconds": det.get("seconds"),
@@ -1065,7 +954,7 @@ def write_archive_layout(release: str, characterization: str | Path,
                 for b in sorted(inp.bands, key=int)}
     write_channel_tolerances(list(tol_rows.values()),
                              tables / "channel_tolerances.csv")
-    selection_rows, screening_rows, operating_rows, world_rows = [], [], [], []
+    selection_rows, screening_rows, operating_rows = [], [], []
     records = []
     for band in sorted(inp.bands, key=int):
         p = priced.get(band)
@@ -1089,16 +978,11 @@ def write_archive_layout(release: str, characterization: str | Path,
         result, extra = screening_for(inp, band, p)
         screening_rows.append({"channel": int(band), **result.as_row()})
         science["screening"] = {**result.as_row(), **extra}
-        bins = [int(b) for b in tol_rows[band]["bins"].split(";") if b]
-        world = worlds_for(inp, band, p, bins, sel_row)
-        world_rows.append(world)
-        science["worlds"] = {k: v for k, v in world.items() if k != "channel"}
         records.append(ledger_record(inp, band, p, science))
     _write_csv(selection_rows, tables / "selection.csv")
     _write_chain(inp, tables / "chain.csv")
     _write_csv(screening_rows, tables / "screening.csv")
     _write_csv(operating_rows, tables / "operating_points.csv")
-    write_world_rows(world_rows, tables / "worlds.csv")
     write_ledger(records, run_record(inp), out / "ledger")
     rungs = []
     for band in sorted(inp.bands, key=int):
@@ -1115,8 +999,7 @@ def write_archive_layout(release: str, characterization: str | Path,
 def _write_chain(inp: Inputs, path: Path) -> Path:
     """The detector's chain.csv with the delay key and its suppression put
     back (the rule scenario's), cells copied as the detector wrote them."""
-    delay_key = str(inp.policy.value("transfer.delay_suppression.default_key"))
-    delay_db = filter_scenarios.DELAY_SUPPRESSION_DB[delay_key]
+    delay_key, delay_db = _delay(inp)
     header, rows = inp.chain_csv
     buf = io.StringIO(newline="")
     writer = csv.writer(buf, lineterminator="\n")

@@ -83,14 +83,14 @@ def test_a_missing_key_or_column_is_refused(handoff_copy):
 def test_tolerance_rows_and_their_edges(handoff_copy, tolerances):
     oc = handoff.read_characterization(handoff_copy.path)
     rows = handoff.read_tolerances(
-        tolerances({"29": [("none", "rule", 0.02, 0.0)],
-                    "34": [("none", "rule", None, 0.0)]}), oc.bands)
+        tolerances({"29": [("none", "rule", 0.02)],
+                    "34": [("none", "rule", None)]}), oc.bands)
     assert rows[0]["r_tol"] == 0.02 and math.isnan(rows[1]["r_tol"])
     shifted = dict(oc.bands)
     shifted["29"] = {**shifted["29"], "low_mhz": 559.0}
     with pytest.raises(handoff.HandoffError, match="edges"):
-        handoff.read_tolerances(tolerances({"29": [("none", "rule", 0.02,
-                                                    0.0)]}), shifted)
+        handoff.read_tolerances(tolerances({"29": [("none", "rule", 0.02)]}),
+                                shifted)
 
 
 def test_a_manifest_that_does_not_call_the_surface_complete_reads_thinned(

@@ -13,7 +13,7 @@ first written for.
 ```mermaid
 flowchart LR
   OC["pilot-proxy handoff<br/>operating_characteristic_v1"] --> V["verdict<br/>(eta_sci, deployable set,<br/>selector, screen)"]
-  F["forecast<br/>(RadioFisher BAO, banks,<br/>delay-filter scenarios)"] --> T["tolerance<br/>(r_tol per band and scenario)"]
+  F["forecast<br/>(RadioFisher BAO, banks,<br/>no-filter response bank)"] --> T["tolerance<br/>(r_tol per band)"]
   T -->|tolerances.csv| V
   COC["pilot-proxy capture handoff<br/>capture_operating_characteristic_v1"] --> R["records of the 2026 campaign<br/>(capture ruling of record)"]
   T --> R
@@ -103,9 +103,11 @@ surface against the band's tolerance and nothing else:
   residual, masked fraction and candidate order;
 - `rfisher.verdict.screening` applies the screen's precedence (tolerance
   refused, detector refused, keep only with a certified eta_Pfa, excise only
-  when every family's deployable set is empty, otherwise undetermined);
-- `rfisher.verdict.sensitivity` is the one place a sensitivity factor (a
-  delay-filter or other post-processing sensitivity) multiplies a residual.
+  when every family's deployable set is empty, otherwise undetermined).
+
+No post-processing of the residual (a delay filter, a ground filter or any
+other downstream stage) is modelled: no factor multiplies a residual, and the
+tolerance is the forecast's without a delay filter.
 
 The selector's constants are data (`projects/chime_bao/selector_policy.json`),
 read through `rfisher.policy`; `selector.fine_rank` chooses the fine ranks the
@@ -154,8 +156,8 @@ the full inputs, results, and caveats.
   and how the selector chooses.
 - [Threshold response](docs/threshold_response.md): exact saved fine thresholds,
   residual proxies, and uniform exposure costs.
-- [Where cosmology enters](docs/cosmology-entry.md): the tolerance, the
-  suppression S and the refused bands, for an engineer.
+- [Where cosmology enters](docs/cosmology-entry.md): the tolerance and the
+  refused bands, for an engineer.
 - [Tolerance](docs/tolerance.md): the masking-cost and contamination-residual
   models in force.
 - [Decision register](docs/decision-register.md): every science and selector

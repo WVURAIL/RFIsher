@@ -10,8 +10,9 @@ with :func:`price` verbatim from that tool, into ``ladder_pricing.csv``:
 - the allowance priced is the rung's evaluation-block residual at G = 1
   (the handoff's ``r_sys_incoherent`` of the ladder's evaluation row), and
   the chain gain the band's (``oc_summary``);
-- the tolerances are the band's growth (fs8), dilation, aperp and apar
-  tolerances at zeta = 1 (``channel_tolerances``).
+- the tolerances are the band's dilation, aperp and apar tolerances at
+  zeta = 1 (``channel_tolerances``). The releases' growth (f sigma_8) columns
+  are not written: the growth rate sets no tolerance (stage P, 2026-10-06).
 
 The detector columns of ``tradeoffs.csv`` and the per-band ``coarse/chNN.json``
 records are the detector's, and the handoff does not carry all of them (the
@@ -25,8 +26,8 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 POLICIES = ("cal_q0.1", "cal_q0.5", "cal_q0.9", "keep_all")
-BUDGET = (("growth", "r_tol_fs8"), ("dilation", "r_tol_dilation"),
-          ("aperp", "r_tol_aperp"), ("apar", "r_tol_apar"))
+BUDGET = (("dilation", "r_tol_dilation"), ("aperp", "r_tol_aperp"),
+          ("apar", "r_tol_apar"))
 
 
 def price(allowance, gain, tolerance):

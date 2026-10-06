@@ -5,18 +5,16 @@
 # where sigma is a parameter's statistical error and b its bias per unit
 # residual. A value is accepted only if the linear response is stable: moving
 # the time by +/- time_fraction may change it by at most
-# maximum_tolerance_ratio and may not flip the sign of b. Reported parameters
-# are listed but set no tolerance.
+# maximum_tolerance_ratio and may not flip the sign of b. The growth rate
+# f sigma_8 is marginalized in the Fisher matrix and sets no tolerance.
 #
 # zeta, the year grid, the stability test and the transfer gains are held by
 # the science register of this project (science_register.json); register
 # names the entry of each, and the model reads the values from there.
 #
-# Each scenario is a delay-filter cut priced by its own response bank. The
-# rule scenario is the one a verdict rests on; sensitivity scenarios are
-# reported beside it and never enter a rule. suppression_key names the
-# assumed suppression S of the residual, which is listed and never folded
-# into a tolerance.
+# The one scenario, the rule a verdict rests on, is the forecast without a
+# delay filter, priced by the no-filter response bank. No post-processing of
+# the residual is modelled.
 #
 # r_reference and residual_shapes are what a tolerance is a tolerance on: a
 # residual power ratio per frame, in this reference, with this spectral
@@ -27,7 +25,7 @@ experiment: chime2022
 cosmology: planck2018
 parameters:
   required: [aperp, apar]
-  reported: [fs8]
+  reported: []
 target_years: 1.0
 register:
   zeta: science.systematic_budget.primary_zeta
@@ -38,13 +36,7 @@ register:
   variance_gain: transfer.variance_gain
 scenarios:
   - {name: none, bank: fisher_bank_chime2022_pres_dense.npz, kfg_fac: null,
-     suppression_key: none, role: rule}
-  - {name: peak1, bank: fisher_bank_chime2022_pres_kfg22_dense.npz,
-     kfg_fac: 22.0, suppression_key: bao_peak1, role: sensitivity}
-  - {name: peak2, bank: fisher_bank_chime2022_pres_kfg44_dense.npz,
-     kfg_fac: 44.0, suppression_key: bao_peak2, role: sensitivity}
-  - {name: deployed, bank: fisher_bank_chime2022_pres_kfg80_dense.npz,
-     kfg_fac: 80.0, suppression_key: aggressive_200ns, role: sensitivity}
+     role: rule}
 r_reference:
   definition: residual interference power over system noise power per frame, in the band
   feed_sum: all_inputs

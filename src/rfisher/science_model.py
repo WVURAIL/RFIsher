@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-SCENARIO_ROLES = ("rule", "sensitivity")
+SCENARIO_ROLES = ("rule",)
 
 
 @dataclass(frozen=True)
@@ -35,16 +35,12 @@ class Parameters:
 class Scenario:
     """A condition under which the model is evaluated.
 
-    ``role`` is ``rule`` for the scenario a verdict rests on and
-    ``sensitivity`` for one that is only reported. ``suppression_db`` is the
-    suppression S the scenario assumes for the residual; it is listed beside
-    the tolerance and never folded into it. ``response_source`` names what
-    supplies the model's response in this scenario.
+    ``role`` is ``rule``: the scenario a verdict rests on. ``response_source``
+    names what supplies the model's response in this scenario.
     """
 
     name: str
     role: str
-    suppression_db: float
     response_source: str
 
 
