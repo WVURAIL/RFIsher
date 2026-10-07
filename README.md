@@ -104,8 +104,9 @@ surface against the band's tolerance and nothing else:
   required for admission: eta_Pfa is reported beside the set and bounds
   nothing;
 - `rfisher.verdict.screening` applies the screen's precedence (tolerance
-  refused, detector refused, keep only with a certified eta_Pfa, excise only
-  when every family's deployable set is empty, otherwise undetermined).
+  refused, detector refused, keep when some family's deployable set is
+  nonempty (eta_Pfa reported, not required), excise only when every family's
+  deployable set is empty, otherwise undetermined).
 
 No post-processing of the residual (a delay filter, a ground filter or any
 other downstream stage) is modelled: no factor multiplies a residual, and the

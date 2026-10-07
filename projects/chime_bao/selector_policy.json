@@ -118,7 +118,7 @@
       "units": "ordered screen steps",
       "basis": "policy",
       "status": "locked",
-      "rationale": "The first step that matches decides a band: a band without a tolerance, or whose detector surface is refused, is undetermined; a keep needs a certified false-alarm limit; an excision needs every family empty and an R that does not only measure the floor.",
+      "rationale": "The first step that matches decides a band: a band without a tolerance, or whose detector surface is refused, is undetermined; a keep needs a nonempty deployable set (eta_Pfa is reported, not required); an excision needs every family empty and an R that does not only measure the floor.",
       "evidence": [
         "src/rfisher/verdict/screening.py"
       ],

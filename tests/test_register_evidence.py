@@ -26,6 +26,12 @@ AMENDMENTS = {
         "rationale": "The detector fixes rho = 63 from the intended bulk geometry. "
                      "The verdict reads that family; eta is the only per-channel threshold parameter.",
     },
+    "selector.precedence": {
+        "rationale": "The first step that matches decides a band: a band without a tolerance, or whose detector "
+                     "surface is refused, is undetermined; a keep needs a nonempty deployable set (eta_Pfa is "
+                     "reported, not required); an excision needs every family empty and an R that does not only "
+                     "measure the floor.",
+    },
 }
 
 
