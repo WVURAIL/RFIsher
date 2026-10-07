@@ -1,0 +1,8 @@
+{
+ "rule": "r5_3",
+ "base": "r5_2",
+ "description": "Revision 5.3 (DECISIONS.md item 87, audit A4): a lowest-epoch bound reads each dump at the channel's own frames, the fewest over its in-band bins (27 for channels 19, 23 and 35 in the dump of 2026-09-17 09:02:30); the rest is r5.2.",
+ "switches": {
+  "FRAMES": "bin"
+ }
+}

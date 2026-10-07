@@ -35,6 +35,8 @@ Switches (identity value first; --a18 sets every switch to its amendment 18 valu
   TAU_LOWER_BOUNDS off | on               item 35: unmeasured and refused classes at the admissible minimum G, or, where the
                                           within-dump lane bounds the class's tau (a19_inputs.tau_lower_bounds), at the
                                           bound (never below the admissible minimum); exclusion side only
+  FRAMES          dump | bin              item 87: a lowest-epoch bound prices each dump at its frame count (NFRAMES), or at
+                                          the frames of the channel's reading in that dump, the fewest over its in-band bins
 
 r3 (2026-09-24, DECISIONS.md items 15 and 16): the WORLD switch. The model is idealized (system temperature and DTV RFI
 only), so the exclusion side reads the no-filter tolerance lambda_none, as the keep side already does, and the delay-filter
@@ -89,6 +91,11 @@ credit readings) and in the printed coherence columns and rescue texts; the no-c
                       reconciled definition, the median over its measured (gain) classes, the classes whose residual G prices, with
                       the all-class median where none is measured; clamped to [0, 0.95] either way
 
+r5.3 (2026-10-07, DECISIONS.md item 87, audit A4): the FRAMES switch. In the dump of 2026-09-17 09:02:30 three non-pilot
+bins hold 27 frames, not 33: freq_id 759 (channel 19), 703 (channel 23) and 511 (channel 35) (capture_units.SHORT_BINS).
+Under FRAMES=bin a lowest-epoch bound reads each dump at the channel's own frames (capture_units.nframes); dump, the identity
+value, writes no key, so every earlier release is reproduced byte for byte; --rule r5_3 sets r5.2 and FRAMES=bin.
+
 usage: rfisher records capture-ruling --rule NAME [--sensitivity NAME] [--set NAME=VALUE ...] --input TABLE
                                       --handoff DIR --out CSV [--json OUT.json] [--thresholds OUT.csv] [--ch33-rescan]
 """
@@ -106,7 +113,7 @@ CHOICES = dict(UNITS=("booked", "power"), POL=("larger", "stokes_i"), UNMEASURED
                KEEP=("coded", "stated"), EVERY_POLICY=("coded", "thesis"), ALLOWANCE=("db", "ratio"), THRESHOLDS=("off", "on"), WORLD=U.WORLDS, GROUND_CREDIT=("on", "off"),
                TAU_LOWER_BOUNDS=("off", "on"), TAU_CENSOR=("off", "on", "all"),
                BOUND_SOURCE=("summary", "fits"), BOUND_CALIBRATION=("off", "on"), G1_NAMES=("r5", "literal"), SWITCH_RECORD=("omit", "all"),
-               CREDIT_FORM=("one_minus_gamma_sq", "one_minus_gamma"), CREDIT_GAMMA=("released", "reconciled"))
+               CREDIT_FORM=("one_minus_gamma_sq", "one_minus_gamma"), CREDIT_GAMMA=("released", "reconciled"), FRAMES=("dump", "bin"))
 PILOT = {14:844,15:829,16:813,17:798,18:783,19:767,20:752,21:736,22:721,23:706,24:690,25:675,26:660,27:644,28:629,29:614,30:598,31:583,32:568,33:552,34:537,35:521,36:506,37:491}
 POLICIES = ["cal_q0.1", "cal_q0.5", "cal_q0.9", "keep_all"]; QS = {"cal_q0.1": 0.1, "cal_q0.5": 0.5, "cal_q0.9": 0.9}
 SCIENCE = {"20260916162300": "pilot", "20260917040230": "D1", "20260917090230": "D2", "20260917140230": "D3"}
@@ -421,9 +428,10 @@ def main(argv=None, *, project=None):
                     # R at the least trim probe), not the R of the least A. At G = 1, every epoch alike, the least is the least A's.
                     per_e = []
                     for a_, e_ in vals:
-                        t_, st_, _ = range_gain(ch, rng, False, U.NFRAMES[e_]); Ge = gain(t_, ch) if np.isfinite(t_) else G
-                        tq_, _, _ = range_gain(ch, rng, True, U.NFRAMES[e_]); GLe = gain(tq_, ch) if np.isfinite(tq_) else Ge
-                        per_e.append(dict(epoch=e_, n_frames=U.NFRAMES[e_], A=a_, tau=t_, tau_least=tq_, G=Ge, G_least=GLe, tstat=st_, R_dep=a_ * S * credit * Ge / ld, R_least=a_ * S * credit * GLe / ld))
+                        nf = U.NFRAMES[e_] if SW["FRAMES"] == "dump" else U.nframes(e_, ch)   # r5.3, item 87
+                        t_, st_, _ = range_gain(ch, rng, False, nf); Ge = gain(t_, ch) if np.isfinite(t_) else G
+                        tq_, _, _ = range_gain(ch, rng, True, nf); GLe = gain(tq_, ch) if np.isfinite(tq_) else Ge
+                        per_e.append(dict(epoch=e_, n_frames=nf, A=a_, tau=t_, tau_least=tq_, G=Ge, G_least=GLe, tstat=st_, R_dep=a_ * S * credit * Ge / ld, R_least=a_ * S * credit * GLe / ld))
                     b = min(per_e, key=lambda x: x["R_dep"])
                     low = dict(A=b["A"], epoch=b["epoch"], R_dep=b["R_dep"] if np.isfinite(G) else np.nan, R_dep_G1=min(vals)[0] * S * credit / ld,
                                R_bar_G1=b["A"] * S * credit / ld, at_floor=False, tau=b["tau"], tau_least=b["tau_least"], G=b["G"], tstat=b["tstat"], probe_db=db(min(x["R_least"] for x in per_e)) - db(b["R_dep"]), epochs=per_e)
@@ -630,6 +638,7 @@ def main(argv=None, *, project=None):
                   and not (k == "TAU_CENSOR" and v == "off") and not (k in R5_VALUES and k != "TAU_CENSOR" and v == R5_VALUES[k])}
             if SW["SWITCH_RECORD"] == "all": sw = dict(SW)   # r5.1 (triage row 35): every switch, the credit readings' included
             sw = {k: v for k, v in sw.items() if not (k in R51_VALUES and v == R51_VALUES[k])}   # r5.2: the r5.1 credit values write no key, so r5 and r5.1 are reproduced
+            sw = {k: v for k, v in sw.items() if not (k == "FRAMES" and v == "dump")}   # r5.3: likewise FRAMES=dump, so r5.2 is reproduced
             out = dict(switches=sw, summary={ch: list(s) for ch, s in summary.items()}, has_pilot=has_pilot, results=results,
                        S={ch: 10 ** (-sup.get(ch, 0.0) / 10) for ch in results}, lam_dep=lam_dep, lam_none=lam_none,
                        thresholds={f"{ch}|{rng}": [t, why] for (ch, rng), (t, why) in thr.items()},

@@ -324,11 +324,29 @@ handoff's manifest. They are byte copies that the sha pins and the release's
 equal manifest keys need; nothing opens a file at those paths.
 
 The rule files are `projects/chime_bao/capture_rules/` (`record`, `a18`, `r5`,
-`r5_1`, `r5_2`, and the sensitivity `g1`). Under numpy 2.3 or later every file
+`r5_1`, `r5_2`, `r5_3`, and the sensitivity `g1`). Under numpy 2.3 or later every file
 written equals the frozen release byte for byte, except the five that lost
 their post-processing content. `records cohort-basis`, `robustness`,
 `phase-limit` and `duration` run the release's copies one at a time; each
 prints its usage on `--help`.
+
+Rule `r5_3` is r5.2 with each channel's own frames per dump (DECISIONS.md item
+87): in the dump of 2026-09-17 09:02:30 the bins 759, 703 and 511 (channels 19,
+23 and 35) hold 27 frames, not 33 (`capture_units.SHORT_BINS`). Its four
+rulings, written as the release's `run/` files:
+
+```bash
+BOUNDS_OFF="--set TAU_LOWER_BOUNDS=off --set BOUND_SOURCE=summary --set BOUND_CALIBRATION=off"
+IN="--input table_of_record_v7.csv --handoff HANDOFF --ch33-rescan"
+rfisher records capture-ruling --rule r5_3 --json a18.json --thresholds thresholds.csv --out a18_full.csv $IN > a18.log
+rfisher records capture-ruling --rule r5_3 --sensitivity g1 --json a18_g1.json --out a18_g1_full.csv $IN > a18_g1.log
+rfisher records capture-ruling --rule r5_3 $BOUNDS_OFF --json a18_bounds_off.json --out a18_bounds_off_full.csv $IN > a18_bounds_off.log
+rfisher records capture-ruling --rule r5_3 $BOUNDS_OFF --sensitivity g1 --json a18_g1_bounds_off.json --out a18_g1_bounds_off_full.csv $IN > a18_g1_bounds_off.log
+```
+
+Against r5.2 each json moves only `results/19/shortest/low/epochs/2/n_frames`
+(33 to 27) and adds the switch `FRAMES: bin`; every table and log is r5.2's
+byte for byte (`tests/records/test_capture_identity.py`).
 
 ## Forecast-completion evidence
 
