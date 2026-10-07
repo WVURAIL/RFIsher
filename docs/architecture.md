@@ -3,7 +3,7 @@
 RFIsher is the science side of the detector/science split: it turns a
 cosmological forecast into a tolerance on a residual, and the detector's
 operating characteristic into a verdict per band. The detector side is
-[pilot-proxy](https://github.com/djgormley/pilot-proxy); what crosses between
+[pilot-proxy](https://github.com/WVURAIL/pilot-proxy); what crosses between
 them, and the reading path through each, are in [HANDOFF.md](HANDOFF.md) here
 and in `docs/HANDOFF.md` there.
 
