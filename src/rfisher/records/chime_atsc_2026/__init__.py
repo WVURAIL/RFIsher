@@ -7,4 +7,7 @@
   split, is no longer written);
 - the capture ruling of record and its copies (release r5.2) read one
   capture handoff directory.
+
+The records write each release's own labels; the dissertation's Appendix B
+maps them to its two dispositions.
 """

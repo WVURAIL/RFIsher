@@ -38,6 +38,13 @@ The science side's own terms:
   model; it survives in frozen tokens and in the text of the 2026 records.
 - **The deployable set** is the feasible candidates at or above `eta_eval`;
   the false-alarm limit `eta_pfa` is a reported diagnostic, not a bound.
+- **Excise and Mask** are the dissertation's two dispositions, one per
+  allocation. RFIsher emits no disposition: the historical screen's keep,
+  excise and undetermined (`rfisher.verdict.screening`, per band) and the
+  capture records' excise, keep and undetermined (per range, and per channel
+  in the frozen `disposition` and `a18_disposition` columns) are ruling-level
+  labels. The dissertation maps them to the dispositions once, in its
+  Appendix B; a ruling's excise is not always Excise.
 
 ## Frozen tokens of the science side
 
