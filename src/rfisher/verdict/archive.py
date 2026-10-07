@@ -299,7 +299,7 @@ def run(characterization: str | Path, tolerances: str | Path,
                             "R": p.R, "feasible": p.feasible,
                             "in_deployable_set": p.candidate_order in members})
         outcome = screening.screen(band, rule_tol, summaries, rule_families,
-                                   pol, alpha=alpha)
+                                   pol)
         screen_rows.append(outcome.as_row())
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)

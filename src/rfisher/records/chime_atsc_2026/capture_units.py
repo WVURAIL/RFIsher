@@ -17,7 +17,9 @@ middle of its computation:
 - :func:`every_policy_blockers`: the item 6 rule on the policies' readings;
 - the detector tables ``NB`` (baselines per class) and ``NFRAMES`` (frames
   per dump), which :meth:`CaptureHandoff.check_constants` holds equal to the
-  handoff's manifest.
+  handoff's manifest;
+- ``SHORT_BINS``, the bins that hold fewer frames than their dump, and
+  :func:`nframes`, the frames of a channel's reading in one dump.
 
 pilot-proxy publishes the same detector functions (M4); the copy here is kept
 until a byte-level proof lets one go.
@@ -46,6 +48,11 @@ NFRAMES = {"20260916162300": 11, "20260917040230": 33, "20260917090230": 33, "20
 for _e in ("20260917160208", "20260917160223", "20260917160238", "20260917160308", "20260917160408", "20260917160608",
            "20260917161008", "20260917161408", "20260917161808", "20260917162208"):
     NFRAMES[_e] = 4
+# bins that hold fewer frames than their dump (DECISIONS.md item 87, audit A4): {(dump, freq_id): (channel, frames)}, from a
+# header-only scan of stacks.npy axis 0 of every reduced dump, datasets/pilot_reduce_<dump>/<freq_id>.npz (280 bins per dump;
+# output/d2-frame-count-2026-10-01/scratch/frames_scan.json, sha256 2e36330bb22e974ddd1af180eb66a61f28bf458b7e6e883615cbc7dce5f47791,
+# written by scan_frames.py beside it). Every other bin of every dump holds its dump's NFRAMES.
+SHORT_BINS = {("20260917090230", 511): (35, 27), ("20260917090230", 703): (23, 27), ("20260917090230", 759): (19, 27)}
 WORLDS = ("200ns", "none")       # item 15: the deployed 200 ns delay filter with its credit S (the record's), or no filter
 
 
@@ -95,6 +102,11 @@ def gmin_models(n):
             best = min(best, max(tf, 1.0) / resp)
         out[model] = best
     return out
+
+
+def nframes(epoch, ch):
+    """The frames of channel ch's reading in one dump: the fewest over its in-band bins (NFRAMES unless one is short)."""
+    return min([NFRAMES[epoch]] + [n for (e, _), (c, n) in SHORT_BINS.items() if e == epoch and c == ch])
 
 
 def admissible_min_G(n):

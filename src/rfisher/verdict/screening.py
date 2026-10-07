@@ -12,9 +12,9 @@ The steps, in the order the selector policy declares them
    preparation refusal, or a stability refusal of every family). The
    interval is still computed and reported beside the outcome, as a
    diagnostic.
-3. ``keep``: some family has a nonempty deployable set in the keep reading
-   and its false-alarm limit is certified. Without the certification the
-   band is undetermined ("keep-eligible; P_fa unverified").
+3. ``keep``: some family has a nonempty deployable set in the keep reading.
+   No false-alarm limit is required: eta_Pfa is a reported diagnostic, as in
+   the interval (:func:`certified` is reported beside the outcome).
 4. ``excise``: every family has an empty deployable set in the exclusion
    reading and, unless the floor is verified on every family, the least-R
    candidate's floor share is below ``selector.sensitivity_limited_share``
@@ -25,9 +25,10 @@ Steps 3 and 4 read only the families the detector did not refuse: a family
 whose stability screen or preparation refused carries no keep and no
 excision, whatever its set.
 
-A false-alarm limit is certified (:func:`certified`) only when the detector
-reports it available, its integer null support and source are recorded,
-and its 95% upper bound is at most the alpha the handoff declares.
+A false-alarm limit is certified (:func:`certified`, the archive's
+``false_alarm_certified`` column) only when the detector reports it
+available, its integer null support and source are recorded, and its 95%
+upper bound is at most the alpha the handoff declares.
 
 The two readings differ only for a quantity that is not measured
 (``selector.unmeasured``): an exclusion reads it at its most favorable value
@@ -180,12 +181,8 @@ class Screen:
 
 def screen(band_id: str, tolerance: Mapping | None,
            summaries: Sequence[Mapping], families: Sequence[Readings],
-           policy, *, alpha: float | None = None) -> Screen:
-    """The band's outcome under the precedence (see the module docstring).
-
-    ``alpha`` is the false-alarm target the handoff declares; a limit read
-    at another one is not certified.
-    """
+           policy) -> Screen:
+    """The band's outcome under the precedence (see the module docstring)."""
     check_precedence(policy)
     n = len(families)
     r_tol = float(tolerance["r_tol"]) if tolerance else math.nan
@@ -200,13 +197,9 @@ def screen(band_id: str, tolerance: Mapping | None,
     usable = [f for f in families if not refused_family(f)]
     keepable = [f for f in usable if f.keep.status in NONEMPTY]
     if keepable:
-        if any(certified(f.keep, f.summary, alpha) for f in keepable):
-            return Screen(band_id, "keep", 3,
-                          f"deployable set nonempty on {len(keepable)} "
-                          f"famil{'y' if len(keepable) == 1 else 'ies'} with "
-                          "a certified false-alarm limit", n)
-        return Screen(band_id, "undetermined", 5,
-                      "keep-eligible; P_fa unverified", n)
+        return Screen(band_id, "keep", 3,
+                      f"deployable set nonempty on {len(keepable)} "
+                      f"famil{'y' if len(keepable) == 1 else 'ies'}", n)
     empty = bool(usable) and all(f.exclusion.status not in NONEMPTY
                                  and f.exclusion.status.startswith("empty")
                                  for f in usable)

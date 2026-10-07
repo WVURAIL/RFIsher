@@ -122,17 +122,16 @@ def test_an_excision_needs_every_recorded_family_empty(recorded_rank_policy):
     assert (out.outcome, out.step) == ("excise", 4)
     rows, summaries = _band([[5.0, 6.0], [0.5, 8.0]])
     out = _screen(pol, rows, summaries)
-    assert out.outcome == "undetermined" and "P_fa unverified" in out.reason
-
-
-def test_a_keep_needs_a_certified_false_alarm_limit(pol):
-    rows, summaries = _band([[0.5, 6.0]])
-    assert _screen(pol, rows, summaries).reason == \
-        "keep-eligible; P_fa unverified"
-    rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5,
-                            eta_pfa_status="available")
-    out = _screen(pol, rows, summaries)
     assert (out.outcome, out.step) == ("keep", 3)
+
+
+def test_a_keep_needs_no_false_alarm_limit(pol):
+    # eta_Pfa is a reported diagnostic: unavailable or certified, the band keeps
+    for extra in ({}, {"eta_pfa": 0.5, "eta_pfa_status": "available"}):
+        rows, summaries = _band([[0.5, 6.0]], **extra)
+        out = _screen(pol, rows, summaries)
+        assert (out.outcome, out.step, out.reason) == (
+            "keep", 3, "deployable set nonempty on 1 family")
 
 
 def test_an_unmeasured_gain_excises_only_at_g_one(pol):
@@ -238,17 +237,12 @@ def test_a_limit_on_the_bulk_or_at_another_alpha_is_not_certified(pol):
     rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5,
                             eta_pfa_status="available", pfa_target=1e-3,
                             null_source="transmitter-off epoch from 2023-02")
-    families = screening.family_readings(rows, summaries, 1.0, pol)
-    tol = {"r_tol": 1.0, "refusal": ""}
-    assert screening.screen("99", tol, summaries, families, pol,
-                            alpha=1e-3).outcome == "keep"
-    assert screening.screen("99", tol, summaries, families, pol,
-                            alpha=1e-2).outcome == "undetermined"
+    reading = screening.family_readings(rows, summaries, 1.0, pol)[0].keep
+    assert screening.certified(reading, summaries[0], alpha=1e-3)
+    assert not screening.certified(reading, summaries[0], alpha=1e-2)
     for s in summaries:
         s["null_source"] = "bulk of the mixture (declared)"
-    families = screening.family_readings(rows, summaries, 1.0, pol)
-    out = screening.screen("99", tol, summaries, families, pol, alpha=1e-3)
-    assert out.reason == "keep-eligible; P_fa unverified"
+    assert not screening.certified(reading, summaries[0], alpha=1e-3)
 
 
 @pytest.mark.parametrize("field,value", [
@@ -265,14 +259,15 @@ def test_a_limit_on_the_bulk_or_at_another_alpha_is_not_certified(pol):
     ("null_source", "verified signal-free transmitter-off epoch fixture"),
     ("null_source", "bulk of the mixture (declared)"),
 ])
-def test_malformed_null_certificate_cannot_keep(pol, field, value):
+def test_malformed_null_certificate_is_not_certified(pol, field, value):
     rows, summaries = _band([[0.5, 6.0]], eta_pfa=0.5,
                             eta_pfa_status="available", **{field: value})
     families = screening.family_readings(rows, summaries, 1.0, pol)
+    assert not screening.certified(families[0].keep, summaries[0], alpha=1e-3)
+    # the certificate is reported, not required: the band still keeps
     out = screening.screen("99", {"r_tol": 1.0, "refusal": ""},
-                           summaries, families, pol, alpha=1e-3)
-    assert (out.outcome, out.step, out.reason) == (
-        "undetermined", 5, "keep-eligible; P_fa unverified")
+                           summaries, families, pol)
+    assert (out.outcome, out.step) == ("keep", 3)
 
 
 def test_certificate_needs_its_summary_and_accepts_bound_equality(pol):
