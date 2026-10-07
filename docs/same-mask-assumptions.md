@@ -11,13 +11,13 @@ The accepted maximum normalized bias tolerance, **`zeta=1`, remains fixed**.
 This review concerns confidence/coverage and how uncertainty is represented
 around that science rule. It does not propose relaxing the tolerance ceiling.
 The dissertation's
-[accepted rationale](https://github.com/djgormley/dissertation/blob/cb1bb565b4325d8f5e2ab0975a390f5d10a963bb/chapters/ch09_tolerance.tex#L535-L546)
+[accepted rationale](https://github.com/WVURAIL/dissertation/blob/cb1bb565b4325d8f5e2ab0975a390f5d10a963bb/chapters/ch09_tolerance.tex#L535-L546)
 cites Amara and Réfrégier's bias-versus-statistical-error criterion and adopts
 `zeta=1`. That rationale supports the adopted bias screen; it does not set a
 confidence coefficient or supply a coverage guarantee.
 
 The dissertation's
-[decision contract](https://github.com/djgormley/dissertation/blob/cb1bb565b4325d8f5e2ab0975a390f5d10a963bb/DECISION_CONTRACT.md#decision-rule)
+[decision contract](https://github.com/WVURAIL/dissertation/blob/cb1bb565b4325d8f5e2ab0975a390f5d10a963bb/DECISION_CONTRACT.md#decision-rule)
 requires appropriate confidence bounds at a declared coverage for a
 saveability ruling, without specifying 95%. Conditional point forecasts
 therefore remain distinct from qualified science verdicts with supported

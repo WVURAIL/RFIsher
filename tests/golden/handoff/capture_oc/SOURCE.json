@@ -8,5 +8,5 @@
     "manifest.json": "87524b592f33d7a8dfda30234e70022a1a800866c3a24bfe301a267e186566b1"
   },
   "path": "tests/golden/handoff/capture",
-  "repository": "https://github.com/djgormley/pilot-proxy"
+  "repository": "https://github.com/WVURAIL/pilot-proxy"
 }

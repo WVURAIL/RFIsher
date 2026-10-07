@@ -8,7 +8,7 @@ evidence products. The immutable release roots are indexed separately in
 ## Install
 
 ```bash
-git clone https://github.com/djgormley/RFIsher
+git clone https://github.com/WVURAIL/RFIsher
 cd RFIsher
 python -m pip install -e ".[test]"
 ```

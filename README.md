@@ -3,7 +3,7 @@
 RFIsher is the science side of a detector/science split for radio-frequency
 interference in 21 cm intensity mapping: it decides what a detector's masking
 is worth to a cosmological measurement. The detector side,
-[pilot-proxy](https://github.com/djgormley/pilot-proxy), characterizes each
+[pilot-proxy](https://github.com/WVURAIL/pilot-proxy), characterizes each
 band (every candidate threshold with its masked fraction and kept residual);
 RFIsher turns a Fisher forecast into a tolerance on that residual and prices
 the detector's surface against it, band by band: keep, excise or
@@ -179,7 +179,7 @@ the full inputs, results, and caveats.
 ## Install and verify
 
 ```bash
-git clone https://github.com/djgormley/RFIsher
+git clone https://github.com/WVURAIL/RFIsher
 cd RFIsher
 python -m pip install -e ".[test]"
 python -m pytest tests/ -q
@@ -212,7 +212,7 @@ validation. After installing the pinned checkout, run
 
 ## Project boundary
 
-[pilot-proxy](https://github.com/djgormley/pilot-proxy) owns detector kernels,
+[pilot-proxy](https://github.com/WVURAIL/pilot-proxy) owns detector kernels,
 survey-product generation, and the underlying masking measurements.
 [RadioFisher](https://github.com/djgormley/RadioFisher) supplies the supported
 Fisher backend: the integrand and the instrument-agnostic hooks that cut or

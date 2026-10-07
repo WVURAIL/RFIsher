@@ -2,7 +2,7 @@
 
 This page is for an engineer who wants to know what this repository computes
 from the detector's output, and where in the code each step is. The detector
-side ([pilot-proxy](https://github.com/djgormley/pilot-proxy)) has the matching
+side ([pilot-proxy](https://github.com/WVURAIL/pilot-proxy)) has the matching
 page, `docs/HANDOFF.md` there, for what crosses the boundary and how it is
 made.
 
