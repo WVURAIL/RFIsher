@@ -41,7 +41,7 @@ RadioFisher is required for bank construction and direct backend validation.
 Use the reviewed commit recorded by the released banks:
 
 ```bash
-git clone https://github.com/djgormley/RadioFisher ../RadioFisher
+git clone https://github.com/WVURAIL/RadioFisher ../RadioFisher
 git -C ../RadioFisher checkout 806b0159b5d2b4327cf38af8fcbee093803d080b
 export RADIOFISHER_DIR=../RadioFisher
 ```

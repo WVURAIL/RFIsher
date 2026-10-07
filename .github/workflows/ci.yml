@@ -113,7 +113,7 @@ jobs:
       - name: Check out the reviewed RadioFisher backend
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: djgormley/RadioFisher
+          repository: WVURAIL/RadioFisher
           ref: 806b0159b5d2b4327cf38af8fcbee093803d080b
           path: RadioFisher
           persist-credentials: false
