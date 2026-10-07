@@ -3,9 +3,11 @@
 The scenario builders of :mod:`.scenarios`, and ``scripts/verify_bank.py``,
 ``scripts/run_forecast.py`` and :mod:`rfisher.plots`, read one channel plan
 and one vendored rate table: the ATSC UHF channels 14 to 36 on 6 MHz from
-470 MHz, and ``survey_quarterly_rates_all23.csv`` (pilot-proxy
-``data/provenance/survey_stratum_20260718/``). That table's provenance is
-identified: ``analysis/survey_composition.py`` produced it on 2026-07-18 with
+470 MHz, and ``survey_quarterly_rates_all23.csv``, a byte copy of pilot-proxy
+``data/provenance/survey_stratum_20260718/survey_quarterly_rates_all23.csv@4d8e140``
+(removed from pilot-proxy's current tree on 2026-10-07 and kept in its
+history). That table's provenance is identified: pilot-proxy
+``analysis/survey_composition.py@30e50c2`` produced it on 2026-07-18 with
 the coarse rule ``F > mu_hat + 0.012 * mu0`` (about five null widths above
 each channel's empirical zero point) from the *first* production trawl,
 whose weight bank (sha256 ``b0dce17a...``, kept as
