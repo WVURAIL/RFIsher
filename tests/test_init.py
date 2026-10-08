@@ -23,7 +23,6 @@ PUBLIC_MODULES = (
     "rfisher.records.chime_atsc_2026.capture_ruling",
     "rfisher.response.visibility",
     "rfisher.tolerance.reference",
-    "rfisher.verdict.archive",
     "rfisher.verdict.interval",
 )
 

@@ -15,11 +15,6 @@ CONDITIONAL_SCREENING_EVIDENCE = {
     "science_selection_eligible": False,
     "residual_contains_sensitivity_floor": True,
 }
-HISTORICAL_SCREENING_EVIDENCE = {
-    **CONDITIONAL_SCREENING_EVIDENCE,
-    "decision_scope": "historical_conditional_screen",
-    "physical_operating_recommendation": "not_established",
-}
 
 
 class UnqualifiedResponseError(ValueError):

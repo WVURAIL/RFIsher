@@ -1,8 +1,0 @@
-{
- "oc_summary.csv": "2c51b21cb26f4cb489bbc0d4f202b4ae9e36398504550f41483621c9bf9593d1",
- "manifest.json": "99949ca60236cd6be09c1db06a55b4172ef54cbcb5409b5cdab4bba38cde62f9",
- "tolerances.csv": "2b6a74d69cd14d2ac487a1fbba38240158baa3d044aea4563b386d893c8d0322",
- "extract": "the first oc_summary row of each band and candidate set; the rule rows of tolerances.csv",
- "summary_rows": 52,
- "tolerance_rows": 23
-}

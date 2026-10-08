@@ -15,8 +15,6 @@ frozen tokens; the rows below appear there with the same code names.
 | η_Pfa (the false-alarm limit, reported only) | `eta_pfa` |
 | η_eval | `eta_eval` |
 | r_tol | `r_tol` (`tolerance_basis` says which basis) |
-| η_sci | `eta_sci` |
-| 𝒟 (deployable set) | `interval_low`, `interval_high`, `interval_status`, `in_deployable_set` |
 | R = r_sys/r_tol | `R` |
 | "selector" | `rfisher.verdict.interval.select` |
 | "OC table" | `operating_characteristic_v1` |
@@ -27,7 +25,7 @@ The science side's own terms:
   the forecast on its year grid, gated by the stability test),
   `exact_time_reference_2026-09-09` (the capture's, integrated at T*). The
   capture's table of record was priced at identity on
-  `coarse_world_sensitivity_2026-09-09`, which no verdict reads. See
+  `coarse_world_sensitivity_2026-09-09`, which no current rule reads. See
   [cosmology-entry.md](cosmology-entry.md).
 - **G**, the coherence gain of a residual integrated over the survey; at
   G = 1 the residual adds incoherently.
@@ -36,14 +34,10 @@ The science side's own terms:
 - **Post-processing** is not modelled (decision 78): no delay filter, ground
   filter or other downstream suppression multiplies a residual. "Credit" is not a term of the
   model; it survives in frozen tokens and in the text of the 2026 records.
-- **The deployable set** is the feasible candidates at or above `eta_eval`;
-  the false-alarm limit `eta_pfa` is a reported diagnostic, not a bound.
 - **Excise and Frame-mask** are the dissertation's two dispositions, one per
-  allocation. RFIsher emits no disposition: the historical screen's keep,
-  excise and undetermined (`rfisher.verdict.screening`, per band) and the
-  capture records' excise, keep and undetermined (per range, and per channel
-  in the frozen `disposition` and `a18_disposition` columns) are ruling-level
-  labels. The dissertation maps them to the dispositions once, in its
+  allocation. RFIsher emits no disposition: the capture records' excise, keep
+  and undetermined (per range, and per channel in the frozen `disposition` and
+  `a18_disposition` columns) are ruling-level labels. The dissertation maps them to the dispositions once, in its
   Appendix B; a ruling's excise is not always Excise.
 
 ## Frozen tokens of the science side

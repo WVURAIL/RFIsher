@@ -12,12 +12,15 @@ register (`projects/chime_atsc/detector_register.json` there).
 `src/rfisher/records/chime_atsc_2026/data/policy_2026_archive/` holds a frozen
 copy of both registers as they were when the archive releases were written
 (policy sha 05dfa2a6, the value their ledgers record): the frozen release
-layouts are priced under that copy, so a change of an entry here moves the
-verdict and never the layouts of record.
+layouts are priced under that copy, so a change of an entry here never moves
+the layouts of record.
 
 The delay-filter scenario key (`transfer.delay_suppression.default_key`) was
-removed from the project register with the post-processing scenarios; the
-frozen copy keeps it, because the archive layouts record it.
+removed from the project register with the post-processing scenarios, and the
+four entries only the historical scalar screen read (`selector.precedence`,
+`selector.sensitivity_limited_share`, `selector.unmeasured` and
+`selector.archive_exclusion_gain`) were removed with that screen; the frozen
+copy keeps all five, unchanged.
 
 The tables below give each entry's id, value, status and evidence; the JSON
 files hold the rest. A test (`tests/test_decision_register.py`) holds this page
@@ -49,8 +52,4 @@ to the registers: every table cell must match.
 | `selection.cost_plateau_ratio` | 1.02 | provisional | src/rfisher/thresholds.py@7b0067b; src/rfisher/verdict/interval.py |
 | `selection.tie_break` | ["systematic_residual", "masked_fraction", "candidate_order"] | locked | src/rfisher/thresholds.py@7b0067b; src/rfisher/verdict/interval.py |
 | `selection.tolerance_equality_is_feasible` | true | derived | src/rfisher/thresholds.py@7b0067b; src/rfisher/verdict/interval.py |
-| `selector.archive_exclusion_gain` | {"measured": "booked", "bounded": 1, "cap": 1} | locked | src/rfisher/verdict/screening.py |
 | `selector.fine_rank` | 63 | locked | src/rfisher/verdict/interval.py |
-| `selector.precedence` | ["tolerance refused", "detector refused", "keep", "excise", "undetermined"] | locked | src/rfisher/verdict/screening.py |
-| `selector.sensitivity_limited_share` | 0.95 | provisional | src/rfisher/verdict/screening.py |
-| `selector.unmeasured` | {"exclude": "most_favorable", "keep": "least_favorable"} | locked | src/rfisher/verdict/screening.py |

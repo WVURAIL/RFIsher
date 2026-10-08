@@ -195,38 +195,14 @@ replacement banks in a staging directory, and authenticate them with
 replace the packaged ones. A changed source digest requires a new
 calculation, not new metadata on old matrices.
 
-### Archive verdict and release layouts
+### Archive release layouts
 
 Given a characterization directory `CHAR` written by pilot-proxy, price its
-bands and screen them:
+bands:
 
 ```bash
 rfisher tolerance bands --project projects/chime_bao --bands CHAR/manifest.json --out TOL
-rfisher verdict archive --project projects/chime_bao --characterization CHAR \
-  --tolerances TOL --out SCIENCE
 ```
-
-`verdict.csv` holds each family's deployable set and the band's union,
-`verdict_points.csv` the rule scenario's priced candidates, `screen.csv` the
-screen's step and outcome, and `manifest.json` the sha256 of every file read
-and the producer's identity. The tolerance file must hold rule rows only.
-
-This command reproduces the historical conditional screen. Its `keep`,
-`excise`, and `undetermined` categories and numerical columns retain that
-historical meaning; they are not current physical operating recommendations.
-Every newly generated table row and manifest declares
-`decision_scope: historical_conditional_screen`,
-`evidence_kind: conditional_screening_allowance`,
-`science_selection_eligible: false`, `physical_response_qualified: false`,
-`residual_contains_sensitivity_floor: true`, and
-`physical_operating_recommendation: not_established`.
-In particular, a verified sensitivity floor can permit the historical
-`excise` category even when the floor supplies the entire proxy. That floor
-is not detected RFI and cannot establish physical all-threshold infeasibility.
-The science-evidence guard described in [threshold_response.md](threshold_response.md)
-refuses these exports. Old untagged rows are also ineligible. Complete
-calibration handoffs remain refused by this command; use `response threshold`
-for their diagnostic curves. These additions do not rewrite frozen outputs.
 
 The frozen no-split archive release is written in its own layout from the
 same inputs:

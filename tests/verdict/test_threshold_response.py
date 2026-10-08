@@ -4,7 +4,6 @@ from __future__ import annotations
 import csv
 import json
 import shutil
-from pathlib import Path
 
 import pytest
 
@@ -13,7 +12,7 @@ from rfisher.response import threshold
 from rfisher.response.evidence import (
     UnqualifiedResponseError, require_science_selection_evidence,
 )
-from rfisher.verdict import archive, handoff
+from rfisher.verdict import handoff
 
 
 def rewrite(root, name, transform):
@@ -252,14 +251,6 @@ def test_zero_candidate_summary_is_preserved(complete, tmp_path):
     result = threshold.write_forward(threshold.read_forward([complete]), tmp_path / "result")
     assert result["bands"][1]["supported_candidates"] == 0
     assert result["bands"][1]["source_refusal"]
-
-
-def test_complete_handoff_is_refused_by_archive_before_output(complete, tmp_path):
-    project = Path(__file__).resolve().parents[2] / "projects" / "chime_bao"
-    with pytest.raises(handoff.HandoffError, match="forward-only"):
-        archive.verdict_archive(complete, tmp_path / "missing-tolerances.csv",
-                                project, tmp_path / "verdict")
-    assert not (tmp_path / "verdict").exists()
 
 
 def test_path_traversal_and_duplicate_bands_refused(complete):

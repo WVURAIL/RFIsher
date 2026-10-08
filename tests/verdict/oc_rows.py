@@ -9,7 +9,6 @@ be compared with that selector's, value for value.
 """
 from __future__ import annotations
 
-import math
 
 MIN_KEPT = 30
 Q16 = 1 << 16
@@ -51,16 +50,3 @@ def histogram_rows(histograms: dict, *, band_id: str = "99") -> list[dict]:
                 "floor_share": 0.0, "rho": int(rho), "eta_q16": int(q16)})
             order += 1
     return rows
-
-
-def summary_row(family: str, rows: list[dict], **fields) -> dict:
-    """A minimal ``oc_summary`` row of one family."""
-    etas = [r["eta"] for r in rows if r["threshold_family"] == family]
-    base = {"threshold_family": family, "band_id": "99",
-            "candidate_set": "fine_surface",
-            "eta_eval": min(etas) if etas else math.nan,
-            "eta_pfa": math.nan, "eta_pfa_status": "not computed: statistic Z_rho",
-            "chain_gain_status": "measured", "stability_status": "passed",
-            "refusal": "", "floor_verified": False}
-    base.update(fields)
-    return base

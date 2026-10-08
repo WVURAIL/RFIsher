@@ -2,8 +2,8 @@
 
 A project directory holds two registers: ``science_register.json`` (the
 science settings the forecast adapter and the tolerance table depend on) and
-``selector_policy.json`` (how the verdict chooses inside the deployable set,
-and the screen's precedence). Every entry records its value with units,
+``selector_policy.json`` (how the selector prices and chooses among a
+family's candidates). Every entry records its value with units,
 basis, status, rationale, evidence and sensitivity values, and is tagged with
 its side. This loader reads only ``side: science``: it refuses a file or an
 entry of the detector side, whose register belongs to the detector package.
