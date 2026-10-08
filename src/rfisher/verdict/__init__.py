@@ -1,7 +1,6 @@
-"""From the detector's handoff and a tolerance table to the screen of each band.
+"""The detector's handoff and the pricing of its candidates.
 
-Reading order: :mod:`.handoff` (how the handoff files are checked),
-:mod:`.interval` (the deployable set from eta_eval to eta_sci, eta_Pfa
-reported beside it, and the selector inside it), :mod:`.screening` (keep, excise or undetermined, and the
-precedence) and :mod:`.archive` (the command that writes them).
+:mod:`.handoff` checks the handoff files; :mod:`.interval` prices a family's
+candidates against a tolerance and holds the selector the frozen archive
+layouts use.
 """

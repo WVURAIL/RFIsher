@@ -21,6 +21,12 @@
     ],
     "renamed": {
       "selection.tie_break": "the tail rho, multiplier_q16 of the 7b0067b value is named candidate_order, the order it stands for (M6)"
+    },
+    "removed": {
+      "selector.archive_exclusion_gain": "read only by the historical scalar screen (src/rfisher/verdict/screening.py@54f3adb), removed 2026-10-08",
+      "selector.precedence": "read only by the historical scalar screen (src/rfisher/verdict/screening.py@54f3adb), removed 2026-10-08",
+      "selector.sensitivity_limited_share": "read only by the historical scalar screen (src/rfisher/verdict/screening.py@54f3adb), removed 2026-10-08",
+      "selector.unmeasured": "read only by the historical scalar screen (src/rfisher/verdict/screening.py@54f3adb), removed 2026-10-08"
     }
   },
   "decisions": [
@@ -76,23 +82,6 @@
       "sensitivity_values": []
     },
     {
-      "id": "selector.archive_exclusion_gain",
-      "side": "science",
-      "value": {
-        "measured": "booked",
-        "bounded": 1,
-        "cap": 1
-      },
-      "units": "chain gain by chain_gain_status",
-      "basis": "policy",
-      "status": "locked",
-      "rationale": "An exclusion takes the most favorable value of an unmeasured quantity. Where the correlation time is measured, the booked gain is a measurement; where it is only bounded or at the cap, no admissible minimum is defined for the archive, so an exclusion reads G = 1 (r_sys_incoherent).",
-      "evidence": [
-        "src/rfisher/verdict/screening.py"
-      ],
-      "sensitivity_values": []
-    },
-    {
       "id": "selector.fine_rank",
       "side": "science",
       "value": 63,
@@ -102,58 +91,6 @@
       "rationale": "The detector fixes rho = 63 from the intended bulk geometry. The verdict reads that family; eta is the only per-channel threshold parameter.",
       "evidence": [
         "src/rfisher/verdict/interval.py"
-      ],
-      "sensitivity_values": []
-    },
-    {
-      "id": "selector.precedence",
-      "side": "science",
-      "value": [
-        "tolerance refused",
-        "detector refused",
-        "keep",
-        "excise",
-        "undetermined"
-      ],
-      "units": "ordered screen steps",
-      "basis": "policy",
-      "status": "locked",
-      "rationale": "The first step that matches decides a band: a band without a tolerance, or whose detector surface is refused, is undetermined; a keep needs a nonempty deployable set (eta_Pfa is reported, not required); an excision needs every family empty and an R that does not only measure the floor.",
-      "evidence": [
-        "src/rfisher/verdict/screening.py"
-      ],
-      "sensitivity_values": []
-    },
-    {
-      "id": "selector.sensitivity_limited_share",
-      "side": "science",
-      "value": 0.95,
-      "units": "share of kept frames",
-      "basis": "policy",
-      "status": "provisional",
-      "rationale": "Where the floor is not verified, an R whose least candidate keeps floor-bounded frames on this share or more measures the measurement's sensitivity, not the interference, and cannot excise.",
-      "evidence": [
-        "src/rfisher/verdict/screening.py"
-      ],
-      "sensitivity_values": [
-        0.9,
-        0.95,
-        0.99
-      ]
-    },
-    {
-      "id": "selector.unmeasured",
-      "side": "science",
-      "value": {
-        "exclude": "most_favorable",
-        "keep": "least_favorable"
-      },
-      "units": "reading of an unmeasured quantity",
-      "basis": "policy",
-      "status": "locked",
-      "rationale": "An unmeasured quantity is read at its most favorable value when excising and at its least favorable value when keeping, so neither verdict rests on an assumption in its own favor.",
-      "evidence": [
-        "src/rfisher/verdict/screening.py"
       ],
       "sensitivity_values": []
     }

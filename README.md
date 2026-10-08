@@ -5,25 +5,24 @@ interference in 21 cm intensity mapping: it decides what a detector's masking
 is worth to a cosmological measurement. The detector side,
 [pilot-proxy](https://github.com/WVURAIL/pilot-proxy), characterizes each
 band (every candidate threshold with its masked fraction and kept residual);
-RFIsher turns a Fisher forecast into a tolerance on that residual and prices
-the detector's surface against it, band by band: keep, excise or
-undetermined. It also prices masking as observing-time cost, the use it was
-first written for.
+RFIsher turns a Fisher forecast into a tolerance on that residual, checks
+same-mask responses against fixed precision and calendar budgets, and holds
+the code of record of the 2026 capture ruling. It also prices masking as
+observing-time cost, the use it was first written for.
 
 ```mermaid
 flowchart LR
-  OC["pilot-proxy handoff<br/>operating_characteristic_v1"] --> V["verdict<br/>(eta_sci, deployable set,<br/>selector, screen)"]
+  OC["pilot-proxy handoff<br/>operating_characteristic_v1"] --> TR["threshold response<br/>(residual and exposure<br/>per saved threshold)"]
   F["forecast<br/>(RadioFisher BAO, banks,<br/>no-filter response bank)"] --> T["tolerance<br/>(r_tol per band)"]
-  T -->|tolerances.csv| V
   COC["pilot-proxy capture handoff<br/>capture_operating_characteristic_v1"] --> R["records of the 2026 campaign<br/>(capture ruling of record)"]
   T --> R
   F -->|BAO-band coherence gain| R
 ```
 
 Cosmology enters through `rfisher.forecast` and `rfisher.tolerance`, and two
-things leave them: `tolerances.csv`, for both verdicts, and the BAO-band gain,
-for the capture ruling of record only. [docs/HANDOFF.md](docs/HANDOFF.md) says
-what the verdict reads and gives the reading path through the code;
+things leave them: `tolerances.csv` and the BAO-band gain, the latter for the
+capture ruling of record only. [docs/HANDOFF.md](docs/HANDOFF.md) says
+what this side reads from the detector and gives the reading path through the code;
 [docs/cosmology-entry.md](docs/cosmology-entry.md) explains the tolerance for
 an engineer; [docs/adapting.md](docs/adapting.md) says how to add a science
 model.
@@ -93,40 +92,20 @@ the rank fixed before the scores are read; see pilot-proxy's
 `docs/HANDOFF.md`; a control band's threshold is a surrogate and never a
 band's eta_Pfa), and the stability screen
 (`oc_table.csv`, `oc_summary.csv` and
-`manifest.json`, schema `operating_characteristic` v1). RFIsher prices that
-surface against the band's tolerance and nothing else:
-
-- `rfisher.verdict.interval` gives each family its science threshold eta_sci
-  (the largest eta whose kept residual meets r_tol), the deployable set between
-  eta_eval and eta_sci, and the selection inside it: the least cost
-  `(1 + r_var) / (1 - f)` within 2% of the minimum, ties broken by kept
-  residual, masked fraction and candidate order. No false-alarm rate is
-  required for admission: eta_Pfa is reported beside the set and bounds
-  nothing;
-- `rfisher.verdict.screening` applies the screen's precedence (tolerance
-  refused, detector refused, keep when some family's deployable set is
-  nonempty (eta_Pfa reported, not required), excise only when every family's
-  deployable set is empty, otherwise undetermined).
+`manifest.json`, schema `operating_characteristic` v1).
+`rfisher.verdict.handoff` checks those files, and `rfisher response threshold`
+exports the saved residual and exposure curves of a complete handoff without
+selecting a threshold ([threshold response](docs/threshold_response.md)).
 
 No post-processing of the residual (a delay filter, a ground filter or any
 other downstream stage) is modelled: no factor multiplies a residual, and the
 tolerance is the forecast's without a delay filter.
 
-The selector's constants are data (`projects/chime_bao/selector_policy.json`),
-read through `rfisher.policy`; `selector.fine_rank` chooses the fine ranks the
-selector reads. A small example is in
-[`examples/verdict_from_oc_table.py`](examples/verdict_from_oc_table.py). Every
-science choice is an entry of the project's two registers,
-`projects/chime_bao/science_register.json` and `selector_policy.json`, with
-its value, units, basis, status, rationale, evidence and sensitivity values;
-the detector's choices are entries of pilot-proxy's register.
-
-Given a characterization directory and the band tolerances:
-
-```bash
-rfisher tolerance bands --project projects/chime_bao --bands CHAR/manifest.json --out TOL
-rfisher verdict archive --project projects/chime_bao --characterization CHAR --tolerances TOL --out SCIENCE
-```
+Every science choice is an entry of the project's two registers,
+`projects/chime_bao/science_register.json` and `selector_policy.json`, read
+through `rfisher.policy`, with its value, units, basis, status, rationale,
+evidence and sensitivity values; the detector's choices are entries of
+pilot-proxy's register.
 
 The code of record of the 2026 campaign is `rfisher records`: the frozen
 archive release layouts, and the capture ruling of record (release r5.2 and
@@ -170,8 +149,8 @@ the full inputs, results, and caveats.
   entry with its value, status and evidence.
 - [Architecture and scope](docs/architecture.md): component boundaries,
   bank contract, backend hooks, and the current generality limit.
-- [The historical scalar screen](docs/HANDOFF.md): what the screen's verdict
-  reads, the reading path, and how the selector chooses.
+- [The handoff](docs/HANDOFF.md): what this side reads from the detector,
+  and the reading path through the code.
 - [Adapting](docs/adapting.md) and [terminology](docs/terminology.md).
 - [CHIME/BAO reference application](docs/application-chime.md): fiducial
   configuration, headline results, inputs, and application-specific caveats.
@@ -206,7 +185,7 @@ rfisher forecast --uniform 0.25
 rfisher forecast --cosmology cmbspa2026 --uniform 0.25
 rfisher build-bank --help
 rfisher tolerance show
-rfisher verdict archive --help
+rfisher response --help
 rfisher records --help
 ```
 

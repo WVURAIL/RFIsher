@@ -55,7 +55,6 @@ The retained fraction is `kept / frames`. The uniform-loss estimate is
 `T_required_uniform_years = clean_years * frames / kept`, assuming lost
 frames are distributed evenly. This is an exposure calculation, not a BAO
 forecast. No tolerance, false-alarm assumption, or optimizer is applied.
-The new complete handoff is forward-only; `verdict archive` refuses it.
 
 The Python API offers `read_forward(paths)`, `sweep(response, ...)`,
 `query(response, band=..., family=..., eta_q16=...)`, and

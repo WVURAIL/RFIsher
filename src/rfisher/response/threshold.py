@@ -7,15 +7,16 @@ floor and coherence assumptions; they are not physical bounds.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from ..provenance import producer_identity
 from ..verdict import handoff
-from ..verdict.archive import render
 from .evidence import CONDITIONAL_SCREENING_EVIDENCE
 
 MODEL_KEYS = ("r_reference", "residual_shape", "integration_model", "statistics",
@@ -38,6 +39,25 @@ STATUS_COLUMNS = (
     "complete_calibration_grid", "available_families", "supported_candidates",
     "exported_candidates", "status", "source_claim_status", "source_refusal",
 )
+
+
+def _cell(value):
+    if value is None or (isinstance(value, float) and not math.isfinite(value)):
+        return ""
+    if isinstance(value, float):
+        return repr(value)
+    return value
+
+
+def render(rows: Sequence[Mapping], columns: Sequence[str]) -> bytes:
+    """CSV bytes: floats as repr, NaN and None empty, ``\\n`` line ends."""
+    stream = io.StringIO(newline="")
+    writer = csv.DictWriter(stream, fieldnames=list(columns),
+                            lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({k: _cell(row.get(k)) for k in columns})
+    return stream.getvalue().encode("utf-8")
 
 
 @dataclass(frozen=True)

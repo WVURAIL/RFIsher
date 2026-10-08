@@ -66,9 +66,7 @@ def test_every_old_entry_is_carried_moved_or_deleted():
             assert entry["id"] not in loaded.decisions, entry["id"]
     old = {e["id"] for e in _golden()}
     new = set(loaded.decisions) - old
-    assert new == {"selector.archive_exclusion_gain", "selector.fine_rank",
-                   "selector.precedence", "selector.sensitivity_limited_share",
-                   "selector.unmeasured"}
+    assert new == {"selector.fine_rank"}
 
 
 def test_the_golden_covers_the_whole_old_register():
@@ -91,15 +89,7 @@ def test_the_selector_policy_holds_the_selector_values():
     loaded = policy.load(PROJECT)
     assert loaded.value("selection.cost_plateau_ratio") == 1.02
     assert loaded.value("selection.tolerance_equality_is_feasible") is True
-    assert loaded.value("selector.sensitivity_limited_share") == 0.95
     assert loaded.value("selector.fine_rank") == 63
-    assert loaded.value("selector.precedence") == (
-        "tolerance refused", "detector refused", "keep", "excise",
-        "undetermined")
-    assert dict(loaded.value("selector.unmeasured")) == {
-        "exclude": "most_favorable", "keep": "least_favorable"}
-    assert dict(loaded.value("selector.archive_exclusion_gain")) == {
-        "measured": "booked", "bounded": 1, "cap": 1}
 
 
 def _read_ids(tree):

@@ -21,6 +21,7 @@ docs/sdr-capture-diagnostics.md	8a58343
 docs/threshold-decision-register.md	842912a
 docs/visibility_response.md	842912a
 examples/threshold_selection.py	842912a
+examples/verdict_from_oc_table.py	54f3adb
 paper/.gitignore	2d682c1
 paper/forecast_section.tex	2d682c1
 paper/main.tex	2d682c1
@@ -135,6 +136,8 @@ src/rfisher/selection_policy.py	877aeb1
 src/rfisher/survey.py	2d682c1
 src/rfisher/thresholds.py	877aeb1
 src/rfisher/tolerances.py	877aeb1
+src/rfisher/verdict/archive.py	54f3adb
+src/rfisher/verdict/screening.py	54f3adb
 src/rfisher/verdict/sensitivity.py	96f3585
 src/rfisher_results/__init__.py	877aeb1
 src/rfisher_results/archive/__init__.py	877aeb1
@@ -211,6 +214,9 @@ tests/golden/forecast_template/SOURCE.json	c7c3949
 tests/golden/forecast_template/forecast_completion_channel_mapping.csv	c7c3949
 tests/golden/forecast_template/forecast_completion_template_comparison.csv	c7c3949
 tests/golden/forecast_template/forecast_completion_template_status.csv	c7c3949
+tests/golden/handoff/archive_screen/SOURCE.json	54f3adb
+tests/golden/handoff/archive_screen/oc_summary_extract.csv	54f3adb
+tests/golden/handoff/archive_screen/tolerances_rule.csv	54f3adb
 tests/records/test_results_tree.py	c7c3949
 tests/test_api.py	2d682c1
 tests/test_archive_acceptance_bench.py	877aeb1
@@ -233,6 +239,7 @@ tests/test_compare_coarse_histograms_v5_science.py	877aeb1
 tests/test_current_bias_authentication.py	2d682c1
 tests/test_current_cosmology.py	2d682c1
 tests/test_dissertation_figures.py	f56916a
+tests/test_examples.py	54f3adb
 tests/test_export_coarse_histogram_frames_v1.py	877aeb1
 tests/test_fisherbank_preflight.py	2d682c1
 tests/test_fisherbank_schema.py	2d682c1
@@ -327,4 +334,6 @@ tests/test_validation_regulatory.py	877aeb1
 tests/test_validation_tolerance.py	877aeb1
 tests/test_visibility_response.py	efcaab4
 tests/test_voltage_coherence.py	877aeb1
+tests/verdict/test_archive.py	54f3adb
+tests/verdict/test_screening.py	54f3adb
 tests/verdict/test_sensitivity.py	96f3585

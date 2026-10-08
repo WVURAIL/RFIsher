@@ -1,23 +1,12 @@
-"""The deployable set of thresholds and the selector inside it.
+"""The candidates of a threshold family priced against a tolerance, and the selector.
 
 Per threshold family (the candidates of one statistic and one rank) and per
-tolerance r_tol:
-
-- a candidate is *feasible* when its kept residual r_sys meets r_tol
-  (equality is feasible when the selector policy says so);
-- eta_sci is the loosest feasible threshold; eta_eval the tightest evaluable
-  one (from the handoff's summary);
-- the deployable set D holds the feasible candidates at or above eta_eval,
-  the one lower bound. No false-alarm rate is required for admission: the
-  detector's false-alarm limit eta_Pfa, where it is available, is reported
-  beside the set as a diagnostic and bounds nothing. The set's low end
-  (``interval_low``) is a false-alarm bound only, so it is left empty, and
-  its high end is eta_sci.
-
-The selector inside D takes the least cost C = (1 + r_var) / (1 - f), keeps
-the members within the plateau ratio of it, and breaks ties by residual,
-then masked fraction, then the detector's declared candidate order. The
-floats are those of the operands in that order, so a selection made here is
+tolerance r_tol, a candidate is *feasible* when its kept residual r_sys meets
+r_tol (equality is feasible when the selector policy says so). The selector
+takes the least cost C = (1 + r_var) / (1 - f) among the feasible candidates,
+keeps those within the plateau ratio of it, and breaks ties by residual, then
+masked fraction, then the detector's declared candidate order. The floats are
+those of the operands in that order, so a selection made here is
 bit-identical to one made on the same candidates by the earlier selector.
 
 Which fine families are read is one selector-policy value,
@@ -39,19 +28,10 @@ ORDER_NAMES = ("candidate_order",)
 LEGACY_ORDER_NAMES = ("rho", "multiplier_q16")
 TIE_FIELDS = {"systematic_residual": "r_sys", "masked_fraction":
               "masked_fraction"}
-AVAILABLE = "available"
-
-STATUS_NONEMPTY = "nonempty"
-STATUS_EVAL_ABOVE = "empty: eta_eval > eta_sci"
-STATUS_NO_CANDIDATE = "empty: no candidate meets r_tol"
-STATUS_NO_EVALUABLE = "empty: no evaluable candidate"
-STATUS_TOLERANCE = "tolerance refused"
-STATUS_DETECTOR = "detector refused"
-STATUS_THINNED = "incomplete: thinned surface"
 
 
 class SelectionRefused(ValueError):
-    """The family's preparation evidence refuses a claim."""
+    """The selector refuses a family whose feasible candidates lack a finite cost."""
 
 
 def fine_candidates(rows: Sequence[Mapping], policy) -> list[Mapping]:
@@ -173,107 +153,3 @@ def select(candidates: Sequence[Point], policy) -> Selection:
     near = tuple(p for p in good if p.cost <= ratio * minimum)
     chosen = min(near, key=tie_key(policy))
     return Selection(chosen, minimum, near, "selected")
-
-
-@dataclass(frozen=True)
-class PreparedSelection:
-    """A selection and the claim its preparation evidence permits."""
-
-    claim_status: str
-    selection: Selection
-
-    @property
-    def selected(self):
-        return self.selection.selected
-
-    @property
-    def status(self):
-        return self.selection.status
-
-
-def select_prepared(candidates: Sequence[Point], refusals: Sequence[str],
-                    policy, *, allow_screening: bool = False
-                    ) -> PreparedSelection:
-    """Select only after the family's preparation evidence passes.
-
-    ``refusals`` are the reasons the detector refused an operational claim
-    (a drift or support refusal of the stability screen); any one refuses.
-    """
-    if refusals:
-        raise SelectionRefused("; ".join(refusals))
-    return PreparedSelection(
-        claim_status="screening" if allow_screening else "operational",
-        selection=select(candidates, policy))
-
-
-@dataclass(frozen=True)
-class FamilyInterval:
-    """The deployable set of one family against one tolerance."""
-
-    family: str
-    eta_eval: float
-    eta_pfa: float
-    eta_pfa_status: str
-    eta_sci: float
-    lower_bound: float
-    lower_bound_source: str
-    interval_low: float
-    interval_high: float
-    status: str
-    feasible_count: int
-    contiguous: bool | None
-    members: tuple[Point, ...]
-    least: Point | None
-
-
-def _least(candidates: Sequence[Point]) -> Point | None:
-    finite = [p for p in candidates if math.isfinite(p.r_sys)]
-    return min(finite, key=lambda p: (p.r_sys, p.masked_fraction,
-                                      p.candidate_order)) if finite else None
-
-
-def interval(candidates: Sequence[Point], summary: Mapping, *,
-             thinned: bool = False) -> FamilyInterval:
-    """The deployable set of one family (see the module docstring).
-
-    ``summary`` is the family's ``oc_summary`` row. On a thinned surface the
-    set is reported incomplete when the family's least-residual candidate is
-    feasible: candidates that were not written could then belong to it.
-    eta_Pfa is read and reported, never used as a bound.
-    """
-    eta_eval = float(summary["eta_eval"])
-    eta_pfa = float(summary["eta_pfa"])
-    status_pfa = str(summary["eta_pfa_status"] or "")
-    has_pfa = status_pfa == AVAILABLE and math.isfinite(eta_pfa)
-    lower = eta_eval
-    source = "evaluability" if math.isfinite(eta_eval) else "none"
-    ok = [p for p in candidates if p.feasible]
-    eta_sci = max((p.eta for p in ok), default=math.nan)
-    members = tuple(p for p in ok if not (math.isfinite(lower)
-                                         and p.eta < lower))
-    least = _least(candidates)
-    if not candidates:
-        status = STATUS_NO_EVALUABLE
-    elif not ok:
-        status = STATUS_NO_CANDIDATE
-    elif not members:
-        status = STATUS_EVAL_ABOVE
-    else:
-        status = STATUS_NONEMPTY
-    if thinned and least is not None and least.feasible:
-        status = STATUS_THINNED
-    contiguous = None
-    if members:
-        ordered = sorted(candidates, key=lambda p: (p.eta, p.candidate_order))
-        flags = [p in members for p in ordered]
-        first = flags.index(True)
-        last = len(flags) - 1 - flags[::-1].index(True)
-        contiguous = all(flags[first:last + 1])
-    return FamilyInterval(
-        family=str(summary["threshold_family"]), eta_eval=eta_eval,
-        eta_pfa=eta_pfa if has_pfa else math.nan,
-        eta_pfa_status=status_pfa, eta_sci=eta_sci, lower_bound=lower,
-        lower_bound_source=source,
-        interval_low=math.nan, interval_high=eta_sci,
-        status=status, feasible_count=len(ok), contiguous=contiguous,
-        members=members, least=least)

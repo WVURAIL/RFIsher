@@ -1,8 +1,9 @@
 # Architecture and scope
 
 RFIsher is the science side of the detector/science split: it turns a
-cosmological forecast into a tolerance on a residual, and the detector's
-operating characteristic into a verdict per band. The detector side is
+cosmological forecast into a tolerance on a residual, checks same-mask
+responses against fixed precision and calendar budgets, and holds the code of
+record of the 2026 capture ruling. The detector side is
 [pilot-proxy](https://github.com/WVURAIL/pilot-proxy); what crosses between
 them, and the reading path through each, are in [HANDOFF.md](HANDOFF.md) here
 and in `docs/HANDOFF.md` there.
@@ -16,15 +17,15 @@ and in `docs/HANDOFF.md` there.
    (operating_characteristic_v1)              v  sigma(T*) and the bias per unit residual, per parameter and bin
           |                                tolerance/   r_tol = min over required parameters and bins of zeta sigma / |b|
           |                                   v
-          |                               tolerances.csv  (the only science input of the verdict)
+          |                               tolerances.csv
           v                                   v
-       verdict/  handoff.py checks the files; interval.py eta_sci, the deployable set, the selector;
-                 screening.py keep / excise / undetermined
+       verdict/  handoff.py checks the files; interval.py prices candidates and selects
+       response/threshold.py  saved residual and exposure curves of a complete handoff
    capture_operating_characteristic_v1 --> records/chime_atsc_2026/  the capture ruling of record and its copies
 ```
 
-Cosmology lives in `forecast/` and `tolerance/`. `verdict/` imports neither
-and reads one tolerance file; `records/` holds the code of record of the 2026
+Cosmology lives in `forecast/` and `tolerance/`. `verdict/` imports neither;
+`records/` holds the code of record of the 2026
 campaign, kept runnable and not part of the library's interface.
 
 ## Main components
@@ -34,11 +35,11 @@ campaign, kept runnable and not part of the library's interface.
 | `rfisher.science_model` | the `ScienceModel` protocol a science model satisfies |
 | `rfisher.forecast.radiofisher_bao` | the one science model: the RadioFisher BAO adapter (`model.py`), its banks (`bank/`, the whole bank source manifest), the response (`response.py`), the BAO-band coherence gain (`coherence_gain.py`) and the forecast API (`api.py`, `scenarios.py`, `significance.py`) |
 | `rfisher.tolerance` | the rule (`rule.py`), its reduction to bands (`bands.py`), the table and its provenance (`table.py`), and the frozen reference tolerances of the capture (`reference.py`) |
-| `rfisher.verdict` | the archive verdict: `handoff.py`, `interval.py`, `screening.py`, `archive.py` |
+| `rfisher.verdict` | the detector handoff's reader (`handoff.py`) and the candidate pricing and selector (`interval.py`) the frozen archive layouts use |
 | `rfisher.response` | the linear response of the masked visibility (`visibility.py`, byte-pinned) and its validation |
 | `rfisher.records.chime_atsc_2026` | the capture ruling of record, its copies, the capture release r5.2, the cadence report's table of record section, and the writers of the frozen archive layouts |
 | `rfisher.policy` | the side-checked loader of the two project registers |
-| `rfisher.cli` | `rfisher forecast`, `build-bank`, `tolerance`, `verdict`, `response`, `records` |
+| `rfisher.cli` | `rfisher forecast`, `build-bank`, `tolerance`, `response`, `records` |
 
 ## Fisher-bank contract
 
@@ -151,9 +152,9 @@ scripts/                bank verification and re-stamping, coverage, and the thr
 data/                   research comparison banks
 docs/                   architecture, the handoff, cosmology entry, tolerance, releases, schemas
 docs/releases/          manifests of the immutable release roots
-examples/               the minimal forecast and the verdict of a handoff
+examples/               the minimal forecast
 out/                    ignored scratch; the results tree lives outside (releases.md)
-tests/                  package, verdict, record and workflow tests; tests/golden/ the vendored fixtures
+tests/                  package, handoff, record and workflow tests; tests/golden/ the vendored fixtures
 ```
 
 Generated results, including the immutable release roots, live outside the

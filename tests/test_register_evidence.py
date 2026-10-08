@@ -19,18 +19,14 @@ EVIDENCE = {
 VALUES = {"selection.tie_break": ["systematic_residual", "masked_fraction", "candidate_order"],
           "selector.fine_rank": 63}
 # Entries the project register no longer carries, each recorded in its source.removed.
-REMOVED = {"science_register.json": {"transfer.delay_suppression.default_key"}}
+REMOVED = {"science_register.json": {"transfer.delay_suppression.default_key"},
+           "selector_policy.json": {"selector.archive_exclusion_gain", "selector.precedence",
+                                    "selector.sensitivity_limited_share", "selector.unmeasured"}}
 AMENDMENTS = {
     "selector.fine_rank": {
         "status": "locked",
         "rationale": "The detector fixes rho = 63 from the intended bulk geometry. "
                      "The verdict reads that family; eta is the only per-channel threshold parameter.",
-    },
-    "selector.precedence": {
-        "rationale": "The first step that matches decides a band: a band without a tolerance, or whose detector "
-                     "surface is refused, is undetermined; a keep needs a nonempty deployable set (eta_Pfa is "
-                     "reported, not required); an excision needs every family empty and an R that does not only "
-                     "measure the floor.",
     },
 }
 
