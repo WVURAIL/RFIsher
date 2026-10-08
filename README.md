@@ -130,7 +130,11 @@ rfisher verdict archive --project projects/chime_bao --characterization CHAR --t
 
 The code of record of the 2026 campaign is `rfisher records`: the frozen
 archive release layouts, and the capture ruling of record (release r5.2 and
-its table of record) from the capture handoff.
+its table of record) from the capture handoff. `records/` is frozen code of
+record: its credit and 200 ns switches (`GROUND_CREDIT`, `WORLD`, `KEEP`) exist
+only to reproduce the table of record, and no current rule enables them; the
+latest rule, r5_3, resolves `GROUND_CREDIT=off`, `WORLD=none` and
+`KEEP=stated`, which `tests/test_repository_hygiene.py` checks.
 
 ## Shipped reference result
 
@@ -140,31 +144,34 @@ applying masking. Selected masking-only results are:
 | Scenario | Survey time penalty | Time for 2% transverse distance at z=1.40-1.50 |
 |---|---:|---:|
 | No masking | 1.00x | 0.32 on-sky yr |
-| Legacy detector rate table | 1.03x | 0.42 on-sky yr |
 | 50% of the DTV band masked | 1.15x | 0.63 on-sky yr |
 | Channel 30 excised | 1.008x | 0.36 on-sky yr |
 | Channel 30 retained, Fourier convention | 1.06x | 1.96 on-sky yr |
 
-The legacy table is a historical detector summary, not a DTV
-occupancy measurement. Use corrected survey products for occupancy claims.
-Absolute Fisher times are model-dependent; masking ratios are the more robust
+The masking-cost driver that wrote these, `scripts/run_forecast.py@c7c3949`,
+is kept in the history. Absolute Fisher times are model-dependent; masking ratios are the more robust
 comparison. See [the CHIME/BAO application](docs/application-chime.md) for
 the full inputs, results, and caveats.
 
 ## Documentation
 
-- [Architecture and scope](docs/architecture.md): component boundaries,
-  bank contract, backend hooks, and the current generality limit.
-- [The handoff](docs/HANDOFF.md): what the verdict reads, the reading path,
-  and how the selector chooses.
-- [Threshold response](docs/threshold_response.md): exact saved fine thresholds,
-  residual proxies, and uniform exposure costs.
-- [Where cosmology enters](docs/cosmology-entry.md): the tolerance and the
-  refused bands, for an engineer.
 - [Tolerance](docs/tolerance.md): the masking-cost and contamination-residual
   models in force.
+- [Fixed precision and calendar budgets](docs/FIXED_PRECISION_CALENDAR.md):
+  same-mask responses against the fixed clean-reference precision
+  (`rfisher response calendar`).
+- [Visibility response](docs/visibility-response.md): the 10-second
+  visibility product carried through a fixed science response.
+- [Where cosmology enters](docs/cosmology-entry.md): the tolerance and the
+  refused bands, for an engineer.
+- [Threshold response](docs/threshold_response.md): exact saved fine thresholds,
+  residual proxies, and uniform exposure costs.
 - [Decision register](docs/decision-register.md): every science and selector
   entry with its value, status and evidence.
+- [Architecture and scope](docs/architecture.md): component boundaries,
+  bank contract, backend hooks, and the current generality limit.
+- [The historical scalar screen](docs/HANDOFF.md): what the screen's verdict
+  reads, the reading path, and how the selector chooses.
 - [Adapting](docs/adapting.md) and [terminology](docs/terminology.md).
 - [CHIME/BAO reference application](docs/application-chime.md): fiducial
   configuration, headline results, inputs, and application-specific caveats.
@@ -174,8 +181,6 @@ the full inputs, results, and caveats.
   oracles, CI coverage gates, and optional integration checks.
 - [Release index](docs/releases.md): immutable existing releases and the
   layout for future releases.
-- [Forecast-completion contract](docs/forecast-completion.md): complete
-  estimator, schema, and analytic-template details.
 
 ## Install and verify
 
@@ -186,10 +191,9 @@ python -m pip install -e ".[test]"
 python -m pytest tests/ -q
 ```
 
-Generated results, including the two forecast-completion release roots, live
-outside the repository. Point `RFISHER_OUT` at that results tree so the
-release regression tests read the shipped copies; without it those tests
-skip. See [releases](docs/releases.md).
+Generated results, including the frozen releases, live outside the
+repository in the workspace `results/` tree. See
+[releases](docs/releases.md).
 
 The command-line entry points are:
 

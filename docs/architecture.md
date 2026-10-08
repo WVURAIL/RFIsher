@@ -147,7 +147,7 @@ CHIME/BAO bank, but other scientific targets cannot be claimed as supported.
 ```text
 src/rfisher/            the package and its data (banks, P(k) caches, tolerances/, schemas/, response_banks/)
 projects/chime_bao/     the science profile: science_model.yaml, the two registers, capture_rules/
-scripts/                bank verification and re-stamping, coverage, the forecast-template and validation scripts
+scripts/                bank verification and re-stamping, coverage, and the threshold-calibration bridge
 data/                   research comparison banks
 docs/                   architecture, the handoff, cosmology entry, tolerance, releases, schemas
 docs/releases/          manifests of the immutable release roots
@@ -157,7 +157,7 @@ tests/                  package, verdict, record and workflow tests; tests/golde
 ```
 
 Generated results, including the immutable release roots, live outside the
-repository in the results tree that `rfisher.records.results_tree` resolves;
-see the [release index](releases.md) before changing anything there. Scripts
+repository in the workspace `results/` tree; see the
+[release index](releases.md) before changing anything there. Scripts
 write their scratch output to the ignored `out/`. Detector kernels, the
 characterization and new survey-product generation are the detector side's.

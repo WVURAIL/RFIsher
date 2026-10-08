@@ -32,7 +32,6 @@ def test_distance_and_parameter_metrics_refuse_absent_information():
     assert fc.sigma_param_bin(SCENARIO, 1, 0, "aperp0") == pytest.approx(1)
     shared = _forecast(np.diag([4, 9]), names=("A", "aperp0"), style="shared_A")
     assert shared.sigma_param_bin(SCENARIO, 1, 0, "aperp0") == pytest.approx(1 / 3)
-    assert shared.required_years(SCENARIO, target=5, duty=0.5, hours_per_year=10) == pytest.approx(2)
 
 
 @pytest.fixture

@@ -33,8 +33,8 @@ The science side's own terms:
   G = 1 the residual adds incoherently.
 - **Scenario**, never "world": the condition the forecast is priced in. There
   is one, `none` (no delay filter), of role `rule`.
-- **Post-processing** is not modelled: no delay filter, ground filter or other
-  downstream suppression multiplies a residual. "Credit" is not a term of the
+- **Post-processing** is not modelled (decision 78): no delay filter, ground
+  filter or other downstream suppression multiplies a residual. "Credit" is not a term of the
   model; it survives in frozen tokens and in the text of the 2026 records.
 - **The deployable set** is the feasible candidates at or above `eta_eval`;
   the false-alarm limit `eta_pfa` is a reported diagnostic, not a bound.

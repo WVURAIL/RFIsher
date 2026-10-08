@@ -332,13 +332,6 @@ def test_generic_metric_rejects_nan_but_allows_infinite_unreachable_values():
     assert np.isinf(fc.required_hours_metric(lambda _t: -np.inf, 1.0))
 
 
-@pytest.mark.parametrize("duty", [0.0, -0.5, np.nan, np.inf])
-def test_calendar_duty_must_be_positive_and_finite(duty):
-    fc = _forecast(np.eye(2))
-    with pytest.raises(ValueError, match="duty"):
-        fc.required_years(SCENARIO, target=1.0, duty=duty)
-
-
 def test_valid_required_time_root_is_unchanged():
     fc = _forecast([[1.0]], names=("A",))
     assert fc.required_hours(SCENARIO, target=5.0, t_lo=1.0, t_hi=10.0) \

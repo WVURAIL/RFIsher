@@ -11,7 +11,6 @@ from typing import get_type_hints
 import numpy as np
 import pytest
 
-from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao.bank import banks as fisherbank, resources
 from rfisher.forecast.radiofisher_bao import significance as forecast, scenarios
 from rfisher.forecast.radiofisher_bao.bank.backend import find_radiofisher_dir
@@ -26,8 +25,6 @@ EXPECTED_SHA256 = {
         "7c4a66438f623e52ec617c56c3ccf1f070244fe1ef6a89285467352570311665",
     resources.PACT2025_BANK_NAME:
         "b32caab502af811ca0ac403133da1bc879c66d11f3bd99bc8270b80187c0d58a",
-    channels.DEFAULT_RATES_NAME:
-        "da8c1c1df1f3929920ac132ea037adaa7cad5f5edb215e046ec5a40281d6bde3",
     resources.SYNTHETIC_BASELINE_NAME:
         "101a156d88c212781b098f89a86bfb11ada58433d5dcc5cc2fb86956c930790b",
     "cache_pk.dat":
@@ -40,7 +37,6 @@ EXPECTED_SHA256 = {
         "4703b937f8bb1c6a80391a9e0e91f6ee9b3d44d3291a312495e7dbba41501c81",
 }
 CANONICAL_TEXT_RESOURCES = frozenset({
-    channels.DEFAULT_RATES_NAME,
     resources.SYNTHETIC_BASELINE_NAME,
 })
 BULL_BANK_SHA256 = {
@@ -106,7 +102,6 @@ def test_source_checkout_defaults_load_from_package_data():
     assert bank.meta["config"] == "chime2022"
     assert bank.meta["cosmology"] == "cmbspa2026"
     assert bank.nbins == 15
-    assert len(channels.legacy_rate_fractions()) == 23
 
 
 def test_resource_annotations_resolve_on_supported_python():
@@ -217,7 +212,7 @@ def test_packaged_pact_bank_matches_direct_backend_for_masked_bin(cosmology):
         pytest.skip("direct P-ACT validation requires a RadioFisher checkout")
     bank = FisherBank(resources.bank_file(cosmology))
     calculator = forecast.Forecast(bank, style="perbin_A")
-    scenario = scenarios.legacy_rate_table_scenario()
+    scenario = scenarios.uniform(0.5, scenarios.DTV_BAND)
     bank_sigma = calculator.sigma_A(scenario, 1.0e4, bins=[6])
     direct_sigma = calculator.sigma_A_direct(
         scenario, 1.0e4, bins=[6])
@@ -383,7 +378,7 @@ from rfisher.forecast.radiofisher_bao.bank import resources
 assert '.zip/' in str(resources.DEFAULT_BANK)
 forecast = api.load()
 assert forecast.bank.meta['config'] == 'chime2022'
-assert len(channels.legacy_rate_fractions()) == 23
+assert channels.channel_edges(14) == (470.0, 476.0)
 for resource_name in resources.RADIOFISHER_FILESYSTEM_NAMES:
     with resources.data_file(resource_name).open('rb') as stream:
         assert stream.read(1)

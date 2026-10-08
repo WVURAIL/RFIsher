@@ -61,8 +61,7 @@ def scenario_from(mask=None, uniform=None, band: _scenarios.FrequencyBand =
     uniform masked fraction over an explicit :class:`FrequencyBand`.
 
     ``mask`` also accepts a prebuilt :class:`rfisher.forecast.radiofisher_bao.scenarios.Scenario`
-    (from :func:`scenarios.legacy_rate_table_scenario`,
-    :func:`scenarios.at_threshold`, ...),
+    (from :func:`scenarios.uniform`, :func:`scenarios.single_channel`, ...),
     which passes through unchanged. A Scenario already carries its own
     policy, so combining one with the other arguments here would silently
     ignore half of it; that combination is refused.

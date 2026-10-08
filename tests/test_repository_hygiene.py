@@ -155,3 +155,11 @@ def test_no_world_name_in_the_code():
 def test_the_byte_pinned_module_is_unchanged():
     for path, prefix in PINNED.items():
         assert hashlib.sha256((ROOT / path).read_bytes()).hexdigest().startswith(prefix), path
+
+
+def test_the_latest_capture_rule_enables_no_credit():
+    """records/ is frozen code of record; its credit switches only reproduce the table of record."""
+    from rfisher.records.chime_atsc_2026 import capture_ruling
+
+    rule = capture_ruling.resolve("r5_3")
+    assert (rule["GROUND_CREDIT"], rule["WORLD"], rule["KEEP"]) == ("off", "none", "stated")

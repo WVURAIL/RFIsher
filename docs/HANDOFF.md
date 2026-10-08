@@ -1,4 +1,9 @@
-# The handoff: what the science side does with the detector's files
+# The handoff of the historical scalar screen
+
+This page describes the scalar screen of the archive releases (`rfisher verdict
+archive`), kept as the historical method. The current method is the tolerance,
+the fixed-precision calendar (`FIXED_PRECISION_CALENDAR.md`) and the capture
+ruling of record (`rfisher records`).
 
 This page is for an engineer who wants to know what this repository computes
 from the detector's output, and where in the code each step is. The detector

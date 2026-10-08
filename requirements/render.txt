@@ -1,2 +1,0 @@
-# Renderer used by the frozen forecast figures.
-matplotlib==3.11.1

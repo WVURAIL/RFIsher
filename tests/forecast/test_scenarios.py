@@ -3,12 +3,21 @@ import pytest
 
 from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao import scenarios
+from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
+
+# A masked survey with an excised channel (30) and kept channels at several fractions.
+MIXED = {17: 0.35, 24: 0.97, 30: 0.97, 31: 0.2, 32: 0.1, 36: 0.01}
+
+
+def _mixed(mode="time"):
+    return scenarios.Scenario("mixed", "Mixed masking", fractions=MIXED, mode=mode)
 
 
 def test_channel_edges():
     assert channels.channel_edges(14) == (470.0, 476.0)
     assert channels.channel_edges(30) == (566.0, 572.0)
-    zlo, zhi = channels.channel_z_range(30)
+    lo, hi = channels.channel_edges(30)
+    zlo, zhi = HI_REST_FREQUENCY_MHZ / hi - 1.0, HI_REST_FREQUENCY_MHZ / lo - 1.0
     assert 1.48 < zlo < 1.49 and 1.50 < zhi < 1.52
 
 
@@ -31,10 +40,7 @@ def test_uniform_time_mode():
 
 
 @pytest.mark.parametrize("factory", [
-    lambda mode: scenarios.legacy_rate_table_scenario(mode=mode),
     lambda mode: scenarios.uniform(0.5, scenarios.DTV_BAND, mode=mode),
-    lambda mode: scenarios.at_threshold(
-        {30: (0.3, 0.2)}, threshold_label=1.2, mode=mode),
     lambda mode: scenarios.single_channel(30, 0.97, keep=True, mode=mode),
 ])
 def test_fourier_factory_identity_is_distinct(factory):
@@ -77,23 +83,14 @@ def test_kept_channel_costs_time():
     assert wf < 0.2
 
 
-def test_legacy_rate_fractions_load():
-    fr = channels.legacy_rate_fractions()
-    assert fr[30] == pytest.approx(0.97)
-    assert fr[24] == pytest.approx(0.97)
-    assert 0.005 < fr[36] < 0.02
-    assert 0.25 < fr[17] < 0.45
-    assert len(fr) == 23
-
-
 def test_zbin_factor_array_shape():
     zs = np.array([0.78, 0.88, 0.98])
-    fac = scenarios.legacy_rate_table_scenario().bin_factors_for_zbins(zs)
+    fac = _mixed().bin_factors_for_zbins(zs)
     assert fac.shape == (2, 2)
 
 
 def test_freq_weight_fn_matches_radiofisher_hook_semantics():
-    sc = scenarios.legacy_rate_table_scenario()
+    sc = _mixed()
     w = sc.freq_weight_fn()
     # outside any DTV channel: clean
     assert w(450.0)[0] == 1.0 and w(700.0)[0] == 1.0
@@ -107,14 +104,13 @@ def test_freq_weight_fn_matches_radiofisher_hook_semantics():
     nu = np.linspace(400.0, 800.0, 1001)
     assert w(nu).shape == nu.shape
     assert sc.rf_mode() == "invvar"
-    assert scenarios.legacy_rate_table_scenario(
-        mode="fourier").rf_mode() == "fourier"
+    assert _mixed(mode="fourier").rf_mode() == "fourier"
 
 
 def test_hook_band_average_equals_bin_factors():
     """The uniform-sampled band average RadioFisher's hook computes must
     reproduce Scenario.bin_factors' piecewise-exact w_bar."""
-    sc = scenarios.legacy_rate_table_scenario()
+    sc = _mixed()
     w = sc.freq_weight_fn()
     nu_lo, nu_hi = 566.6, 591.4        # representative ch30-overlap bin
     nn = np.linspace(nu_lo, nu_hi, 200001)
@@ -273,20 +269,3 @@ def test_channel_and_frequency_band_masks_must_not_overlap():
         scenarios.Scenario(
             "bad", "bad", fractions={30: 0.2},
             frequency_fractions={scenarios.DTV_BAND: 0.2})
-
-
-# ----------------------------------------------------------------------
-# Mask-table provenance
-# ----------------------------------------------------------------------
-
-
-def test_csv_table_carries_legacy_epoch_provenance():
-    t = channels.legacy_rate_table()
-    # the rule is now identified (traceable) but it is the mistuned legacy
-    # epoch, so the table is not an occupancy measurement
-    assert t.is_traceable and t.rule == channels.LEGACY_CSV_RULE
-    assert not t.is_occupancy_measurement and t.epoch == channels.LEGACY_CSV_EPOCH
-    assert any("legacy fs/2-mistuned" in n for n in t.notes)
-    assert "NOT an occupancy measurement" in t.summary()
-
-

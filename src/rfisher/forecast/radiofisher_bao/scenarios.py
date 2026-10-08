@@ -347,46 +347,6 @@ def clean() -> Scenario:
     return Scenario("clean", "Uncontaminated baseline")
 
 
-def _masking_scenario(
-        rates_csv=None, refused_fraction: float = legacy_masks.REFUSED_FRACTION,
-        excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
-        mode: str = "time", residuals: dict[int, float] | None = None,
-        residual_excise_threshold: float = NO_EXCISION_THRESHOLD) -> Scenario:
-    """Build a scenario from the legacy rate table.
-
-    ``residuals`` optionally adds the contamination that survives the mask;
-    omitted, the result is masking-only and identical to every published
-    number in ``out/``.
-    """
-    kw = {} if rates_csv is None else {"rates_csv": rates_csv}
-    table = legacy_masks.legacy_rate_table(
-        refused_fraction=refused_fraction, **kw)
-    label, name = "Legacy detector rate table", "legacy_rate_table"
-    fr = table.fractions
-
-    name, label = _mode_identity(name, label, mode)
-    return Scenario(name, label,
-                    fractions=fr, excise_threshold=excise_threshold, mode=mode,
-                    residuals=dict(residuals or {}),
-                    residual_excise_threshold=residual_excise_threshold)
-
-
-def legacy_rate_table_scenario(
-        rates_csv=None, refused_fraction: float = legacy_masks.REFUSED_FRACTION,
-        excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
-        mode: str = "time", residuals: dict[int, float] | None = None,
-        residual_excise_threshold: float = NO_EXCISION_THRESHOLD) -> Scenario:
-    """Use the identified legacy detector rate table.
-
-    The table is retained for result reproduction. It is not a DTV occupancy
-    measurement.
-    """
-    return _masking_scenario(
-        rates_csv=rates_csv, refused_fraction=refused_fraction,
-        excise_threshold=excise_threshold, mode=mode, residuals=residuals,
-        residual_excise_threshold=residual_excise_threshold)
-
-
 def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",
             residual: float = 0.0,
             excise_threshold: float | None = None,
@@ -424,35 +384,6 @@ def uniform(f: float, band: FrequencyBand = DTV_BAND, *, mode: str = "time",
     scenario.name, scenario.label = _mode_identity(
         scenario.name, scenario.label, mode)
     return scenario
-
-
-def at_threshold(per_channel: dict[int, tuple[float, float]],
-                 threshold_label=None,
-                 excise_threshold: float = DEFAULT_EXCISE_THRESHOLD,
-                 residual_excise_threshold: float = NO_EXCISION_THRESHOLD,
-                 mode: str = "time") -> Scenario:
-    """Scenario from a detector operating point: ``{channel: (f, r)}``.
-
-    This is the constructor the threshold study wants. A pilot-proxy threshold
-    sweep produces, per channel, a masked fraction ``f`` and the residual ``r``
-    left in what survives; feeding both here prices the two halves against each
-    other, so the required time as a function of threshold has an interior
-    minimum instead of running away to "never mask".
-    """
-    fr = {int(c): float(v[0]) for c, v in per_channel.items()}
-    rs = {int(c): float(v[1]) for c, v in per_channel.items()}
-    threshold_text = (None if threshold_label is None
-                      else str(threshold_label))
-    tag = ("" if threshold_text is None
-           else f" (threshold={threshold_text})")
-    name, label = _mode_identity(
-        f"threshold{'' if threshold_text is None else f'_{threshold_text}'}",
-        f"Detector operating point{tag}", mode)
-    return Scenario(name, label,
-                    fractions=fr, residuals=rs,
-                    excise_threshold=excise_threshold,
-                    residual_excise_threshold=residual_excise_threshold,
-                    mode=mode)
 
 
 def single_channel(ch: int, f: float, keep: bool = True,

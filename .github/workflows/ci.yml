@@ -55,48 +55,19 @@ jobs:
         run: python scripts/check_test_coverage.py
 
   dissertation-figure:
+    # The names the dissertation's forecast builders import; no TeX toolchain.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the TeX and Poppler figure toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            texlive-latex-base texlive-latex-recommended texlive-latex-extra \
-            texlive-fonts-recommended lmodern cm-super dvipng poppler-utils
-      - name: Confirm the toolchain resolves
-        run: |
-          for tool in latex dvipng kpsewhich pdffonts pdfinfo; do
-            command -v "$tool" || { echo "::error::missing $tool"; exit 1; }
-          done
-          # matplotlib's usetex preamble hard-requires these. type1ec comes
-          # from cm-super and type1cm from texlive-latex-extra; without them
-          # LaTeX fails with an opaque error rather than naming the package.
-          for sty in type1ec type1cm lmodern underscore textcomp geometry \
-                     amsmath amssymb fontenc inputenc; do
-            kpsewhich "$sty.sty" >/dev/null \
-              || { echo "::error::missing LaTeX package $sty.sty"; exit 1; }
-          done
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install ".[test]" -c requirements/render.txt
-      - name: Render the forecast template figure and audit its fonts
-        run: |
-          set -o pipefail
-          python -m pytest -q -rs --no-header \
-            tests/test_render_forecast_template_assets.py::test_the_renderer_loads_the_dissertation_style_contract \
-            tests/test_render_forecast_template_assets.py::test_render_fixture_matches_the_release_manifest \
-            tests/test_render_forecast_template_assets.py::test_fixture_renderer_exports_and_audits_pdf \
-            | tee /tmp/figure.log
-          if grep -Eq "SKIPPED|[0-9]+ skipped" /tmp/figure.log; then
-            echo "::error::required figure audit skipped"
-            exit 1
-          fi
+      - run: python -m pip install -e ".[test]"
+      - run: python -m pytest -q -rs --no-header tests/test_dissertation_contract.py
 
   radiofisher-integration:
     runs-on: ubuntu-latest
@@ -177,5 +148,5 @@ jobs:
           /tmp/rfisher-wheel-smoke/bin/rfisher tolerance show > /dev/null
           /tmp/rfisher-wheel-smoke/bin/rfisher verdict archive --help > /dev/null
           /tmp/rfisher-wheel-smoke/bin/rfisher records capture-release --help > /dev/null
-          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.records.chime_atsc_2026 import capture_release, capture_ruling; assert capture_ruling.resolve('r5_2')['CREDIT_FORM'] == 'one_minus_gamma'; assert capture_release._release_doc()['fields']['release'] == 'capture_ruling_a19_2026-09-25_r5_2'"
+          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.records.chime_atsc_2026 import capture_release, capture_ruling; rule = capture_ruling.resolve('r5_3'); assert (rule['GROUND_CREDIT'], rule['WORLD'], rule['KEEP']) == ('off', 'none', 'stated'); assert capture_release._release_doc()['fields']['release'] == 'capture_ruling_a19_2026-09-25_r5_2'"
           /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.forecast.radiofisher_bao.bank.banks import BANK_SCHEMA_VERSION, FisherBank; from rfisher.forecast.radiofisher_bao.bank.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; from rfisher.forecast.radiofisher_bao.response import packaged_response_banks; assert set(BANK_NAMES) == {'planck2018', 'pact2025', 'cmbspa2026'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES); assert len(list(packaged_response_banks().glob('*.npz'))) == 1"

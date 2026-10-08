@@ -52,13 +52,12 @@ scientific correctness.
 | `tolerance.reference` | `tolerance/test_reference.py`: the vendored capture references by sha, the record's lambda strings and the per-bin tolerances the capture reads |
 | `bank.templates` | `forecast/test_templates.py`: analytic templates and their refusal rules |
 | `bank._validation`, `bank.resources` | `forecast/test_validation.py`, `forecast/test_resources.py`: strict scalar types, the bank pins, packaged data and wheel resources |
-| `plots` | `test_plots.py`: every public forecast figure rendered headlessly, plotted numerical values, axes, masks, zero-information markers and PDF/PNG output |
 | `records.chime_atsc_2026` archive layouts (`compat_tables`, `ladder_pricing`) | `records/test_compat_tables.py`, `records/test_compat_layout.py`, `records/test_archive_screening.py`: the frozen rows of both archive releases on a two-band golden (without their delay-filter scenarios and f sigma_8 columns, retired with stage P), the layout written end to end, and the releases' screening rule |
 | `records.chime_atsc_2026` capture records | `records/test_capture_identity.py`, `records/test_capture_handoff.py`, `records/test_capture_oc.py`, `records/test_capture_rules.py`, `records/test_capture_copies.py`, `records/test_capture_release.py`: from the golden capture handoff and the record's explicit tables, the table of record (9867551a) and its v7 input, the r2 to r5.2 ruling runs, r5.3's four rulings (only channel 19's D2 frame count moves), the copies and the r5.2 release byte for byte under the numerics of record (its post-processing readings retired with stage P, and the five files that lost post-processing content pinned at their new bytes) (numpy 2.3 or later; under an older numpy the tables are still compared byte for byte), the reader's objects against the release producer's, the handoff written from pilot-proxy's capture output, the rules of the producer's own tests, and the handoff's refusals |
 | `records.chime_atsc_2026.cadence_report` | `records/test_cadence_report.py`: the detector's report and the table of record give the frozen `CADENCE_REPORT.md` byte for byte |
 | Handoff schemas, examples, documents and the repository | `test_schemas.py`, `test_examples.py`, `test_doc_snippets.py`, `test_decision_register.py`, `test_register_evidence.py`, `test_repository_hygiene.py`: the vendored archive and capture schemas and pilot-proxy's golden handoffs by sha, the verdict example on the golden handoff, the tolerance page's snippets, the register page against the registers, the register evidence against the frozen policy copy, and the repository's file names, paths and removed-path references |
-| `records.results_tree`, `response` | `records/test_results_tree.py`, `response/test_visibility.py`, `response/test_visibility_command.py`: where generated results live, and the visibility response's known moments |
-| Response report and release scripts | `tolerance/test_bias_estimators.py`, `tolerance/test_bias_workflows.py`, `tolerance/test_current_bias_authentication.py`, `forecast/test_templates.py`, `test_run_forecast.py`, `test_forecast_template_comparison.py`, `test_render_forecast_template_assets.py`; includes real historical/current response-bank builds and reference-tampering rejection |
+| `response` | `response/test_visibility.py`, `response/test_visibility_command.py`: the visibility response's known moments |
+| Response report | `tolerance/test_bias_estimators.py`, `tolerance/test_bias_workflows.py`, `tolerance/test_current_bias_authentication.py`, `forecast/test_templates.py`; includes real historical/current response-bank builds and reference-tampering rejection |
 | Threshold-calibration bridge (`scripts/threshold_calibration_bridge/`) | `test_threshold_bridge.py`: the byte copies carry their recorded sha256, and the scenario evaluator reproduces the package's zero-residual scenario at the current thresholds from its 24 vendored input rows |
 | Coverage gate itself | `test_coverage_gate.py`: missing/new modules, branch regressions, low-coverage components hidden by larger modules and unreadable reports |
 
@@ -88,8 +87,6 @@ Use `pytest -ra` to see every skip reason. External inputs must remain explicit:
   its pinned revision, runs `scripts/verify_bank.py`, the forecast goldens and
   `scripts/restamp_bank_provenance.py --check`, and rebuilds the tolerance
   table with `rfisher tolerance build`, which must match the committed bytes.
-- `RFISHER_OUT` selects generated release tables. The release regressions need
-  the files listed in [releases](releases.md).
 - `RFISHER_ARCHIVE_RESULTS` selects archive evidence for tests that support the
   override. Some historical tests retain a fixed local archive path and report
   a skip when that evidence is absent.

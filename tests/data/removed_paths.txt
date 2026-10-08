@@ -10,6 +10,9 @@ docs/channel29-policy-comparison.md	8a58343
 docs/chime-bao-application.md	842912a
 docs/contamination-residuals.md	842912a
 docs/fine_null_diagnostics.md	8a58343
+docs/forecast-completion-evidence.schema.json	c7c3949
+docs/forecast-completion-release-manifest.schema.json	c7c3949
+docs/forecast-completion.md	c7c3949
 docs/inband-coherence.md	8a58343
 docs/inband_lag_diagnostics.md	8a58343
 docs/masking-cost.md	842912a
@@ -24,6 +27,7 @@ paper/main.tex	2d682c1
 paper/refs.bib	2d682c1
 projects/chime_bao/capture_rules/sensitivities/r2.json	96f3585
 projects/chime_bao/capture_rules/sensitivities/r3.json	96f3585
+requirements/render.txt	c7c3949
 scripts/analyze_fine_null_calibration.py	877aeb1
 scripts/audit_era_hindsight.py	877aeb1
 scripts/bias_tolerance.py	ff75809
@@ -56,11 +60,14 @@ scripts/dissertation/data/bao_policy_case.csv	f56916a
 scripts/dissertation/data/bao_two_walls.csv	f56916a
 scripts/dissertation/figures.py	f56916a
 scripts/dissertation/make_two_walls.py	0f9eb43
+scripts/dissertation/style.py	c7c3949
 scripts/export_coarse_histogram_frames_v1.py	877aeb1
 scripts/fg_sensitivity.py	2d682c1
 scripts/figstyle.py	2d682c1
 scripts/fine_operating_point.py	0f9eb43
 scripts/floor_projection.py	0f9eb43
+scripts/forecast_completion_evidence.py	c7c3949
+scripts/forecast_template_comparison.py	c7c3949
 scripts/freeze_channel29_followup.py	877aeb1
 scripts/measure_inband_coherence_v1.py	877aeb1
 scripts/measure_inband_lags_v1.py	877aeb1
@@ -76,9 +83,11 @@ scripts/plot_sdr_distribution_references_v1.py	f56916a
 scripts/plot_two_walls.py	0f9eb43
 scripts/policy_comparison.py	877aeb1
 scripts/prepare_validation_evidence.py	877aeb1
+scripts/render_forecast_template_assets.py	c7c3949
 scripts/replay_causal_eras.py	877aeb1
 scripts/residual_budget.py	2d682c1
 scripts/restamp_bank_pins.py	2d682c1
+scripts/run_forecast.py	c7c3949
 scripts/run_taucut_sweep.py	2d682c1
 scripts/three_worlds.py	2d682c1
 scripts/threshold_decisions.py	877aeb1
@@ -98,6 +107,7 @@ src/rfisher/data/products.json	877aeb1
 src/rfisher/data/response_banks/fisher_bank_chime2022_pres_kfg22_dense.npz	96f3585
 src/rfisher/data/response_banks/fisher_bank_chime2022_pres_kfg44_dense.npz	96f3585
 src/rfisher/data/response_banks/fisher_bank_chime2022_pres_kfg80_dense.npz	96f3585
+src/rfisher/data/survey_quarterly_rates_all23.csv	c7c3949
 src/rfisher/data/tolerances/filter_scenarios_T1yr.csv	96f3585
 src/rfisher/data/tolerances/filter_scenarios_T1yr.provenance.json	96f3585
 src/rfisher/fisherbank.py	2d682c1
@@ -108,11 +118,13 @@ src/rfisher/layout.py	2d682c1
 src/rfisher/npzio.py	877aeb1
 src/rfisher/pilotproxy.py	877aeb1
 src/rfisher/pkcache.py	2d682c1
+src/rfisher/plots.py	c7c3949
 src/rfisher/preparation.py	877aeb1
 src/rfisher/products.py	877aeb1
 src/rfisher/records/chime_atsc_2026/filter_sensitivity.py	96f3585
 src/rfisher/records/chime_atsc_2026/postprocessing.py	96f3585
 src/rfisher/records/chime_atsc_2026/promotion_evidence.py	96f3585
+src/rfisher/records/results_tree.py	c7c3949
 src/rfisher/residual.py	877aeb1
 src/rfisher/residual_scores/__init__.py	877aeb1
 src/rfisher/residual_scores/bundle.py	877aeb1
@@ -195,6 +207,11 @@ src/rfisher_results/validation/visibility.py	877aeb1
 src/rfisher_results/validation/visibility_response.py	efcaab4
 src/rfisher_results/validation/voltage_coherence.py	877aeb1
 tests/forecast/test_filter_scenarios.py	96f3585
+tests/golden/forecast_template/SOURCE.json	c7c3949
+tests/golden/forecast_template/forecast_completion_channel_mapping.csv	c7c3949
+tests/golden/forecast_template/forecast_completion_template_comparison.csv	c7c3949
+tests/golden/forecast_template/forecast_completion_template_status.csv	c7c3949
+tests/records/test_results_tree.py	c7c3949
 tests/test_api.py	2d682c1
 tests/test_archive_acceptance_bench.py	877aeb1
 tests/test_archive_pipeline_bench.py	877aeb1
@@ -222,6 +239,7 @@ tests/test_fisherbank_schema.py	2d682c1
 tests/test_floor_provenance.py	877aeb1
 tests/test_forecast.py	2d682c1
 tests/test_forecast_boundary_bench.py	2d682c1
+tests/test_forecast_template_comparison.py	c7c3949
 tests/test_incumbent.py	877aeb1
 tests/test_incumbent_product_bench.py	877aeb1
 tests/test_lag_moments.py	877aeb1
@@ -231,8 +249,10 @@ tests/test_null_calibration.py	877aeb1
 tests/test_pilotproxy_v5.py	877aeb1
 tests/test_pkcache.py	2d682c1
 tests/test_pkcache_lifecycle.py	2d682c1
+tests/test_plots.py	c7c3949
 tests/test_preparation.py	877aeb1
 tests/test_products.py	877aeb1
+tests/test_render_forecast_template_assets.py	c7c3949
 tests/test_report_missing_components.py	877aeb1
 tests/test_residual.py	877aeb1
 tests/test_residual_scores.py	877aeb1
@@ -287,6 +307,7 @@ tests/test_results_estimator_transfer.py	877aeb1
 tests/test_results_evaluations.py	877aeb1
 tests/test_results_style.py	877aeb1
 tests/test_results_tree.py	877aeb1
+tests/test_run_forecast.py	c7c3949
 tests/test_run_taucut_sweep.py	2d682c1
 tests/test_scenarios.py	2d682c1
 tests/test_sdr_capture.py	877aeb1

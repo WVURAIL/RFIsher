@@ -274,16 +274,6 @@ class Forecast:
         f = lambda logt: self.significance(scenario, 10.0 ** logt) - target
         return self._first_crossing_hours(f, t_lo, t_hi)
 
-    def required_years(self, scenario: Scenario, target: float = 5.0,
-                       duty: float = 1.0,
-                       hours_per_year: float = experiments.OVERVIEW_ONSKY_YEAR_HOURS) -> float:
-        duty = _positive_finite_scalar(duty, "duty")
-        hours_per_year = _positive_finite_scalar(
-            hours_per_year, "hours_per_year")
-        h = self.required_hours(scenario, target)
-        return (float(experiments.hours_to_years(h, duty, hours_per_year))
-                if np.isfinite(h) else np.inf)
-
     # ------------------------------------------------------------------
     def sigma_A_direct(self, scenario: Scenario, t_hours: float,
                        bins: list[int] | None = None, cosmo=None,
