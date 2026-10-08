@@ -84,13 +84,13 @@ samples) and mislabels an axis at its line 46.
 
 ## Masking-only results
 
-Run `scripts/run_forecast.py` to regenerate `out/required_times.csv`,
-`out/bin_level_targets.csv`, and `out/results.md`.
+`scripts/run_forecast.py@c7c3949` wrote these tables (`out/required_times.csv`,
+`out/bin_level_targets.csv` and `out/results.md`); the driver left the head
+on 2026-10-08 and is kept in the history.
 
 | Scenario | Time penalty relative to clean | Time for 2% transverse distance at `z = 1.40--1.50` |
 |---|---:|---:|
 | No masking | 1.00x | 0.32 on-sky yr |
-| Legacy detector rate table | 1.03x | 0.42 on-sky yr |
 | 50% of the DTV band masked | 1.15x | 0.63 on-sky yr |
 | 97% of the DTV band masked | 1.25x | about 10 on-sky yr |
 | 50% of the entire CHIME band masked | 2.00x | not reported |
@@ -131,13 +131,12 @@ coherence assumptions are in the history copy
 
 The model-only bias release evaluates four unit-normalized analytic residual
 families over every DTV-overlapping redshift bin. It is a sensitivity envelope,
-not a measured template selection. See the
-[forecast-completion contract](forecast-completion.md) and
-[release index](releases.md).
+not a measured template selection. Its contract is
+`docs/forecast-completion.md@c7c3949`; see the [release index](releases.md).
 
 ## Generated figures
 
-The main masking-cost driver writes:
+The main masking-cost driver (`scripts/run_forecast.py@c7c3949`) wrote:
 
 - `fig1_significance_vs_time`: survey significance versus observing time;
 - `fig2_required_time_vs_masking`: years to the BAO targets versus masked DTV
@@ -170,5 +169,4 @@ history.
 
 The number checks that held these tables against the paper and the
 dissertation, `scripts/check_paper_numbers.py@2d682c1` and
-`scripts/check_dissertation_numbers.py@2d682c1`, were removed in 4.0.0 with the
-paper. Exact commands are in [reproducibility.md](reproducibility.md).
+`scripts/check_dissertation_numbers.py@2d682c1`, left with the paper. Exact commands are in [reproducibility.md](reproducibility.md).

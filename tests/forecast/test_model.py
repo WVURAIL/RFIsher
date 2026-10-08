@@ -9,6 +9,7 @@ import pytest
 from rfisher.forecast.radiofisher_bao import legacy_masks as channels
 from rfisher.forecast.radiofisher_bao import model
 from rfisher.forecast.radiofisher_bao.bank import experiments
+from rfisher.forecast.radiofisher_bao.bank.physics import HI_REST_FREQUENCY_MHZ
 from rfisher.science_model import ScienceModel
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,7 +36,7 @@ def test_the_model_satisfies_the_science_model_protocol(science):
 @pytest.mark.parametrize("channel", sorted(FROZEN_BINS))
 def test_the_band_redshift_range_is_bit_equal_to_the_channel_one(channel):
     low, high = channels.channel_edges(channel)
-    expected = channels.channel_z_range(channel)
+    expected = (HI_REST_FREQUENCY_MHZ / high - 1.0, HI_REST_FREQUENCY_MHZ / low - 1.0)
     for edges in ((low, high), (int(low), int(high))):
         got = model.redshift_range(*edges)
         assert [value.hex() for value in got] \

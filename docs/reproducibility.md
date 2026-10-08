@@ -68,14 +68,8 @@ and matches its pin. The last two lines rebuild the tolerance table from the
 four packaged response banks; it must match the committed bytes.
 
 Byte-for-byte reproduction of the frozen forecast-completion figures uses the
-renderer recorded in the PNG metadata:
-
-```bash
-python -m pip install -e ".[test]" -c requirements/render.txt
-```
-
-Other supported Matplotlib versions can render current figures, but are not
-expected to reproduce version-dependent compressed image bytes.
+renderer recorded in the PNG metadata, pinned by `requirements/render.txt@c7c3949`;
+replay those figures at f56916a (see [releases.md](releases.md)).
 
 On a WSL checkout, use a Linux temporary directory if the test runner's
 default temporary path is on a mounted Windows filesystem:
@@ -96,12 +90,7 @@ against the schema, and the reference residual and band edges against the
 science profile, and refuse a mismatch.
 
 The shipped tables, evidence ledgers and release roots live in the results
-tree outside the repository (see [releases.md](releases.md)); point the
-release regression tests at it, or they skip:
-
-```bash
-export RFISHER_OUT=~/rail/results/forecasts/rfisher_out_c1302f4
-```
+tree outside the repository (see [releases.md](releases.md)).
 
 ## Rebuild the shipped banks
 
@@ -161,12 +150,9 @@ interpolation check.
 
 ## Masking-cost outputs
 
-```bash
-python scripts/run_forecast.py
-```
-
-The main driver regenerates the reference figures, CSV tables, and
-`out/results.md`. Interpretation and input limitations are documented in
+The masking-cost driver `scripts/run_forecast.py@c7c3949` wrote the reference
+figures, CSV tables and `out/results.md`; it left the head on 2026-10-08.
+Interpretation and input limitations are documented in
 [application-chime.md](application-chime.md).
 
 ## Response banks and the tolerance table
@@ -350,33 +336,12 @@ byte for byte (`tests/records/test_capture_identity.py`).
 
 ## Forecast-completion evidence
 
-The complete estimator, time-scaling families, refusal ledger, and exact
-three-point evidence-bank commands are documented in
-[forecast-completion.md](forecast-completion.md). After producing the four
-all-bin evidence ledgers, rebuild the comparison and rendered assets with
-(the commands write to the repository's ignored `out/`; the shipped ledgers
-are in the results tree):
-
-```bash
-PYTHONPATH=src python3 scripts/forecast_template_comparison.py \
-  --evidence noise_shaped=out/forecast_completion_all_dtv_bins.json \
-  --evidence low_kparallel=out/forecast_completion_all_dtv_bins_low_kparallel.json \
-  --evidence wedge_like=out/forecast_completion_all_dtv_bins_wedge_like.json \
-  --evidence k_shell_localized=out/forecast_completion_all_dtv_bins_k_shell_localized.json
-PYTHONPATH=src python3 scripts/render_forecast_template_assets.py
-```
-
-For the dated reconciliation release, keep each evidence JSON beside its
-comparison CSV. The renderer resolves evidence basenames relative to that CSV.
-Its four small response banks stay local under the ignored `banks/` directory
-and are not release artifacts. Pass `--preserve-release-metadata` only when
-reproducing the immutable release PDF byte for byte.
-
-The dated release uses `epsilon_fg = 0` for every scalar and named-template
-bank. Omit `--dense-knee` for its three-time banks. Omit `--kfg-fac` when the
-intended recorded value is `null`; zero is a distinct setting. Keep the scalar
-baseline as `--p-res 1.0`, because changing it to a named template changes the
-provenance classification.
+The forecast-completion contract, its scripts and the template renderer left
+the head on 2026-10-08: `docs/forecast-completion.md@c7c3949`,
+`scripts/forecast_completion_evidence.py@c7c3949`,
+`scripts/forecast_template_comparison.py@c7c3949` and
+`scripts/render_forecast_template_assets.py@c7c3949`. Replay the frozen
+releases at f56916a (see [releases.md](releases.md)).
 
 ## Deterministic figures
 

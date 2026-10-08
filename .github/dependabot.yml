@@ -20,9 +20,6 @@ updates:
     # Recorded analysis environments stay unchanged.
     exclude-paths:
       - "requirements/**"
-      - "docs/evidence/**"
-      - "history/**"
-      - "tools/capture/frame_analysis/**"
     groups:
       python-minor-and-patch:
         patterns: ["*"]

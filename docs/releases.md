@@ -21,7 +21,7 @@ numpy 2.3 and later.
 | 8 | the channel 24 basis of the era redate | `records cohort-basis` | this commit | archive environment |
 | 21 | `capture_ruling_a19_2026-09-25_r5_2` (49 files), and the rulings of revisions a18 to r5.1 through their rule files (`projects/chime_bao/capture_rules/`) | `rfisher records capture-release --rule r5_2` with the capture handoff and the explicit record tables, without the post-processing readings (below) | this commit | dissertation environment (numpy 2.3.5) |
 | 6 | the cadence report of record (`CADENCE_REPORT.md`) | pilot-proxy's `capture cadence-report`, then `rfisher records cadence-report` with the table of record | this commit | release environment |
-| 12c | the forecast-template figure of `forecast_completion_20260824_reconciliation` | `scripts/render_forecast_template_assets.py --preserve-release-metadata` | f56916a | release environment |
+| 12c | the forecast-template figure of `forecast_completion_20260824_reconciliation` | `scripts/render_forecast_template_assets.py@f56916a --preserve-release-metadata` | f56916a | release environment |
 | 13 | the visibility response endpoint validation | `rfisher response visibility` (`response/visibility.py`, 0d041bfd) | f56916a | baonoise environment (numpy 2.5.1) |
 
 Post-processing is not modelled, so the replays at this commit leave out the
@@ -42,265 +42,39 @@ sha256 3985dd59), value for value.
 The earlier capture revisions are frozen releases (`capture_ruling_a18_2026-09-24`
 and its revisions r2 to r4, `capture_ruling_a19_2026-09-25_r5` and `_r5_1`);
 their rulings are reproduced through the rule files, and their tables are not
-rebuilt. The forecast-completion and calibration releases below keep their own
-manifests in `docs/releases/`.
+rebuilt.
 
-## Release notes
+## Frozen releases with a manifest here
 
-RFIsher has two immutable forecast-completion release roots. They share
-artifact basenames but represent different provenance states. Neither
-directory should be renamed, moved, rewritten, or collapsed into the other.
+Each of these lives in the workspace `results/` tree, outside the repository,
+and is immutable: never regenerate one in place, rename its files or change its
+schema identifiers; a scientific change is a new dated release. The repository
+keeps a copy of each manifest under `docs/releases/`.
 
-Both live in the results tree, outside the repository, with the rest of the
-generated tables, ledgers and figures that were tracked under `out/` until
-September 2026. The repository keeps their manifests under `docs/releases/`
-and the manifest schema under `docs/`. The tree is resolved by
-`rfisher.records.results_tree.out_dir()`: `$RFISHER_OUT`, else `out_dir` in
-`data/products.local.json`, else the repository's own ignored `out/`. Paths
-below are relative to that tree; manifest entries keep their recorded `out/`
-prefix, which resolves to the same place.
+| Release | Date | Manifest copy | What it holds |
+|---|---|---|---|
+| `forecast_completion_*` (first release) | before 2026-08-24 | `forecast_completion_first_release.manifest.json` | four all-DTV-bin evidence ledgers, the template comparison, mapping and status tables, the tolerance figures, caption and TeX summary |
+| `forecast_completion_20260824_reconciliation` | 2026-08-24 | `forecast_completion_20260824_reconciliation.manifest.json` | the same 12 basenames with `epsilon_fg = 0` and one evaluation source state; it corrects the first release and does not replace it |
+| `calibration_followup_2026-09-08` | 2026-09-08 | `calibration_followup_2026-09-08.manifest.json` | a fresh-draw digital protocol, frame shards, a GPU/CPU arithmetic audit and a pending physical-data plan; no operational policy |
+| `calibration_next_2026-09-08` | 2026-09-08 | `calibration_next_2026-09-08.manifest.json` | a joint digital tolerance experiment (59/60 joint successes, below its 95 % target), regulatory sidecars and an era audit |
+| `archive_v5_2026-09-08_corrected` | 2026-09-08 | `archive_2026-09-08_corrected.manifest.json` | the corrected 23-channel retrospective archive analysis; no channel receives an operating point |
+| `calibration_progress_2026-09-09` | 2026-09-09 | `calibration_progress_2026-09-09.manifest.json` | waveform startup reconciliation, a 197/200 joint residual study and recovered producer histories |
 
-## Software API v3
+The code that wrote the forecast-completion releases left the head on
+2026-10-08 (`docs/forecast-completion.md@c7c3949` and its scripts); replay
+them at f56916a as row 12c does. The physical-calibration workflow of the
+calibration releases is `docs/physical-calibration.md@f56916a`. The 3.0.0
+migration notes (the retired `baonoise` namespace and wrappers) are this file
+at c7c3949. The dissertation keeps its own copies of the forecast-completion
+releases; they are independently covered by its manifest.
 
-Version 3.0.0 removes the former `baonoise` Python namespace and console
-commands, ambiguous compatibility wrappers, and the pre-v1 bias-tolerance JSON
-shape. Current code uses `rfisher`, exact Q16 threshold identities, and the
-versioned bias-report schema exclusively. This software cleanup does not
-rewrite historical `baonoise` provenance keys or schema identifiers in the
-immutable artifacts below.
-
-### Migrating from v2
-
-| v2 surface | v3 replacement |
-|---|---|
-| `import baonoise` | `import rfisher` |
-| `rfisher.compat` | `rfisher.backend` |
-| `baonoise-forecast`, `baonoise-build-bank` | `rfisher-forecast`, `rfisher-build-bank` |
-| `api.tolerance_curve` | `api.masking_cost_curve` |
-| `channels.measured_mask_fractions`, `measured_mask_table` | `legacy_rate_fractions`, `legacy_rate_table` |
-| `scenarios.measured` | `legacy_rate_table_scenario` or `survey_product_scenario`, chosen explicitly |
-| `MaskDecision.noise_gain` | `MaskDecision.residual_reduction` |
-| `threshold_curve` keys `eta`, `best_eta` | `thresholds`, `best_threshold` |
-| `at_threshold(..., eta=...)` | `at_threshold(..., threshold_label=...)` |
-| floating `build_residual_score_histogram` | exact `build_q16_residual_score_histogram` |
-| `MULTIPLIER_Q`, `MULTIPLIER_ONE` | `Q16_FRACTION_BITS`, `Q16_SCALE` |
-| `bias_tolerance.py --json-format ...` | the sole versioned report schema; bank-grid refusal is unconditional |
-
-The removed convenience aggregators in `layout` and `residual` had no live
-callers. Compose their underlying explicit operations if an external workflow
-still needs equivalent behavior.
-
-The ordinary dissertation inputs `three_worlds.csv` (in the results tree) and
-`scripts/dissertation/data/bao_era_points.csv@f56916a` are also authenticated pre-v3
-scientific snapshots. Their embedded source hashes identify the code that
-produced their values. No test of this repository checks them any more (the
-checker, `tests/test_dissertation_figures.py@f56916a`, left with the old figure driver
-in 8a58343); the dissertation's `figure_src/data/frozen_export/v1` keeps its own
-copies with their provenance. Do not restamp them. Regenerate a new
-snapshot only when the archived products are available to run the full
-pipeline.
-
-<!-- BEGIN CALIBRATION_PROGRESS -->
-## Calibration progress and producer evidence: September 9, 2026
-
-`calibration_progress_2026-09-09` separately preserved waveform startup reconciliation, a fresh 300/200-block joint residual study, operator-reported transmitter history, offline causal ledgers, recovered visibility producer histories and controlled-radio preparation/test receipts. Its [manifest](releases/calibration_progress_2026-09-09.manifest.json) binds the evidence and current source snapshots; `docs/physical-calibration.md@f56916a` describes their scope.
-
-The digital result of this release was **197/200 joint successes**, with a **96.1690%** one-sided 95% lower limit; its predeclared 95% evaluation target was **demonstrated**. Calibration's 99% content target is distinct. The prior 59/60 result and all earlier release bytes remained unchanged.
-
-The waveform audit explained the startup discrepancy and preserved newly generated IQ with explicit discard and provenance. Corus reported an October 2018 shutdown month for 44 named transmitters; continuous off intervals and the separate multiplex cutover were unverified. The causal replay preserved as-known assignments and accepted no operating policy. Recovered visibility histories showed that saved matrices omit a later data-dependent median subtraction, and the nominal cleaner comparison used different upstream revisions. As of this release, physical in-band transfer, untouched telescope evaluation and Pathfinder validation were open.
-
-<!-- END CALIBRATION_PROGRESS -->
-
-## Joint calibration and evidence follow-up: September 8, 2026
-
-`calibration_next_2026-09-08` separately releases a signed joint digital
-tolerance experiment, regulatory-history sidecars, a 23-channel monthly-prefix
-era audit and four bounded saved-filter examples. Its
-[manifest](releases/calibration_next_2026-09-08.manifest.json) binds the source
-snapshots and evidence; the workflow (`docs/physical-calibration.md@f56916a`) explains the
-method and remaining physical requirements.
-
-The new experiment uses 60 calibration and 60 fresh evaluation blocks, each
-with 15 dependent cases. Its frozen reduced bound has 59/60 joint successes
-and a one-sided 95% lower success limit of 92.34%, below the predeclared 95%
-validation target. One shared block under-books two cases; no support fails.
-The original assignment covers all 60 blocks. The correction was not refitted.
-This result does not qualify a reduced archive floor or an operating policy.
-
-ISED/CRTC and FCC supply administrative transmitter-history leads without
-requiring CANFAR. Actual RF transition intervals remain unverified. The era
-audit quantifies 126 prior assignment revisions across 1,722 prefixes; the
-saved filters demonstrate vector-dependent response outside the nominal DTV
-band. Neither supplies prospective or in-band physical certification.
-
-## Calibration follow-up: September 8, 2026
-
-`calibration_followup_2026-09-08` is a separate conditional evidence release.
-It contains a frozen fresh-draw digital protocol, 18 generated frame shards,
-coverage and post-hoc batch diagnostics, a six-frame GPU/CPU arithmetic audit,
-the eight-product collaboration preflight and a pending physical-data plan.
-Its [manifest](releases/calibration_followup_2026-09-08.manifest.json) preserves
-the input and output identities. The workflow (`docs/physical-calibration.md@f56916a`)
-explains the new validation helpers and the remaining physical requirements.
-
-All twelve fixed digital cases have 60 supported batches without under-booking;
-the simultaneous one-sided 95% lower success limit is 91.27%. This does not
-establish physical confidence coverage or science-tolerance compliance. The
-collaboration data are outside the DTV band, and the all-days/p1 HyFoRes pairs
-require matched-day re-stacking. No operational policy is authorized.
-
-## Corrected retrospective archive: September 8, 2026
-
-`archive_v5_2026-09-08_corrected/` in the results tree is a separate 23-channel
-analysis. Its input products match both September 7b and September 7c by hash.
-It uses rebuilt scalar-response banks and target-only, all-overlap one-year
-tolerances, calibration-only fitted inputs, and the corrected support gates.
-
-Joint dilations are priced on eight channels and growth on all 23. No channel
-receives a selected operating point: fifteen are unpriced for joint dilations,
-one lacks a floor, two lack time coverage, and five fail supported-candidate
-drift limits. Physical residual calibration, independent states,
-complex-visibility/filter transfer and prospective validation remain pending.
-The dissertation's independent physical-calibration stub tracks the remaining
-requirements; the newer evidence release above records the available
-regulatory leads and local out-of-band visibility diagnostics.
-
-The release `README.md` explains the results and policy-specific exposure.
-Its input, bank, product, comparison and policy-check records remain beside
-its channel ledgers and full dissertation report. The repository copy of the
-release inventory is `docs/releases/archive_2026-09-08_corrected.manifest.json`.
-Analysis and renderer source identities are recorded separately, including
-working-tree patches. This release does not restamp historical outputs or
-claim measured delay suppression.
-
-## Existing releases
-
-### First release
-
-The first release is stored at the top of the results tree under the
-`forecast_completion_*` basenames. Its manifest is
-`forecast_completion_release_manifest.json` there, kept in the repository as:
-
-```text
-docs/releases/forecast_completion_first_release.manifest.json
-```
-
-This is the frozen historical release. Its four evidence ledgers were built at
-their recorded source states. Later cleanup must not restamp those identities
-or regenerate the files in place.
-
-The release contains:
-
-- four all-DTV-bin evidence ledgers;
-- template-comparison, channel-mapping, and status CSV files;
-- PNG and PDF tolerance figures;
-- caption text;
-- a TeX summary; and
-- the manifest's referenced schema document.
-
-`forecast_completion_evidence.json` is a smaller bounded evidence example
-and is not one of the 12 manifest entries.
-
-### Reconciliation release
-
-The current reconciled release is:
-
-```text
-forecast_completion_20260824_reconciliation/
-```
-
-Its manifest is `forecast_completion_release_manifest.json` inside that
-directory, kept in the repository as:
-
-```text
-docs/releases/forecast_completion_20260824_reconciliation.manifest.json
-```
-
-It retains the same 12 release basenames, records `epsilon_fg = 0` for all four
-response families, and uses one clean RFIsher evaluation source state across
-the ledgers. Four small response banks may exist locally under its ignored
-`banks/` directory. They are build prerequisites, not release artifacts, and
-must not be committed as part of the bundle.
-
-The dissertation keeps its own `evidence/` copy of both releases, likewise
-outside its repository (on the WVU OneDrive). Those copies are independently
-covered by the dissertation manifest and are also immutable.
-
-## Why both remain
-
-The reconciliation release did not erase the first release. It corrected and
-made explicit the shared scientific evaluation identity while preserving the
-original result as an auditable historical state.
-
-Some derived files happen to be byte-identical across the two roots, while the
-evidence ledgers, status tables, comparison table, and manifest record
-different provenance. Byte equality of an individual figure is not a reason
-to deduplicate an authenticated release.
-
-Each manifest records paths as well as content hashes. Moving a file would
-change the represented bundle even if its bytes stayed fixed.
-
-## Rules for existing roots
-
-- Do not regenerate either release in place.
-- Do not change its schema identifiers or provenance field names.
-- Do not rename its files to match the preferred current namespace.
-- Do not add local banks to the manifest.
-- Do not replace the first release with links to the reconciliation release.
-- Validate a release from the source state recorded in its evidence, not by
-  forcing current source to reproduce an older source digest.
-- If a scientific or presentation change is needed, create a new dated
-  release.
-
-## Verifying a copy
-
-A results tree is checked against the repository's record of both releases
-by the regression tests, which skip when no tree is configured:
-
-```bash
-RFISHER_OUT=/path/to/results python -m pytest \
-  tests/test_render_forecast_template_assets.py -k manifests
-```
-
-## Future layout
-
-New release bundles go in the results tree, not the repository, and should
-not be mixed with ordinary generated files at its root. Use:
-
-```text
-releases/
-  <application>/
-    YYYY-MM-DD-<description>/
-      README.md
-      manifest.json
-      schema/
-      evidence/
-      tables/
-      figures/
-```
-
-For the shipped application, `<application>` should be `chime-bao`. A release
-README should state:
-
-- scientific scope and target;
-- input and source identities;
-- whether inputs are measured, bounded, modeled, or refused;
-- exact generation and verification commands;
-- artifact inventory and manifest contract; and
-- any prior release it supersedes without deleting.
-
-Ordinary regenerated results stay in the repository's ignored `out/` scratch
-directory or wherever `--out` points. They should not be called releases unless they
-have a manifest, immutable input identities, and a documented validation
-boundary.
-
-Future schema names and provenance keys should use the current RFIsher
-identity. Existing schema-v2 identifiers remain unchanged for compatibility
-and historical verification.
+New release bundles go under `releases/<application>/YYYY-MM-DD-<description>/`
+in the results tree, with a README stating scope, input identities, exact
+commands and the manifest contract. Ordinary regenerated results are not
+releases.
 
 ## Related documentation
 
 - [Reproducibility commands](reproducibility.md)
-- [Forecast-completion contract](forecast-completion.md)
 - [CHIME/BAO application](application-chime.md)
 - [Architecture and provenance boundary](architecture.md)

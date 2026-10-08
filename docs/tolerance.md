@@ -116,15 +116,15 @@ also signal a frequency-unit mistake.
 
 A masked fraction is meaningful only beside the rule and detector geometry
 that produced it. The historical quarterly table the original forecast used
-(`src/rfisher/data/survey_quarterly_rates_all23.csv`, written on 2026-07-18 from the first
+(`src/rfisher/data/survey_quarterly_rates_all23.csv@c7c3949`, written on 2026-07-18 from the first
 production trawl with the coarse rule `F > mu_hat + 0.012 * mu0`) records a
 legacy detector epoch, not DTV occupancy: its weight bank placed the
 coarse-channel center at Nyquist, half the sample rate from the true
 position, which suppressed the pilots by 39 to 47 dB on every channel but
 channel 30, and its 97 % values for channels 24 and 30 are placeholders for
-refused channels. It is kept as the reproducible baseline of the July 2026
-forecast validation (`scripts/run_forecast.py`, `scripts/verify_bank.py`) and
-supports no occupancy statement. Current masked fractions come from the
+refused channels. It was the reproducible baseline of the July 2026 forecast
+validation (`scripts/run_forecast.py@c7c3949`) and supports no occupancy
+statement; it left the head on 2026-10-08. Current masked fractions come from the
 detector side's operating characteristic (pilot-proxy's handoff), with the
 rule and the geometry recorded beside them. The comparison that exposed the
 mismatch, and the product loader of the time, are in the history
@@ -167,8 +167,8 @@ The masking calculation also does not include:
 - coherent contamination bias; or
 - an empirical visibility covariance not present in the supplied products.
 
-Run `scripts/run_forecast.py` to regenerate the reference application's
-masking-cost tables and figures. See
+The reference application's masking-cost tables and figures were written by
+`scripts/run_forecast.py@c7c3949`. See
 [application-chime.md](application-chime.md) for their interpretation.
 
 # Contamination residual

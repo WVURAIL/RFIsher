@@ -113,25 +113,24 @@ s_clean = fc.significance(scenarios.clean(), t2)
 s_exc = fc.significance(scenarios.single_channel(30, 0.97, keep=False), t2)
 s_kept_f = fc.significance(
     scenarios.single_channel(30, 0.97, keep=True, mode="fourier"), t2)
-s_legacy = fc.significance(scenarios.legacy_rate_table_scenario(), t2)
+s_uniform = fc.significance(scenarios.uniform(0.50, scenarios.DTV_BAND), t2)
 print(f"  S(clean)={s_clean:.2f}  S(ch30 excised)={s_exc:.2f}  "
       f"S(ch30 kept, fourier)={s_kept_f:.2f}  "
-      f"S(legacy rate table)={s_legacy:.2f}")
-flag = ("PASS" if s_clean >= s_exc >= s_kept_f and s_clean >= s_legacy
+      f"S(uniform 50% DTV)={s_uniform:.2f}")
+flag = ("PASS" if s_clean >= s_exc >= s_kept_f and s_clean >= s_uniform
         else "FAIL")
 ok &= flag == "PASS"
-print(f"  [{flag}] clean >= excised >= kept(fourier); clean >= legacy")
+print(f"  [{flag}] clean >= excised >= kept(fourier); clean >= uniform")
 
 # ---------------------------------------------- 5. fork-hook equivalence
 print("== 5. in-fork RFI hooks vs bank-rescaling path ==")
 IB = 6
 cases = [
-    ("legacy rate table", scenarios.legacy_rate_table_scenario(), [IB]),
     ("uniform50_dtv", scenarios.uniform(0.50, scenarios.DTV_BAND), [IB]),
     ("ch30_kept_fourier",
      scenarios.single_channel(30, 0.97, keep=True, mode="fourier"), [IB]),
-    ("legacy rate table (all bins)",
-     scenarios.legacy_rate_table_scenario(), None),
+    ("uniform50_dtv (all bins)",
+     scenarios.uniform(0.50, scenarios.DTV_BAND), None),
 ]
 for name, sc, bins in cases:
     t0 = time.time()
