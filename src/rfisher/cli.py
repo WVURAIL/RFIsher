@@ -35,12 +35,11 @@ def main(argv=None):
 
         from .figures import overview_figure
         from .overview import reference
-        from .table import read_table
         ref = reference(args.workers)
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "overview_reference.json").write_text(json.dumps(ref, indent=1) + "\n")
         print(args.out / "overview_reference.json")
-        print(overview_figure(ref, read_table(), args.out))
+        print(overview_figure(ref, args.out))
     else:
         from .figures import draw_all
         from .table import read_table

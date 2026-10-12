@@ -18,6 +18,7 @@ from .bands import Band
 
 INK, MUTED, GRID, SURF = "#1c2126", "#5a6168", "#e4e6e2", "#ffffff"
 LINE = "#2a78d6"
+NU21 = 1420.406
 STYLE = {"font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
          "axes.labelcolor": INK, "figure.facecolor": SURF, "axes.facecolor": SURF, "text.color": INK,
          "axes.titlesize": 11, "axes.titleweight": "bold", "axes.titlelocation": "left"}
@@ -140,38 +141,25 @@ def draw_all(table, out, channels=None) -> list[Path]:
     return paths
 
 
-def overview_figure(ref: dict, table: dict, out) -> Path:
-    """The CHIME Overview forecast reproduced on its 15 bins, and over the DTV range in 6 MHz channels."""
+def overview_figure(ref: dict, out) -> Path:
+    """The CHIME Overview forecast as published (15 bins) and with 6 MHz bins over the DTV range."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    ob, ch = ref["overview_bins"], ref["channels"]
-    lo = min(b["z_min"] for b in ch["bins"])
-    hi = max(b["z_max"] for b in ch["bins"])
+    panels = (("(a) As in the Overview: 15 bins", ref["overview_bins"], (0.75, 2.55)),
+              ("(b) 6 MHz bins over the DTV range (channels 14 to 37)", ref["channels"], (1.30, 2.03)))
     with plt.rc_context(STYLE):
-        fig, axes = plt.subplots(1, 2, figsize=(15, 5.2), constrained_layout=True)
-        ax = axes[0]
-        zc = [b["z_center"] for b in ob["bins"]]
-        ax.axvspan(lo, hi, color=GRID, lw=0, label="DTV channels 14 to 37")
-        ax.errorbar(zc, np.ones(len(zc)), yerr=ob["sigma_dv"], fmt="none", capsize=3, color=LINE, lw=1.6)
-        ax.set(xlim=(0.75, 2.55), ylim=(0.985, 1.015), xlabel="redshift z", ylabel="D_V / D_V(fiducial)",
-               title="(a) The Overview's 15 bins, one clean year (Fig. 31 reproduced)")
-        ax.legend(frameon=False, loc="upper left")
-        ax = axes[1]
-        zc = [b["z_center"] for b in ch["bins"]]
-        rows = {r["channel"]: r for r in table["channels"]}
-        ax.plot(zc, [100 * s for s in ch["sigma_dv"]], "o", color=LINE, ms=7, label="Overview method, σ_NL shared")
-        ax.plot(zc, [100 * rows[b["channel"]]["sigma_dv"] for b in ch["bins"]], "o", mfc="none", color=INK, ms=10,
-                label="RFIsher table, per channel")
-        for b, s in zip(ch["bins"], ch["sigma_dv"]):
-            if b["channel"] % 4 == 2 or b["channel"] == 37:
-                ax.annotate(str(b["channel"]), (b["z_center"], 100 * s), xytext=(0, 9), textcoords="offset points",
-                            ha="center", fontsize=8.5, color=MUTED)
-        ax.set(xlabel="redshift z", ylabel="σ(D_V)/D_V, one clean year (%)",
-               title="(b) The same forecast in 6 MHz channels")
-        ax.legend(frameon=False, loc="upper left")
-        for ax in axes:
+        fig, axes = plt.subplots(1, 2, figsize=(15, 5.4), sharey=True, constrained_layout=True)
+        for ax, (title, fc, xlim) in zip(axes, panels):
+            zc = [b["z_center"] for b in fc["bins"]]
+            ax.errorbar(zc, np.ones(len(zc)), yerr=fc["sigma_dv"], fmt="none", capsize=3, color=LINE, lw=1.6)
+            ax.set(xlim=xlim, ylim=(0.982, 1.018), xlabel="redshift z", title=title)
+            top = ax.secondary_xaxis("top", functions=(lambda z: NU21 / np.maximum(1 + np.asarray(z, float), 1e-9),
+                                                       lambda nu: NU21 / np.maximum(np.asarray(nu, float), 1e-9) - 1))
+            top.set_xlabel("frequency (MHz)")
+            top.tick_params(colors=MUTED)
             _tidy(ax)
-        fig.suptitle("CHIME Overview forecast (Planck 2018, CHIME, 8,760 h): reproduced, then over the DTV range",
+        axes[0].set_ylabel("D_V / D_V(fiducial)")
+        fig.suptitle("CHIME Overview forecast, one clean year (Planck 2018, CHIME, 8,760 h)",
                      x=0.01, ha="left", fontsize=13, fontweight="bold")
         path = out / "overview_reference.png"
         fig.savefig(path, dpi=110)

@@ -46,11 +46,12 @@ bias_over_sigma = a * abs(row["response_dv"])
 RadioFisher's own `fisher()` per redshift bin, A, bσ8, fσ8 and the two dilations free in
 each bin, σ_NL shared by all bins, and the dilations combined into D_V. On the Overview's
 15 bins it reproduces the clean one-year errors, 0.47% to 1.03%, to within 0.0003
-percentage points. Run on the 6 MHz channels it gives the clean reference for the DTV
-range, 1.18% to 1.52% per channel. The table's clean σ(D_V) agrees with it to within
-1.5% on every channel; the table integrates more finely and fits σ_NL per channel.
+percentage points. The same forecast with 6 MHz bins over the DTV range gives 1.18% to
+1.52% per channel: each bin is about a quarter as deep, so its error is about twice as
+large. The tolerance table's clean σ(D_V) agrees with it to within 1.5% on every
+channel; the table integrates more finely and fits σ_NL per channel.
 
-![The CHIME Overview forecast reproduced, and in 6 MHz channels](docs/figures/overview_reference.png)
+![The CHIME Overview forecast as published, and with 6 MHz bins over the DTV range](docs/figures/overview_reference.png)
 
 ## How the detector side uses the table
 
