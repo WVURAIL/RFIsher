@@ -72,7 +72,8 @@ def _radiofisher_source() -> dict:
 def provenance() -> dict:
     return {"rfisher": {"version": __version__, "commit": _git_commit(Path(__file__).parent)},
                 "radiofisher": _radiofisher_source(),
-                "pk_table": {"name": inputs.PK_TABLE, "sha256": pk_cache.file_sha256(inputs.pk_table_path())},
+                "pk_table": {"name": inputs.PK_TABLES[inputs.DEFAULT_COSMOLOGY],
+                             "sha256": pk_cache.file_sha256(inputs.pk_table_path())},
                 "python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__}
 
 
@@ -86,7 +87,9 @@ def build_table(bands=None, workers: int | None = None) -> dict:
         with ProcessPoolExecutor(max_workers=workers) as pool:
             rows = list(pool.map(row, bands))
     return {"schema": SCHEMA,
-                "inputs": {"cosmology": "Planck 2018 (CHIME Overview)", "experiment": "CHIME (CHIME Overview)",
+                "inputs": {"cosmology": inputs.DEFAULT_COSMOLOGY,
+                           "cosmology_description": inputs.COSMOLOGY_NAMES[inputs.DEFAULT_COSMOLOGY],
+                           "experiment": "CHIME (CHIME Overview)",
                             "retained_hours": inputs.RETAINED_HOURS,
                             "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
                             "fitted": ["A", "sigma_NL", "aperp", "apar", "fs8", "bs8"],

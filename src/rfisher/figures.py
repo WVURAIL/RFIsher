@@ -122,8 +122,9 @@ def summary(table, out: Path) -> Path:
                title="(c) Clean uncertainty of D_V")
         for ax in axes:
             _tidy(ax)
-        fig.suptitle("RFIsher channel table: one RadioFisher forecast per 6 MHz channel, coherent DTV residual, "
-                     "one retained year, D_V", x=0.01, ha="left", fontsize=13, fontweight="bold")
+        fig.suptitle(f"RFIsher channel table: one RadioFisher forecast per 6 MHz channel, coherent DTV residual, "
+                     f"one retained year, D_V ({table['inputs']['cosmology']})", x=0.01, ha="left", fontsize=13,
+                     fontweight="bold")
         path = out / "summary.png"
         fig.savefig(path, dpi=110)
         plt.close(fig)

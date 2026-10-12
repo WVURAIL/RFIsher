@@ -7,16 +7,16 @@ from radiofisher.units import HRS_MHZ
 from rfisher import inputs, pk_cache
 
 
-def test_the_power_spectrum_table_belongs_to_the_cosmology():
-    cosmo = pk_cache.with_explicit_physical_densities(copy.deepcopy(rf.chime.cosmo))
-    assert pk_cache.cache_matches(inputs.pk_table_path(), cosmo)
-    meta = pk_cache.inspect_pk_cache(inputs.pk_table_path())
-    assert meta["cosmology"]["h"] == rf.chime.cosmo["h"]
+def test_the_power_spectrum_tables_belong_to_their_cosmologies():
+    assert inputs.DEFAULT_COSMOLOGY == "cmbspa2026"
+    overview = pk_cache.with_explicit_physical_densities(copy.deepcopy(rf.chime.cosmo))
+    assert pk_cache.cache_matches(inputs.pk_table_path("planck2018"), overview)
+    assert pk_cache.inspect_pk_cache(inputs.pk_table_path("planck2018"))["cosmology"]["h"] == rf.chime.cosmo["h"]
+    assert pk_cache.cache_matches(inputs.pk_table_path(), inputs.parameters())
 
 
 def test_a_different_cosmology_is_refused(monkeypatch):
-    other = dict(rf.chime.cosmo, h=0.70)
-    monkeypatch.setattr(rf.chime, "cosmo", other)
+    monkeypatch.setattr(inputs, "CMBSPA2026", dict(inputs.CMBSPA2026, h=0.70))
     with pytest.raises(ValueError, match="not built for this cosmology"):
         inputs.cosmology()
 
@@ -28,8 +28,7 @@ def test_a_damaged_table_is_refused(tmp_path):
     damaged.write_text("\n".join(lines) + "\n")
     with pytest.raises(ValueError, match="digest"):
         pk_cache.inspect_pk_cache(damaged)
-    cosmo = pk_cache.with_explicit_physical_densities(copy.deepcopy(rf.chime.cosmo))
-    assert not pk_cache.cache_matches(damaged, cosmo)
+    assert not pk_cache.cache_matches(damaged, inputs.parameters())
 
 
 def test_densities_are_all_or_none():
