@@ -64,7 +64,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[test]" -e "$RUNNER_TEMP/RadioFisher[test]"
+      # pyproject.toml installs RadioFisher from the same pinned commit as the clone.
+      - run: python -m pip install -e ".[test]"
+      - run: python -c "import radiofisher, sys; print(radiofisher.__file__)"
       - run: python -m pytest -q "$RUNNER_TEMP/RadioFisher/tests"
       - run: rfisher table --out "$RUNNER_TEMP/table" --channels 14,29,37
       - name: The rebuilt rows match the shipped table
