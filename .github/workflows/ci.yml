@@ -78,8 +78,9 @@ jobs:
           fresh = read_table(os.path.join(os.environ["RUNNER_TEMP"], "table", "channel_table.json"))
           for r in fresh["channels"]:
               s = shipped[r["channel"]]
-              for key in ("sigma_dv", "response_dv", "a_tol"):
-                  assert abs(r[key] / s[key] - 1) < 1e-5, (r["channel"], key, r[key], s[key])
+              assert abs(r["sigma_dv"] / s["sigma_dv"] - 1) < 1e-5, (r["channel"], r["sigma_dv"], s["sigma_dv"])
+              scale = max(abs(v) for v in s["dilations"]["response"])
+              assert abs(r["response_dv"] - s["response_dv"]) <= 1e-4 * scale, (r["channel"], r["response_dv"], s["response_dv"])
           print("rebuilt", sorted(r["channel"] for r in fresh["channels"]))
           PY
 

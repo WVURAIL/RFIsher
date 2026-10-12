@@ -159,6 +159,7 @@ python -m pip install -e ".[test]"
 python -m pytest -q
 ```
 
-One test rebuilds channel 19 and checks it against the shipped table to 1e-5 (other numpy
-and scipy builds differ by a few parts in a million). CI also rebuilds
+One test rebuilds channel 19 and checks it against the shipped table: σ to 1e-5 and the
+responses to 1e-4 of the larger dilation response (other numpy and scipy builds differ by
+a few parts in a million, which D_V's partial cancellation magnifies). CI also rebuilds
 channels 14, 29 and 37 against RadioFisher at the pinned commit.
