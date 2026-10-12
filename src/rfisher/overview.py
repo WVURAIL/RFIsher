@@ -35,10 +35,10 @@ def channel_bins() -> list:
     return [(b.z_min, b.z_max) for b in channels()]
 
 
-def bin_fisher(edges):
-    """RadioFisher's clean Fisher matrix for one bin, as the Overview computed it."""
-    zmin, zmax = edges
-    cosmo = inputs.cosmology()
+def bin_fisher(task):
+    """RadioFisher's clean Fisher matrix for one bin ((z_min, z_max), cosmology), as the Overview computed it."""
+    (zmin, zmax), name = task
+    cosmo = inputs.cosmology(name)
     with contextlib.redirect_stdout(io.StringIO()):
         F, names = rf.fisher(zmin, zmax, cosmo, inputs.experiment(), inputs.background(cosmo))
     return F, list(names)
@@ -66,23 +66,24 @@ def combine(matrices: list, names: list) -> dict:
     return {"sigma_dv": sigma_dv, "sigma_fs8": sigma_fs8}
 
 
-def forecast(bins: list, workers: int | None = None) -> dict:
-    """The Overview forecast over ``bins`` (a list of (z_min, z_max))."""
+def forecast(bins: list, workers: int | None = None, cosmology: str = inputs.DEFAULT_COSMOLOGY) -> dict:
+    """The Overview forecast over ``bins`` (a list of (z_min, z_max)) in the named cosmology."""
     workers = workers or min(len(bins), os.cpu_count() or 1)
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        results = list(pool.map(bin_fisher, bins))
+        results = list(pool.map(bin_fisher, [(b, cosmology) for b in bins]))
     names = results[0][1]
     out = combine([F for F, _ in results], names)
+    out["cosmology"] = cosmology
     out["bins"] = [{"z_min": lo, "z_max": hi, "z_center": 0.5 * (lo + hi),
                     "nu_low_mhz": NU21_MHZ / (1 + hi), "nu_high_mhz": NU21_MHZ / (1 + lo)} for lo, hi in bins]
     return out
 
 
-def reference(workers: int | None = None) -> dict:
-    """Both binnings: the Overview's 15 bins (the reproduction) and the 6 MHz channels."""
+def reference(workers: int | None = None, cosmology: str = inputs.DEFAULT_COSMOLOGY) -> dict:
+    """Both binnings in one cosmology: the Overview's 15 bins and the 6 MHz channels."""
     bands = channels()
-    dtv = forecast(channel_bins(), workers)
+    dtv = forecast(channel_bins(), workers, cosmology)
     for row, b in zip(dtv["bins"], bands):
         row["channel"] = b.channel
-    return {"overview_bins": forecast(overview_bins(), workers), "channels": dtv,
-            "method": __doc__.split("\n\n")[1].replace("\n", " ")}
+    return {"cosmology": cosmology, "overview_bins": forecast(overview_bins(), workers, cosmology),
+            "channels": dtv, "method": __doc__.split("\n\n")[1].replace("\n", " ")}

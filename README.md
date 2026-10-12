@@ -53,6 +53,18 @@ channel; the table integrates more finely and fits σ_NL per channel.
 
 ![The CHIME Overview forecast as published, and with 6 MHz bins over the DTV range](docs/figures/overview_reference.png)
 
+The forecast inputs carry two cosmologies: the Overview's Planck 2018 (the default, so
+the reproduction can be checked) and the latest, `cmbspa2026`: SPT-3G, ACT and Planck CMB
+with DESI DR2 BAO (Omori et al. 2026, arXiv:2608.31136v1, Table 8). Only the cosmological
+parameters and the P(k) table change; the HI models, σ_NL and CHIME stay the Overview's.
+In the latest cosmology the 6 MHz errors are 7% to 8% smaller (1.09% to 1.40% per channel).
+
+```bash
+rfisher overview --out out/overview --cosmology planck2018 --compare cmbspa2026
+```
+
+![The 6 MHz forecast in Planck 2018 and in the latest cosmology](docs/figures/overview_cosmology.png)
+
 ## How the detector side uses the table
 
 For each candidate threshold, the archive histogram gives the DTV power `x` left in the

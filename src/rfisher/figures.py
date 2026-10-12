@@ -18,6 +18,7 @@ from .bands import Band
 
 INK, MUTED, GRID, SURF = "#1c2126", "#5a6168", "#e4e6e2", "#ffffff"
 LINE = "#2a78d6"
+GRID_DARK = "#9aa0a6"
 NU21 = 1420.406
 STYLE = {"font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
          "axes.labelcolor": INK, "figure.facecolor": SURF, "axes.facecolor": SURF, "text.color": INK,
@@ -162,6 +163,39 @@ def overview_figure(ref: dict, out) -> Path:
         fig.suptitle("CHIME Overview forecast, one clean year (Planck 2018, CHIME, 8,760 h)",
                      x=0.01, ha="left", fontsize=13, fontweight="bold")
         path = out / "overview_reference.png"
+        fig.savefig(path, dpi=110)
+        plt.close(fig)
+    return path
+
+
+def cosmology_figure(refs: dict, out) -> Path:
+    """The 6 MHz forecast in two cosmologies: the error bars side by side, and their ratio."""
+    out = Path(out)
+    (base, a), (new, b) = list(refs.items())
+    za = np.array([r["z_center"] for r in a["channels"]["bins"]])
+    sa, sb = np.array(a["channels"]["sigma_dv"]), np.array(b["channels"]["sigma_dv"])
+    with plt.rc_context(STYLE):
+        fig, axes = plt.subplots(1, 2, figsize=(15, 5.4), constrained_layout=True)
+        ax = axes[0]
+        ax.errorbar(za - 0.004, np.ones(len(za)), yerr=sa, fmt="none", capsize=3, color=GRID_DARK, lw=1.6, label=base)
+        ax.errorbar(za + 0.004, np.ones(len(za)), yerr=sb, fmt="none", capsize=3, color=LINE, lw=1.6, label=new)
+        ax.set(xlim=(1.30, 2.03), ylim=(0.982, 1.018), xlabel="redshift z", ylabel="D_V / D_V(fiducial)",
+               title="(a) 6 MHz bins over the DTV range, one clean year")
+        ax.legend(frameon=False, loc="upper left")
+        ax = axes[1]
+        ax.plot(za, sb / sa, "o-", color=LINE, lw=1.6, ms=5)
+        ax.axhline(1, color=MUTED, lw=1)
+        ax.set(xlim=(1.30, 2.03), xlabel="redshift z", ylabel=f"σ(D_V) {new} ÷ σ(D_V) {base}",
+               title="(b) Change in the error per channel")
+        for ax in axes:
+            top = ax.secondary_xaxis("top", functions=(lambda z: NU21 / np.maximum(1 + np.asarray(z, float), 1e-9),
+                                                       lambda nu: NU21 / np.maximum(np.asarray(nu, float), 1e-9) - 1))
+            top.set_xlabel("frequency (MHz)")
+            top.tick_params(colors=MUTED)
+            _tidy(ax)
+        fig.suptitle(f"CHIME Overview forecast in 6 MHz bins: {base} and {new}", x=0.01, ha="left",
+                     fontsize=13, fontweight="bold")
+        path = out / "overview_cosmology.png"
         fig.savefig(path, dpi=110)
         plt.close(fig)
     return path
