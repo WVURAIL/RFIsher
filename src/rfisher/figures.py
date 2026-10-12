@@ -138,3 +138,42 @@ def draw_all(table, out, channels=None) -> list[Path]:
         if channels is None or row["channel"] in channels:
             paths.append(plate(row, out, shared))
     return paths
+
+
+def overview_figure(ref: dict, table: dict, out) -> Path:
+    """The CHIME Overview forecast reproduced on its 15 bins, and over the DTV range in 6 MHz channels."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    ob, ch = ref["overview_bins"], ref["channels"]
+    lo = min(b["z_min"] for b in ch["bins"])
+    hi = max(b["z_max"] for b in ch["bins"])
+    with plt.rc_context(STYLE):
+        fig, axes = plt.subplots(1, 2, figsize=(15, 5.2), constrained_layout=True)
+        ax = axes[0]
+        zc = [b["z_center"] for b in ob["bins"]]
+        ax.axvspan(lo, hi, color=GRID, lw=0, label="DTV channels 14 to 37")
+        ax.errorbar(zc, np.ones(len(zc)), yerr=ob["sigma_dv"], fmt="none", capsize=3, color=LINE, lw=1.6)
+        ax.set(xlim=(0.75, 2.55), ylim=(0.985, 1.015), xlabel="redshift z", ylabel="D_V / D_V(fiducial)",
+               title="(a) The Overview's 15 bins, one clean year (Fig. 31 reproduced)")
+        ax.legend(frameon=False, loc="upper left")
+        ax = axes[1]
+        zc = [b["z_center"] for b in ch["bins"]]
+        rows = {r["channel"]: r for r in table["channels"]}
+        ax.plot(zc, [100 * s for s in ch["sigma_dv"]], "o", color=LINE, ms=7, label="Overview method, σ_NL shared")
+        ax.plot(zc, [100 * rows[b["channel"]]["sigma_dv"] for b in ch["bins"]], "o", mfc="none", color=INK, ms=10,
+                label="RFIsher table, per channel")
+        for b, s in zip(ch["bins"], ch["sigma_dv"]):
+            if b["channel"] % 4 == 2 or b["channel"] == 37:
+                ax.annotate(str(b["channel"]), (b["z_center"], 100 * s), xytext=(0, 9), textcoords="offset points",
+                            ha="center", fontsize=8.5, color=MUTED)
+        ax.set(xlabel="redshift z", ylabel="σ(D_V)/D_V, one clean year (%)",
+               title="(b) The same forecast in 6 MHz channels")
+        ax.legend(frameon=False, loc="upper left")
+        for ax in axes:
+            _tidy(ax)
+        fig.suptitle("CHIME Overview forecast (Planck 2018, CHIME, 8,760 h): reproduced, then over the DTV range",
+                     x=0.01, ha="left", fontsize=13, fontweight="bold")
+        path = out / "overview_reference.png"
+        fig.savefig(path, dpi=110)
+        plt.close(fig)
+    return path

@@ -29,6 +29,7 @@ new cosmology, telescope, residual model or retained-time anchor does.
 python -m pip install -e .            # installs RadioFisher at the pinned commit
 rfisher table --out out/              # all 24 channels, about a minute on 12 cores
 rfisher figures --out out/figures     # the summary and one plate per channel
+rfisher overview --out out/overview   # the CHIME Overview forecast, reproduced and in 6 MHz channels
 ```
 
 ```python
@@ -38,6 +39,18 @@ row = next(r for r in table["channels"] if r["channel"] == 19)
 a = 8.4e-8                            # residual strength at a threshold (detector side)
 bias_over_sigma = a * abs(row["response_dv"])
 ```
+
+## Reference: the CHIME Overview forecast
+
+`rfisher overview` reproduces the CHIME Overview forecast the way its scripts compute it:
+RadioFisher's own `fisher()` per redshift bin, A, bσ8, fσ8 and the two dilations free in
+each bin, σ_NL shared by all bins, and the dilations combined into D_V. On the Overview's
+15 bins it reproduces the clean one-year errors, 0.47% to 1.03%, to within 0.0003
+percentage points. Run on the 6 MHz channels it gives the clean reference for the DTV
+range, 1.18% to 1.52% per channel. The table's clean σ(D_V) agrees with it to within
+1.5% on every channel; the table integrates more finely and fits σ_NL per channel.
+
+![The CHIME Overview forecast reproduced, and in 6 MHz channels](docs/figures/overview_reference.png)
 
 ## How the detector side uses the table
 
@@ -120,6 +133,7 @@ and how the bias of D_V grows with strength.
 | `src/rfisher/residual.py` | the coherent DTV residual |
 | `src/rfisher/forecast.py` | one channel's Fisher matrix with the residual's bias row |
 | `src/rfisher/tolerance.py` | σ and bias of D_V, response and tolerance |
+| `src/rfisher/overview.py` | the CHIME Overview forecast, reproduced, and in 6 MHz channels |
 | `src/rfisher/table.py`, `figures.py`, `cli.py` | the table, the figures, the command line |
 | `src/rfisher/data/channel_table.json`, `.csv` | the shipped table, with provenance |
 | `docs/diagram.py` | draws the call graph above |
