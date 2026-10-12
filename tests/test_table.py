@@ -13,18 +13,17 @@ def test_the_shipped_table_covers_every_channel():
     assert t["schema"] == SCHEMA
     assert [r["channel"] for r in t["channels"]] == [b.channel for b in channels()]
     for r in t["channels"]:
-        assert r["a_tol"] == pytest.approx(1 / max(abs(r["response_aperp"]), abs(r["response_apar"])))
-        assert r["binding"] == ("aperp" if abs(r["response_aperp"]) >= abs(r["response_apar"]) else "apar")
-        assert 0.015 < r["sigma_aperp"] < 0.03 and 0.015 < r["sigma_apar"] < 0.03
+        assert r["a_tol"] == pytest.approx(1 / abs(r["response_dv"]))
+        assert 0.01 < r["sigma_dv"] < 0.02
+        assert all(0.015 < s < 0.03 for s in r["dilations"]["sigma"])
 
 
 @pytest.mark.parametrize("number", [19])
 def test_a_channel_rebuilds_to_the_shipped_row(number):
     shipped = next(r for r in read_table()["channels"] if r["channel"] == number)
     fresh = row(channel(number))
-    for key in ("z_center", "sigma_aperp", "sigma_apar", "response_aperp", "response_apar", "a_tol"):
+    for key in ("z_center", "sigma_dv", "response_dv", "a_tol"):
         assert fresh[key] == pytest.approx(shipped[key], rel=1e-6), key
-    assert fresh["binding"] == shipped["binding"]
 
 
 def test_write_and_read(tmp_path):

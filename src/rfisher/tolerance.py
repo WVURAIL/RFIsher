@@ -6,18 +6,25 @@ are held at their fiducial values. Inverting the fitted block gives the clean
 covariance C. The '_Pres' column B holds the residual's projection onto each
 parameter, so the first-order bias of a unit-strength residual is C B.
 
-    response_i = bias_i / sigma_i      per unit strength, for alpha_perp, alpha_par
-    a_tol      = 1 / max |response_i|  the strength at which the larger bias equals sigma
+The two dilations are combined into the one number the CHIME Overview reports,
+the volume-averaged distance D_V:
+
+    ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par
+
+    sigma_dv    = sqrt(w C w),  w = (2/3, 1/3) on the dilations
+    response_dv = (w . bias) / sigma_dv     per unit strength
+    a_tol       = 1 / |response_dv|         the strength at which the bias equals sigma
 """
 import numpy as np
 
 FITTED = ("A", "sigma_NL", "aperp", "apar", "fs8", "bs8")
 DILATIONS = ("aperp", "apar")
+DV_WEIGHTS = np.array([2 / 3, 1 / 3])
 RESIDUAL = "_Pres"
 
 
 def tolerance(F: np.ndarray, names: list) -> dict:
-    """Clean dilation uncertainties, bias per unit strength, response and tolerance."""
+    """Clean D_V uncertainty, its bias per unit strength, the response and the tolerance."""
     names = list(names)
     keep = [names.index(p) for p in FITTED]
     if any(F[i, i] <= 0 for i in keep):
@@ -35,9 +42,12 @@ def tolerance(F: np.ndarray, names: list) -> dict:
     ix = [FITTED.index(p) for p in DILATIONS]
     cov = C[np.ix_(ix, ix)]
     sigma = np.sqrt(np.diag(cov))
-    response = bias[ix] / sigma
-    binding = int(np.argmax(np.abs(response)))
-    return {"sigma": sigma.tolist(), "bias_per_unit_a": bias[ix].tolist(),
-                "response": response.tolist(), "a_tol": float(1 / np.abs(response).max()),
-                "binding": DILATIONS[binding], "correlation": float(cov[0, 1] / np.prod(sigma)),
-                "dilation_covariance": cov.tolist(), "condition": float(eig[-1] / eig[0])}
+    sigma_dv = float(np.sqrt(DV_WEIGHTS @ cov @ DV_WEIGHTS))
+    bias_dv = float(DV_WEIGHTS @ bias[ix])
+    response_dv = bias_dv / sigma_dv
+    return {"sigma_dv": sigma_dv, "bias_dv_per_unit_a": bias_dv, "response_dv": response_dv,
+            "a_tol": float(1 / abs(response_dv)) if response_dv else float("inf"),
+            "dilations": {"sigma": sigma.tolist(), "bias_per_unit_a": bias[ix].tolist(),
+                          "response": (bias[ix] / sigma).tolist(), "covariance": cov.tolist(),
+                          "correlation": float(cov[0, 1] / np.prod(sigma))},
+            "condition": float(eig[-1] / eig[0])}

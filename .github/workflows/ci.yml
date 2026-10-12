@@ -78,9 +78,8 @@ jobs:
           fresh = read_table(os.path.join(os.environ["RUNNER_TEMP"], "table", "channel_table.json"))
           for r in fresh["channels"]:
               s = shipped[r["channel"]]
-              for key in ("sigma_aperp", "sigma_apar", "response_aperp", "response_apar", "a_tol"):
+              for key in ("sigma_dv", "response_dv", "a_tol"):
                   assert abs(r[key] / s[key] - 1) < 1e-6, (r["channel"], key, r[key], s[key])
-              assert r["binding"] == s["binding"]
           print("rebuilt", sorted(r["channel"] for r in fresh["channels"]))
           PY
 
