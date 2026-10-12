@@ -14,7 +14,7 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
-    "radiofisher @ git+https://github.com/WVURAIL/RadioFisher.git@28402f3783d51c94e4e198e26d15d98a028316de",
+    "radiofisher @ git+https://github.com/WVURAIL/RadioFisher.git@287278b80618ecef68095a40d5f403640768e4bd",
 ]
 
 # camb is only needed to rebuild the P(k) table for a new cosmology.

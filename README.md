@@ -127,5 +127,6 @@ python -m pip install -e ".[test]"
 python -m pytest -q
 ```
 
-One test rebuilds channel 19 and checks it against the shipped table. CI also rebuilds
+One test rebuilds channel 19 and checks it against the shipped table to 1e-6 (other numpy
+and scipy builds differ by about 1e-9). CI also rebuilds
 channels 14, 29 and 37 against RadioFisher at the pinned commit.

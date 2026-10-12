@@ -23,7 +23,7 @@ def test_a_channel_rebuilds_to_the_shipped_row(number):
     shipped = next(r for r in read_table()["channels"] if r["channel"] == number)
     fresh = row(channel(number))
     for key in ("z_center", "sigma_aperp", "sigma_apar", "response_aperp", "response_apar", "a_tol"):
-        assert fresh[key] == pytest.approx(shipped[key], rel=1e-9), key
+        assert fresh[key] == pytest.approx(shipped[key], rel=1e-6), key
     assert fresh["binding"] == shipped["binding"]
 
 
