@@ -40,3 +40,16 @@ def test_densities_are_all_or_none():
 def test_one_retained_year():
     assert inputs.experiment()["ttot"] == 8760.0 * HRS_MHZ
     assert inputs.experiment(100.0)["ttot"] == 100.0 * HRS_MHZ
+
+
+def test_the_latest_cosmology_has_its_own_table():
+    c = inputs.parameters("cmbspa2026")
+    assert (c["h"], c["ombh2"], c["omch2"], c["ns"], c["sigma_8"]) == (0.6832, 0.022506, 0.11755, 0.9742, 0.8117)
+    assert c["omega_M_0"] + c["omega_lambda_0"] == pytest.approx(1.0)
+    assert pk_cache.cache_matches(inputs.pk_table_path("cmbspa2026"), c)
+    assert not pk_cache.cache_matches(inputs.pk_table_path("planck2018"), c)
+
+
+def test_an_unknown_cosmology_is_refused():
+    with pytest.raises(ValueError, match="unknown cosmology"):
+        inputs.parameters("planck2013")

@@ -29,6 +29,7 @@ new cosmology, telescope, residual model or retained-time anchor does.
 python -m pip install -e .            # installs RadioFisher at the pinned commit
 rfisher table --out out/              # all 24 channels, about a minute on 12 cores
 rfisher figures --out out/figures     # the summary and one plate per channel
+rfisher overview --out out/overview   # the CHIME Overview forecast, reproduced and in 6 MHz channels
 ```
 
 ```python
@@ -38,6 +39,31 @@ row = next(r for r in table["channels"] if r["channel"] == 19)
 a = 8.4e-8                            # residual strength at a threshold (detector side)
 bias_over_sigma = a * abs(row["response_dv"])
 ```
+
+## Reference: the CHIME Overview forecast
+
+`rfisher overview` reproduces the CHIME Overview forecast the way its scripts compute it:
+RadioFisher's own `fisher()` per redshift bin, A, bσ8, fσ8 and the two dilations free in
+each bin, σ_NL shared by all bins, and the dilations combined into D_V. On the Overview's
+15 bins it reproduces the clean one-year errors, 0.47% to 1.03%, to within 0.0003
+percentage points. The same forecast with 6 MHz bins over the DTV range gives 1.18% to
+1.52% per channel: each bin is about a quarter as deep, so its error is about twice as
+large. The tolerance table's clean σ(D_V) agrees with it to within 1.5% on every
+channel; the table integrates more finely and fits σ_NL per channel.
+
+![The CHIME Overview forecast as published, and with 6 MHz bins over the DTV range](docs/figures/overview_reference.png)
+
+The forecast inputs carry two cosmologies: the Overview's Planck 2018 (the default, so
+the reproduction can be checked) and the latest, `cmbspa2026`: SPT-3G, ACT and Planck CMB
+with DESI DR2 BAO (Omori et al. 2026, arXiv:2608.31136v1, Table 8). Only the cosmological
+parameters and the P(k) table change; the HI models, σ_NL and CHIME stay the Overview's.
+In the latest cosmology the 6 MHz errors are 7% to 8% smaller (1.09% to 1.40% per channel).
+
+```bash
+rfisher overview --out out/overview --cosmology planck2018 --compare cmbspa2026
+```
+
+![The 6 MHz forecast in Planck 2018 and in the latest cosmology](docs/figures/overview_cosmology.png)
 
 ## How the detector side uses the table
 
@@ -120,6 +146,7 @@ and how the bias of D_V grows with strength.
 | `src/rfisher/residual.py` | the coherent DTV residual |
 | `src/rfisher/forecast.py` | one channel's Fisher matrix with the residual's bias row |
 | `src/rfisher/tolerance.py` | σ and bias of D_V, response and tolerance |
+| `src/rfisher/overview.py` | the CHIME Overview forecast, reproduced, and in 6 MHz channels |
 | `src/rfisher/table.py`, `figures.py`, `cli.py` | the table, the figures, the command line |
 | `src/rfisher/data/channel_table.json`, `.csv` | the shipped table, with provenance |
 | `docs/diagram.py` | draws the call graph above |
