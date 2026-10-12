@@ -12,8 +12,8 @@
 <text x="36" y="196" font-size="12.5" fill="#5a6168" font-weight="normal" text-anchor="start" xml:space="preserve">from the 6 MHz edges</text>
 <rect x="340" y="98" width="300" height="118" rx="7" fill="#eef4fb" stroke="#1f5fa8" stroke-width="1.3"/>
 <text x="352" y="121" font-size="14" fill="#1c2126" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">inputs.cosmology()</text>
-<text x="352" y="142" font-size="12.5" fill="#5a6168" font-weight="normal" text-anchor="start" xml:space="preserve">Planck 2018 (radiofisher.chime)</text>
-<text x="352" y="160" font-size="12.5" fill="#5a6168" font-weight="normal" text-anchor="start" xml:space="preserve">pk_planck2018.dat, checked by</text>
+<text x="352" y="142" font-size="12.5" fill="#5a6168" font-weight="normal" text-anchor="start" xml:space="preserve">latest: cmbspa2026 (SPT+ACT+Planck,</text>
+<text x="352" y="160" font-size="12.5" fill="#5a6168" font-weight="normal" text-anchor="start" xml:space="preserve">DESI DR2); its P(k) table checked by</text>
 <text x="352" y="178" font-size="12.5" fill="#5a6168" font-weight="normal" text-anchor="start" xml:space="preserve">pk_cache.cache_matches</text>
 <text x="352" y="196" font-size="12.5" fill="#5a6168" font-weight="normal" text-anchor="start" xml:space="preserve">-&gt; radiofisher.load_power_spectrum</text>
 <rect x="656" y="98" width="300" height="118" rx="7" fill="#ffffff" stroke="#1c2126" stroke-width="1.3"/>

@@ -43,7 +43,7 @@ s = [(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-famil
 s.append(text(24, 88, "FIXED INPUTS  (bands.py, inputs.py)", 12, MUTED, "600"))
 s.append(box(24, 98, 300, 118, "bands.channels()", ["24 channels: DTV 14 to 36,", "control 37 (608-614 MHz)",
                                                      "Band.z_min, z_max, z_center", "from the 6 MHz edges"]))
-s.append(box(340, 98, 300, 118, "inputs.cosmology()", ["Planck 2018 (radiofisher.chime)", "pk_planck2018.dat, checked by",
+s.append(box(340, 98, 300, 118, "inputs.cosmology()", ["latest: cmbspa2026 (SPT+ACT+Planck,", "DESI DR2); its P(k) table checked by",
                                                        "pk_cache.cache_matches", "-> radiofisher.load_power_spectrum"], stroke=BLUE, fill=BLUEBG))
 s.append(box(656, 98, 300, 118, "inputs.experiment()", ["CHIME (radiofisher.chime)", "t = 8,760 h of retained data",
                                                         "(one year)"]))

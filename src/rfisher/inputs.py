@@ -1,10 +1,11 @@
 """The fixed forecast inputs. A new cosmology, telescope or anchor means a new table.
 
     cosmology   a named fiducial with its linear P(k) table:
-                planck2018  the CHIME Overview's (Planck 2018 CMB only), the default
-                cmbspa2026  SPT-3G + ACT + Planck CMB, lensing and DESI DR2 BAO
-                            (Omori et al. 2026, arXiv:2608.31136v1, Table 8,
-                            posterior means, flat LambdaCDM)
+                cmbspa2026  the latest, and the default: SPT-3G + ACT + Planck CMB,
+                            lensing and DESI DR2 BAO (Omori et al. 2026,
+                            arXiv:2608.31136v1, Table 8, posterior means, flat LambdaCDM)
+                planck2018  the CHIME Overview's (Planck 2018 CMB only), used to
+                            reproduce the Overview forecast
     experiment  CHIME as in the CHIME Overview, for one retained year
 
 Everything but the cosmological parameters (HI models, sigma_NL, the growth
@@ -19,7 +20,9 @@ from radiofisher.units import HRS_MHZ
 from . import pk_cache
 
 RETAINED_HOURS = 8760.0  # one retained year: 365 days of kept data
-DEFAULT_COSMOLOGY = "planck2018"
+DEFAULT_COSMOLOGY = "cmbspa2026"
+COSMOLOGY_NAMES = {"cmbspa2026": "SPT-3G + ACT + Planck CMB with DESI DR2 BAO (Omori et al. 2026)",
+                   "planck2018": "Planck 2018, as in the CHIME Overview"}
 CMBSPA2026 = {"h": 0.6832, "ombh2": 0.022506, "omch2": 0.11755, "sigma_8": 0.8117, "ns": 0.9742, "mnu": 0.06}
 PK_TABLES = {"planck2018": "pk_planck2018.dat", "cmbspa2026": "pk_cmbspa2026.dat"}
 PK_TABLE = PK_TABLES[DEFAULT_COSMOLOGY]

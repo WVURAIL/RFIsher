@@ -23,6 +23,7 @@ from .tolerance import DV_WEIGHTS
 
 # The Overview's redshift bins (Amiri et al. 2022, Table 2)
 OVERVIEW_Z_EDGES = (0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.04, 2.20, 2.355, 2.51)
+OVERVIEW_COSMOLOGY = "planck2018"   # the Overview's fiducial, so the reproduction can be checked
 PER_BIN = ("A", "bs8", "fs8", "aperp", "apar")
 SHARED = ("sigma_NL",)
 
@@ -66,7 +67,7 @@ def combine(matrices: list, names: list) -> dict:
     return {"sigma_dv": sigma_dv, "sigma_fs8": sigma_fs8}
 
 
-def forecast(bins: list, workers: int | None = None, cosmology: str = inputs.DEFAULT_COSMOLOGY) -> dict:
+def forecast(bins: list, workers: int | None = None, cosmology: str = OVERVIEW_COSMOLOGY) -> dict:
     """The Overview forecast over ``bins`` (a list of (z_min, z_max)) in the named cosmology."""
     workers = workers or min(len(bins), os.cpu_count() or 1)
     with ProcessPoolExecutor(max_workers=workers) as pool:
@@ -79,7 +80,7 @@ def forecast(bins: list, workers: int | None = None, cosmology: str = inputs.DEF
     return out
 
 
-def reference(workers: int | None = None, cosmology: str = inputs.DEFAULT_COSMOLOGY) -> dict:
+def reference(workers: int | None = None, cosmology: str = OVERVIEW_COSMOLOGY) -> dict:
     """Both binnings in one cosmology: the Overview's 15 bins and the 6 MHz channels."""
     bands = channels()
     dtv = forecast(channel_bins(), workers, cosmology)
