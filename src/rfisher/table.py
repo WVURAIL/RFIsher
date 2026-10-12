@@ -22,10 +22,9 @@ from . import __version__, forecast, inputs, pk_cache
 from .bands import Band, channels
 from .tolerance import tolerance
 
-SCHEMA = "rfisher-channel-table-v1"
+SCHEMA = "rfisher-channel-table-v2"
 TABLE = "channel_table.json"
-CSV_COLUMNS = ["channel", "role", "low_mhz", "high_mhz", "z_center", "sigma_aperp", "sigma_apar",
-               "response_aperp", "response_apar", "a_tol", "binding"]
+CSV_COLUMNS = ["channel", "role", "low_mhz", "high_mhz", "z_center", "sigma_dv", "response_dv", "a_tol"]
 
 
 def row(band: Band) -> dict:
@@ -35,13 +34,12 @@ def row(band: Band) -> dict:
     t = tolerance(F, names)
     g = p["geometry"]
     return {"channel": band.channel, "role": band.role, "low_mhz": band.low_mhz, "high_mhz": band.high_mhz,
-                "z_min": band.z_min, "z_max": band.z_max, "z_center": float(p["cosmo"]["z"]),
-                "sigma_aperp": t["sigma"][0], "sigma_apar": t["sigma"][1], "correlation": t["correlation"],
-                "bias_per_unit_a": t["bias_per_unit_a"], "response_aperp": t["response"][0],
-                "response_apar": t["response"][1], "a_tol": t["a_tol"], "binding": t["binding"],
-                "dilation_covariance": t["dilation_covariance"], "condition": t["condition"],
-                "residual": {"n_nu": g["n_nu"], "horizon_slope": g["m"], "band_depth_mpc": g["L"]},
-                "seconds": time.monotonic() - t0}
+            "z_min": band.z_min, "z_max": band.z_max, "z_center": float(p["cosmo"]["z"]),
+            "sigma_dv": t["sigma_dv"], "bias_dv_per_unit_a": t["bias_dv_per_unit_a"],
+            "response_dv": t["response_dv"], "a_tol": t["a_tol"], "dilations": t["dilations"],
+            "condition": t["condition"],
+            "residual": {"n_nu": g["n_nu"], "horizon_slope": g["m"], "band_depth_mpc": g["L"]},
+            "seconds": time.monotonic() - t0}
 
 
 def _git_commit(path) -> str | None:
@@ -92,6 +90,7 @@ def build_table(bands=None, workers: int | None = None) -> dict:
                             "retained_hours": inputs.RETAINED_HOURS,
                             "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
                             "fitted": ["A", "sigma_NL", "aperp", "apar", "fs8", "bs8"],
+                            "tolerance_on": "D_V: ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par",
                             "quadrature": {"radial_order": forecast.RADIAL_ORDER,
                                             "angular_order": forecast.ANGULAR_ORDER,
                                             "bao_derivative_step": forecast.STEP}},

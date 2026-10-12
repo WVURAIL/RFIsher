@@ -80,13 +80,13 @@ s.append(arrow(344, 604, 344, 626))
 
 s.append(box(44, 628, 1212, 136, "3  tolerance.tolerance(F, names)", [
     "fit six: A, sigma_NL, alpha_perp, alpha_par, f sigma_8, b sigma_8; hold the rest at the fiducial",
-    "C = (F_fit)^-1, the clean one-year covariance;   B = the '_Pres' column",
-    "bias per unit a = C B;   sigma = sqrt(diag C);   response = bias / sigma, for each dilation",
-    "a_tol = 1 / max |response|  -- the strength at which the larger bias equals its sigma",
-    "binding = the dilation that sets a_tol"]))
+    "C = (F_fit)^-1, the clean one-year covariance;   B = the '_Pres' column;   bias per unit a = C B",
+    "combine the dilations as the CHIME Overview does: ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par",
+    "sigma_dv = sqrt(w C w);   response_dv = (w . bias) / sigma_dv,   w = (2/3, 1/3)",
+    "a_tol = 1 / |response_dv|  -- the strength at which the bias of D_V equals its sigma"]))
 s.append(arrow(344, 764, 344, 786))
 s.append(box(44, 788, 1212, 74, "row", [
-    "channel, band, z_center, sigma_aperp, sigma_apar, response_aperp, response_apar, a_tol, binding (+ covariance, bias)"]))
+    "channel, band, z_center, sigma_dv, response_dv, a_tol   (+ each dilation's sigma, bias and response)"]))
 
 # outputs
 s.append(arrow(330, 880, 330, 912))
@@ -95,13 +95,13 @@ s.append(box(24, 914, 612, 96, "table.write_table(table, out)", ["channel_table.
                                                                  "(RFIsher and RadioFisher commits, P(k) table SHA-256)",
                                                                  "channel_table.csv: the rows"]))
 s.append(box(656, 914, 620, 96, "figures.draw_all(table, out)", ["summary.png: tolerance, response and sigma by channel",
-                                                                 "channel_NN.png: where the residual sits, bias vs strength,",
-                                                                 "and the dilation ellipse at a_tol"]))
+                                                                 "channel_NN.png: where the residual sits, and the bias",
+                                                                 "of D_V against residual strength"]))
 
 # downstream
 s.append(box(24, 1030, 1252, 100, "downstream, not in RFIsher: the detector side reads the table", [
     "for each threshold:  power x and kept fraction kappa from the archive histogram",
-    "a = (c x)^2 x 16,384 x G   (c = coherent fraction, G = frames it stays coherent);   bias / sigma = a x response",
+    "a = (c x)^2 x 16,384 x G   (c = coherent fraction, G = 1 frame);   bias / sigma of D_V = a x |response_dv|",
     "rule: the knee if bias / sigma <= 1, else the passing threshold closest to it, else word 0x1;   time = 1 / kappa"],
     stroke=MUTED, dash="6 4", tcol=MUTED))
 s.append(f'<line x1="330" y1="1010" x2="330" y2="1028" stroke="{MUTED}" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#m)"/>')

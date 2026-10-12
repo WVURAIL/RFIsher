@@ -1,9 +1,9 @@
 """Per-channel plates and the all-channel summary, drawn from a channel table.
 
-Each plate answers three questions for one channel:
+Each plate answers two questions for one channel:
   (a) where in Fourier space the residual sits, at the tolerated strength;
-  (b) how the bias of each dilation grows with the residual's strength;
-  (c) what "bias equals sigma" looks like on the two dilations.
+  (b) how the bias of D_V grows with the residual's strength, and where it
+      reaches the clean sigma.
 """
 from pathlib import Path
 
@@ -12,14 +12,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Ellipse
 
 from . import forecast, inputs, residual
 from .bands import Band
 
 INK, MUTED, GRID, SURF = "#1c2126", "#5a6168", "#e4e6e2", "#ffffff"
-PERP, PAR = "#2a78d6", "#eb6834"          # alpha_perp, alpha_par
-LABEL = {"aperp": "α⊥", "apar": "α∥"}
+LINE = "#2a78d6"
 STYLE = {"font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
          "axes.labelcolor": INK, "figure.facecolor": SURF, "axes.facecolor": SURF, "text.color": INK,
          "axes.titlesize": 11, "axes.titleweight": "bold", "axes.titlelocation": "left"}
@@ -67,54 +65,31 @@ def residual_map(ax, row, shared):
 
 
 def bias_line(ax, row):
-    """|bias| / sigma = a |response| for each dilation, against strength a."""
+    """|bias| / sigma of D_V = a |response_dv|, against strength a."""
     a = np.logspace(-8, -1, 200)
-    for key, col in (("aperp", PERP), ("apar", PAR)):
-        q = row[f"response_{key}"]
-        sign = "+" if q > 0 else "−"
-        ax.plot(a, a * abs(q), color=col, lw=2, label=f"{LABEL[key]} (bias {sign}, {abs(q):,.0f} per unit a)")
+    q = row["response_dv"]
+    ax.plot(a, a * abs(q), color=LINE, lw=2.2,
+            label=f"D_V: bias {'+' if q > 0 else '−'}{abs(q):,.0f} σ per unit a")
     ax.axhline(1, color=INK, ls="--", lw=1.1)
     ax.axvline(row["a_tol"], color=MUTED, lw=1)
     ax.plot(row["a_tol"], 1, "o", color=INK, ms=6)
-    ax.annotate(f"a_tol = {row['a_tol']:.2g}\n({LABEL[row['binding']]} binds)", (row["a_tol"], 1),
-                xytext=(8, -34), textcoords="offset points", fontsize=9.5)
+    ax.annotate(f"a_tol = {row['a_tol']:.2g}", (row["a_tol"], 1), xytext=(8, -22), textcoords="offset points",
+                fontsize=9.5)
     ax.text(a[0] * 1.6, 1.35, "bias = σ", fontsize=9)
+    ax.text(0.97, 0.04, f"σ(D_V)/D_V = {100 * row['sigma_dv']:.2f}%, one year, clean",
+            transform=ax.transAxes, ha="right", fontsize=9, color=MUTED)
     ax.set(xscale="log", yscale="log", xlim=(a[0], a[-1]), ylim=(1e-5, 1e3),
-           xlabel="residual strength a", ylabel="|bias| ÷ σ",
+           xlabel="residual strength a", ylabel="|bias| ÷ σ of D_V",
            title="(b) Bias grows in proportion to strength")
-    ax.legend(frameon=False, fontsize=8.8, loc="upper left", bbox_to_anchor=(0, 0.93))
-
-
-def ellipse(ax, row):
-    """Clean 1-sigma ellipse of the dilations and its shift at a = a_tol."""
-    cov = np.array(row["dilation_covariance"]) * 1e4      # percent^2
-    shift = np.array(row["bias_per_unit_a"]) * row["a_tol"] * 100
-    vals, vecs = np.linalg.eigh(cov)
-    angle = np.degrees(np.arctan2(vecs[1, 1], vecs[0, 1]))
-    w, h = 2 * np.sqrt(vals[1]), 2 * np.sqrt(vals[0])
-    ax.add_patch(Ellipse((0, 0), w, h, angle=angle, fill=False, color=INK, lw=1.8))
-    ax.add_patch(Ellipse(tuple(shift), w, h, angle=angle, fill=False, color=MUTED, lw=1.4, ls="--"))
-    ax.annotate("", xy=tuple(shift), xytext=(0, 0),
-                arrowprops={"arrowstyle": "-|>", "color": PERP if row["binding"] == "aperp" else PAR, "lw": 2})
-    ax.plot(0, 0, "o", color=INK, ms=4)
-    s = np.sqrt(np.diag(cov))
-    lim = 2.2 * max(s.max(), np.abs(shift).max())
-    ax.set(xlim=(-lim, lim), ylim=(-lim, lim), aspect="equal",
-           xlabel="α⊥ − 1 (%)", ylabel="α∥ − 1 (%)",
-           title="(c) At a_tol the larger shift equals its σ")
-    ax.text(0.03, 0.04, f"σ⊥ = {s[0]:.2f}%   σ∥ = {s[1]:.2f}%   ρ = {row['correlation']:.2f}\n"
-            f"solid: clean, one year   dashed: with the residual",
-            transform=ax.transAxes, fontsize=8.8, color=MUTED)
+    ax.legend(frameon=False, fontsize=9, loc="upper left")
 
 
 def plate(row, out: Path, shared) -> Path:
     with plt.rc_context(STYLE):
-        fig, axes = plt.subplots(1, 3, figsize=(17, 5.4), constrained_layout=True)
+        fig, axes = plt.subplots(1, 2, figsize=(13, 5.4), constrained_layout=True)
         residual_map(axes[0], row, shared)
         bias_line(axes[1], row)
-        ellipse(axes[2], row)
-        for ax in axes[1:]:
-            _tidy(ax)
+        _tidy(axes[1])
         kind = "control channel (no DTV)" if row["role"] == "control" else "DTV channel"
         fig.suptitle(f"Channel {row['channel']}  ·  {row['low_mhz']:.0f}–{row['high_mhz']:.0f} MHz  ·  "
                      f"z = {row['z_center']:.3f}  ·  {kind}", x=0.01, ha="left", fontsize=13, fontweight="bold")
@@ -131,30 +106,22 @@ def summary(table, out: Path) -> Path:
     with plt.rc_context(STYLE):
         fig, axes = plt.subplots(1, 3, figsize=(17, 5), constrained_layout=True)
         ax = axes[0]
-        for key, col in (("aperp", PERP), ("apar", PAR)):
-            m = np.array([r["binding"] == key for r in rows])
-            ax.plot(ch[m], [r["a_tol"] for r, k in zip(rows, m) if k], "o", color=col, ms=8,
-                    label=f"{LABEL[key]} binds")
+        ax.plot(ch, [r["a_tol"] for r in rows], "o", color=LINE, ms=8)
         ax.set(yscale="log", xlabel="channel", ylabel="tolerance a_tol", xticks=ch[::2],
                title="(a) Tolerated residual strength per channel")
-        ax.legend(frameon=False)
         ax = axes[1]
-        for key, col in (("aperp", PERP), ("apar", PAR)):
-            ax.plot(z, [r[f"response_{key}"] for r in rows], "o-", color=col, lw=1.6, ms=5, label=LABEL[key])
+        ax.plot(z, [r["response_dv"] for r in rows], "o-", color=LINE, lw=1.6, ms=5)
         ax.axhline(0, color=MUTED, lw=1)
-        ax.set(xlabel="redshift z", ylabel="bias ÷ σ per unit strength",
-               title="(b) Response of each dilation (signed)")
-        ax.legend(frameon=False)
+        ax.set(xlabel="redshift z", ylabel="bias ÷ σ of D_V per unit strength",
+               title="(b) Response of D_V (signed)")
         ax = axes[2]
-        for key, col in (("aperp", PERP), ("apar", PAR)):
-            ax.plot(z, [100 * r[f"sigma_{key}"] for r in rows], "o-", color=col, lw=1.6, ms=5, label=LABEL[key])
-        ax.set(xlabel="redshift z", ylabel="clean σ, one year (%)",
-               title="(c) Clean uncertainty of each dilation")
-        ax.legend(frameon=False)
+        ax.plot(z, [100 * r["sigma_dv"] for r in rows], "o-", color=LINE, lw=1.6, ms=5)
+        ax.set(xlabel="redshift z", ylabel="clean σ(D_V)/D_V, one year (%)",
+               title="(c) Clean uncertainty of D_V")
         for ax in axes:
             _tidy(ax)
         fig.suptitle("RFIsher channel table: one RadioFisher forecast per 6 MHz channel, coherent DTV residual, "
-                     "one retained year", x=0.01, ha="left", fontsize=13, fontweight="bold")
+                     "one retained year, D_V", x=0.01, ha="left", fontsize=13, fontweight="bold")
         path = out / "summary.png"
         fig.savefig(path, dpi=110)
         plt.close(fig)
