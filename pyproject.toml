@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rfisher"
-version = "4.0.0"
-description = "RFIsher maps masking and contamination residuals to Fisher-forecast science costs."
+version = "5.0.0"
+description = "How much residual DTV power each 6 MHz channel tolerates in a 21 cm BAO forecast."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -14,66 +14,30 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
-    "pyyaml",
+    "radiofisher @ git+https://github.com/WVURAIL/RadioFisher.git@28402f3783d51c94e4e198e26d15d98a028316de",
 ]
 
-# camb is only needed to regenerate the fiducial P(k) cache, and the caches
-# this project uses are committed under data/. Requiring it forced a Fortran
-# cosmology package on anyone who just wanted to run a forecast.
+# camb is only needed to rebuild the P(k) table for a new cosmology.
 [project.optional-dependencies]
 pk = ["camb"]
-test = ["jsonschema", "pytest", "ruff"]
+test = ["pytest", "ruff"]
 
 [project.scripts]
 rfisher = "rfisher.cli:main"
 
 [project.urls]
-Documentation = "https://github.com/WVURAIL/RFIsher/tree/main/docs"
-Issues = "https://github.com/WVURAIL/RFIsher/issues"
 Repository = "https://github.com/WVURAIL/RFIsher"
 
-# The packages are listed (tests/test_packaging.py holds the list equal to the
-# packages under src/): the project directory projects/chime_bao ships inside
-# the package as rfisher.projects, so an installed rfisher reads the same
-# science register a checkout does.
 [tool.setuptools]
-package-dir = {"" = "src", "rfisher.projects" = "projects"}
-packages = [
-    "rfisher",
-    "rfisher.data",
-    "rfisher.forecast",
-    "rfisher.forecast.radiofisher_bao",
-    "rfisher.forecast.radiofisher_bao.bank",
-    "rfisher.projects",
-    "rfisher.records",
-    "rfisher.records.chime_atsc_2026",
-    "rfisher.response",
-    "rfisher.tolerance",
-    "rfisher.verdict",
-]
+package-dir = {"" = "src"}
+packages = ["rfisher", "rfisher.data"]
 
 [tool.setuptools.package-data]
-"rfisher.data" = ["*.npz", "*.csv", "*.json", "*.dat", "response_banks/*.npz",
-                  "tolerances/*", "tolerances/*/*", "schemas/*"]
-"rfisher.projects" = ["chime_bao/*.json", "chime_bao/*.yaml", "chime_bao/capture_rules/*.json",
-                      "chime_bao/capture_rules/sensitivities/*.json"]
-"rfisher.records.chime_atsc_2026" = ["data/*.md", "data/policy_2026_archive/*.json"]
+"rfisher.data" = ["*.dat", "*.csv", "*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra"
 
 [tool.ruff]
-target-version = "py310"
-
-[tool.ruff.lint]
-select = ["E9", "F", "N"]
-ignore = ["N802", "N803", "N806", "N816", "N818"]
-
-[tool.ruff.lint.per-file-ignores]
-# The capture records keep the release producer's lines as they ran (its
-# unused locals, placeholder-free f-strings and "U" for the units).
-"src/rfisher/records/chime_atsc_2026/*.py" = ["F541", "F841", "N812"]
-"tests/records/*.py" = ["N812"]
-# Byte copies of the threshold-calibration bridge's producers, kept as they ran
-# (their sha256 is recorded in the package's outputs).
-"scripts/threshold_calibration_bridge/*.py" = ["F401"]
+line-length = 120

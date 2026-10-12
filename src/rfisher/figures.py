@@ -1,0 +1,173 @@
+"""Per-channel plates and the all-channel summary, drawn from a channel table.
+
+Each plate answers three questions for one channel:
+  (a) where in Fourier space the residual sits, at the tolerated strength;
+  (b) how the bias of each dilation grows with the residual's strength;
+  (c) what "bias equals sigma" looks like on the two dilations.
+"""
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Ellipse
+
+from . import forecast, inputs, residual
+from .bands import Band
+
+INK, MUTED, GRID, SURF = "#1c2126", "#5a6168", "#e4e6e2", "#ffffff"
+PERP, PAR = "#2a78d6", "#eb6834"          # alpha_perp, alpha_par
+LABEL = {"aperp": "α⊥", "apar": "α∥"}
+STYLE = {"font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
+         "axes.labelcolor": INK, "figure.facecolor": SURF, "axes.facecolor": SURF, "text.color": INK,
+         "axes.titlesize": 11, "axes.titleweight": "bold", "axes.titlelocation": "left"}
+
+
+def _tidy(ax):
+    ax.grid(True, color=GRID, lw=0.6)
+    ax.set_axisbelow(True)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+
+
+def _band(row) -> Band:
+    return Band(row["channel"], row["low_mhz"], row["high_mhz"], row["role"])
+
+
+def residual_map(ax, row, shared):
+    """dP / C_N at a = a_tol over (k_perp, k_par), with the cuts RadioFisher applies."""
+    p = forecast.prepare(_band(row), *shared)
+    g = p["geometry"]
+    kperp = np.logspace(-2.3, 0, 300)
+    kpar = np.logspace(-3, 0, 300)
+    KP, KL = np.meshgrid(kperp, kpar)
+    kw = residual.wedge_kpar(KP, g)
+    ratio = row["a_tol"] * g["n_nu"] * residual.n_meas(KP, g) * np.pi / (g["L"] * kw)
+    ratio = np.where(KL <= kw, ratio, np.nan)
+    ratio = np.where(np.hypot(KP, KL) > p["knl"], np.nan, ratio)
+    ratio = np.where(KL < p["kfg"], np.nan, ratio)
+    with np.errstate(divide="ignore"):
+        im = ax.pcolormesh(kperp, kpar, np.log10(ratio), cmap="Blues", vmin=-6, vmax=0, shading="auto")
+    ax.plot(kperp, residual.wedge_kpar(kperp, g), color=INK, lw=1.2)
+    ax.axhline(p["kfg"], color=MUTED, ls="--", lw=1)
+    t = np.linspace(0, np.pi / 2, 200)
+    ax.plot(p["knl"] * np.cos(t), p["knl"] * np.sin(t), color=MUTED, ls=":", lw=1.2)
+    ax.text(0.35, p["kfg"] * 1.25, "foreground cut", color=MUTED, fontsize=8.5, ha="center")
+    ax.text(0.011, residual.wedge_kpar(0.011, g) * 1.3, "wedge edge", color=INK, fontsize=8.5)
+    ax.text(p["knl"] * 1.08, p["knl"] * 0.45, "nonlinear\ncut", color=MUTED, fontsize=8.5)
+    ax.text(0.011, p["kfg"] * 3, "residual inside the wedge", color="white", fontsize=8.5)
+    ax.set(xscale="log", yscale="log", xlim=(kperp[0], 1), ylim=(kpar[0], 1),
+           xlabel="k⊥ (Mpc⁻¹)", ylabel="k∥ (Mpc⁻¹)",
+           title="(a) Where the residual sits, at the tolerated strength")
+    cb = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
+    cb.set_label("log₁₀ residual ÷ noise power", color=INK)
+    cb.outline.set_edgecolor(MUTED)
+
+
+def bias_line(ax, row):
+    """|bias| / sigma = a |response| for each dilation, against strength a."""
+    a = np.logspace(-8, -1, 200)
+    for key, col in (("aperp", PERP), ("apar", PAR)):
+        q = row[f"response_{key}"]
+        sign = "+" if q > 0 else "−"
+        ax.plot(a, a * abs(q), color=col, lw=2, label=f"{LABEL[key]} (bias {sign}, {abs(q):,.0f} per unit a)")
+    ax.axhline(1, color=INK, ls="--", lw=1.1)
+    ax.axvline(row["a_tol"], color=MUTED, lw=1)
+    ax.plot(row["a_tol"], 1, "o", color=INK, ms=6)
+    ax.annotate(f"a_tol = {row['a_tol']:.2g}\n({LABEL[row['binding']]} binds)", (row["a_tol"], 1),
+                xytext=(8, -34), textcoords="offset points", fontsize=9.5)
+    ax.text(a[0] * 1.6, 1.35, "bias = σ", fontsize=9)
+    ax.set(xscale="log", yscale="log", xlim=(a[0], a[-1]), ylim=(1e-5, 1e3),
+           xlabel="residual strength a", ylabel="|bias| ÷ σ",
+           title="(b) Bias grows in proportion to strength")
+    ax.legend(frameon=False, fontsize=8.8, loc="upper left", bbox_to_anchor=(0, 0.93))
+
+
+def ellipse(ax, row):
+    """Clean 1-sigma ellipse of the dilations and its shift at a = a_tol."""
+    cov = np.array(row["dilation_covariance"]) * 1e4      # percent^2
+    shift = np.array(row["bias_per_unit_a"]) * row["a_tol"] * 100
+    vals, vecs = np.linalg.eigh(cov)
+    angle = np.degrees(np.arctan2(vecs[1, 1], vecs[0, 1]))
+    w, h = 2 * np.sqrt(vals[1]), 2 * np.sqrt(vals[0])
+    ax.add_patch(Ellipse((0, 0), w, h, angle=angle, fill=False, color=INK, lw=1.8))
+    ax.add_patch(Ellipse(tuple(shift), w, h, angle=angle, fill=False, color=MUTED, lw=1.4, ls="--"))
+    ax.annotate("", xy=tuple(shift), xytext=(0, 0),
+                arrowprops={"arrowstyle": "-|>", "color": PERP if row["binding"] == "aperp" else PAR, "lw": 2})
+    ax.plot(0, 0, "o", color=INK, ms=4)
+    s = np.sqrt(np.diag(cov))
+    lim = 2.2 * max(s.max(), np.abs(shift).max())
+    ax.set(xlim=(-lim, lim), ylim=(-lim, lim), aspect="equal",
+           xlabel="α⊥ − 1 (%)", ylabel="α∥ − 1 (%)",
+           title="(c) At a_tol the larger shift equals its σ")
+    ax.text(0.03, 0.04, f"σ⊥ = {s[0]:.2f}%   σ∥ = {s[1]:.2f}%   ρ = {row['correlation']:.2f}\n"
+            f"solid: clean, one year   dashed: with the residual",
+            transform=ax.transAxes, fontsize=8.8, color=MUTED)
+
+
+def plate(row, out: Path, shared) -> Path:
+    with plt.rc_context(STYLE):
+        fig, axes = plt.subplots(1, 3, figsize=(17, 5.4), constrained_layout=True)
+        residual_map(axes[0], row, shared)
+        bias_line(axes[1], row)
+        ellipse(axes[2], row)
+        for ax in axes[1:]:
+            _tidy(ax)
+        kind = "control channel (no DTV)" if row["role"] == "control" else "DTV channel"
+        fig.suptitle(f"Channel {row['channel']}  ·  {row['low_mhz']:.0f}–{row['high_mhz']:.0f} MHz  ·  "
+                     f"z = {row['z_center']:.3f}  ·  {kind}", x=0.01, ha="left", fontsize=13, fontweight="bold")
+        path = out / f"channel_{row['channel']:02d}.png"
+        fig.savefig(path, dpi=110)
+        plt.close(fig)
+    return path
+
+
+def summary(table, out: Path) -> Path:
+    rows = sorted(table["channels"], key=lambda r: r["channel"])
+    ch = np.array([r["channel"] for r in rows])
+    z = np.array([r["z_center"] for r in rows])
+    with plt.rc_context(STYLE):
+        fig, axes = plt.subplots(1, 3, figsize=(17, 5), constrained_layout=True)
+        ax = axes[0]
+        for key, col in (("aperp", PERP), ("apar", PAR)):
+            m = np.array([r["binding"] == key for r in rows])
+            ax.plot(ch[m], [r["a_tol"] for r, k in zip(rows, m) if k], "o", color=col, ms=8,
+                    label=f"{LABEL[key]} binds")
+        ax.set(yscale="log", xlabel="channel", ylabel="tolerance a_tol", xticks=ch[::2],
+               title="(a) Tolerated residual strength per channel")
+        ax.legend(frameon=False)
+        ax = axes[1]
+        for key, col in (("aperp", PERP), ("apar", PAR)):
+            ax.plot(z, [r[f"response_{key}"] for r in rows], "o-", color=col, lw=1.6, ms=5, label=LABEL[key])
+        ax.axhline(0, color=MUTED, lw=1)
+        ax.set(xlabel="redshift z", ylabel="bias ÷ σ per unit strength",
+               title="(b) Response of each dilation (signed)")
+        ax.legend(frameon=False)
+        ax = axes[2]
+        for key, col in (("aperp", PERP), ("apar", PAR)):
+            ax.plot(z, [100 * r[f"sigma_{key}"] for r in rows], "o-", color=col, lw=1.6, ms=5, label=LABEL[key])
+        ax.set(xlabel="redshift z", ylabel="clean σ, one year (%)",
+               title="(c) Clean uncertainty of each dilation")
+        ax.legend(frameon=False)
+        for ax in axes:
+            _tidy(ax)
+        fig.suptitle("RFIsher channel table: one RadioFisher forecast per 6 MHz channel, coherent DTV residual, "
+                     "one retained year", x=0.01, ha="left", fontsize=13, fontweight="bold")
+        path = out / "summary.png"
+        fig.savefig(path, dpi=110)
+        plt.close(fig)
+    return path
+
+
+def draw_all(table, out, channels=None) -> list[Path]:
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    cosmo = inputs.cosmology()
+    shared = (cosmo, inputs.experiment(), inputs.background(cosmo))
+    paths = [summary(table, out)]
+    for row in table["channels"]:
+        if channels is None or row["channel"] in channels:
+            paths.append(plate(row, out, shared))
+    return paths

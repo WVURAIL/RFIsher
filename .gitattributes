@@ -1,33 +1,13 @@
-# Keep distributed scientific inputs byte-stable across operating systems.
+# Keep the shipped scientific inputs byte-stable across operating systems.
 *.py text eol=lf
 *.toml text eol=lf
-*.sh text eol=lf
 *.md text eol=lf
-*.tex text eol=lf
 *.yml text eol=lf
-*.yaml text eol=lf
 *.cff text eol=lf
-requirements/*.txt text eol=lf
+*.svg text eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf
 src/rfisher/data/*.csv text eol=lf
 src/rfisher/data/*.json text eol=lf
-src/rfisher/data/*.npz binary
 src/rfisher/data/*.dat text eol=lf
-src/rfisher/data/response_banks/*.npz binary
-src/rfisher/data/tolerances/* text eol=lf
-src/rfisher/data/tolerances/*/* text eol=lf
-src/rfisher/data/tolerances/*.gz binary
-src/rfisher/data/schemas/* text eol=lf
-projects/**/*.yaml text eol=lf
-projects/**/*.json text eol=lf
-tests/golden/*.json text eol=lf
-tests/golden/**/*.json text eol=lf
-tests/golden/**/*.csv text eol=lf
-
-# Release evidence hashes identify the checked-in bytes, independent of a
-# contributor's core.autocrlf setting.
-docs/*.schema.json text eol=lf
-docs/schemas/*.json text eol=lf
-docs/releases/*.json text eol=lf
-tests/golden/**/*.gz binary
+*.png binary
