@@ -11,23 +11,10 @@ jobs:
   test:
     name: test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    # The float goldens are exact under this OpenBLAS kernel and, on the numpy
-    # series they were recorded with, under numpy's X86_V3 dispatch (the
-    # recording machine has no AVX-512). The 3.10 job has an older numpy, which
-    # names its CPU features differently and holds the goldens to 1e-12, so it
-    # gets no numpy pin; an empty value leaves numpy's dispatch as it is.
-    env:
-      OPENBLAS_CORETYPE: Haswell
-      NPY_ENABLE_CPU_FEATURES: ${{ matrix.numpy-cpu-features }}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.12", "3.14"]
-        include:
-          - python-version: "3.12"
-            numpy-cpu-features: X86_V3
-          - python-version: "3.14"
-            numpy-cpu-features: X86_V3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,25 +24,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[test]" -r requirements/test-coverage.txt
+      - run: python -m pip install -e ".[test]"
       - run: python -m pip check
-      - name: Record the CPU and the numerical runtime
-        run: |
-          lscpu
-          echo "OPENBLAS_CORETYPE=${OPENBLAS_CORETYPE-} NPY_ENABLE_CPU_FEATURES=${NPY_ENABLE_CPU_FEATURES-}"
-          # threadpoolctl goes to a side directory, so the tested environment is unchanged.
-          python -m pip install -q --target "$RUNNER_TEMP/threadpoolctl" threadpoolctl \
-            || echo "threadpoolctl not available"
-          PYTHONPATH="$RUNNER_TEMP/threadpoolctl" python -c "import numpy, scipy, scipy.linalg; print('numpy', numpy.__version__, 'scipy', scipy.__version__); numpy.show_runtime()"
-          env -u NPY_ENABLE_CPU_FEATURES python -c "from numpy._core import _multiarray_umath as m; print('numpy dispatch on this host without the pin:', [f for f in m.__cpu_dispatch__ if m.__cpu_features__[f]])"
       - run: ruff check .
-      - run: python -m pytest -q --cov --cov-report=term-missing:skip-covered --cov-report=json
-      - name: Enforce coverage for every package component
-        if: always()
-        run: python scripts/check_test_coverage.py
+      - run: python -m pytest -q
 
   dissertation-figure:
-    # The names the dissertation's forecast builders import; no TeX toolchain.
+    # The figures the dissertation shows, drawn from the shipped table.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,60 +41,48 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[test]"
-      - run: python -m pytest -q -rs --no-header tests/test_dissertation_contract.py
+      - run: python -m pip install -e .
+      - run: rfisher figures --out "$RUNNER_TEMP/figures" --channels 19,36
+      - run: test -s "$RUNNER_TEMP/figures/summary.png" && test -s "$RUNNER_TEMP/figures/channel_19.png" && test -s "$RUNNER_TEMP/figures/channel_36.png"
+      - run: python docs/diagram.py && git diff --exit-code docs/rfisher_functions.svg
 
   radiofisher-integration:
+    # RadioFisher at the pinned commit passes its own tests, and three channels
+    # (both ends of the band and the control) rebuild to the shipped table.
     runs-on: ubuntu-latest
-    env:
-      RADIOFISHER_DIR: ${{ github.workspace }}/RadioFisher
-      # The float goldens and the table rebuild are exact under this OpenBLAS
-      # kernel and numpy's X86_V3 dispatch, as on the recording machine.
-      OPENBLAS_CORETYPE: Haswell
-      NPY_ENABLE_CPU_FEATURES: X86_V3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check out the reviewed RadioFisher backend
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: WVURAIL/RadioFisher
-          ref: 806b0159b5d2b4327cf38af8fcbee093803d080b
-          path: RadioFisher
-          persist-credentials: false
+      - name: Check out RadioFisher at the commit pyproject.toml pins
+        run: |
+          commit=$(grep -o 'RadioFisher.git@[0-9a-f]\{40\}' pyproject.toml | cut -d@ -f2)
+          git clone -q https://github.com/WVURAIL/RadioFisher.git "$RUNNER_TEMP/RadioFisher"
+          git -C "$RUNNER_TEMP/RadioFisher" checkout -q "$commit"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      # Editable: a bank authenticates against the digest of the bank source
-      # in this checkout, which an installed copy cannot provide.
-      - run: python -m pip install -e ".[test]" ./RadioFisher
-      - name: Record the CPU and the numerical runtime
+      # pyproject.toml installs RadioFisher from the same pinned commit as the clone.
+      - run: python -m pip install -e ".[test]"
+      - run: python -c "import radiofisher, sys; print(radiofisher.__file__)"
+      - run: python -m pytest -q "$RUNNER_TEMP/RadioFisher/tests"
+      - run: rfisher table --out "$RUNNER_TEMP/table" --channels 14,29,37
+      - name: The rebuilt rows match the shipped table
         run: |
-          lscpu
-          echo "OPENBLAS_CORETYPE=${OPENBLAS_CORETYPE-} NPY_ENABLE_CPU_FEATURES=${NPY_ENABLE_CPU_FEATURES-}"
-          # threadpoolctl goes to a side directory, so the tested environment is unchanged.
-          python -m pip install -q --target "$RUNNER_TEMP/threadpoolctl" threadpoolctl \
-            || echo "threadpoolctl not available"
-          PYTHONPATH="$RUNNER_TEMP/threadpoolctl" python -c "import numpy, scipy, scipy.linalg; print('numpy', numpy.__version__, 'scipy', scipy.__version__); numpy.show_runtime()"
-          env -u NPY_ENABLE_CPU_FEATURES python -c "from numpy._core import _multiarray_umath as m; print('numpy dispatch on this host without the pin:', [f for f in m.__cpu_dispatch__ if m.__cpu_features__[f]])"
-      - name: Run pinned cross-repository contract tests
-        run: |
-          python -m pytest -q tests/forecast/test_resources.py \
-            -k 'packaged_pact_bank_matches or each_bull_research_bank_matches or each_bull_bank_interpolates'
-          python scripts/verify_bank.py
-          python scripts/verify_bank.py --bank src/rfisher/data/fisher_bank_chime2022.npz
-          python -m pytest -q tests/tolerance/test_current_bias_authentication.py
-          python -m pytest -q tests/forecast/test_forecast_goldens.py
-      - name: The bank code is frozen behind the one re-stamp
-        run: python scripts/restamp_bank_provenance.py --check
-      - name: The tolerance table rebuilds byte for byte
-        run: |
-          rfisher tolerance build --project projects/chime_bao --out "$RUNNER_TEMP/tolerances"
-          cmp src/rfisher/data/tolerances/tolerance_T1yr.csv "$RUNNER_TEMP/tolerances/tolerance_T1yr.csv"
-          cmp src/rfisher/data/tolerances/tolerance_T1yr.provenance.json "$RUNNER_TEMP/tolerances/tolerance_T1yr.provenance.json"
+          python - <<'PY'
+          import os
+          from rfisher import read_table
+          shipped = {r["channel"]: r for r in read_table()["channels"]}
+          fresh = read_table(os.path.join(os.environ["RUNNER_TEMP"], "table", "channel_table.json"))
+          for r in fresh["channels"]:
+              s = shipped[r["channel"]]
+              for key in ("sigma_aperp", "sigma_apar", "response_aperp", "response_apar", "a_tol"):
+                  assert abs(r[key] / s[key] - 1) < 1e-6, (r["channel"], key, r[key], s[key])
+              assert r["binding"] == s["binding"]
+          print("rebuilt", sorted(r["channel"] for r in fresh["channels"]))
+          PY
 
   wheel-smoke:
     runs-on: ubuntu-latest
@@ -139,13 +102,6 @@ jobs:
           python -m venv /tmp/rfisher-wheel-smoke
           /tmp/rfisher-wheel-smoke/bin/python -m pip install "$wheel_path"
           cd /tmp
-          /tmp/rfisher-wheel-smoke/bin/python -c "import importlib.util, rfisher; assert rfisher.__version__ == '4.0.0'; assert importlib.util.find_spec('baonoise') is None"
           /tmp/rfisher-wheel-smoke/bin/python -m pip check
-          /tmp/rfisher-wheel-smoke/bin/rfisher forecast --cosmology planck2018 --uniform 0.0 --band dtv
-          /tmp/rfisher-wheel-smoke/bin/rfisher forecast --cosmology pact2025 --uniform 0.0 --band chime
-          /tmp/rfisher-wheel-smoke/bin/rfisher forecast --uniform 0.0 --band chime
-          /tmp/rfisher-wheel-smoke/bin/rfisher build-bank --help
-          /tmp/rfisher-wheel-smoke/bin/rfisher tolerance show > /dev/null
-          /tmp/rfisher-wheel-smoke/bin/rfisher records capture-release --help > /dev/null
-          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.records.chime_atsc_2026 import capture_release, capture_ruling; rule = capture_ruling.resolve('r5_3'); assert (rule['GROUND_CREDIT'], rule['WORLD'], rule['KEEP']) == ('off', 'none', 'stated'); assert capture_release._release_doc()['fields']['release'] == 'capture_ruling_a19_2026-09-25_r5_2'"
-          /tmp/rfisher-wheel-smoke/bin/python -c "from rfisher.forecast.radiofisher_bao.bank.banks import BANK_SCHEMA_VERSION, FisherBank; from rfisher.forecast.radiofisher_bao.bank.resources import BANK_NAMES, RADIOFISHER_FILESYSTEM_NAMES, bank_file, filesystem_data_file; from rfisher.forecast.radiofisher_bao.response import packaged_response_banks; assert set(BANK_NAMES) == {'planck2018', 'pact2025', 'cmbspa2026'}; assert all(FisherBank(bank_file(name)).schema_version == BANK_SCHEMA_VERSION for name in BANK_NAMES); assert all(filesystem_data_file(name).is_file() for name in RADIOFISHER_FILESYSTEM_NAMES); assert len(list(packaged_response_banks().glob('*.npz'))) == 1"
+          /tmp/rfisher-wheel-smoke/bin/rfisher --help > /dev/null
+          /tmp/rfisher-wheel-smoke/bin/python -c "import rfisher; assert rfisher.__version__ == '5.0.0'; t = rfisher.read_table(); assert len(t['channels']) == 24; from rfisher import inputs; inputs.cosmology()"

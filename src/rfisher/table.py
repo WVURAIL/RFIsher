@@ -1,0 +1,123 @@
+"""The channel table: one row per channel, written as JSON (with provenance) and CSV.
+
+Each row is one RadioFisher forecast at the channel's own redshift. The table
+changes only when an input in inputs.py, the residual model or the quadrature
+changes; a new detector calibration never needs a new table.
+"""
+import csv
+import importlib.metadata
+import json
+import os
+import platform
+import subprocess
+import time
+from concurrent.futures import ProcessPoolExecutor
+from importlib import resources
+from pathlib import Path
+
+import numpy as np
+import scipy
+
+from . import __version__, forecast, inputs, pk_cache
+from .bands import Band, channels
+from .tolerance import tolerance
+
+SCHEMA = "rfisher-channel-table-v1"
+TABLE = "channel_table.json"
+CSV_COLUMNS = ["channel", "role", "low_mhz", "high_mhz", "z_center", "sigma_aperp", "sigma_apar",
+               "response_aperp", "response_apar", "a_tol", "binding"]
+
+
+def row(band: Band) -> dict:
+    """Forecast one channel and reduce it to its table row."""
+    t0 = time.monotonic()
+    F, names, p = forecast.channel_fisher(band)
+    t = tolerance(F, names)
+    g = p["geometry"]
+    return {"channel": band.channel, "role": band.role, "low_mhz": band.low_mhz, "high_mhz": band.high_mhz,
+                "z_min": band.z_min, "z_max": band.z_max, "z_center": float(p["cosmo"]["z"]),
+                "sigma_aperp": t["sigma"][0], "sigma_apar": t["sigma"][1], "correlation": t["correlation"],
+                "bias_per_unit_a": t["bias_per_unit_a"], "response_aperp": t["response"][0],
+                "response_apar": t["response"][1], "a_tol": t["a_tol"], "binding": t["binding"],
+                "dilation_covariance": t["dilation_covariance"], "condition": t["condition"],
+                "residual": {"n_nu": g["n_nu"], "horizon_slope": g["m"], "band_depth_mpc": g["L"]},
+                "seconds": time.monotonic() - t0}
+
+
+def _git_commit(path) -> str | None:
+    """HEAD of the checkout holding ``path``, marked '+dirty' if it has uncommitted changes."""
+    try:
+        def git(*a):
+            return subprocess.run(["git", "-C", str(path), *a], capture_output=True, text=True,
+                                  check=True).stdout.strip()
+        head = git("rev-parse", "HEAD")
+        return head + ("+dirty" if git("status", "--porcelain", "--untracked-files=no", ".") else "")
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def _radiofisher_source() -> dict:
+    import radiofisher
+    out = {"version": radiofisher.__version__}
+    try:
+        direct = importlib.metadata.distribution("radiofisher").read_text("direct_url.json")
+        if direct:
+            info = json.loads(direct)
+            out.update(url=info.get("url"), commit=info.get("vcs_info", {}).get("commit_id"))
+    except importlib.metadata.PackageNotFoundError:
+        pass
+    out.setdefault("commit", None)
+    out["commit"] = out["commit"] or _git_commit(Path(radiofisher.__file__).parent)
+    return out
+
+
+def provenance() -> dict:
+    return {"rfisher": {"version": __version__, "commit": _git_commit(Path(__file__).parent)},
+                "radiofisher": _radiofisher_source(),
+                "pk_table": {"name": inputs.PK_TABLE, "sha256": pk_cache.file_sha256(inputs.pk_table_path())},
+                "python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__}
+
+
+def build_table(bands=None, workers: int | None = None) -> dict:
+    """Forecast every channel (in parallel) and return the table."""
+    bands = channels() if bands is None else list(bands)
+    workers = workers or min(len(bands), os.cpu_count() or 1)
+    if workers == 1:
+        rows = [row(b) for b in bands]
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            rows = list(pool.map(row, bands))
+    return {"schema": SCHEMA,
+                "inputs": {"cosmology": "Planck 2018 (CHIME Overview)", "experiment": "CHIME (CHIME Overview)",
+                            "retained_hours": inputs.RETAINED_HOURS,
+                            "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
+                            "fitted": ["A", "sigma_NL", "aperp", "apar", "fs8", "bs8"],
+                            "quadrature": {"radial_order": forecast.RADIAL_ORDER,
+                                            "angular_order": forecast.ANGULAR_ORDER,
+                                            "bao_derivative_step": forecast.STEP}},
+                "provenance": provenance(), "channels": rows}
+
+
+def write_table(table: dict, out) -> list[Path]:
+    """Write <out>/channel_table.json and <out>/channel_table.csv."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    js = out / TABLE
+    js.write_text(json.dumps(table, indent=1) + "\n")
+    cs = out / "channel_table.csv"
+    with cs.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore", lineterminator="\n")
+        w.writeheader()
+        for r in table["channels"]:
+            w.writerow({k: (repr(v) if isinstance(v, float) else v) for k, v in r.items()})
+    return [js, cs]
+
+
+def read_table(path=None) -> dict:
+    """A written table, or the one shipped with the package."""
+    if path is None:
+        return json.loads(resources.files("rfisher.data").joinpath(TABLE).read_text())
+    table = json.loads(Path(path).read_text())
+    if table.get("schema") != SCHEMA:
+        raise ValueError(f"{path} is not a {SCHEMA} table")
+    return table

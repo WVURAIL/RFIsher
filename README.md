@@ -1,217 +1,132 @@
 # RFIsher
 
-RFIsher is the science side of a detector/science split for radio-frequency
-interference in 21 cm intensity mapping: it decides what a detector's masking
-is worth to a cosmological measurement. The detector side,
-[pilot-proxy](https://github.com/WVURAIL/pilot-proxy), characterizes each
-band (every candidate threshold with its masked fraction and kept residual);
-RFIsher turns a Fisher forecast into a tolerance on that residual, checks
-same-mask responses against fixed precision and calendar budgets, and holds
-the code of record of the 2026 capture ruling. It also prices masking as
-observing-time cost, the use it was first written for.
+How much residual DTV power each 6 MHz channel can carry before it biases a 21 cm BAO
+measurement by more than its own uncertainty.
 
-```mermaid
-flowchart LR
-  OC["pilot-proxy handoff<br/>operating_characteristic_v1"] --> TR["threshold response<br/>(residual and exposure<br/>per saved threshold)"]
-  F["forecast<br/>(RadioFisher BAO, banks,<br/>no-filter response bank)"] --> T["tolerance<br/>(r_tol per band)"]
-  COC["pilot-proxy capture handoff<br/>capture_operating_characteristic_v1"] --> R["records of the 2026 campaign<br/>(capture ruling of record)"]
-  T --> R
-  F -->|BAO-band coherence gain| R
-```
+For each channel, RFIsher runs one [RadioFisher](https://github.com/WVURAIL/RadioFisher)
+forecast at the channel's own redshift, with CHIME as in the CHIME Overview and one
+retained year of data. The forecast gives the clean uncertainty σ of the two BAO
+dilations, α⊥ and α∥. A coherent DTV residual of unit strength is added through
+RadioFisher's residual hook, and the forecast returns the bias it causes in each
+dilation. Bias is proportional to the residual's strength `a`, so each channel reduces
+to one number per dilation, its **response** (bias ÷ σ per unit strength), and one
+**tolerance**:
 
-Cosmology enters through `rfisher.forecast` and `rfisher.tolerance`, and two
-things leave them: `tolerances.csv` and the BAO-band gain, the latter for the
-capture ruling of record only. [docs/HANDOFF.md](docs/HANDOFF.md) says
-what this side reads from the detector and gives the reading path through the code;
-[docs/cosmology-entry.md](docs/cosmology-entry.md) explains the tolerance for
-an engineer; [docs/adapting.md](docs/adapting.md) says how to add a science
-model.
+    a_tol = 1 / max(|response_aperp|, |response_apar|)
 
-The current release ships a CHIME, ATSC DTV, and 21 cm BAO reference
-application. Its public scenario and bank boundaries are designed for other
-bands and instruments, but its installed forecast targets and builders are
-still CHIME/BAO-specific. RFIsher should not yet be described as a
-target-independent Fisher package.
+A residual weaker than `a_tol` biases both dilations by less than their σ.
 
-## Quickstart
+The table of these numbers is RFIsher's only output. It does not depend on the
+detector's calibration: a new threshold, era or mask never needs a new table. Only a
+new cosmology, telescope, residual model or retained-time anchor does.
 
-Three provenance-complete CHIME banks ship with the package, so the basic
-workflow does not require a RadioFisher checkout:
+![RFIsher call graph](docs/rfisher_functions.svg)
 
-```python
-from rfisher.forecast.radiofisher_bao import api, scenarios
-
-fc = api.load()                                   # the default cmbspa2026 bank
-mask = {17: 0.33, 30: 0.97, 31: 0.24}             # masked-time fractions
-
-api.required_time(fc, mask, target=5.0)           # survey BAO target
-api.required_time(fc, mask, target=5.0, zbin=6)   # one redshift bin
-api.significance(fc, 2.0, mask)                   # after two on-sky years
-api.masking_cost_curve(fc, band=scenarios.DTV_BAND)  # masking-cost curve
-```
-
-`examples/minimal_example.py` runs this calculation in a few seconds. A
-continuous band works through the same scenario interface:
-
-```python
-n71 = scenarios.FrequencyBand(
-    "5g_n71_downlink", 617.0, 652.0, label="5G n71 downlink")
-scenario = scenarios.Scenario(
-    "n71",
-    "ATSC and 5G n71 downlink",
-    fractions={17: 0.33, 31: 0.24},
-    frequency_fractions={n71: 0.15},
-)
-
-api.required_time(fc, scenario, target=5.0)
-```
-
-Banks use the strict schema-v2 contract. Pre-provenance banks are rejected
-and must be rebuilt.
-
-## What is being priced
-
-RFIsher keeps two costs separate:
-
-- **Masking cost:** masking a fraction `f` retains `(1 - f)` of the effective
-  integration time. Complete excision is priced as lost survey volume.
-- **Contamination residual:** retained data can carry residual power `r`
-  relative to thermal noise. In the incoherent variance model, the effective
-  time factor becomes `(1 - f) / (1 + r)`.
-
-Coherent contamination is a bias problem, not simply extra variance. The
-dedicated bias-response workflow propagates it through a `_Pres` Fisher row
-and refuses unsupported or numerically unstable evaluations.
-
-Threshold selection is split at the handoff. The detector (pilot-proxy)
-characterizes each band: every candidate threshold with its masked fraction,
-kept residual and evaluability, the false-alarm limit eta_Pfa (the smallest
-fixed-rank threshold whose one-sided 95% Clopper-Pearson upper bound is at
-most alpha = 0.001 on the band's own independently sampled verified null,
-the rank fixed before the scores are read; see pilot-proxy's
-`docs/HANDOFF.md`; a control band's threshold is a surrogate and never a
-band's eta_Pfa), and the stability screen
-(`oc_table.csv`, `oc_summary.csv` and
-`manifest.json`, schema `operating_characteristic` v1).
-`rfisher.verdict.handoff` checks those files, and `rfisher response threshold`
-exports the saved residual and exposure curves of a complete handoff without
-selecting a threshold ([threshold response](docs/threshold_response.md)).
-
-No post-processing of the residual (a delay filter, a ground filter or any
-other downstream stage) is modelled: no factor multiplies a residual, and the
-tolerance is the forecast's without a delay filter.
-
-Every science choice is an entry of the project's two registers,
-`projects/chime_bao/science_register.json` and `selector_policy.json`, read
-through `rfisher.policy`, with its value, units, basis, status, rationale,
-evidence and sensitivity values; the detector's choices are entries of
-pilot-proxy's register.
-
-The code of record of the 2026 campaign is `rfisher records`: the frozen
-archive release layouts, and the capture ruling of record (release r5.2 and
-its table of record) from the capture handoff. `records/` is frozen code of
-record: its credit and 200 ns switches (`GROUND_CREDIT`, `WORLD`, `KEEP`) exist
-only to reproduce the table of record, and no current rule enables them; the
-latest rule, r5_3, resolves `GROUND_CREDIT=off`, `WORLD=none` and
-`KEEP=stated`, which `tests/test_repository_hygiene.py` checks.
-
-## Shipped reference result
-
-The reference application reproduces the CHIME Overview BAO forecast before
-applying masking. Selected masking-only results are:
-
-| Scenario | Survey time penalty | Time for 2% transverse distance at z=1.40-1.50 |
-|---|---:|---:|
-| No masking | 1.00x | 0.32 on-sky yr |
-| 50% of the DTV band masked | 1.15x | 0.63 on-sky yr |
-| Channel 30 excised | 1.008x | 0.36 on-sky yr |
-| Channel 30 retained, Fourier convention | 1.06x | 1.96 on-sky yr |
-
-The masking-cost driver that wrote these, `scripts/run_forecast.py@c7c3949`,
-is kept in the history. Absolute Fisher times are model-dependent; masking ratios are the more robust
-comparison. See [the CHIME/BAO application](docs/application-chime.md) for
-the full inputs, results, and caveats.
-
-## Documentation
-
-- [Tolerance](docs/tolerance.md): the masking-cost and contamination-residual
-  models in force.
-- [Fixed precision and calendar budgets](docs/FIXED_PRECISION_CALENDAR.md):
-  same-mask responses against the fixed clean-reference precision
-  (`rfisher response calendar`).
-- [Visibility response](docs/visibility-response.md): the 10-second
-  visibility product carried through a fixed science response.
-- [Where cosmology enters](docs/cosmology-entry.md): the tolerance and the
-  refused bands, for an engineer.
-- [Threshold response](docs/threshold_response.md): exact saved fine thresholds,
-  residual proxies, and uniform exposure costs.
-- [Decision register](docs/decision-register.md): every science and selector
-  entry with its value, status and evidence.
-- [Architecture and scope](docs/architecture.md): component boundaries,
-  bank contract, backend hooks, and the current generality limit.
-- [The handoff](docs/HANDOFF.md): what this side reads from the detector,
-  and the reading path through the code.
-- [Adapting](docs/adapting.md) and [terminology](docs/terminology.md).
-- [CHIME/BAO reference application](docs/application-chime.md): fiducial
-  configuration, headline results, inputs, and application-specific caveats.
-- [Reproducibility](docs/reproducibility.md): installation, verification,
-  bank builds, dissertation checks, and evidence regeneration.
-- [Verification benches](docs/testing.md): component coverage, numerical
-  oracles, CI coverage gates, and optional integration checks.
-- [Release index](docs/releases.md): immutable existing releases and the
-  layout for future releases.
-
-## Install and verify
+## Use
 
 ```bash
-git clone https://github.com/WVURAIL/RFIsher
-cd RFIsher
+python -m pip install -e .            # installs RadioFisher at the pinned commit
+rfisher table --out out/              # all 24 channels, about a minute on 12 cores
+rfisher figures --out out/figures     # the summary and one plate per channel
+```
+
+```python
+import rfisher
+table = rfisher.read_table()          # the shipped table
+row = next(r for r in table["channels"] if r["channel"] == 19)
+a = 8.4e-8                            # residual strength at a threshold (detector side)
+bias_over_sigma = a * max(abs(row["response_aperp"]), abs(row["response_apar"]))
+```
+
+## How the detector side uses the table
+
+For each candidate threshold, the archive histogram gives the DTV power `x` left in the
+kept frames (relative to the noise on one input) and the kept fraction κ. Then:
+
+1. The residual strength is `a = (c x)² × 16,384 × G`. Here `c` is the coherent fraction
+   of the power, 16,384 the samples in one frame, and `G` the frames it stays coherent.
+2. The bias in units of σ is `a × response`, for the larger-responding dilation.
+3. The threshold passes if that is at most 1. The rule takes the knee if it passes,
+   otherwise the passing threshold closest to the knee, otherwise word 0x1.
+4. The calendar time to collect the retained year is `1 / κ` years.
+
+κ never enters the forecast. The forecast is always for one retained year; κ only says
+how long collecting it takes.
+
+## The model
+
+- **Inputs** (`inputs.py`): Planck 2018 with its linear P(k) table, checked against the
+  cosmology before use; CHIME as in the CHIME Overview (4 cylinders × 256 feeds,
+  T_sys = 55 K, 31,000 deg², 0.39 MHz channels, as-built baseline density); 8,760 h of
+  retained data.
+- **Fit** (`tolerance.py`): A, σ_NL, α⊥, α∥, fσ8 and bσ8 are fitted; the rest are held
+  at the fiducial. The bias is first order and compared with the clean σ.
+- **Residual** (`residual.py`): one transmitter's power as a flat 6 MHz shelf that stays
+  coherent. It puts the same visibility on every baseline that measures a Fourier cell,
+  so it sits inside the horizon wedge. Relative to the noise power,
+  `dP / C_N = a × N_ν × N_meas(k⊥) × f_w(k⊥)` for `|k∥| ≤ m k⊥ + π/L`, and zero outside.
+- **Quadrature** (`forecast.py`): Gauss–Legendre in k and μ, split at every kink of the
+  integrand. Doubling either order changes the tolerance by less than 3 × 10⁻⁷.
+
+## The table
+
+24 channels: DTV allocations 14 to 36 and channel 37, which carries no DTV and
+serves as the control. σ is the clean one-year uncertainty in percent; the responses are
+signed.
+
+| Channel | MHz | z | σ⊥ (%) | σ∥ (%) | Response α⊥ | Response α∥ | a_tol | Binds | |
+|---|---|---|---|---|---|---|---|---|---|
+| 14 | 470–476 | 2.003 | 2.48 | 2.55 | +1,273 | -3,514 | 2.85e-04 | α∥ | [plate](docs/figures/channel_14.png) |
+| 15 | 476–482 | 1.965 | 2.50 | 2.55 | +676 | -2,021 | 4.95e-04 | α∥ | [plate](docs/figures/channel_15.png) |
+| 16 | 482–488 | 1.929 | 2.51 | 2.55 | +190 | -582 | 1.72e-03 | α∥ | [plate](docs/figures/channel_16.png) |
+| 17 | 488–494 | 1.893 | 2.49 | 2.54 | +127 | +638 | 1.57e-03 | α∥ | [plate](docs/figures/channel_17.png) |
+| 18 | 494–500 | 1.858 | 2.42 | 2.53 | +761 | +1,501 | 6.66e-04 | α∥ | [plate](docs/figures/channel_18.png) |
+| 19 | 500–506 | 1.824 | 2.34 | 2.51 | +2,187 | +1,959 | 4.57e-04 | α⊥ | [plate](docs/figures/channel_19.png) |
+| 20 | 506–512 | 1.791 | 2.26 | 2.50 | +4,301 | +2,048 | 2.32e-04 | α⊥ | [plate](docs/figures/channel_20.png) |
+| 21 | 512–518 | 1.758 | 2.20 | 2.49 | +6,814 | +1,859 | 1.47e-04 | α⊥ | [plate](docs/figures/channel_21.png) |
+| 22 | 518–524 | 1.726 | 2.16 | 2.48 | +9,308 | +1,535 | 1.07e-04 | α⊥ | [plate](docs/figures/channel_22.png) |
+| 23 | 524–530 | 1.695 | 2.14 | 2.47 | +11,394 | +1,214 | 8.78e-05 | α⊥ | [plate](docs/figures/channel_23.png) |
+| 24 | 530–536 | 1.665 | 2.13 | 2.47 | +12,602 | +1,100 | 7.94e-05 | α⊥ | [plate](docs/figures/channel_24.png) |
+| 25 | 536–542 | 1.635 | 2.11 | 2.47 | +12,589 | +1,365 | 7.94e-05 | α⊥ | [plate](docs/figures/channel_25.png) |
+| 26 | 542–548 | 1.606 | 2.09 | 2.47 | +11,212 | +2,086 | 8.92e-05 | α⊥ | [plate](docs/figures/channel_26.png) |
+| 27 | 548–554 | 1.578 | 2.06 | 2.46 | +8,521 | +3,241 | 1.17e-04 | α⊥ | [plate](docs/figures/channel_27.png) |
+| 28 | 554–560 | 1.550 | 2.03 | 2.46 | +4,851 | +4,662 | 2.06e-04 | α⊥ | [plate](docs/figures/channel_28.png) |
+| 29 | 560–566 | 1.523 | 1.99 | 2.45 | +725 | +6,078 | 1.65e-04 | α∥ | [plate](docs/figures/channel_29.png) |
+| 30 | 566–572 | 1.496 | 1.95 | 2.44 | -3,356 | +7,241 | 1.38e-04 | α∥ | [plate](docs/figures/channel_30.png) |
+| 31 | 572–578 | 1.470 | 1.94 | 2.44 | -6,956 | +7,976 | 1.25e-04 | α∥ | [plate](docs/figures/channel_31.png) |
+| 32 | 578–584 | 1.445 | 1.96 | 2.45 | -9,762 | +8,186 | 1.02e-04 | α⊥ | [plate](docs/figures/channel_32.png) |
+| 33 | 584–590 | 1.420 | 1.98 | 2.46 | -11,604 | +7,811 | 8.62e-05 | α⊥ | [plate](docs/figures/channel_33.png) |
+| 34 | 590–596 | 1.395 | 1.99 | 2.47 | -12,533 | +6,849 | 7.98e-05 | α⊥ | [plate](docs/figures/channel_34.png) |
+| 35 | 596–602 | 1.371 | 1.97 | 2.47 | -12,844 | +5,417 | 7.79e-05 | α⊥ | [plate](docs/figures/channel_35.png) |
+| 36 | 602–608 | 1.348 | 1.93 | 2.46 | -13,002 | +3,771 | 7.69e-05 | α⊥ | [plate](docs/figures/channel_36.png) |
+| 37 (control) | 608–614 | 1.325 | 1.87 | 2.46 | -13,325 | +2,189 | 7.50e-05 | α⊥ | [plate](docs/figures/channel_37.png) |
+
+![Summary](docs/figures/summary.png)
+
+Each plate shows where the residual sits in Fourier space at the tolerated strength,
+how each dilation's bias grows with strength, and the dilation ellipse shifted by the
+tolerated residual.
+
+## Files
+
+| File | Contents |
+|---|---|
+| `src/rfisher/bands.py` | the channels and their redshifts |
+| `src/rfisher/inputs.py`, `pk_cache.py` | the fixed forecast inputs and the P(k) table check |
+| `src/rfisher/residual.py` | the coherent DTV residual |
+| `src/rfisher/forecast.py` | one channel's Fisher matrix with the residual's bias row |
+| `src/rfisher/tolerance.py` | σ, bias per unit strength, response and tolerance |
+| `src/rfisher/table.py`, `figures.py`, `cli.py` | the table, the figures, the command line |
+| `src/rfisher/data/channel_table.json`, `.csv` | the shipped table, with provenance |
+| `docs/diagram.py` | draws the call graph above |
+
+## Tests
+
+```bash
 python -m pip install -e ".[test]"
-python -m pytest tests/ -q
+python -m pytest -q
 ```
 
-Generated results, including the frozen releases, live outside the
-repository in the workspace `results/` tree. See
-[releases](docs/releases.md).
-
-The command-line entry points are:
-
-New forecasts default to the August 2026 combined cosmology. Bull's Planck
-2013 and Foreman's Planck 2018 inputs remain explicit reproduction options;
-see [cosmologies](docs/cosmologies.md) for the three primary roles.
-
-```bash
-rfisher forecast --uniform 0.25
-rfisher forecast --cosmology cmbspa2026 --uniform 0.25
-rfisher build-bank --help
-rfisher tolerance show
-rfisher response --help
-rfisher records --help
-```
-
-RadioFisher is needed only to build a bank or perform direct backend
-validation. After installing the pinned checkout, run
-`python scripts/verify_bank.py`. See
-[reproducibility](docs/reproducibility.md) for the exact setup.
-
-## Project boundary
-
-[pilot-proxy](https://github.com/WVURAIL/pilot-proxy) owns detector kernels,
-survey-product generation, and the underlying masking measurements.
-[RadioFisher](https://github.com/WVURAIL/RadioFisher) supplies the supported
-Fisher backend: the integrand and the instrument-agnostic hooks that cut or
-weight it, in the backend's own units. RFIsher validates those inputs, maps
-them to masking and contamination-residual scenarios, supplies every
-survey-specific number, decision, and dataset the hooks consume, and prices
-the scientific effect.
-
-The immutable historical releases retain their original paths, filenames,
-schema identifiers, and provenance fields. They are indexed in
-[docs/releases.md](docs/releases.md).
-
-## Citation
-
-If this software feeds a publication, cite RadioFisher (Bull, Ferreira, Patel,
-and Santos, *ApJ* 803, 21, 2015; arXiv:1405.1452) for the forecasting
-formalism and pilot-proxy for the masking measurements. Project citation
-metadata are in `CITATION.cff`.
+One test rebuilds channel 19 and checks it against the shipped table to 1e-6 (other numpy
+and scipy builds differ by about 1e-9). CI also rebuilds
+channels 14, 29 and 37 against RadioFisher at the pinned commit.

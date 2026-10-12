@@ -1,2 +1,0 @@
-# Test-only tooling for the coverage job.
-pytest-cov>=6,<8
