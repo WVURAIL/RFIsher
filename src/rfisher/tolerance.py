@@ -15,6 +15,9 @@ the volume-averaged distance D_V:
     response_dv = (w . bias) / sigma_dv     per unit strength
     a_tol       = 1 / |response_dv|         the strength at which the bias equals sigma
 """
+import sys
+import types
+
 import numpy as np
 
 FITTED = ("A", "sigma_NL", "aperp", "apar", "fs8", "bs8")
@@ -51,3 +54,15 @@ def tolerance(F: np.ndarray, names: list) -> dict:
                           "response": (bias[ix] / sigma).tolist(), "covariance": cov.tolist(),
                           "correlation": float(cov[0, 1] / np.prod(sigma))},
             "condition": float(eig[-1] / eig[0])}
+
+
+class _CallableModule(types.ModuleType):
+    """The package exports the function tolerance() under this module's name, so the
+    module is callable: rfisher.tolerance(F, names) calls the function, and
+    rfisher.tolerance.FITTED and the other constants stay reachable."""
+
+    def __call__(self, F: np.ndarray, names: list) -> dict:
+        return tolerance(F, names)
+
+
+sys.modules[__name__].__class__ = _CallableModule

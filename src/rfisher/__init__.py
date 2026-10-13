@@ -18,9 +18,9 @@ strength and compares.
 """
 __version__ = "5.0.0"
 
+from . import tolerance  # the module, callable as tolerance.tolerance(F, names)
 from .bands import Band, channels
 from .forecast import channel_fisher
 from .table import build_table, read_table
-from .tolerance import tolerance
 
 __all__ = ["Band", "build_table", "channel_fisher", "channels", "read_table", "tolerance"]

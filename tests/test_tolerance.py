@@ -1,3 +1,5 @@
+import importlib
+
 import numpy as np
 import pytest
 
@@ -48,3 +50,12 @@ def test_a_fitted_parameter_without_information_is_refused():
     F[NAMES.index("fs8"), NAMES.index("fs8")] = 0
     with pytest.raises(ValueError):
         tolerance(F, NAMES)
+
+
+def test_the_module_and_the_function_are_both_reachable():
+    module = importlib.import_module("rfisher.tolerance")
+    exported = importlib.import_module("rfisher").tolerance   # what `from rfisher import tolerance` binds
+    assert exported is module and callable(exported)
+    assert exported.FITTED == FITTED and exported.tolerance is tolerance
+    F = synthetic({"aperp": 5e4, "apar": 2.5e4})
+    assert exported(F, NAMES) == tolerance(F, NAMES)
