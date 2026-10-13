@@ -1,3 +1,5 @@
+import importlib
+
 import numpy as np
 import pytest
 
@@ -51,13 +53,9 @@ def test_a_fitted_parameter_without_information_is_refused():
 
 
 def test_the_module_and_the_function_are_both_reachable():
-    import importlib
-
-    import rfisher
-    from rfisher import tolerance as exported
-
     module = importlib.import_module("rfisher.tolerance")
-    assert rfisher.tolerance is exported is module
-    assert rfisher.tolerance.FITTED == FITTED and rfisher.tolerance.tolerance is tolerance
+    exported = importlib.import_module("rfisher").tolerance   # what `from rfisher import tolerance` binds
+    assert exported is module and callable(exported)
+    assert exported.FITTED == FITTED and exported.tolerance is tolerance
     F = synthetic({"aperp": 5e4, "apar": 2.5e4})
     assert exported(F, NAMES) == tolerance(F, NAMES)
