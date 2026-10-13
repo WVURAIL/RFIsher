@@ -20,6 +20,7 @@ INK, MUTED, GRID, SURF = "#1c2126", "#5a6168", "#e4e6e2", "#ffffff"
 LINE = "#2a78d6"
 GRID_DARK = "#9aa0a6"
 NU21 = 1420.406
+COSMOLOGY_LABELS = {"planck2018": "Planck 2018"}
 STYLE = {"font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
          "axes.labelcolor": INK, "figure.facecolor": SURF, "axes.facecolor": SURF, "text.color": INK,
          "axes.titlesize": 11, "axes.titleweight": "bold", "axes.titlelocation": "left"}
@@ -134,7 +135,7 @@ def summary(table, out: Path) -> Path:
 def draw_all(table, out, channels=None) -> list[Path]:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    cosmo = inputs.cosmology()
+    cosmo = inputs.cosmology(table["inputs"]["cosmology"])
     shared = (cosmo, inputs.experiment(), inputs.background(cosmo))
     paths = [summary(table, out)]
     for row in table["channels"]:
@@ -161,7 +162,8 @@ def overview_figure(ref: dict, out) -> Path:
             top.tick_params(colors=MUTED)
             _tidy(ax)
         axes[0].set_ylabel("D_V / D_V(fiducial)")
-        fig.suptitle("CHIME Overview forecast, one clean year (Planck 2018, CHIME, 8,760 h)",
+        label = COSMOLOGY_LABELS.get(ref["cosmology"], ref["cosmology"])
+        fig.suptitle(f"CHIME Overview forecast, one clean year ({label}, CHIME, {inputs.RETAINED_HOURS:,.0f} h)",
                      x=0.01, ha="left", fontsize=13, fontweight="bold")
         path = out / "overview_reference.png"
         fig.savefig(path, dpi=110)
