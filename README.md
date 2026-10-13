@@ -65,22 +65,16 @@ rfisher overview --out out/overview --cosmology planck2018 --compare cmbspa2026
 
 ![The 6 MHz forecast in Planck 2018 and in the latest cosmology](docs/figures/overview_cosmology.png)
 
-## How the detector side uses the table
+## The residual strength
 
-For each candidate threshold, the archive histogram gives the DTV power `x` left in the
-kept frames (relative to the noise on one input) and the kept fraction κ. Then:
+The table is written per unit of residual strength `a = (c x)² N G`. Here `x` is the DTV
+power left in the kept frames, relative to the noise on one input; `c` is the coherent
+fraction of that power, `N` = 16,384 the samples in one frame, and `G` the frames it stays
+coherent. The bias of D_V in units of its σ is `a × |response_dv|`. The forecast is always
+for one retained year, so the kept fraction never enters it.
 
-1. The residual strength is `a = (c x)² × 16,384 × G`. Here `c` is the coherent fraction
-   of the power, 16,384 the samples in one frame, and `G` the frames it stays coherent,
-   taken as one frame, as in the captures.
-2. The bias of D_V in units of its σ is `a × |response_dv|`.
-3. The threshold passes if that is at most 1, using the power plus two standard errors.
-   The rule takes the knee if it passes, otherwise the passing threshold closest to the
-   knee, otherwise word 0x1. pilot-proxy holds a copy of this table and the rule.
-4. The calendar time to collect the retained year is `1 / κ` years.
-
-κ never enters the forecast. The forecast is always for one retained year; κ only says
-how long collecting it takes.
+The detector side's threshold rule, which reads this table, lives in pilot-proxy
+(`src/pilot_proxy/characterization/threshold_rule.py`) with a copy of the table.
 
 ## The model
 
