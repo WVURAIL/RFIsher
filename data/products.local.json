@@ -1,7 +1,0 @@
-{
-  "comment": "Machine-local overlay (gitignored). search_dirs names the v5 rebuild because that is the cohort the run of record read: /home/djg/rail/results/archive_v5_2026-09-07b/ledger/run.json records products_dir as this directory, and every current reader (rfisher.pilotproxy's PRODUCT_SCHEMA_TOKEN, and so archive_acceptance) refuses anything but pilotproxy_per_pilot_product_v5. The 2026-08-20 complete-23 set named in docs/reproducibility.md sits beside it at /home/djg/rail/products/per_pilot_2026-08-20_complete23 and carries the older pilotproxy_detector_datatrawl_v3 schema; the two share filenames, so they must never be searched together. Reproduce the shipped v3-era forecast tables by pointing RFISHER_PRODUCT_DIRS at that directory for the duration of the run, which is searched ahead of this file.",
-  "search_dirs": [
-    "/home/djg/rail/products/chime_pilots_rebuild_20260829/products/_per_pilot"
-  ],
-  "out_dir": "/home/djg/rail/results/forecasts/rfisher_out_c1302f4"
-}
