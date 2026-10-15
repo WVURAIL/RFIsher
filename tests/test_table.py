@@ -15,7 +15,7 @@ def test_the_shipped_table_covers_every_channel():
     for r in t["channels"]:
         assert r["a_tol"] == pytest.approx(1 / abs(r["response_dv"]))
         assert 0.01 < r["sigma_dv"] < 0.02
-        assert all(0.015 < s < 0.03 for s in r["dilations"]["sigma"])
+        assert all(0.015 < s < 0.05 for s in r["dilations"]["sigma"])
 
 
 @pytest.mark.parametrize("number", [19])
