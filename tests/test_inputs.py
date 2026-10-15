@@ -52,3 +52,8 @@ def test_the_latest_cosmology_has_its_own_table():
 def test_an_unknown_cosmology_is_refused():
     with pytest.raises(ValueError, match="unknown cosmology"):
         inputs.parameters("planck2013")
+
+
+def test_unknown_baselines_are_refused():
+    with pytest.raises(ValueError, match="unknown baselines"):
+        inputs.experiment(baselines="intra")

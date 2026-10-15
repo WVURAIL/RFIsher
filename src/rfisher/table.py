@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import scipy
 
-from . import __version__, forecast, inputs, pk_cache
+from . import __version__, baselines, forecast, inputs, pk_cache
 from .bands import Band, channels
 from .tolerance import tolerance
 
@@ -74,6 +74,8 @@ def provenance() -> dict:
                 "radiofisher": _radiofisher_source(),
                 "pk_table": {"name": inputs.PK_TABLES[inputs.DEFAULT_COSMOLOGY],
                              "sha256": pk_cache.file_sha256(inputs.pk_table_path())},
+                "baseline_density": {"name": baselines.INTER_FILE,
+                                     "sha256": pk_cache.file_sha256(baselines.inter_file())},
                 "python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__}
 
 
@@ -89,7 +91,8 @@ def build_table(bands=None, workers: int | None = None) -> dict:
     return {"schema": SCHEMA,
                 "inputs": {"cosmology": inputs.DEFAULT_COSMOLOGY,
                            "cosmology_description": inputs.COSMOLOGY_NAMES[inputs.DEFAULT_COSMOLOGY],
-                           "experiment": "CHIME (CHIME Overview)",
+                           "experiment": "CHIME (CHIME Overview), inter-cylinder baselines only",
+                           "baselines": inputs.DEFAULT_BASELINES,
                             "retained_hours": inputs.RETAINED_HOURS,
                             "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
                             "fitted": ["A", "sigma_NL", "aperp", "apar", "fs8", "bs8"],
