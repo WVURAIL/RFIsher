@@ -4,7 +4,8 @@ As the Overview's scripts do it (S. Foreman, RadioFisher chime2021/full_experime
 and plot_dv_forecasts.py): RadioFisher's own fisher() for each bin with no residual;
 per bin the BAO amplitude A, b sigma_8, f sigma_8 and the two dilations are free,
 sigma_NL is shared by all bins, and everything else is held at the fiducial; the
-dilations are combined into D_V. Run on the Overview's 15 redshift bins it
+dilations are combined into D_V. Every baseline counts, as in the Overview (RadioFisher's
+as-built density), so this reference is on all baselines while the table is not. Run on the Overview's 15 redshift bins it
 reproduces the published forecast; run on the 6 MHz channels it is the clean
 reference the tolerance table starts from.
 """
@@ -41,7 +42,8 @@ def bin_fisher(task):
     (zmin, zmax), name = task
     cosmo = inputs.cosmology(name)
     with contextlib.redirect_stdout(io.StringIO()):
-        F, names = rf.fisher(zmin, zmax, cosmo, inputs.experiment(), inputs.background(cosmo))
+        expt = inputs.experiment(baselines="all")
+        F, names = rf.fisher(zmin, zmax, cosmo, expt, inputs.background(cosmo))
     return F, list(names)
 
 

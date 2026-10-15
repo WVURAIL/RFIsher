@@ -6,7 +6,9 @@
                             arXiv:2608.31136v1, Table 8, posterior means, flat LambdaCDM)
                 planck2018  the CHIME Overview's (Planck 2018 CMB only), used to
                             reproduce the Overview forecast
-    experiment  CHIME as in the CHIME Overview, for one retained year
+    experiment  CHIME as in the CHIME Overview, for one retained year, on the
+                inter-cylinder baselines CHIME's analyses use (the default) or on
+                all baselines, as the Overview's forecast does (baselines.py)
 
 Everything but the cosmological parameters (HI models, sigma_NL, the growth
 index, the experiment) is the CHIME Overview's in every cosmology.
@@ -17,6 +19,7 @@ from importlib import resources
 import radiofisher as rf
 from radiofisher.units import HRS_MHZ
 
+from . import baselines as _baselines
 from . import pk_cache
 
 RETAINED_HOURS = 8760.0  # one retained year: 365 days of kept data
@@ -26,6 +29,8 @@ COSMOLOGY_NAMES = {"cmbspa2026": "SPT-3G + ACT + Planck CMB with DESI DR2 BAO (O
 CMBSPA2026 = {"h": 0.6832, "ombh2": 0.022506, "omch2": 0.11755, "sigma_8": 0.8117, "ns": 0.9742, "mnu": 0.06}
 PK_TABLES = {"planck2018": "pk_planck2018.dat", "cmbspa2026": "pk_cmbspa2026.dat"}
 PK_TABLE = PK_TABLES[DEFAULT_COSMOLOGY]
+BASELINES = ("inter-cylinder", "all")
+DEFAULT_BASELINES = "inter-cylinder"
 
 
 def pk_table_path(name: str = DEFAULT_COSMOLOGY):
@@ -62,10 +67,18 @@ def cosmology(name: str = DEFAULT_COSMOLOGY) -> dict:
     return rf.load_power_spectrum(cosmo, str(path))
 
 
-def experiment(hours: float = RETAINED_HOURS) -> dict:
-    """CHIME as in the CHIME Overview, observing for ``hours`` of retained data."""
+def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES) -> dict:
+    """CHIME as in the CHIME Overview, observing for ``hours`` of retained data.
+
+    ``baselines`` is "inter-cylinder" (the default: CHIME's analyses drop the pairs within
+    one cylinder) or "all" (RadioFisher's as-built density, as the Overview's forecast uses).
+    """
+    if baselines not in BASELINES:
+        raise ValueError(f"unknown baselines {baselines!r}; choose one of {BASELINES}")
     expt = copy.deepcopy(rf.chime.CHIME)
     expt["ttot"] = hours * HRS_MHZ
+    if baselines == "inter-cylinder":
+        expt["n(x)"] = str(_baselines.inter_file())
     return expt
 
 

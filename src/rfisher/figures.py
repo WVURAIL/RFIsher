@@ -136,7 +136,8 @@ def draw_all(table, out, channels=None) -> list[Path]:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     cosmo = inputs.cosmology(table["inputs"]["cosmology"])
-    shared = (cosmo, inputs.experiment(), inputs.background(cosmo))
+    expt = inputs.experiment(baselines=table["inputs"].get("baselines", "all"))
+    shared = (cosmo, expt, inputs.background(cosmo))
     paths = [summary(table, out)]
     for row in table["channels"]:
         if channels is None or row["channel"] in channels:
