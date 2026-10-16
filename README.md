@@ -15,11 +15,16 @@ strength) and one **tolerance**:
 
     a_tol = 1 / |response_dv|
 
-A residual weaker than `a_tol` biases D_V by less than its σ.
+A residual weaker than `a_tol` has a first-order assigned bias below its σ.
 
-The table of these numbers is RFIsher's only output. It does not depend on the
+The table of these numbers is RFIsher's main output. It does not depend on the
 detector's calibration: a new threshold, era or mask never needs a new table. Only a
 new cosmology, telescope, residual model or retained-time anchor does.
+
+The optional [finite BAO-only likelihood check](docs/NONLINEAR_BIAS_CHECK.md)
+tests the local bias approximation against an explicitly defined nonlinear
+model. It records unsuccessful fits and numerical checks, keeps the published
+table fixed, and does not calibrate the physical residual or sampling coverage.
 
 ![RFIsher call graph](docs/rfisher_functions.svg)
 
@@ -90,11 +95,13 @@ The detector side's threshold rule, which reads this table, lives in pilot-proxy
   built from the array layout (`baselines.py`, `data/nx_CHIME_inter.dat`; built from all
   pairs, the same code reproduces RadioFisher's as-built density exactly); 8,760 h of
   retained data.
-- **Fit** (`tolerance.py`): A, σ_NL, α⊥, α∥, fσ8 and bσ8 are fitted; the rest are held
+- **Fit** (`tolerance.py`): A, s_NL = σ_NL², α⊥, α∥, fσ8 and bσ8 are fitted; the rest are held
   at the fiducial. The dilations are combined into D_V as the CHIME Overview does. The
   bias is first order and compared with the clean σ of D_V. Where the two dilations'
   biases have opposite signs they partly cancel in D_V; the response changes sign between
   channels 31 and 32, so those two tolerances are the loosest.
+  The legacy matrix label `sigma_NL` denotes the damping-variance derivative,
+  not the derivative with respect to the physical damping length.
 - **Residual** (`residual.py`): one transmitter's power as a flat 6 MHz shelf that stays
   coherent. It puts the same visibility on every baseline that measures a Fourier cell,
   so it sits inside the horizon wedge. Relative to the noise power,
