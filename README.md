@@ -5,7 +5,7 @@ measurement by more than its own uncertainty.
 
 For each channel, RFIsher runs one [RadioFisher](https://github.com/WVURAIL/RadioFisher)
 forecast at the channel's own redshift, with CHIME as in the CHIME Overview on the
-inter-cylinder baselines CHIME's analyses use, the latest cosmology and one retained year of data. The two BAO dilations are combined into the one number the
+inter-cylinder baselines CHIME's analyses use, the specified cosmology and one retained year of data. The two BAO dilations are combined into the one number the
 CHIME Overview reports, the volume-averaged distance D_V
 (`ln α_V = 2/3 ln α⊥ + 1/3 ln α∥`). The forecast gives its clean uncertainty σ. A
 coherent DTV residual of unit strength is added through RadioFisher's residual hook,
@@ -57,39 +57,50 @@ large. The reproduction counts every baseline, as the Overview's forecast does
 (RadioFisher's as-built density), so it still matches the published numbers. The tolerance
 table does not: CHIME's analyses drop the pairs within one cylinder, which carry noise
 cross-talk and a strong response to diffuse Galactic emission (CHIME Collaboration 2025,
-arXiv:2511.19620), and the coherent fraction the table is read with is measured between
+arXiv:2511.19620), and the stack-to-proxy amplitude ratio used with the table is measured between
 cylinders. Without those baselines the table's clean σ(D_V) is 17% to 34% larger than on
 all of them. On all baselines it agrees with the reproduction to within 1.5% on every
 channel; the table integrates more finely and fits σ_NL per channel.
 
 ![The CHIME Overview forecast as published, and with 6 MHz bins over the DTV range](docs/figures/overview_reference.png)
 
-The forecast inputs carry two cosmologies: the latest, `cmbspa2026`, which the table
+The forecast inputs carry two cosmologies: the adopted `cmbspa2026`, which the table
 uses (SPT-3G, ACT and Planck CMB with DESI DR2 BAO; Omori et al. 2026, arXiv:2608.31136v1,
 Table 8), and the Overview's Planck 2018, which the reproduction uses so it can be checked. Only the cosmological
 parameters and the P(k) table change; the HI models, σ_NL and CHIME stay the Overview's.
-In the latest cosmology the 6 MHz errors are 7% to 8% smaller (1.09% to 1.40% per channel).
+In the specified cosmology the 6 MHz errors are 7% to 8% smaller (1.09% to 1.40% per channel).
 
 ```bash
 rfisher overview --out out/overview --cosmology planck2018 --compare cmbspa2026
 ```
 
-![The 6 MHz forecast in Planck 2018 and in the latest cosmology](docs/figures/overview_cosmology.png)
+![The 6 MHz forecast in Planck 2018 and in the specified cosmology](docs/figures/overview_cosmology.png)
 
 ## The residual strength
 
-The table is written per unit of residual strength `a = (c x)² N G`. Here `x` is the DTV
-power left in the kept frames, relative to the noise on one input; `c` is the coherent
-fraction of that power, `N` = 16,384 the samples in one frame, and `G` the frames it stays
-coherent. The bias of D_V in units of its σ is `a × |response_dv|`. The forecast is always
-for one retained year, so the kept fraction never enters it.
+The detector maps the retained shelf proxy into the table's strength using
+`a = (gamma x_hi)^2 N G`. `x_hi` is the retained per-input shelf proxy's upper
+end, `gamma` is the measured calibrated redundant-stack amplitude divided by
+the archive proxy, and `N = 16,384` is the frame length. `gamma` is not an
+intrinsic coherent fraction. `G` is an assumed effective temporal gain for an
+unmeasured cross-moment, not a measured coherence time or a cross-day bound.
+The first-order bias ratio is `a * abs(response_dv)`.
 
-The detector side's threshold rule, which reads this table, lives in pilot-proxy
-(`src/pilot_proxy/characterization/threshold_rule.py`) with a copy of the table.
+The table is normalized to 8,760 retained hours. The paper's primary calendar
+comparison uses the Overview's ideal year: retaining fraction `kappa` requires
+`1 / kappa` years for this reference exposure. An additional operating-duty
+penalty is a separate scenario. A fixed calendar-duration forecast instead uses
+`ttot = 8760 * Y * kappa` hours; it must be recomputed at that exposure.
+
+The threshold rule is in PilotProxy. Its finite-amplitude and channel-specific
+transfer budgets are external inputs, not silently included in `a_tol`.
+`nonlinear.py` and the validation tools check the expected-likelihood model;
+they do not establish the physical transfer or cross-day DTV covariance.
+See [the paper/code contract](docs/PAPER_CODE_MAP.md).
 
 ## The model
 
-- **Inputs** (`inputs.py`): the latest cosmology, `cmbspa2026` (SPT-3G, ACT and Planck CMB
+- **Inputs** (`inputs.py`): the specified cosmology, `cmbspa2026` (SPT-3G, ACT and Planck CMB
   with DESI DR2 BAO), with its linear P(k) table, checked against the cosmology before use; CHIME as in the CHIME Overview (4 cylinders × 256 feeds,
   T_sys = 55 K, 31,000 deg², 0.39 MHz channels); the inter-cylinder baselines only,
   built from the array layout (`baselines.py`, `data/nx_CHIME_inter.dat`; built from all
@@ -102,9 +113,9 @@ The detector side's threshold rule, which reads this table, lives in pilot-proxy
   channels 31 and 32, so those two tolerances are the loosest.
   The legacy matrix label `sigma_NL` denotes the damping-variance derivative,
   not the derivative with respect to the physical damping length.
-- **Residual** (`residual.py`): one transmitter's power as a flat 6 MHz shelf that stays
-  coherent. It puts the same visibility on every baseline that measures a Fourier cell,
-  so it sits inside the horizon wedge. Relative to the noise power,
+- **Residual** (`residual.py`): an assumed flat 6 MHz residual-power template. It puts the same visibility on every baseline that measures a Fourier cell,
+  with support inside the horizon wedge. This distributes the residual; it does not
+  excise wedge modes or apply a delay filter. Relative to the noise power,
   `dP / C_N = a × N_ν × N_meas(k⊥) × f_w(k⊥)` for `|k∥| ≤ m k⊥ + π/L`, and zero outside.
 - **Quadrature** (`forecast.py`): Gauss–Legendre in k and μ, split at every kink of the
   integrand. Doubling either order changes the tolerance by less than 3 × 10⁻⁷.
@@ -112,7 +123,7 @@ The detector side's threshold rule, which reads this table, lives in pilot-proxy
 ## The table
 
 24 channels: DTV allocations 14 to 36 and channel 37, which carries no DTV and
-serves as the control, all in the latest cosmology. σ is the clean one-year uncertainty
+serves as the control, all in the specified cosmology. σ is the clean one-year uncertainty
 of D_V in percent; the response is signed.
 
 | Channel | MHz | z | σ(D_V)/D_V (%) | Response | a_tol | |
@@ -160,7 +171,7 @@ and how the bias of D_V grows with strength.
 | `src/rfisher/overview.py` | the CHIME Overview forecast, reproduced, and in 6 MHz channels |
 | `src/rfisher/table.py`, `figures.py`, `cli.py` | the table, the figures, the command line |
 | `src/rfisher/data/channel_table.json`, `.csv` | the shipped table, with provenance |
-| `docs/diagram.py` | draws the call graph above |
+| `tools/generate_call_graph.py` | draws the call graph above |
 
 ## Tests
 
