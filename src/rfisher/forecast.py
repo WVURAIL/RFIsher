@@ -11,13 +11,12 @@ The derivative of the BAO template is taken directly at each k
 (central difference, step 1e-7 Mpc^-1, zero below 0.03 Mpc^-1) instead of
 being interpolated from RadioFisher's k grid.
 """
-import contextlib
-import io
 import itertools
 
 import numpy as np
 import radiofisher as rf
 from numpy.polynomial.legendre import leggauss
+from radiofisher.instrument import mode_limits
 
 from . import inputs, residual
 from .bands import Band
@@ -43,9 +42,9 @@ def prepare(band: Band, cosmo=None, expt=None, fns=None) -> dict:
     c["dfbao_dk"] = dfbao_dk
     g = residual.geometry(c, e)
     e["P_res"] = residual.coherent_shelf(g)
+    kfg, knl = mode_limits(c, e)
     return {"cosmo": c, "expt": e, "Vfac": Vfac, "geometry": g, "band": band,
-                "kfg": 2 * np.pi * e["nu_line"] / (e["survey_dnutot"] * c["rnu"]) * e.get("kfg_fac", 1.),
-                "knl": e["k_nl0"] * (1 + c["z"]) ** (2 / (2 + c["ns"])),
+                "kfg": kfg, "knl": knl,
                 "nu": e["nu_line"] / (1 + c["z"]),
                 "knots": np.genfromtxt(e["n(x)_file"])[:, 0]}
 
@@ -77,24 +76,38 @@ def angular_edges(k: float, p: dict) -> np.ndarray:
     return e if mw is None else np.unique(np.r_[e, mw])
 
 
-def integrate(p: dict, radial_order: int = RADIAL_ORDER, angular_order: int = ANGULAR_ORDER):
-    """F_ij = Vfac * 2 * Int k^2 d_i d_j dk dmu over mu in [0, 1] (the integrand is even)."""
+def quadrature_segments(p: dict, radial_order: int, angular_order: int, *, edges=None):
+    """Yield bounded batches of paired (k, mu) nodes and weights 2 k² dk dmu.
+
+    Each radial node has its own angular boundaries. Batch one radial segment
+    at a time so evaluation is vectorized without allocating the entire grid.
+    The linear forecast and finite-amplitude check use these same nodes.
+    """
     qk, wk = leggauss(radial_order)
     qu, wu = leggauss(angular_order)
-    edges = radial_edges(p)
+    edges = radial_edges(p) if edges is None else edges
+    for left, right in itertools.pairwise(edges):
+        nodes, angles, weights = [], [], []
+        for k, kw in zip((left + right) / 2 + (right - left) * .5 * qk, (right - left) * .5 * wk):
+            angular = angular_edges(k, p)
+            width = np.diff(angular)
+            midpoint = (angular[:-1] + angular[1:]) / 2
+            mu = (midpoint[:, None] + width[:, None] * .5 * qu).ravel()
+            angular_weight = (width[:, None] * .5 * wu).ravel()
+            nodes.append(np.full(mu.size, k))
+            angles.append(mu)
+            weights.append(2 * k * k * kw * angular_weight)
+        yield np.concatenate(nodes), np.concatenate(angles), np.concatenate(weights)
+
+
+def integrate(p: dict, radial_order: int = RADIAL_ORDER, angular_order: int = ANGULAR_ORDER):
+    """F_ij = Vfac * 2 * Int k^2 d_i d_j dk dmu over mu in [0, 1] (the integrand is even)."""
     total, names = None, None
-    with contextlib.redirect_stdout(io.StringIO()):
-        for left, right in itertools.pairwise(edges):
-            for k, kw in zip((left + right) / 2 + (right - left) * .5 * qk, (right - left) * .5 * wk):
-                e = angular_edges(k, p)
-                w = np.diff(e)
-                m = (e[:-1] + e[1:]) / 2
-                mu = (m[:, None] + w[:, None] * .5 * qu).ravel()
-                uw = (w[:, None] * .5 * wu).ravel()
-                deriv, names = rf.fisher_integrands(np.array([k]), mu, p["cosmo"], p["expt"])
-                D = np.asarray(deriv)[:, :, 0]
-                v = 2 * k * k * kw * ((D * uw) @ D.T)
-                total = v if total is None else total + v
+    for k, mu, weight in quadrature_segments(p, radial_order, angular_order):
+        deriv, names = rf.fisher_integrands(k, mu, p["cosmo"], p["expt"], paired=True)
+        derivatives = np.asarray(deriv)
+        segment = (derivatives * weight) @ derivatives.T
+        total = segment if total is None else total + segment
     return p["Vfac"] * total, list(names)
 
 

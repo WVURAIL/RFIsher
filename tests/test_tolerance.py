@@ -5,7 +5,7 @@ import pytest
 
 from rfisher.tolerance import DV_WEIGHTS, FITTED, tolerance
 
-NAMES = ["A", "b_HI", "Tb", "sigma_NL", "sigma8tot", "n_s", "f", "aperp", "apar", "fs8", "bs8", "pk", "_Pres"]
+NAMES = ["A", "b_HI", "Tb", "s_NL", "sigma8tot", "n_s", "f", "aperp", "apar", "fs8", "bs8", "pk", "_Pres"]
 
 
 def synthetic(B):
@@ -52,10 +52,10 @@ def test_a_fitted_parameter_without_information_is_refused():
         tolerance(F, NAMES)
 
 
-def test_the_module_and_the_function_are_both_reachable():
+def test_the_explicit_module_and_function_imports():
     module = importlib.import_module("rfisher.tolerance")
     exported = importlib.import_module("rfisher").tolerance   # what `from rfisher import tolerance` binds
-    assert exported is module and callable(exported)
+    assert exported is module and not callable(exported)
     assert exported.FITTED == FITTED and exported.tolerance is tolerance
     F = synthetic({"aperp": 5e4, "apar": 2.5e4})
-    assert exported(F, NAMES) == tolerance(F, NAMES)
+    assert exported.tolerance(F, NAMES) == tolerance(F, NAMES)

@@ -29,8 +29,8 @@ jobs:
       - run: ruff check .
       - run: python -m pytest -q
 
-  dissertation-figure:
-    # The figures the dissertation shows, drawn from the shipped table.
+  documentation-figures:
+    # Reader-facing figures drawn from the shipped table.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -104,4 +104,4 @@ jobs:
           cd /tmp
           /tmp/rfisher-wheel-smoke/bin/python -m pip check
           /tmp/rfisher-wheel-smoke/bin/rfisher --help > /dev/null
-          /tmp/rfisher-wheel-smoke/bin/python -c "import rfisher; assert rfisher.__version__ == '5.0.0'; t = rfisher.read_table(); assert len(t['channels']) == 24; from rfisher import inputs; inputs.cosmology()"
+          /tmp/rfisher-wheel-smoke/bin/python -c "import rfisher; assert rfisher.__version__ == '6.0.0'; t = rfisher.read_table(); assert len(t['channels']) == 24; from rfisher import inputs; inputs.cosmology()"

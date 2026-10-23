@@ -18,9 +18,9 @@ physical transfer or the cross-day residual.
     nonlinear   finite-amplitude expected-likelihood checks
     figures     per-channel plates and the summary
 """
-__version__ = "5.0.0"
+__version__ = "6.0.0"
 
-from . import tolerance  # the module, callable as tolerance.tolerance(F, names)
+from . import tolerance
 from .bands import Band, channels
 from .forecast import channel_fisher
 from .table import build_table, read_table

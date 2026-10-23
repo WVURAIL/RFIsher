@@ -1,16 +1,12 @@
 """Finite BAO-only expected-covariance fits, separate from published linear tables.
 
 The retained RadioFisher derivative switches define a phenomenological BAO-only
-model. They do not define the full Alcock-Paczynski signal model. The coordinate
-named ``sigma_NL`` in the Fisher matrix is damping variance, in Mpc squared.
+model. They do not define the full Alcock-Paczynski signal model. The Fisher coordinate ``s_NL`` is damping variance in Mpc squared.
 """
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
-import io
-import itertools
 import json
 import platform
 import uuid
@@ -19,11 +15,11 @@ from pathlib import Path
 
 import numpy as np
 import scipy
-from numpy.polynomial.legendre import leggauss
 from scipy.optimize import minimize
 
 from . import forecast
-from .tolerance import FITTED
+from .pk_cache import file_sha256
+from .tolerance import DV_WEIGHTS, FITTED
 
 PARAMETERS = tuple(FITTED)
 DILATION_FLAGS = {
@@ -33,10 +29,6 @@ DILATION_FLAGS = {
     "alpha_bao_shift": True,
     "alpha_pk_shift": False,
 }
-
-
-def sha256(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def array_digest(values):
@@ -76,7 +68,7 @@ def _source_bindings():
     from radiofisher import baofisher as rf
 
     paths = [*Path(__file__).parent.glob("*.py"), *Path(rf.__file__).parent.glob("*.py")]
-    return {p.parent.name + "/" + p.name: sha256(p) for p in sorted(paths)}
+    return {p.parent.name + "/" + p.name: file_sha256(p) for p in sorted(paths)}
 
 
 def check_conventions(prepared):
@@ -125,7 +117,7 @@ class FiniteBAOModel:
         self.covariance = np.linalg.solve(scaled, np.eye(6)) / np.outer(diagonal, diagonal)
         self.scale = np.sqrt(np.diag(self.covariance))
         self.linear_shift = self.covariance @ self.bias_row
-        self.sigma_dv = float(np.sqrt(np.array([2 / 3, 1 / 3]) @ self.covariance[2:4, 2:4] @ np.array([2 / 3, 1 / 3])))
+        self.sigma_dv = float(np.sqrt(DV_WEIGHTS @ self.covariance[2:4, 2:4] @ DV_WEIGHTS))
         self.a_tol = self.sigma_dv / abs((2 * self.linear_shift[2] + self.linear_shift[3]) / 3)
 
     def domain(self):
@@ -361,18 +353,16 @@ def build_model(prepared, cache_dir, radial_order=8, angular_order=16, chunk_seg
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     edges = forecast.radial_edges(prepared)
-    qk, wk = leggauss(radial_order)
-    qu, wu = leggauss(angular_order)
     identity = {
         "channel": prepared["band"].channel,
         "radial_order": radial_order,
         "angular_order": angular_order,
         "chunk_segments": chunk_segments,
-        "source_sha256": sha256(__file__),
+        "source_sha256": file_sha256(__file__),
         "theta0": theta0.tolist(),
         "template_sha256": array_digest({"x": c["fbao"].x, "y": c["fbao"].y}),
         "pk_sha256": array_digest({"x": c["pk_nobao"].x, "y": c["pk_nobao"].y}),
-        "baseline_sha256": sha256(e["n(x)_file"]),
+        "baseline_sha256": file_sha256(e["n(x)_file"]),
         "radial_edges_sha256": array_digest({"edges": edges}),
         "use": e["use"],
         "z": c["z"],
@@ -422,37 +412,26 @@ def build_model(prepared, cache_dir, radial_order=8, angular_order=16, chunk_seg
                 raise ValueError("quadrature checkpoint identity/segment mismatch")
         else:
             rows, total = [], np.zeros((7, 7))
-            with contextlib.redirect_stdout(io.StringIO()):
-                for left, right in itertools.pairwise(edges[begin : min(begin + chunk_segments + 1, len(edges))]):
-                    for k, kw in zip((left + right) / 2 + (right - left) / 2 * qk, (right - left) / 2 * wk):
-                        a = forecast.angular_edges(k, prepared)
-                        width = np.diff(a)
-                        mid = (a[:-1] + a[1:]) / 2
-                        mu = (mid[:, None] + width[:, None] / 2 * qu).ravel()
-                        weight = prepared["Vfac"] * 2 * k * k * kw * (width[:, None] / 2 * wu).ravel()
-                        derivs, names = rf.fisher_integrands(np.array([k]), mu, c, e)
-                        indices = [names.index(name) for name in [*PARAMETERS, "_Pres"]]
-                        d = np.asarray(derivs)[indices, :, 0].T
-                        total += (d.T * weight) @ d
-                        q = c["r"] * k * np.sqrt(1 - mu * mu)
-                        y = c["rnu"] * k * mu
-                        cs = rf.Csignal(q, y, c, e)
-                        cn = rf.Cnoise(q, y, c, e)
-                        cf = rf.Cfg(q, y, c, e)
-                        active = cn < 1e100
-                        if active.any():
-                            rows.append(
-                                np.column_stack(
-                                    [
-                                        np.full(active.sum(), k),
-                                        mu[active],
-                                        weight[active],
-                                        (cs / (cs + cn + cf))[active],
-                                        d[active, 6],
-                                        d[active, :6],
-                                    ]
-                                )
-                            )
+            segment_edges = edges[begin : min(begin + chunk_segments + 1, len(edges))]
+            for k, mu, weight in forecast.quadrature_segments(
+                prepared, radial_order, angular_order, edges=segment_edges
+            ):
+                weight = prepared["Vfac"] * weight
+                derivs, names = rf.fisher_integrands(k, mu, c, e, paired=True)
+                indices = [names.index(name) for name in [*PARAMETERS, "_Pres"]]
+                d = np.asarray(derivs)[indices].T
+                total += (d.T * weight) @ d
+                q = c["r"] * k * np.sqrt(1 - mu * mu)
+                y = c["rnu"] * k * mu
+                cs = rf.Csignal(q, y, c, e)
+                cn = rf.Cnoise(q, y, c, e)
+                cf = rf.Cfg(q, y, c, e)
+                active = cn < 1e100
+                if active.any():
+                    rows.append(np.column_stack([
+                        k[active], mu[active], weight[active],
+                        (cs / (cs + cn + cf))[active], d[active, 6], d[active, :6],
+                    ]))
             record = {
                 "rows": np.concatenate(rows) if rows else np.empty((0, 11)),
                 "full_fisher": total,

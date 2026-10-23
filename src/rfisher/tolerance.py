@@ -1,6 +1,6 @@
 """From a channel's Fisher matrix to its tolerance.
 
-The forecast fits six parameters: the BAO amplitude A, the damping variance s_NL = sigma_NL**2 (legacy label sigma_NL),
+The forecast fits six parameters: the BAO amplitude A, the damping variance s_NL = sigma_nl**2 (Mpc squared),
 the two dilations alpha_perp and alpha_par, f sigma_8 and b sigma_8. The rest
 are held at their fiducial values. Inverting the fitted block gives the clean
 covariance C. The '_Pres' column B holds the residual's projection onto each
@@ -15,12 +15,9 @@ the volume-averaged distance D_V:
     response_dv = (w . bias) / sigma_dv     per unit strength
     a_tol       = 1 / |response_dv|         the strength at which the bias equals sigma
 """
-import sys
-import types
-
 import numpy as np
 
-FITTED = ("A", "sigma_NL", "aperp", "apar", "fs8", "bs8")
+FITTED = ("A", "s_NL", "aperp", "apar", "fs8", "bs8")
 DILATIONS = ("aperp", "apar")
 DV_WEIGHTS = np.array([2 / 3, 1 / 3])
 RESIDUAL = "_Pres"
@@ -54,15 +51,3 @@ def tolerance(F: np.ndarray, names: list) -> dict:
                           "response": (bias[dilation_indices] / dilation_sigma).tolist(), "covariance": dilation_covariance.tolist(),
                           "correlation": float(dilation_covariance[0, 1] / np.prod(dilation_sigma))},
             "condition": float(eigenvalues[-1] / eigenvalues[0])}
-
-
-class _CallableModule(types.ModuleType):
-    """The package exports the function tolerance() under this module's name, so the
-    module is callable: rfisher.tolerance(F, names) calls the function, and
-    rfisher.tolerance.FITTED and the other constants stay reachable."""
-
-    def __call__(self, F: np.ndarray, names: list) -> dict:
-        return tolerance(F, names)
-
-
-sys.modules[__name__].__class__ = _CallableModule

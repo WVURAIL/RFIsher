@@ -3,7 +3,7 @@ import csv
 from dataclasses import dataclass
 from importlib import resources
 
-NU21_MHZ = 1420.406  # rest frequency of the 21 cm line
+from radiofisher.units import NU21_MHZ
 
 
 @dataclass(frozen=True)

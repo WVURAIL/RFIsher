@@ -1,6 +1,6 @@
 """CHIME's baseline density n(x), built from the array layout.
 
-RadioFisher's CHIME density (radiofisher/data/nx_CHIME_800.dat) counts every pair of
+RadioFisher's CHIME density (src/radiofisher/data/nx_CHIME_800.dat) counts every pair of
 feeds, including the pairs within one cylinder. CHIME's 21 cm analyses drop those
 intra-cylinder baselines, which carry noise cross-talk and a strong response to diffuse
 Galactic emission (CHIME Collaboration 2025, arXiv:2511.19620; the stacking analysis of
@@ -20,10 +20,11 @@ from pathlib import Path
 
 import numpy as np
 import radiofisher as rf
+from radiofisher.units import FORECAST_LIGHT_SPEED_KM_S
 
 CYLINDERS, CYLINDER_SPACING_M = 4, 22.0
 FEEDS, FEED_SPACING_M = 256, 0.3048
-METRES_PER_X = 300.0            # x = d / 300 m, the speed of light RadioFisher's file uses
+METERS_PER_X = FORECAST_LIGHT_SPEED_KM_S / 1000            # x = d / 300 m, the speed of light RadioFisher's file uses
 INTER_FILE = "nx_CHIME_inter.dat"
 
 
@@ -38,7 +39,7 @@ def inter_file() -> Path:
 
 
 def density(x, inter_only: bool = True) -> np.ndarray:
-    """n(x) at the bin centres ``x`` (uniform bins starting at 0) from the layout."""
+    """n(x) at the bin centers ``x`` (uniform bins starting at 0) from the layout."""
     x = np.asarray(x, dtype=float)
     dx = x[1] - x[0]
     edges = np.r_[x - dx / 2, x[-1] + dx / 2]
@@ -46,7 +47,7 @@ def density(x, inter_only: bool = True) -> np.ndarray:
     n = np.arange(-(FEEDS - 1), FEEDS)
     E, N = np.meshgrid(e, n, indexing="ij")
     pairs = np.outer(CYLINDERS - np.abs(e), FEEDS - np.abs(n)).astype(float)   # ordered pairs per offset
-    d = np.hypot(E * CYLINDER_SPACING_M, N * FEED_SPACING_M) / METRES_PER_X
+    d = np.hypot(E * CYLINDER_SPACING_M, N * FEED_SPACING_M) / METERS_PER_X
     keep = (d > 0) & (E != 0) if inter_only else d > 0
     counts, _ = np.histogram(d[keep], bins=edges, weights=pairs[keep])
     return counts / (2 * np.pi * x * dx) / 2

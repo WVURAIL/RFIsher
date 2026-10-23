@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from radiofisher.units import HOUR_IN_MHZ_INVERSE, NU21_MHZ
 
 from . import forecast, inputs, residual
 from . import wvu_palette as wvu
@@ -20,7 +21,6 @@ from .bands import Band
 INK, MUTED, GRID, SURF = wvu.INK, wvu.MUTED, wvu.tint(wvu.SENECA_GRAY, 0.3), wvu.WHITE
 LINE = wvu.BLUE
 GRID_DARK = wvu.SENECA_GRAY
-NU21 = 1420.406
 COSMOLOGY_LABELS = {"planck2018": "Planck 2018"}
 STYLE = {**wvu.plot_rcparams(), "font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
          "axes.labelcolor": INK, "figure.facecolor": SURF, "axes.facecolor": SURF, "text.color": INK,
@@ -69,8 +69,9 @@ def residual_map(ax, row, shared):
     cb.outline.set_edgecolor(MUTED)
 
 
-def bias_line(ax, row):
+def bias_line(ax, row, hours=inputs.RETAINED_HOURS):
     """|bias| / sigma of D_V = a |response_dv|, against strength a."""
+    exposure = "one year" if hours == inputs.RETAINED_HOURS else f"{hours:,.0f} retained hours"
     a = np.logspace(-8, -1, 200)
     q = row["response_dv"]
     ax.plot(a, a * abs(q), color=LINE, lw=2.2,
@@ -81,7 +82,7 @@ def bias_line(ax, row):
     ax.annotate(f"a_tol = {row['a_tol']:.2g}", (row["a_tol"], 1), xytext=(8, -22), textcoords="offset points",
                 fontsize=9.5)
     ax.text(a[0] * 1.6, 1.35, "bias = σ", fontsize=9)
-    ax.text(0.97, 0.04, f"σ(D_V)/D_V = {100 * row['sigma_dv']:.2f}%, one year, clean",
+    ax.text(0.97, 0.04, f"σ(D_V)/D_V = {100 * row['sigma_dv']:.2f}%, {exposure}, clean",
             transform=ax.transAxes, ha="right", fontsize=9, color=MUTED)
     ax.set(xscale="log", yscale="log", xlim=(a[0], a[-1]), ylim=(1e-5, 1e3),
            xlabel="residual strength a", ylabel="|bias| ÷ σ of D_V",
@@ -93,7 +94,7 @@ def plate(row, out: Path, shared) -> Path:
     with plt.rc_context(STYLE):
         fig, axes = plt.subplots(1, 2, figsize=(13, 5.4), constrained_layout=True)
         residual_map(axes[0], row, shared)
-        bias_line(axes[1], row)
+        bias_line(axes[1], row, shared[1]["ttot"] / HOUR_IN_MHZ_INVERSE)
         _tidy(axes[1])
         kind = "control channel (no DTV)" if row["role"] == "control" else "DTV channel"
         fig.suptitle(f"Channel {row['channel']}  ·  {row['low_mhz']:.0f}–{row['high_mhz']:.0f} MHz  ·  "
@@ -105,6 +106,8 @@ def plate(row, out: Path, shared) -> Path:
 
 
 def summary(table, out: Path) -> Path:
+    hours = table["inputs"]["retained_hours"]
+    exposure = "one year" if hours == inputs.RETAINED_HOURS else f"{hours:,.0f} retained hours"
     rows = sorted(table["channels"], key=lambda r: r["channel"])
     ch = np.array([r["channel"] for r in rows])
     z = np.array([r["z_center"] for r in rows])
@@ -121,12 +124,12 @@ def summary(table, out: Path) -> Path:
                title="(b) Response of D_V (signed)")
         ax = axes[2]
         ax.plot(z, [100 * r["sigma_dv"] for r in rows], "o-", color=LINE, lw=1.6, ms=5)
-        ax.set(xlabel="redshift z", ylabel="clean σ(D_V)/D_V, one year (%)",
+        ax.set(xlabel="redshift z", ylabel=f"clean σ(D_V)/D_V, {exposure} (%)",
                title="(c) Clean uncertainty of D_V")
         for ax in axes:
             _tidy(ax)
         fig.suptitle(f"RFIsher channel table: one RadioFisher forecast per 6 MHz channel, coherent DTV residual, "
-                     f"one retained year, D_V ({table['inputs']['cosmology']})", x=0.01, ha="left", fontsize=13,
+                     f"{hours:,.0f} retained hours, D_V ({table['inputs']['cosmology']})", x=0.01, ha="left", fontsize=13,
                      fontweight="bold")
         path = out / "summary.png"
         fig.savefig(path, dpi=110)
@@ -138,7 +141,8 @@ def draw_all(table, out, channels=None) -> list[Path]:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     cosmo = inputs.cosmology(table["inputs"]["cosmology"])
-    expt = inputs.experiment(baselines=table["inputs"].get("baselines", "all"))
+    expt = inputs.experiment(hours=table["inputs"]["retained_hours"],
+                             baselines=table["inputs"]["baselines"])
     shared = (cosmo, expt, inputs.background(cosmo))
     paths = [summary(table, out)]
     for row in table["channels"]:
@@ -159,8 +163,8 @@ def overview_figure(ref: dict, out) -> Path:
             zc = [b["z_center"] for b in fc["bins"]]
             ax.errorbar(zc, np.ones(len(zc)), yerr=fc["sigma_dv"], fmt="none", capsize=3, color=LINE, lw=1.6)
             ax.set(xlim=xlim, ylim=(0.982, 1.018), xlabel="redshift z", title=title)
-            top = ax.secondary_xaxis("top", functions=(lambda z: NU21 / np.maximum(1 + np.asarray(z, float), 1e-9),
-                                                       lambda nu: NU21 / np.maximum(np.asarray(nu, float), 1e-9) - 1))
+            top = ax.secondary_xaxis("top", functions=(lambda z: NU21_MHZ / np.maximum(1 + np.asarray(z, float), 1e-9),
+                                                       lambda nu: NU21_MHZ / np.maximum(np.asarray(nu, float), 1e-9) - 1))
             top.set_xlabel("frequency (MHz)")
             top.tick_params(colors=MUTED)
             _tidy(ax)
@@ -194,8 +198,8 @@ def cosmology_figure(refs: dict, out) -> Path:
         ax.set(xlim=(1.30, 2.03), xlabel="redshift z", ylabel=f"σ(D_V) {new} ÷ σ(D_V) {base}",
                title="(b) Change in the error per channel")
         for ax in axes:
-            top = ax.secondary_xaxis("top", functions=(lambda z: NU21 / np.maximum(1 + np.asarray(z, float), 1e-9),
-                                                       lambda nu: NU21 / np.maximum(np.asarray(nu, float), 1e-9) - 1))
+            top = ax.secondary_xaxis("top", functions=(lambda z: NU21_MHZ / np.maximum(1 + np.asarray(z, float), 1e-9),
+                                                       lambda nu: NU21_MHZ / np.maximum(np.asarray(nu, float), 1e-9) - 1))
             top.set_xlabel("frequency (MHz)")
             top.tick_params(colors=MUTED)
             _tidy(ax)

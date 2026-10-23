@@ -2,7 +2,7 @@ import copy
 
 import pytest
 import radiofisher as rf
-from radiofisher.units import HRS_MHZ
+from radiofisher.units import HOUR_IN_MHZ_INVERSE
 
 from rfisher import inputs, pk_cache
 
@@ -37,8 +37,8 @@ def test_densities_are_all_or_none():
 
 
 def test_one_retained_year():
-    assert inputs.experiment()["ttot"] == 8760.0 * HRS_MHZ
-    assert inputs.experiment(100.0)["ttot"] == 100.0 * HRS_MHZ
+    assert inputs.experiment()["ttot"] == 8760.0 * HOUR_IN_MHZ_INVERSE
+    assert inputs.experiment(100.0)["ttot"] == 100.0 * HOUR_IN_MHZ_INVERSE
 
 
 def test_the_latest_cosmology_has_its_own_table():
@@ -57,3 +57,16 @@ def test_an_unknown_cosmology_is_refused():
 def test_unknown_baselines_are_refused():
     with pytest.raises(ValueError, match="unknown baselines"):
         inputs.experiment(baselines="intra")
+
+
+@pytest.mark.parametrize("hours", [0, -1, float('nan'), float('inf')])
+def test_invalid_exposure_is_refused(hours):
+    with pytest.raises(ValueError, match="hours"):
+        inputs.experiment(hours)
+
+
+def test_truncated_pk_header_is_refused(tmp_path):
+    path = tmp_path / 'truncated.dat'
+    path.write_text('# incomplete')
+    with pytest.raises(ValueError, match='versioned'):
+        pk_cache.inspect_pk_cache(path)

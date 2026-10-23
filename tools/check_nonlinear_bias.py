@@ -18,7 +18,8 @@ import scipy
 
 import rfisher
 from rfisher import bands, forecast, nonlinear
-from rfisher.nonlinear import build_model, sha256
+from rfisher.nonlinear import build_model
+from rfisher.pk_cache import file_sha256
 
 
 def write(path, value):
@@ -55,15 +56,15 @@ def read_receipt(path):
 def verify_frozen_sources(protocol, frozen_inputs):
     roots = {
         "RFIsher": Path(rfisher.__file__).resolve().parents[2],
-        "RadioFisher": Path(radiofisher.__file__).resolve().parents[1],
+        "RadioFisher": Path(radiofisher.__file__).resolve().parents[2],
     }
     checked = {}
     for key, entry in protocol["provenance"]["files"].items():
         repo, rel = key.split("/", 1)
         snapshot = frozen_inputs / key
-        if sha256(snapshot) != entry["sha256"]:
+        if file_sha256(snapshot) != entry["sha256"]:
             raise ValueError("frozen input snapshot differs: " + key)
-        if repo in roots and sha256(roots[repo] / rel) != entry["sha256"]:
+        if repo in roots and file_sha256(roots[repo] / rel) != entry["sha256"]:
             raise ValueError("frozen source/data differs: " + key)
         checked[key] = entry["sha256"]
     return checked
@@ -84,7 +85,7 @@ def base_record(output, channel, point_id, execution, protocol):
     ep = base / "execution.json"
     if read_receipt(ep)["contract"] != expected:
         raise ValueError("base result execution does not match refinement")
-    result = load_bound(base / f"{point_id}.json", sha256(ep))
+    result = load_bound(base / f"{point_id}.json", file_sha256(ep))
     if result["point"]["id"] != point_id:
         raise ValueError("base point identity differs")
     return result
@@ -106,7 +107,7 @@ def main():
         raise ValueError("channel not in frozen protocol")
     checked = verify_frozen_sources(protocol, args.frozen_inputs)
     table_entry = protocol["provenance"]["files"]["dtv-paper2-bao-bound/data/channel_table.json"]
-    if sha256(args.frozen_table) != table_entry["sha256"]:
+    if file_sha256(args.frozen_table) != table_entry["sha256"]:
         raise ValueError("frozen table differs")
     table = next(r for r in json.loads(args.frozen_table.read_text())["channels"] if r["channel"] == args.channel)
     out = args.output / f"ch{args.channel}" / args.level
@@ -114,13 +115,13 @@ def main():
     orders = protocol["numerical_protocol"]["base_quadrature" if args.level == "base" else "refined_quadrature"]
     execution = {
         "schema": "finite_bao_execution_v1",
-        "protocol_sha256": sha256(args.protocol),
+        "protocol_sha256": file_sha256(args.protocol),
         "implementation": {
-            str(nonlinear.__file__): sha256(nonlinear.__file__),
-            str(Path(__file__).resolve()): sha256(__file__),
+            str(nonlinear.__file__): file_sha256(nonlinear.__file__),
+            str(Path(__file__).resolve()): file_sha256(__file__),
         },
         "frozen_sources": checked,
-        "frozen_table_sha256": sha256(args.frozen_table),
+        "frozen_table_sha256": file_sha256(args.frozen_table),
         "runtime": {"python": sys.version, "numpy": np.__version__, "scipy": scipy.__version__, "platform": platform.platform()},
         "fit_command": [
             sys.executable,
@@ -160,7 +161,7 @@ def main():
                 "contract": execution,
             },
         )
-    eh = sha256(ep)
+    eh = file_sha256(ep)
     started = time.perf_counter()
     p = forecast.prepare(bands.channel(args.channel))
     model, identity = build_model(p, out / "quadrature", **orders)

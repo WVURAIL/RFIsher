@@ -25,6 +25,13 @@ def main(argv=None):
     o.add_argument("--compare", help="a second cosmology to draw beside the first")
     args = ap.parse_args(argv)
     pick = None if not getattr(args, "channels", None) else {int(c) for c in args.channels.split(",")}
+    if pick is not None:
+        from .bands import channels
+        unknown = pick - {b.channel for b in channels()}
+        if unknown:
+            ap.error(f"unknown channels: {', '.join(map(str, sorted(unknown)))}")
+    if getattr(args, "workers", None) is not None and args.workers < 1:
+        ap.error("workers must be positive")
 
     if args.command == "table":
         from .bands import channels

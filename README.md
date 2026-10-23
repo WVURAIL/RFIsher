@@ -88,7 +88,7 @@ to continue from this response table to the paper's conditional thresholds.
 
 `rfisher overview` reproduces the CHIME Overview forecast the way its scripts compute it:
 RadioFisher's own `fisher()` per redshift bin, A, bσ8, fσ8 and the two dilations free in
-each bin, σ_NL shared by all bins, and the dilations combined into D_V. On the Overview's
+each bin, damping variance `s_NL` shared by all bins, and the dilations combined into D_V. On the Overview's
 15 bins it reproduces the clean one-year errors, 0.47% to 1.03%, to within 0.0003
 percentage points. The same forecast with 6 MHz bins over the DTV range gives 1.18% to
 1.52% per channel: each bin is about a quarter as deep, so its error is about twice as
@@ -99,14 +99,14 @@ cross-talk and a strong response to diffuse Galactic emission (CHIME Collaborati
 arXiv:2511.19620), and the stack-to-proxy amplitude ratio used with the table is measured between
 cylinders. Without those baselines the table's clean σ(D_V) is 17% to 34% larger than on
 all of them. On all baselines it agrees with the reproduction to within 1.5% on every
-channel; the table integrates more finely and fits σ_NL per channel.
+channel; the table integrates more finely and fits `s_NL` per channel.
 
 ![The CHIME Overview forecast as published, and with 6 MHz bins over the DTV range](docs/figures/overview_reference.png)
 
 The forecast inputs carry two cosmologies: the adopted `cmbspa2026`, which the table
 uses (SPT-3G, ACT and Planck CMB with DESI DR2 BAO; Omori et al. 2026, arXiv:2608.31136v1,
 Table 8), and the Overview's Planck 2018, which the reproduction uses so it can be checked. Only the cosmological
-parameters and the P(k) table change; the HI models, σ_NL and CHIME stay the Overview's.
+parameters and the P(k) table change; the HI models, damping scale and CHIME stay the Overview's.
 In the specified cosmology the 6 MHz errors are 7% to 8% smaller (1.09% to 1.40% per channel).
 
 ```bash
@@ -150,14 +150,16 @@ See [the paper/code contract](docs/PAPER_CODE_MAP.md).
   bias is first order and compared with the clean σ of D_V. Where the two dilations'
   biases have opposite signs they partly cancel in D_V; the response changes sign between
   channels 31 and 32, so those two tolerances are the loosest.
-  The legacy matrix label `sigma_NL` denotes the damping-variance derivative,
-  not the derivative with respect to the physical damping length.
+  The matrix coordinate `s_NL` is damping variance in Mpc squared;
+  the configuration `sigma_nl` is the damping length in Mpc.
 - **Residual** (`residual.py`): an assumed flat 6 MHz residual-power template. It puts the same visibility on every baseline that measures a Fourier cell,
   with support inside the horizon wedge. This distributes the residual; it does not
   excise wedge modes or apply a delay filter. Relative to the noise power,
   `dP / C_N = a × N_ν × N_meas(k⊥) × f_w(k⊥)` for `|k∥| ≤ m k⊥ + π/L`, and zero outside.
 - **Quadrature** (`forecast.py`): Gauss–Legendre in k and μ, split at every kink of the
-  integrand. Doubling either order changes the tolerance by less than 3 × 10⁻⁷.
+  integrand. Evaluation is batched by radial segment, preserving its k-dependent angular
+  boundaries and bounding memory use. The same node generator serves the finite
+  check. Doubling either order changes the tolerance by less than 3 × 10⁻⁷.
 
 ## The table
 
@@ -195,7 +197,12 @@ of D_V in percent; the response is signed.
 ![Summary](docs/figures/summary.png)
 
 Each plate shows where the residual sits in Fourier space at the tolerated strength,
-and how the bias of D_V grows with strength.
+and how the bias of D_V grows with strength. The checked-in `docs/figures/` gallery
+lets readers inspect every channel without installing the software. These images
+are documentation, not calculation inputs. Regenerate the channel gallery with
+`rfisher figures --out docs/figures`. Rebuild the two Overview plots with
+`rfisher overview --out docs/figures --cosmology planck2018 --compare cmbspa2026`.
+Use `out/` for exploratory figures.
 
 ## Files
 
