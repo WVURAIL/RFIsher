@@ -29,7 +29,7 @@ jobs:
       - run: ruff check .
       - run: python -m pytest -q
 
-  documentation-figures:
+  dissertation-figure:  # Required status name in the branch policy.
     # Reader-facing figures drawn from the shipped table.
     runs-on: ubuntu-latest
     steps:
