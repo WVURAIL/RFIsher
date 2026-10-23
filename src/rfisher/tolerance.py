@@ -1,6 +1,6 @@
 """From a channel's Fisher matrix to its tolerance.
 
-The forecast fits six parameters: the BAO amplitude A, the damping sigma_NL,
+The forecast fits six parameters: the BAO amplitude A, the damping variance s_NL = sigma_NL**2 (legacy label sigma_NL),
 the two dilations alpha_perp and alpha_par, f sigma_8 and b sigma_8. The rest
 are held at their fiducial values. Inverting the fitted block gives the clean
 covariance C. The '_Pres' column B holds the residual's projection onto each
@@ -32,28 +32,28 @@ def tolerance(F: np.ndarray, names: list) -> dict:
     keep = [names.index(p) for p in FITTED]
     if any(F[i, i] <= 0 for i in keep):
         raise ValueError("a fitted parameter has no information")
-    Ff = F[np.ix_(keep, keep)]
-    B = F[keep, names.index(RESIDUAL)]
-    scale = np.sqrt(np.diag(Ff))
-    S = Ff / np.outer(scale, scale)
-    eig = np.linalg.eigvalsh(S)
-    if eig[0] <= 0 or eig[-1] / eig[0] > 1e8:
+    fitted_fisher = F[np.ix_(keep, keep)]
+    bias_projection = F[keep, names.index(RESIDUAL)]
+    scale = np.sqrt(np.diag(fitted_fisher))
+    scaled_fisher = fitted_fisher / np.outer(scale, scale)
+    eigenvalues = np.linalg.eigvalsh(scaled_fisher)
+    if eigenvalues[0] <= 0 or eigenvalues[-1] / eigenvalues[0] > 1e8:
         raise ValueError("invalid or ill-conditioned fitted Fisher matrix")
-    v = np.linalg.solve(S, B / scale)
-    C = np.linalg.solve(S, np.eye(len(FITTED))) / np.outer(scale, scale)
-    bias = v / scale
-    ix = [FITTED.index(p) for p in DILATIONS]
-    cov = C[np.ix_(ix, ix)]
-    sigma = np.sqrt(np.diag(cov))
-    sigma_dv = float(np.sqrt(DV_WEIGHTS @ cov @ DV_WEIGHTS))
-    bias_dv = float(DV_WEIGHTS @ bias[ix])
+    scaled_bias = np.linalg.solve(scaled_fisher, bias_projection / scale)
+    parameter_covariance = np.linalg.solve(scaled_fisher, np.eye(len(FITTED))) / np.outer(scale, scale)
+    bias = scaled_bias / scale
+    dilation_indices = [FITTED.index(p) for p in DILATIONS]
+    dilation_covariance = parameter_covariance[np.ix_(dilation_indices, dilation_indices)]
+    dilation_sigma = np.sqrt(np.diag(dilation_covariance))
+    sigma_dv = float(np.sqrt(DV_WEIGHTS @ dilation_covariance @ DV_WEIGHTS))
+    bias_dv = float(DV_WEIGHTS @ bias[dilation_indices])
     response_dv = bias_dv / sigma_dv
     return {"sigma_dv": sigma_dv, "bias_dv_per_unit_a": bias_dv, "response_dv": response_dv,
             "a_tol": float(1 / abs(response_dv)) if response_dv else float("inf"),
-            "dilations": {"sigma": sigma.tolist(), "bias_per_unit_a": bias[ix].tolist(),
-                          "response": (bias[ix] / sigma).tolist(), "covariance": cov.tolist(),
-                          "correlation": float(cov[0, 1] / np.prod(sigma))},
-            "condition": float(eig[-1] / eig[0])}
+            "dilations": {"sigma": dilation_sigma.tolist(), "bias_per_unit_a": bias[dilation_indices].tolist(),
+                          "response": (bias[dilation_indices] / dilation_sigma).tolist(), "covariance": dilation_covariance.tolist(),
+                          "correlation": float(dilation_covariance[0, 1] / np.prod(dilation_sigma))},
+            "condition": float(eigenvalues[-1] / eigenvalues[0])}
 
 
 class _CallableModule(types.ModuleType):

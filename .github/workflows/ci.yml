@@ -44,7 +44,7 @@ jobs:
       - run: python -m pip install -e .
       - run: rfisher figures --out "$RUNNER_TEMP/figures" --channels 19,36
       - run: test -s "$RUNNER_TEMP/figures/summary.png" && test -s "$RUNNER_TEMP/figures/channel_19.png" && test -s "$RUNNER_TEMP/figures/channel_36.png"
-      - run: python docs/diagram.py && git diff --exit-code docs/rfisher_functions.svg
+      - run: python tools/generate_call_graph.py && git diff --exit-code docs/rfisher_functions.svg
 
   radiofisher-integration:
     # RadioFisher at the pinned commit passes its own tests, and three channels

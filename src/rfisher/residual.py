@@ -1,7 +1,6 @@
-"""The DTV residual: one transmitter's power left after masking, modelled as a
-flat 6 MHz shelf that stays coherent.
+"""The assumed DTV residual-power template: a flat 6 MHz shelf.
 
-A coherent source puts the same visibility on every baseline that measures a
+The template assigns the same visibility on every baseline that measures a
 Fourier cell, at the delay of its direction, so its power sits inside the
 horizon wedge. Per Fourier mode, relative to RadioFisher's one-year noise
 power C_N:
@@ -9,7 +8,7 @@ power C_N:
     dP / C_N = a * N_nu * N_meas(k_perp) * f_w(k_perp)   for |k_par| <= k_w(k_perp)
              = 0                                          otherwise
 
-  a        residual strength: |V_DTV|^2 / sigma_V^2 on one baseline in one frame
+  a        residual strength: |V_DTV|^2 / sigma_V^2 on one baseline in one frame, times the assumed effective temporal gain
   N_nu     channels across the band (6 MHz / 0.39 MHz). A flat shelf puts all
            its power in one line-of-sight mode (Parseval)
   N_meas   baselines measuring the same Fourier cell, n(u) A_eff / lambda^2
@@ -19,7 +18,9 @@ power C_N:
            orientations spreads the one mode over |k_par| <= k_w, so each mode
            there carries f_w = pi / (L k_w) of it
 
-The template is the unit-strength residual; bias is proportional to a.
+The template is the unit-strength residual; first-order bias is proportional to a.
+It sets the support of the unmodeled residual, not a cut on retained sky modes.
+It does not estimate gamma, temporal coherence, or post-processing suppression.
 """
 import numpy as np
 from scipy.optimize import brentq
