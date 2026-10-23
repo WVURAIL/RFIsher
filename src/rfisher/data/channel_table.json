@@ -9,7 +9,7 @@
   "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
   "fitted": [
    "A",
-   "sigma_NL",
+   "s_NL",
    "aperp",
    "apar",
    "fs8",

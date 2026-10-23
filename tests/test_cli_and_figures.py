@@ -62,3 +62,24 @@ def test_plates_use_the_table_cosmology(tmp_path, monkeypatch):
     t["inputs"]["cosmology"] = "planck2018"
     figures.draw_all(t, tmp_path, channels={19})
     assert asked == ["planck2018"]
+
+
+def test_figures_use_the_table_exposure(tmp_path, monkeypatch):
+    durations, experiment = [], figures.inputs.experiment
+
+    def record_exposure(*args, **kwargs):
+        durations.append(kwargs["hours"])
+        return experiment(*args, **kwargs)
+
+    monkeypatch.setattr(figures.inputs, "experiment", record_exposure)
+    monkeypatch.setattr(figures, "plate", lambda row, out, shared: out / "plate.png")
+    t = table.read_table()
+    t["inputs"]["retained_hours"] = 100
+    figures.draw_all(t, tmp_path, channels={19})
+    assert durations == [100]
+
+
+def test_unknown_requested_channel_is_not_silently_ignored(tmp_path):
+    with pytest.raises(SystemExit) as error:
+        main(["table", "--out", str(tmp_path), "--channels", "19,99"])
+    assert error.value.code == 2

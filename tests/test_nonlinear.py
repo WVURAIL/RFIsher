@@ -37,7 +37,7 @@ def model():
     return m, p
 
 
-def test_finite_signal_matches_legacy_when_dilation_fixed(model):
+def test_finite_signal_matches_radiofisher_when_dilation_fixed(model):
     m, p = model
     changed = m.theta0.copy()
     changed[[0, 1, 4, 5]] *= [1.2, 1.3, 0.9, 1.1]

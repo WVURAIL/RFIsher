@@ -10,14 +10,15 @@
                 inter-cylinder baselines CHIME's analyses use (the default) or on
                 all baselines, as the Overview's forecast does (baselines.py)
 
-Everything but the cosmological parameters (HI models, sigma_NL, the growth
+Everything but the cosmological parameters (HI models, s_NL, the growth
 index, the experiment) is the CHIME Overview's in every cosmology.
 """
 import copy
+import math
 from importlib import resources
 
 import radiofisher as rf
-from radiofisher.units import HRS_MHZ
+from radiofisher.units import HOUR_IN_MHZ_INVERSE
 
 from . import baselines as _baselines
 from . import pk_cache
@@ -75,8 +76,10 @@ def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES
     """
     if baselines not in BASELINES:
         raise ValueError(f"unknown baselines {baselines!r}; choose one of {BASELINES}")
+    if not math.isfinite(hours) or hours <= 0:
+        raise ValueError("retained hours must be finite and positive")
     expt = copy.deepcopy(rf.chime.CHIME)
-    expt["ttot"] = hours * HRS_MHZ
+    expt["ttot"] = hours * HOUR_IN_MHZ_INVERSE
     if baselines == "inter-cylinder":
         expt["n(x)"] = str(_baselines.inter_file())
     return expt

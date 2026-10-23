@@ -20,7 +20,7 @@ import scipy
 
 from . import __version__, baselines, forecast, inputs, pk_cache
 from .bands import Band, channels
-from .tolerance import tolerance
+from .tolerance import FITTED, tolerance
 
 SCHEMA = "rfisher-channel-table-v2"
 TABLE = "channel_table.json"
@@ -49,7 +49,7 @@ def _git_commit(path) -> str | None:
             return subprocess.run(["git", "-C", str(path), *a], capture_output=True, text=True,
                                   check=True).stdout.strip()
         head = git("rev-parse", "HEAD")
-        return head + ("+dirty" if git("status", "--porcelain", "--untracked-files=no", ".") else "")
+        return head + ("+dirty" if git("status", "--porcelain") else "")
     except (OSError, subprocess.CalledProcessError):
         return None
 
@@ -82,7 +82,11 @@ def provenance() -> dict:
 def build_table(bands=None, workers: int | None = None) -> dict:
     """Forecast every channel (in parallel) and return the table."""
     bands = channels() if bands is None else list(bands)
-    workers = workers or min(len(bands), os.cpu_count() or 1)
+    if not bands:
+        raise ValueError("at least one channel is required")
+    if workers is not None and workers < 1:
+        raise ValueError("workers must be positive")
+    workers = min(len(bands), workers or os.cpu_count() or 1)
     if workers == 1:
         rows = [row(b) for b in bands]
     else:
@@ -95,7 +99,7 @@ def build_table(bands=None, workers: int | None = None) -> dict:
                            "baselines": inputs.DEFAULT_BASELINES,
                             "retained_hours": inputs.RETAINED_HOURS,
                             "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
-                            "fitted": ["A", "sigma_NL", "aperp", "apar", "fs8", "bs8"],
+                            "fitted": list(FITTED),
                             "tolerance_on": "D_V: ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par",
                             "quadrature": {"radial_order": forecast.RADIAL_ORDER,
                                             "angular_order": forecast.ANGULAR_ORDER,
@@ -120,9 +124,8 @@ def write_table(table: dict, out) -> list[Path]:
 
 def read_table(path=None) -> dict:
     """A written table, or the one shipped with the package."""
-    if path is None:
-        return json.loads(resources.files("rfisher.data").joinpath(TABLE).read_text())
-    table = json.loads(Path(path).read_text())
+    source = resources.files("rfisher.data").joinpath(TABLE) if path is None else Path(path)
+    table = json.loads(source.read_text())
     if table.get("schema") != SCHEMA:
         raise ValueError(f"{path} is not a {SCHEMA} table")
     return table

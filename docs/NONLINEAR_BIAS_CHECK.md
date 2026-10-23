@@ -15,9 +15,9 @@ k_alpha = k sqrt(alpha_perp^2 (1-mu^2) + alpha_parallel^2 mu^2)
 
 For original modes with `k <= 0.03 Mpc^-1`, `k_alpha=k`, matching the forecast's explicit derivative clamp. The smooth spectrum, RSD angle, volume, noise, foreground, residual, and mode cuts remain at their fiducial values. Calling RadioFisher's full `Csignal` at changed dilations would introduce terms excluded by the published switches; this diagnostic therefore refuses those other switch combinations.
 
-The coordinate labeled `sigma_NL` in the existing matrix is actually `s=sigma_nl^2`, in Mpc squared; its fiducial value is 49. The growth and bias coordinates are `fs8=f D sigma8` and `bs8=bHI D sigma8`. This is a genuine nonlinear, explicitly declared finite extension of the BAO-only tangent model. The Fisher derivatives alone do not specify a unique finite extension.
+The matrix coordinate `s_NL = sigma_nl^2` is the damping variance, in Mpc squared; its fiducial value is 49. The growth and bias coordinates are `fs8=f D sigma8` and `bs8=bHI D sigma8`. This is a genuine nonlinear, explicitly declared finite extension of the BAO-only tangent model. The Fisher derivatives alone do not specify a unique finite extension.
 
-The saved BAO template is piecewise linear. The diagnostic differentiates that actual interpolant and reports its weighted difference from the legacy centered-difference derivative. It does not replace a failed derivative agreement check with the legacy tangent.
+The saved BAO template is piecewise linear. The diagnostic differentiates that actual interpolant and reports its weighted difference from the forecast centered-difference derivative. It does not replace a failed derivative agreement check with the forecast tangent.
 
 ## Expected likelihood and normalization
 

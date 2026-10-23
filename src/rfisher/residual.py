@@ -23,6 +23,7 @@ It sets the support of the unmodeled residual, not a cut on retained sky modes.
 It does not estimate gamma, temporal coherence, or post-processing suppression.
 """
 import numpy as np
+from radiofisher.instrument import collecting_area_m2, wavelength_m
 from scipy.optimize import brentq
 
 
@@ -30,8 +31,8 @@ def geometry(cosmo: dict, expt: dict) -> dict:
     """The quantities the template needs, from a prepared RadioFisher bin."""
     z = cosmo["z"]
     nu = expt["nu_line"] / (1 + z)
-    lam = 3e8 / (nu * 1e6)
-    aeff = expt.get("effic", 0.7) * expt["Ncyl"] * expt["cyl_area"] / expt["Ndish"]
+    lam = wavelength_m(nu)
+    aeff = collecting_area_m2(expt)
     return {"z": z, "r": cosmo["r"], "nu": nu, "lam": lam, "nx": expt["n(x)"], "acell": aeff / lam**2,
                 "L": cosmo["rnu"] * expt["dnutot"] / expt["nu_line"],
                 "n_nu": expt["dnutot"] / expt["dnu"], "m": cosmo["r"] * (1 + z) / cosmo["rnu"]}
@@ -53,9 +54,8 @@ def coherent_shelf(g: dict):
         k, u, cn = np.broadcast_arrays(k, u, cn)
         kpar = k * u
         kperp = k * np.sqrt(np.clip(1 - u * u, 0, 1))
-        n_u = g["nx"](kperp * g["r"] / (2 * np.pi) / g["nu"]) / g["nu"] ** 2
-        kw = g["m"] * kperp + np.pi / g["L"]
-        return cn * g["n_nu"] * n_u * g["acell"] * (np.pi / (g["L"] * kw)) * (np.abs(kpar) <= kw)
+        kw = wedge_kpar(kperp, g)
+        return cn * g["n_nu"] * n_meas(kperp, g) * (np.pi / (g["L"] * kw)) * (np.abs(kpar) <= kw)
     return dP
 
 

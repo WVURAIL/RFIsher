@@ -22,8 +22,7 @@ claim that every nonlinear fit is qualified.
 ## Names and units
 
 - `response_dv` is signed; the decision compares `a * abs(response_dv)`.
-- `sigma_NL` is a legacy matrix label for **damping variance** `s_NL`, in
-  Mpc squared. The physical configuration `sigma_nl` is a length in Mpc.
+- `s_NL` is **damping variance**, in Mpc squared. The physical configuration `sigma_nl` is a length in Mpc.
 - `_Pres` is the residual projection row, not a fitted parameter. Remove it
   before inversion. The residual is absent from the fitted clean covariance.
 - `coherent_shelf` names an assumed template. Its name is not evidence that
@@ -32,10 +31,19 @@ claim that every nonlinear fit is qualified.
   `1 / kappa` years for that exposure. No operating-duty factor is implicit.
 - The residual's wedge support is not wedge excision; no delay filter is applied.
 
-The ordinary Python entry point is `from rfisher.tolerance import tolerance`.
-For compatibility the package's `rfisher.tolerance` module is also callable;
-new code should use the explicit function import. The matrix labels and saved
-JSON keys remain stable for existing data and external consumers.
+The Python entry point is `from rfisher.tolerance import tolerance`.
+`rfisher.tolerance` is an ordinary module. Current matrices and newly written
+tables use `s_NL`. The table schema remains version 2 because the damping-variance coordinate and numerical fields are unchanged.
+Historical input snapshots keep the metadata they were recorded with. The shipped
+table's numerical values and calculation provenance are unchanged by the label
+update. RadioFisher 2 and RFIsher 6 expose the revised API without compatibility
+aliases.
+
+RadioFisher owns the shared units, instrument geometry and covariance integrands.
+RFIsher owns the DTV residual, fitted parameter set and segmented quadrature.
+Both the linear forecast and finite check consume `forecast.quadrature_segments`.
+The two Overview loops assemble independent bin blocks; only the array reductions
+are vectorized. They do not allocate one large multi-bin integrand.
 
 ## Repository organization
 

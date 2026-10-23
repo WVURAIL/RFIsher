@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 
 import numpy as np
-from check_nonlinear_bias import load_bound, read_receipt, sha256, write
+from check_nonlinear_bias import load_bound, read_receipt, write
+
+from rfisher.pk_cache import file_sha256
 
 
 class IncompleteStudyError(RuntimeError):
@@ -61,16 +63,16 @@ def audit_point(root, channel, level, point, protocol, protocol_hash, clean, rec
     execution = read_receipt(ep)
     contract = execution["contract"]
     validate_contract(contract, channel, level, protocol, protocol_hash, common)
-    eh = sha256(ep)
+    eh = file_sha256(ep)
     receipts[str(ep.relative_to(root))] = eh
     pre_path = folder / "preflight.json"
     pre = load_bound(pre_path, eh)
-    receipts[str(pre_path.relative_to(root))] = sha256(pre_path)
+    receipts[str(pre_path.relative_to(root))] = file_sha256(pre_path)
     if not pre["pass_derivative_and_table_gates"]:
         raise IncompleteStudyError(f"channel {channel} {level}: preflight failed; fit receipts are unavailable")
     path = folder / f"{point['id']}.json"
     summary = load_bound(path, eh)
-    receipts[str(path.relative_to(root))] = sha256(path)
+    receipts[str(path.relative_to(root))] = file_sha256(path)
     if summary["point"] != point:
         raise ValueError("point parameters differ from frozen protocol")
     expected = ["fiducial"]
@@ -84,7 +86,7 @@ def audit_point(root, channel, level, point, protocol, protocol_hash, clean, rec
     for name in expected:
         path = folder / f"{point['id']}.{name}.json"
         record = load_bound(path, eh)
-        receipts[str(path.relative_to(root))] = sha256(path)
+        receipts[str(path.relative_to(root))] = file_sha256(path)
         if record["point"] != point or record["start"] != name:
             raise ValueError("start identity differs")
         records.append(record)
@@ -240,7 +242,7 @@ def build_report(protocol, protocol_hash, results, table, allow_incomplete=False
         "frozen_table_sha256": protocol["provenance"]["files"]["dtv-paper2-bao-bound/data/channel_table.json"][
             "sha256"
         ],
-        "reporter_sha256": sha256(__file__),
+        "reporter_sha256": file_sha256(__file__),
         "protocol_points": len(rows),
         "complete_protocol_points": sum(r["complete"] for r in rows),
         "study_complete": not missing,
@@ -269,10 +271,10 @@ def main():
     args = parser.parse_args()
     protocol = json.loads(args.protocol.read_text(encoding="utf-8"))
     expected_table = protocol["provenance"]["files"]["dtv-paper2-bao-bound/data/channel_table.json"]["sha256"]
-    if sha256(args.frozen_table) != expected_table:
+    if file_sha256(args.frozen_table) != expected_table:
         raise ValueError("report normalization table differs from the frozen table")
     table = {r["channel"]: r for r in json.loads(args.frozen_table.read_text(encoding="utf-8"))["channels"]}
-    report = build_report(protocol, sha256(args.protocol), args.results, table, args.allow_incomplete)
+    report = build_report(protocol, file_sha256(args.protocol), args.results, table, args.allow_incomplete)
     rows = report["results"]
     write(args.output, report)
     csv_path = args.output.with_suffix(".csv")

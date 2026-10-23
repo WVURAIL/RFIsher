@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rfisher"
-version = "5.0.0"
+version = "6.0.0"
 description = "How much residual DTV power each 6 MHz channel tolerates in a 21 cm BAO forecast."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
-    "radiofisher @ git+https://github.com/WVURAIL/RadioFisher.git@8294315814ff483f2aa5eb96e669a66a9e3dc8b3",
+    "radiofisher @ git+https://github.com/WVURAIL/RadioFisher.git@2a295086b9f35397dafc0a25551e2b2e596ac0ef",
 ]
 
 # camb is only needed to rebuild the P(k) table for a new cosmology.

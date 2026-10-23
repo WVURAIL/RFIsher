@@ -49,8 +49,8 @@ def test_snapshot_verifies_non_executed_frozen_inputs_too(tmp_path):
     path = tmp_path / "paper" / "data.json"
     path.parent.mkdir()
     path.write_text('{"guard": 1}')
-    protocol = {"provenance": {"files": {"paper/data.json": {"sha256": runner.sha256(path)}}}}
-    assert runner.verify_frozen_sources(protocol, tmp_path)["paper/data.json"] == runner.sha256(path)
+    protocol = {"provenance": {"files": {"paper/data.json": {"sha256": runner.file_sha256(path)}}}}
+    assert runner.verify_frozen_sources(protocol, tmp_path)["paper/data.json"] == runner.file_sha256(path)
     path.write_text('{"guard": 2}')
     with pytest.raises(ValueError, match="snapshot"):
         runner.verify_frozen_sources(protocol, tmp_path)

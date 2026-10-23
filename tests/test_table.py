@@ -5,7 +5,7 @@ import pytest
 
 from rfisher import read_table
 from rfisher.bands import channel, channels
-from rfisher.table import CSV_COLUMNS, SCHEMA, row, write_table
+from rfisher.table import CSV_COLUMNS, SCHEMA, build_table, row, write_table
 
 
 def test_the_shipped_table_covers_every_channel():
@@ -46,3 +46,13 @@ def test_a_foreign_file_is_refused(tmp_path):
     bad.write_text(json.dumps({"schema": "other"}))
     with pytest.raises(ValueError):
         read_table(bad)
+
+
+def test_empty_channel_selection_is_refused():
+    with pytest.raises(ValueError, match="at least one"):
+        build_table([])
+
+
+def test_nonpositive_worker_count_is_refused():
+    with pytest.raises(ValueError, match="workers"):
+        build_table(workers=0)

@@ -5,7 +5,7 @@ import pytest
 from rfisher import overview
 from rfisher.tolerance import DV_WEIGHTS
 
-NAMES = ["A", "b_HI", "Tb", "sigma_NL", "sigma8tot", "n_s", "f", "aperp", "apar", "fs8", "bs8", "pk"]
+NAMES = ["A", "b_HI", "Tb", "s_NL", "sigma8tot", "n_s", "f", "aperp", "apar", "fs8", "bs8", "pk"]
 
 # Per-bin sigma(D_V)/D_V (percent), one clean year, Planck 2018, from the forecast goldens of
 # RFIsher 05ee7e4 (planck2018, S1_clean), the forecast that reproduced the Overview's Fig. 31.
@@ -17,7 +17,7 @@ def diagonal(sig_perp, sig_par, coupling=0.0):
     F = np.eye(len(NAMES))
     F[NAMES.index("aperp"), NAMES.index("aperp")] = 1 / sig_perp ** 2
     F[NAMES.index("apar"), NAMES.index("apar")] = 1 / sig_par ** 2
-    i, j = NAMES.index("aperp"), NAMES.index("sigma_NL")
+    i, j = NAMES.index("aperp"), NAMES.index("s_NL")
     F[i, j] = F[j, i] = coupling
     return F
 
@@ -37,6 +37,17 @@ def test_the_shared_parameter_couples_the_bins():
 def test_the_overview_bins():
     assert len(overview.overview_bins()) == 15 and overview.overview_bins()[0] == (0.8, 0.9)
     assert len(overview.channel_bins()) == 24
+
+
+def test_empty_forecast_is_refused():
+    with pytest.raises(ValueError, match="at least one"):
+        overview.forecast([])
+
+
+def test_single_worker_stays_in_process(monkeypatch):
+    monkeypatch.setattr(overview, "bin_fisher", lambda task: (diagonal(0.02, 0.03), NAMES))
+    result = overview.forecast([(1.2, 1.3)], workers=1)
+    assert len(result["sigma_dv"]) == 1
 
 
 def test_reproduces_the_overview_forecast():

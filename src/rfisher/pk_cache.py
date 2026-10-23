@@ -97,6 +97,8 @@ def _request(cosmo: dict, kmax_h: float, npoints: int) -> dict:
 def inspect_pk_cache(path) -> dict:
     """The table's header, after checking both digests."""
     raw = Path(path).read_bytes().split(b"\n", 2)
+    if len(raw) != 3:
+        raise ValueError(f"{path} has no versioned P(k) header")
     first, second, body = raw[0].decode().strip(), raw[1].decode().strip(), raw[2]
     prefix = "# baonoise-meta "
     if not (first.startswith("# ") and first.endswith("#") and second.startswith(prefix)):

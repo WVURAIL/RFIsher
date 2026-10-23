@@ -113,7 +113,7 @@ def save_study(root, protocol, contract_change=None, fit_change=None, preflight_
                 contract_change(contract)
             ep = folder / "execution.json"
             reporter.write(ep, {"contract": contract})
-            execution_hash = reporter.sha256(ep)
+            execution_hash = reporter.file_sha256(ep)
             preflight = {
                 "execution_sha256": execution_hash,
                 "pass_derivative_and_table_gates": True,
