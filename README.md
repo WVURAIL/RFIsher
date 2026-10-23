@@ -223,3 +223,14 @@ One test rebuilds channel 19 and checks it against the shipped table: σ to 1e-5
 responses to 1e-4 of the larger dilation response (other numpy and scipy builds differ by
 a few parts in a million, which D_V's partial cancellation magnifies). CI also rebuilds
 channels 14, 29 and 37 against RadioFisher at the pinned commit.
+
+### Figure colors
+
+Plots and diagrams use the WVU colors from the
+[Beamer template](https://github.com/WVURAIL/wvu_beamer_template), with a standalone
+copy in `src/rfisher/wvu_palette.py`. Update it with the template's
+`tools/export_plot_palette.py`. Blue denotes measurements; old gold provides
+contrast for model curves and small labels. Additional series use WVU accents
+and distinct markers or line styles where needed. Grayscale masks keep their
+binary meaning. Journal requirements take precedence; this palette does not
+change the numerical calculations or frozen records.

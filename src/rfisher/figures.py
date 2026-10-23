@@ -14,14 +14,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from . import forecast, inputs, residual
+from . import wvu_palette as wvu
 from .bands import Band
 
-INK, MUTED, GRID, SURF = "#1c2126", "#5a6168", "#e4e6e2", "#ffffff"
-LINE = "#2a78d6"
-GRID_DARK = "#9aa0a6"
+INK, MUTED, GRID, SURF = wvu.INK, wvu.MUTED, wvu.tint(wvu.SENECA_GRAY, 0.3), wvu.WHITE
+LINE = wvu.BLUE
+GRID_DARK = wvu.SENECA_GRAY
 NU21 = 1420.406
 COSMOLOGY_LABELS = {"planck2018": "Planck 2018"}
-STYLE = {"font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
+STYLE = {**wvu.plot_rcparams(), "font.size": 10.5, "axes.edgecolor": MUTED, "xtick.color": MUTED, "ytick.color": MUTED,
          "axes.labelcolor": INK, "figure.facecolor": SURF, "axes.facecolor": SURF, "text.color": INK,
          "axes.titlesize": 11, "axes.titleweight": "bold", "axes.titlelocation": "left"}
 
@@ -50,7 +51,7 @@ def residual_map(ax, row, shared):
     ratio = np.where(np.hypot(KP, KL) > p["knl"], np.nan, ratio)
     ratio = np.where(KL < p["kfg"], np.nan, ratio)
     with np.errstate(divide="ignore"):
-        im = ax.pcolormesh(kperp, kpar, np.log10(ratio), cmap="Blues", vmin=-6, vmax=0, shading="auto")
+        im = ax.pcolormesh(kperp, kpar, np.log10(ratio), cmap=wvu.sequential_cmap().with_extremes(bad=(1, 1, 1, 0)), vmin=-6, vmax=0, shading="auto")
     ax.plot(kperp, residual.wedge_kpar(kperp, g), color=INK, lw=1.2)
     ax.axhline(p["kfg"], color=MUTED, ls="--", lw=1)
     t = np.linspace(0, np.pi / 2, 200)
@@ -58,7 +59,8 @@ def residual_map(ax, row, shared):
     ax.text(0.35, p["kfg"] * 1.25, "foreground cut", color=MUTED, fontsize=8.5, ha="center")
     ax.text(0.011, residual.wedge_kpar(0.011, g) * 1.3, "wedge edge", color=INK, fontsize=8.5)
     ax.text(p["knl"] * 1.08, p["knl"] * 0.45, "nonlinear\ncut", color=MUTED, fontsize=8.5)
-    ax.text(0.011, p["kfg"] * 3, "residual inside the wedge", color="white", fontsize=8.5)
+    ax.text(0.011, p["kfg"] * 3, "residual inside the wedge", color=INK, fontsize=8.5,
+            bbox={"facecolor": wvu.WHITE, "edgecolor": "none", "alpha": 0.9, "pad": 2})
     ax.set(xscale="log", yscale="log", xlim=(kperp[0], 1), ylim=(kpar[0], 1),
            xlabel="k⊥ (Mpc⁻¹)", ylabel="k∥ (Mpc⁻¹)",
            title="(a) Where the residual sits, at the tolerated strength")

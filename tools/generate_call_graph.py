@@ -1,8 +1,12 @@
 """Draw docs/rfisher_functions.svg: RFIsher at function level, and where RadioFisher and the DTV model enter."""
 from pathlib import Path
 
-INK, MUTED, SURF, BG = "#1c2126", "#5a6168", "#ffffff", "#f6f7f5"
-AMBER, AMBERBG, BLUE, BLUEBG = "#9a5a00", "#fff4e0", "#1f5fa8", "#eef4fb"
+from rfisher import wvu_palette as wvu
+
+INK, MUTED, SURF, BG = wvu.INK, wvu.MUTED, wvu.WHITE, wvu.NOT_QUITE_WHITE
+MODEL, MODEL_BG = wvu.MODEL, wvu.tint(wvu.MODEL)
+BLUE, BLUEBG = wvu.MEASURED, wvu.tint(wvu.MEASURED)
+
 MONO = "DejaVu Sans Mono, monospace"
 
 
@@ -34,10 +38,10 @@ s = [(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" font-famil
      'aria-label="RFIsher call graph: fixed inputs, the per-channel forecast with the DTV residual, the tolerance and the table">'),
      ("<defs>" + "".join(
          f'<marker id="{i}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">'
-         f'<path d="M0,0 L10,5 L0,10 z" fill="{c}"/></marker>' for i, c in (("a", INK), ("b", AMBER), ("c", BLUE), ("m", MUTED)))
+         f'<path d="M0,0 L10,5 L0,10 z" fill="{c}"/></marker>' for i, c in (("a", INK), ("b", MODEL), ("c", BLUE), ("m", MUTED)))
      + "</defs>"), f'<rect width="{W}" height="{H}" fill="{BG}"/>',
      text(24, 34, "RFIsher: one tolerance per 6 MHz channel", 19, INK, "600"),
-     text(24, 56, "Every function, run once per channel. Blue boxes call RadioFisher; the amber box is the DTV model.", 13)]
+     text(24, 56, "Every function, run once per channel. Blue boxes call RadioFisher; the gold box is the DTV model.", 13)]
 
 # fixed inputs
 s.append(text(24, 88, "FIXED INPUTS  (bands.py, inputs.py)", 12, MUTED, "600"))
@@ -67,8 +71,8 @@ s.append(box(664, 306, 592, 156, "residual.coherent_shelf: the DTV model", [
     "inside the wedge |k_par| <= m k_perp + pi / L, else 0",
     "N_nu = 15.4 channels; N_meas = baselines per Fourier cell;",
     "f_w = pi / (L k_w) spreads one mode over the wedge;",
-    "unit strength a = 1 (bias is proportional to a)"], stroke=AMBER, sw=2.2, fill=AMBERBG, tcol=AMBER))
-s.append(arrow(662, 420, 646, 420, AMBER, "b"))
+    "unit strength a = 1 (bias is proportional to a)"], stroke=MODEL, sw=2.2, fill=MODEL_BG, tcol=MODEL))
+s.append(arrow(662, 420, 646, 420, MODEL, "b"))
 s.append(arrow(344, 462, 344, 484))
 
 s.append(box(44, 486, 1212, 118, "2  forecast.integrate(p)", [
