@@ -30,20 +30,59 @@ table fixed, and does not calibrate the physical residual or sampling coverage.
 
 ## Use
 
+Start in a new directory with Git and Python 3.10 or newer. This path needs
+no telescope data, credentials, GPU, or TeX installation.
+
 ```bash
-python -m pip install -e .            # installs RadioFisher at the pinned commit
-rfisher table --out out/              # all 24 channels, about a minute on 12 cores
-rfisher figures --out out/figures     # the summary and one plate per channel
-rfisher overview --out out/overview   # the CHIME Overview forecast, reproduced and in 6 MHz channels
+git clone https://github.com/WVURAIL/RFIsher.git
+cd RFIsher
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[test]"
 ```
 
-```python
+The install selects the recorded RadioFisher revision. Keep that pin for
+reproduction; use a separate environment to develop RadioFisher's latest source.
+Read the shipped table first:
+
+```bash
+python - <<'PY'
 import rfisher
-table = rfisher.read_table()          # the shipped table
+table = rfisher.read_table()
 row = next(r for r in table["channels"] if r["channel"] == 19)
-a = 8.4e-8                            # residual strength at a threshold (detector side)
+print(f"Channel 19: response = {row['response_dv']:.0f}, a_tol = {row['a_tol']:.3g}")
+a = 8.4e-8  # illustrative residual strength, not a measured calibration
 bias_over_sigma = a * abs(row["response_dv"])
+print(f"First-order bias / sigma = {bias_over_sigma:.3g}")
+PY
 ```
+
+This prints approximately `response = 8344, a_tol = 0.00012` and
+`First-order bias / sigma = 0.000701`. To rebuild one channel and check it:
+
+```bash
+rfisher table --channels 19 --workers 1 --out out/first-run
+rfisher figures --table out/first-run/channel_table.json --out out/first-run/figures
+python -m pytest tests/test_table.py -q
+```
+
+The forecast writes `channel_table.json` and `channel_table.csv`. The figure
+command reads that new table; without `--table`, it would read the shipped table.
+The tests compare the rebuilt channel with the shipped result using the
+numerical tolerances described below.
+
+For the full calculation:
+
+```bash
+rfisher table --out out/all --workers 12
+rfisher figures --table out/all/channel_table.json --out out/all/figures
+rfisher overview --out out/overview --workers 12
+```
+
+Set `--workers` to suit the machine. See [the paper/code contract](docs/PAPER_CODE_MAP.md)
+to trace each quantity, or PilotProxy's
+[first-run walkthrough](https://github.com/WVURAIL/pilotproxy/blob/main/docs/FIRST_RUN.md)
+to continue from this response table to the paper's conditional thresholds.
 
 ## Reference: the CHIME Overview forecast
 
