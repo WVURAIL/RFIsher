@@ -124,6 +124,10 @@ the archive proxy, and `N = 16,384` is the frame length. `gamma` is not an
 intrinsic coherent fraction. `G` is an assumed effective temporal gain for an
 unmeasured cross-moment, not a measured coherence time or a cross-day bound.
 The first-order bias ratio is `a * abs(response_dv)`.
+The signed distance shift is `delta ln D_V / sigma_dv = -a * response_dv`,
+since the fitted dilation is `alpha_V = D_V_fid / D_V`. The schema-v2 table
+field `bias_dv_per_unit_a` stores the opposite-sign `ln(alpha_V)` projection;
+its recorded name and values are preserved.
 
 The table is normalized to 8,760 retained hours. The paper's primary calendar
 comparison uses the Overview's ideal year: retaining fraction `kappa` requires

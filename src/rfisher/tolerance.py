@@ -14,6 +14,10 @@ the volume-averaged distance D_V:
     sigma_dv    = sqrt(w C w),  w = (2/3, 1/3) on the dilations
     response_dv = (w . bias) / sigma_dv     per unit strength
     a_tol       = 1 / |response_dv|         the strength at which the bias equals sigma
+
+alpha_V = D_V_fid / D_V, so delta ln D_V / sigma_dv = -a * response_dv.
+The schema-v2 field bias_dv_per_unit_a stores the ln(alpha_V) projection,
+not the physical distance shift. Its name is retained for saved table readers.
 """
 import numpy as np
 
@@ -24,7 +28,7 @@ RESIDUAL = "_Pres"
 
 
 def tolerance(F: np.ndarray, names: list) -> dict:
-    """Clean D_V uncertainty, its bias per unit strength, the response and the tolerance."""
+    """Clean D_V uncertainty, signed dilation projection, response and tolerance."""
     names = list(names)
     keep = [names.index(p) for p in FITTED]
     if any(F[i, i] <= 0 for i in keep):
@@ -43,9 +47,9 @@ def tolerance(F: np.ndarray, names: list) -> dict:
     dilation_covariance = parameter_covariance[np.ix_(dilation_indices, dilation_indices)]
     dilation_sigma = np.sqrt(np.diag(dilation_covariance))
     sigma_dv = float(np.sqrt(DV_WEIGHTS @ dilation_covariance @ DV_WEIGHTS))
-    bias_dv = float(DV_WEIGHTS @ bias[dilation_indices])
-    response_dv = bias_dv / sigma_dv
-    return {"sigma_dv": sigma_dv, "bias_dv_per_unit_a": bias_dv, "response_dv": response_dv,
+    bias_ln_alpha_v = float(DV_WEIGHTS @ bias[dilation_indices])
+    response_dv = bias_ln_alpha_v / sigma_dv
+    return {"sigma_dv": sigma_dv, "bias_dv_per_unit_a": bias_ln_alpha_v, "response_dv": response_dv,
             "a_tol": float(1 / abs(response_dv)) if response_dv else float("inf"),
             "dilations": {"sigma": dilation_sigma.tolist(), "bias_per_unit_a": bias[dilation_indices].tolist(),
                           "response": (bias[dilation_indices] / dilation_sigma).tolist(), "covariance": dilation_covariance.tolist(),

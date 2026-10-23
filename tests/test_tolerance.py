@@ -38,6 +38,19 @@ def test_opposite_biases_cancel_in_d_v():
     assert t["a_tol"] > 1e9
 
 
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_distance_shift_has_opposite_sign_to_fitted_dilation(direction):
+    result = tolerance(synthetic({"aperp": direction * 5e4, "apar": direction * 2.5e4}), NAMES)
+    strength = 1e-8
+    aperp, apar = 1 + strength * np.asarray(result["dilations"]["bias_per_unit_a"])
+    distance_ratio = aperp ** (-2 / 3) * apar ** (-1 / 3)
+    distance_shift = np.log(distance_ratio) / result["sigma_dv"]
+    assert distance_shift == pytest.approx(-strength * result["response_dv"], rel=1e-6)
+    assert result["bias_dv_per_unit_a"] == pytest.approx(
+        result["response_dv"] * result["sigma_dv"]
+    )
+
+
 def test_held_parameters_do_not_enter():
     F = synthetic({"aperp": 5e4})
     G = F.copy()

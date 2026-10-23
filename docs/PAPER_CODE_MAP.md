@@ -21,7 +21,11 @@ claim that every nonlinear fit is qualified.
 
 ## Names and units
 
-- `response_dv` is signed; the decision compares `a * abs(response_dv)`.
+- `response_dv` is the signed response of `ln(alpha_V)`, with
+  `alpha_V = D_V_fid / D_V`. The physical distance shift in clean-error units
+  is `-a * response_dv`; the decision compares `a * abs(response_dv)`.
+  The schema-v2 field `bias_dv_per_unit_a` stores the unnormalized
+  `ln(alpha_V)` projection. Saved tables retain that field name and sign.
 - `s_NL` is **damping variance**, in Mpc squared. The physical configuration `sigma_nl` is a length in Mpc.
 - `_Pres` is the residual projection row, not a fitted parameter. Remove it
   before inversion. The residual is absent from the fitted clean covariance.
