@@ -8,7 +8,7 @@ from rfisher.tolerance import DV_WEIGHTS
 NAMES = ["A", "b_HI", "Tb", "s_NL", "sigma8tot", "n_s", "f", "aperp", "apar", "fs8", "bs8", "pk"]
 
 # Per-bin sigma(D_V)/D_V (percent), one clean year, Planck 2018, from the forecast goldens of
-# RFIsher 05ee7e4 (planck2018, S1_clean), the forecast that reproduced the Overview's Fig. 31.
+# RFIsher 1483cd1 (planck2018, S1_clean), the forecast that reproduced the Overview's Fig. 31.
 OVERVIEW_PERCENT = [0.4663, 0.4811, 0.4974, 0.5123, 0.5442, 0.5826, 0.6146, 0.6587, 0.7058, 0.7608,
                     0.8508, 0.7748, 0.7847, 0.9444, 1.0291]
 

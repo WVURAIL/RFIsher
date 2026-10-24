@@ -104,4 +104,4 @@ jobs:
           cd /tmp
           /tmp/rfisher-wheel-smoke/bin/python -m pip check
           /tmp/rfisher-wheel-smoke/bin/rfisher --help > /dev/null
-          /tmp/rfisher-wheel-smoke/bin/python -c "import rfisher; assert rfisher.__version__ == '6.0.0'; t = rfisher.read_table(); assert len(t['channels']) == 24; from rfisher import inputs; inputs.cosmology()"
+          /tmp/rfisher-wheel-smoke/bin/python -c "import rfisher; assert rfisher.__version__ == '1.0.0'; t = rfisher.read_table(); assert len(t['channels']) == 24; from rfisher import inputs; inputs.cosmology()"
