@@ -8,5 +8,5 @@ Run from the repository root with the package installed.
 
 The nonlinear tools require explicit study inputs; they are not prerequisites
 for reading the shipped table. Preserve the original protocols and fit receipts.
-See [the forecast contract](../docs/PAPER_CODE_MAP.md) for the numerical and
+See [the paper/code contract](../docs/PAPER_CODE_MAP.md) for the numerical and
 physical limits of these checks.

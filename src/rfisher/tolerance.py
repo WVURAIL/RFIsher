@@ -16,8 +16,8 @@ the volume-averaged distance D_V:
     a_tol       = 1 / |response_dv|         the strength at which the bias equals sigma
 
 alpha_V = D_V_fid / D_V, so delta ln D_V / sigma_dv = -a * response_dv.
-The schema-v2 field bias_dv_per_unit_a stores the ln(alpha_V) projection,
-not the physical distance shift. Its name is retained for saved table readers.
+The table field bias_dv_per_unit_a (schema v2) stores the ln(alpha_V)
+projection, not the physical distance shift.
 """
 import numpy as np
 

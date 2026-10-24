@@ -1,7 +1,7 @@
 """The fixed forecast inputs. A new cosmology, telescope or anchor means a new table.
 
     cosmology   a named fiducial with its linear P(k) table:
-                cmbspa2026  the latest, and the default: SPT-3G + ACT + Planck CMB,
+                cmbspa2026  the default: SPT-3G + ACT + Planck CMB,
                             lensing and DESI DR2 BAO (Omori et al. 2026,
                             arXiv:2608.31136v1, Table 8, posterior means, flat LambdaCDM)
                 planck2018  the CHIME Overview's (Planck 2018 CMB only), used to

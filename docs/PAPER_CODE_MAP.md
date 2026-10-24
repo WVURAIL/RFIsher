@@ -1,4 +1,4 @@
-# Forecast contract and handoff
+# Paper/code contract
 
 RFIsher computes a conditional response to an assumed residual. It does not
 measure the detector's transfer, a coherence lifetime, or the cross-day sky/RFI
@@ -15,17 +15,17 @@ covariance. The paper's candidate words are selected in PilotProxy.
 
 Module paths are under `src/rfisher/`. `a_tol` is the **first-order** tolerance.
 Finite-amplitude or containment caps are separate inputs to the threshold rule.
-The paper's later channel-16 quadrature and channel-19 containment checks remain
-in the manuscript's frozen follow-up records; default quadrature alone does not
-claim that every nonlinear fit is qualified.
+The channel-16 quadrature and channel-19 containment checks the paper reports
+are recorded with the manuscript; the default quadrature alone does not qualify
+every nonlinear fit.
 
 ## Names and units
 
 - `response_dv` is the signed response of `ln(alpha_V)`, with
   `alpha_V = D_V_fid / D_V`. The physical distance shift in clean-error units
   is `-a * response_dv`; the decision compares `a * abs(response_dv)`.
-  The schema-v2 field `bias_dv_per_unit_a` stores the unnormalized
-  `ln(alpha_V)` projection. Saved tables retain that field name and sign.
+  The table field `bias_dv_per_unit_a` (schema v2) stores the unnormalized
+  `ln(alpha_V)` projection, with that sign.
 - `s_NL` is **damping variance**, in Mpc squared. The physical configuration `sigma_nl` is a length in Mpc.
 - `_Pres` is the residual projection row, not a fitted parameter. Remove it
   before inversion. The residual is absent from the fitted clean covariance.
@@ -36,12 +36,12 @@ claim that every nonlinear fit is qualified.
 - The residual's wedge support is not wedge excision; no delay filter is applied.
 
 The Python entry point is `from rfisher.tolerance import tolerance`.
-`rfisher.tolerance` is an ordinary module. Current matrices and newly written
-tables use `s_NL`. The table schema remains version 2 because the damping-variance coordinate and numerical fields are unchanged.
-Historical input snapshots keep the metadata they were recorded with. The shipped
-table's numerical values and calculation provenance are unchanged by the label
-update. RadioFisher 2 and RFIsher 6 expose the revised API without compatibility
-aliases.
+Matrices and tables label the damping coordinate `s_NL`; the table schema is
+`rfisher-channel-table-v2`. The shipped table's `provenance` block records the
+RFIsher and RadioFisher commits and the input hashes it was built with. The
+regression checks rebuild channel 19 (`tests/test_table.py`) and channels 14, 29
+and 37 (CI) with the current code and match the shipped rows within their
+tolerances.
 
 RadioFisher owns the shared units, instrument geometry and covariance integrands.
 RFIsher owns the DTV residual, fitted parameter set and segmented quadrature.
@@ -53,6 +53,6 @@ are vectorized. They do not allocate one large multi-bin integrand.
 
 `src/` contains the supported calculation, `tests/` its scientific checks,
 `tools/` explicit validation and documentation generators, and `docs/figures/`
-the checked-in reader aids. Frozen tables retain their recorded upstream
-revision. RFIsher pins RadioFisher for reproducibility; reviewing a later
-RadioFisher cleanup does not silently change that dependency.
+the checked-in reader aids. `pyproject.toml` pins RadioFisher to one commit for
+reproducibility; a saved table keeps the upstream revision recorded in its
+provenance.

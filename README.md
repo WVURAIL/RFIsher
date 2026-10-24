@@ -93,7 +93,7 @@ each bin, damping variance `s_NL` shared by all bins, and the dilations combined
 percentage points. The same forecast with 6 MHz bins over the DTV range gives 1.18% to
 1.52% per channel: each bin is about a quarter as deep, so its error is about twice as
 large. The reproduction counts every baseline, as the Overview's forecast does
-(RadioFisher's as-built density), so it still matches the published numbers. The tolerance
+(RadioFisher's as-built density), so it matches the published numbers. The tolerance
 table does not: CHIME's analyses drop the pairs within one cylinder, which carry noise
 cross-talk and a strong response to diffuse Galactic emission (CHIME Collaboration 2025,
 arXiv:2511.19620), and the stack-to-proxy amplitude ratio used with the table is measured between
@@ -125,9 +125,9 @@ intrinsic coherent fraction. `G` is an assumed effective temporal gain for an
 unmeasured cross-moment, not a measured coherence time or a cross-day bound.
 The first-order bias ratio is `a * abs(response_dv)`.
 The signed distance shift is `delta ln D_V / sigma_dv = -a * response_dv`,
-since the fitted dilation is `alpha_V = D_V_fid / D_V`. The schema-v2 table
-field `bias_dv_per_unit_a` stores the opposite-sign `ln(alpha_V)` projection;
-its recorded name and values are preserved.
+since the fitted dilation is `alpha_V = D_V_fid / D_V`. The table field
+`bias_dv_per_unit_a` (schema v2) stores the `ln(alpha_V)` projection, which
+has the opposite sign.
 
 The table is normalized to 8,760 retained hours. The paper's primary calendar
 comparison uses the Overview's ideal year: retaining fraction `kappa` requires
@@ -243,5 +243,5 @@ copy in `src/rfisher/wvu_palette.py`. Update it with the template's
 `tools/export_plot_palette.py`. Blue denotes measurements; old gold provides
 contrast for model curves and small labels. Additional series use WVU accents
 and distinct markers or line styles where needed. Grayscale masks keep their
-binary meaning. Journal requirements take precedence; this palette does not
-change the numerical calculations or frozen records.
+binary meaning. Journal requirements take precedence; the palette does not
+affect the calculations or the shipped table.

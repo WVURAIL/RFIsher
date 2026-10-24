@@ -1,7 +1,7 @@
 """The CHIME Overview forecast, reproduced: sigma(D_V)/D_V per bin for one clean year.
 
-As the Overview's scripts do it (S. Foreman, RadioFisher chime2021/full_experiment.py
-and plot_dv_forecasts.py): RadioFisher's own fisher() for each bin with no residual;
+As the Overview's forecast scripts (S. Foreman, for RadioFisher) do it:
+RadioFisher's own fisher() for each bin with no residual;
 per bin the BAO amplitude A, b sigma_8, f sigma_8 and the two dilations are free,
 s_NL is shared by all bins, and everything else is held at the fiducial; the
 dilations are combined into D_V. Every baseline counts, as in the Overview (RadioFisher's
