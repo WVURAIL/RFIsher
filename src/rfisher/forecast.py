@@ -1,15 +1,15 @@
-"""One channel's Fisher matrix, with the residual's bias row.
+"""Compute one channel's Fisher matrix and the residual's bias row.
 
-RadioFisher sets up the bin (prepare_bin) and supplies the integrand of every
-parameter at any (k, mu) (fisher_integrands). RFIsher integrates them itself:
-Gauss-Legendre in k and mu, split at every place the integrand has a kink
-(P(k) table knots, baseline-density knots, the foreground and nonlinear cuts,
-and the residual's wedge edge), so the result is converged. RadioFisher's own
-Simpson grid in fisher() is not accurate enough for the bias row.
+RadioFisher prepares the redshift bin and supplies each parameter's
+integrand at (k, mu). RFIsher then performs the integration. The residual
+bias row needs more resolution than RadioFisher's standard Simpson grid
+provides, so we use segmented Gauss-Legendre quadrature in both variables.
 
-The derivative of the BAO template is taken directly at each k
-(central difference, step 1e-7 Mpc^-1, zero below 0.03 Mpc^-1) instead of
-being interpolated from RadioFisher's k grid.
+Split the integral wherever its form changes: power-spectrum table knots,
+baseline-density knots, foreground and nonlinear cuts, and the residual's
+wedge edge. Evaluate the BAO-template derivative directly at each k with
+a central-difference step of 1e-7 Mpc^-1, setting it to zero below
+0.03 Mpc^-1, rather than interpolating it from RadioFisher's k grid.
 """
 import itertools
 
@@ -50,7 +50,7 @@ def prepare(band: Band, cosmo=None, expt=None, fns=None) -> dict:
 
 
 def radial_edges(p: dict) -> np.ndarray:
-    """Where the integrand in k has kinks: segment boundaries for the k integral."""
+    """Locate changes in the k integrand that need separate integration segments."""
     c = p["cosmo"]
     template = np.asarray(c["fbao"].x)
     pk = np.asarray(c["pk_nobao"].x)
@@ -66,7 +66,7 @@ def radial_edges(p: dict) -> np.ndarray:
 
 
 def angular_edges(k: float, p: dict) -> np.ndarray:
-    """Where the integrand in mu has kinks at this k."""
+    """Locate changes in the mu integrand at this k."""
     xratio = 2 * np.pi * p["nu"] * p["knots"] / (p["cosmo"]["r"] * k)
     xratio = xratio[(xratio > 0) & (xratio < 1)]
     mu = np.sqrt(np.maximum(0, 1 - xratio * xratio))
@@ -101,7 +101,11 @@ def quadrature_segments(p: dict, radial_order: int, angular_order: int, *, edges
 
 
 def integrate(p: dict, radial_order: int = RADIAL_ORDER, angular_order: int = ANGULAR_ORDER):
-    """F_ij = Vfac * 2 * Int k^2 d_i d_j dk dmu over mu in [0, 1] (the integrand is even)."""
+    """Integrate all Fisher elements over the positive-mu half of the grid.
+
+    Use F_ij = Vfac * 2 * integral(k^2 d_i d_j dk dmu), with mu in [0, 1].
+    The factor two accounts for the equal contribution at negative mu.
+    """
     total, names = None, None
     for k, mu, weight in quadrature_segments(p, radial_order, angular_order):
         deriv, names = rf.fisher_integrands(k, mu, p["cosmo"], p["expt"], paired=True)

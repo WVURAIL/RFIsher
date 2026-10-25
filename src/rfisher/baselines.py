@@ -39,7 +39,10 @@ def inter_file() -> Path:
 
 
 def density(x, inter_only: bool = True) -> np.ndarray:
-    """n(x) at the bin centers ``x`` (uniform bins starting at 0) from the layout."""
+    """Compute n(x) from the array layout at the supplied bin centers x.
+
+    The bins are uniform and start at zero.
+    """
     x = np.asarray(x, dtype=float)
     dx = x[1] - x[0]
     edges = np.r_[x - dx / 2, x[-1] + dx / 2]

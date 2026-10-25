@@ -1,13 +1,17 @@
-"""The CHIME Overview forecast, reproduced: sigma(D_V)/D_V per bin for one clean year.
+"""Reproduce the CHIME Overview's clean one-year distance forecast.
 
-As the Overview's forecast scripts (S. Foreman, for RadioFisher) do it:
-RadioFisher's own fisher() for each bin with no residual;
-per bin the BAO amplitude A, b sigma_8, f sigma_8 and the two dilations are free,
-s_NL is shared by all bins, and everything else is held at the fiducial; the
-dilations are combined into D_V. Every baseline counts, as in the Overview (RadioFisher's
-as-built density), so this reference is on all baselines while the table is not. Run on the Overview's 15 redshift bins it
-reproduces the published forecast; run on the 6 MHz channels it is the clean
-reference the tolerance table starts from.
+Follow S. Foreman's RadioFisher forecast scripts: call RadioFisher's
+fisher() without a residual in each bin. Let the BAO amplitude A,
+b sigma_8, f sigma_8, and the two dilations vary separately by bin.
+Share s_NL across bins and hold the remaining parameters at their
+fiducial values. Then combine the dilation uncertainties into
+sigma(D_V)/D_V.
+
+This reproduction uses every baseline in RadioFisher's as-built density,
+as the Overview forecast does. The tolerance table separately uses only
+inter-cylinder baselines. On the Overview's 15 redshift bins, this
+calculation reproduces the published forecast. On 6 MHz channels, it
+provides the clean reference for the tolerance calculation.
 """
 import itertools
 import os
