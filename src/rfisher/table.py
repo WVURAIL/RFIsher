@@ -1,8 +1,9 @@
-"""The channel table: one row per channel, written as JSON (with provenance) and CSV.
+"""Build one forecast row per channel and write JSON and CSV tables.
 
-Each row is one RadioFisher forecast at the channel's own redshift. The table
-changes only when an input in inputs.py, the residual model or the quadrature
-changes; a new detector calibration never needs a new table.
+Each row uses the channel's own redshift, and the JSON also records
+provenance. A change to inputs.py, the residual model, or the quadrature
+requires a new table. A detector recalibration changes the strength
+compared with the table, so it does not require a new forecast.
 """
 import csv
 import importlib.metadata

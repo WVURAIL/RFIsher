@@ -1,23 +1,24 @@
-"""From a channel's Fisher matrix to its tolerance.
+"""Convert a channel's clean Fisher matrix and residual response into a tolerance.
 
-The forecast fits six parameters: the BAO amplitude A, the damping variance s_NL = sigma_nl**2 (Mpc squared),
-the two dilations alpha_perp and alpha_par, f sigma_8 and b sigma_8. The rest
-are held at their fiducial values. Inverting the fitted block gives the clean
-covariance C. The '_Pres' column B holds the residual's projection onto each
-parameter, so the first-order bias of a unit-strength residual is C B.
+The fitted parameters are the BAO amplitude A, damping variance
+s_NL = sigma_nl**2 (Mpc squared), dilations alpha_perp and alpha_par,
+f sigma_8, and b sigma_8. Hold the other parameters at their fiducial
+values. Invert this fitted block to obtain the clean covariance C.
+The extra '_Pres' column B gives the residual's projection onto each
+parameter, so C B is the first-order bias for unit residual strength.
 
-The two dilations are combined into the one number the CHIME Overview reports,
-the volume-averaged distance D_V:
+Next combine the two dilations into the volume-averaged distance used
+by the CHIME Overview:
 
     ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par
+    sigma_dv = sqrt(w C w), where w = (2/3, 1/3) on the dilations
+    response_dv = (w . bias) / sigma_dv, per unit strength
+    a_tol = 1 / |response_dv|
 
-    sigma_dv    = sqrt(w C w),  w = (2/3, 1/3) on the dilations
-    response_dv = (w . bias) / sigma_dv     per unit strength
-    a_tol       = 1 / |response_dv|         the strength at which the bias equals sigma
-
-alpha_V = D_V_fid / D_V, so delta ln D_V / sigma_dv = -a * response_dv.
-The table field bias_dv_per_unit_a (schema v2) stores the ln(alpha_V)
-projection, not the physical distance shift.
+At a_tol, the modeled bias equals one clean standard deviation. The sign
+needs care: alpha_V = D_V_fid / D_V, so the physical distance shift is
+delta ln D_V / sigma_dv = -a * response_dv. Schema v2 stores the
+ln(alpha_V) projection in bias_dv_per_unit_a.
 """
 import numpy as np
 

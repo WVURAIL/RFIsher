@@ -1,7 +1,10 @@
-"""Finite BAO-only expected-covariance fits, separate from published linear tables.
+"""Fit a finite-amplitude BAO model to an expected covariance.
 
-The retained RadioFisher derivative switches define a phenomenological BAO-only
-model. They do not define the full Alcock-Paczynski signal model. The Fisher coordinate ``s_NL`` is damping variance in Mpc squared.
+These checks complement the published linear tables. The retained
+RadioFisher derivative switches specify a phenomenological model in
+which the BAO feature shifts; they do not supply the full Alcock-Paczynski
+signal transformation. The Fisher coordinate s_NL is the damping variance
+in Mpc squared.
 """
 
 from __future__ import annotations
@@ -231,7 +234,7 @@ class FiniteBAOModel:
         return H
 
     def derivative_check(self, relative_step=1e-8):
-        """All-six derivative agreement in the clean Fisher metric."""
+        """Check all six derivatives in the metric defined by the clean Fisher matrix."""
         analytic = self.derivatives
         numeric = np.empty_like(analytic)
         for i in range(6):
@@ -328,7 +331,10 @@ def check_retained_modes(fisher, bias_row, full):
 
 
 def build_model(prepared, cache_dir, radial_order=8, angular_order=16, chunk_segments=64):
-    """Reuse the forecast quadrature, checkpointing independent radial segments."""
+    """Build the model on the forecast quadrature.
+
+    Checkpoint independent radial segments so completed work can be reused.
+    """
     from radiofisher import baofisher as rf
 
     theta0 = check_conventions(prepared)
