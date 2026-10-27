@@ -1,36 +1,39 @@
 # RFIsher
 
-How much residual DTV power each 6 MHz channel can carry before it biases a 21 cm BAO
-measurement by more than its own uncertainty.
+RFIsher determines how much residual digital television (DTV) power each 6 MHz channel can
+carry before it biases a 21 cm baryon acoustic oscillation (BAO) measurement by more than
+its own uncertainty.
 
 For each channel, RFIsher runs one [RadioFisher](https://github.com/WVURAIL/RadioFisher)
-forecast at the channel's own redshift, with CHIME as in the CHIME Overview on the
-inter-cylinder baselines CHIME's analyses use, the specified cosmology and one retained year of data. The two BAO dilations are combined into the one number the
-CHIME Overview reports, the volume-averaged distance D_V
-(`ln α_V = 2/3 ln α⊥ + 1/3 ln α∥`). The forecast gives its clean uncertainty σ. A
-coherent DTV residual of unit strength is added through RadioFisher's residual hook,
-and the forecast returns the bias it causes in D_V. Bias is proportional to the
-residual's strength `a`, so each channel reduces to one **response** (bias ÷ σ per unit
-strength) and one **tolerance**:
+forecast at the channel's own redshift. The forecast uses CHIME as described in the CHIME
+Overview, the inter-cylinder baselines that CHIME's analyses use, the specified cosmology,
+and one retained year of data. The two fitted BAO dilations give the one number the CHIME
+Overview reports, the volume-averaged distance D_V
+(`ln α_V = 2/3 ln α⊥ + 1/3 ln α∥`), and the forecast gives its clean uncertainty σ. A
+coherent DTV residual of unit strength is then added through RadioFisher's residual hook,
+and the forecast returns the bias it causes in D_V. Since the bias is proportional to the
+residual's strength `a`, each channel reduces to one *response* (bias ÷ σ per unit
+strength) and one *tolerance*:
 
     a_tol = 1 / |response_dv|
 
-A residual weaker than `a_tol` has a first-order assigned bias below its σ.
+That is, a residual weaker than `a_tol` has a first-order assigned bias below its σ.
 
-The table of these numbers is RFIsher's main output. It does not depend on the
-detector's calibration: a new threshold, era or mask never needs a new table. Only a
-new cosmology, telescope, residual model or retained-time anchor does.
+The table of these numbers is RFIsher's main output. Since the table does not depend on
+the detector's calibration, a new threshold, era, or mask never needs a new table. A new
+table is needed only for a new cosmology, telescope, residual model, or retained-time anchor.
 
 The optional [finite BAO-only likelihood check](docs/NONLINEAR_BIAS_CHECK.md)
 tests the local bias approximation against an explicitly defined nonlinear
-model. It records unsuccessful fits and numerical checks, keeps the published
-table fixed, and does not calibrate the physical residual or sampling coverage.
+model. Failed fits and numerical checks are recorded with the successful ones, and the
+published table is left fixed. The check does not calibrate the physical residual or the
+sampling coverage.
 
 ![RFIsher call graph](docs/rfisher_functions.svg)
 
 ## Use
 
-Start in a new directory with Git and Python 3.10 or newer. This path needs
+Start in a new directory with Git and Python 3.10 or newer. These steps need
 no telescope data, credentials, GPU, or TeX installation.
 
 ```bash
@@ -41,9 +44,9 @@ python3 -m venv .venv
 python -m pip install -e ".[test]"
 ```
 
-The install selects the recorded RadioFisher revision. Keep that pin for
-reproduction; use a separate environment to develop RadioFisher's latest source.
-Read the shipped table first:
+The install selects the recorded RadioFisher revision. Keep that pin to reproduce the
+table, and develop RadioFisher's latest source in another environment. First, read the
+shipped table:
 
 ```bash
 python - <<'PY'
@@ -51,14 +54,14 @@ import rfisher
 table = rfisher.read_table()
 row = next(r for r in table["channels"] if r["channel"] == 19)
 print(f"Channel 19: response = {row['response_dv']:.0f}, a_tol = {row['a_tol']:.3g}")
-a = 8.4e-8  # illustrative residual strength, not a measured calibration
+a = 8.4e-8  # example residual strength, for illustration only
 bias_over_sigma = a * abs(row["response_dv"])
 print(f"First-order bias / sigma = {bias_over_sigma:.3g}")
 PY
 ```
 
 This prints approximately `response = 8344, a_tol = 0.00012` and
-`First-order bias / sigma = 0.000701`. To rebuild one channel and check it:
+`First-order bias / sigma = 0.000701`. Next, rebuild one channel and check it:
 
 ```bash
 rfisher table --channels 19 --workers 1 --out out/first-run
@@ -66,12 +69,12 @@ rfisher figures --table out/first-run/channel_table.json --out out/first-run/fig
 python -m pytest tests/test_table.py -q
 ```
 
-The forecast writes `channel_table.json` and `channel_table.csv`. The figure
-command reads that new table; without `--table`, it would read the shipped table.
-The tests compare the rebuilt channel with the shipped result using the
-numerical tolerances described below.
+The forecast writes `channel_table.json` and `channel_table.csv`. With `--table`,
+the figure command reads this new table, and without it the shipped table.
+Lastly, the tests compare the rebuilt channel with the shipped result to the
+numerical tolerances given under Tests.
 
-For the full calculation:
+The full calculation is run with:
 
 ```bash
 rfisher table --out out/all --workers 12
@@ -79,35 +82,40 @@ rfisher figures --table out/all/channel_table.json --out out/all/figures
 rfisher overview --out out/overview --workers 12
 ```
 
-Set `--workers` to suit the machine. See [the paper/code contract](docs/PAPER_CODE_MAP.md)
-to trace each quantity, or PilotProxy's
+`--workers` sets the number of processes. [The paper/code contract](docs/PAPER_CODE_MAP.md)
+traces each quantity to its code, and PilotProxy's
 [first-run walkthrough](https://github.com/WVURAIL/pilotproxy/blob/main/docs/FIRST_RUN.md)
-to continue from this response table to the paper's conditional thresholds.
+continues from this response table to the paper's conditional thresholds.
 
-## Reference: the CHIME Overview forecast
+## The CHIME Overview forecast
 
-`rfisher overview` reproduces the CHIME Overview forecast the way its scripts compute it:
-RadioFisher's own `fisher()` per redshift bin, A, bσ8, fσ8 and the two dilations free in
-each bin, damping variance `s_NL` shared by all bins, and the dilations combined into D_V. On the Overview's
-15 bins it reproduces the clean one-year errors, 0.47% to 1.03%, to within 0.0003
-percentage points. The same forecast with 6 MHz bins over the DTV range gives 1.18% to
-1.52% per channel: each bin is about a quarter as deep, so its error is about twice as
-large. The reproduction counts every baseline, as the Overview's forecast does
-(RadioFisher's as-built density), so it matches the published numbers. The tolerance
-table does not: CHIME's analyses drop the pairs within one cylinder, which carry noise
-cross-talk and a strong response to diffuse Galactic emission (CHIME Collaboration 2025,
-arXiv:2511.19620), and the stack-to-proxy amplitude ratio used with the table is measured between
-cylinders. Without those baselines the table's clean σ(D_V) is 17% to 34% larger than on
-all of them. On all baselines it agrees with the reproduction to within 1.5% on every
-channel; the table integrates more finely and fits `s_NL` per channel.
+`rfisher overview` reproduces the CHIME Overview forecast as its scripts compute it.
+RadioFisher's own `fisher()` is called for each redshift bin, with A, bσ8, fσ8, and the two
+dilations free in each bin and the damping variance `s_NL` shared by all bins. The dilations
+then give D_V. On the Overview's 15 bins, the clean one-year errors of 0.47% to
+1.03% are reproduced to 0.0003 percentage points. The same forecast with 6 MHz bins over the
+DTV range gives 1.18% to 1.52% per channel. Each 6 MHz bin is about a quarter as deep, so its
+error is about twice as large.
+
+The reproduction counts every baseline (RadioFisher's as-built density), as the Overview's
+forecast does, so it matches the published numbers. Only the inter-cylinder baselines
+are used for the tolerance table. CHIME's analyses drop the intra-cylinder pairs, which
+carry noise cross-talk and a strong response to diffuse Galactic emission (CHIME
+Collaboration 2025, arXiv:2511.19620), and the stack-to-proxy amplitude ratio used with the
+table is measured between cylinders. Without the intra-cylinder baselines, the table's clean
+σ(D_V) is 17% to 34% larger than on all baselines. On all baselines, the table agrees with
+the reproduction to 1.5% on every channel. The table integrates more finely than the
+reproduction and fits `s_NL` per channel.
 
 ![The CHIME Overview forecast as published, and with 6 MHz bins over the DTV range](docs/figures/overview_reference.png)
 
-The forecast inputs carry two cosmologies: the adopted `cmbspa2026`, which the table
-uses (SPT-3G, ACT and Planck CMB with DESI DR2 BAO; Omori et al. 2026, arXiv:2608.31136v1,
-Table 8), and the Overview's Planck 2018, which the reproduction uses so it can be checked. Only the cosmological
-parameters and the P(k) table change; the HI models, damping scale and CHIME stay the Overview's.
-In the specified cosmology the 6 MHz errors are 7% to 8% smaller (1.09% to 1.40% per channel).
+The forecast inputs have two cosmologies. For the table, the specified cosmology
+`cmbspa2026` is used (SPT-3G, ACT, and Planck CMB with DESI DR2 BAO, from Omori et al. 2026,
+arXiv:2608.31136v1, Table 8). For the reproduction, the Overview's Planck 2018 is used, so
+that the reproduction can be checked against the published forecast. Only the cosmological
+parameters and the P(k) table change between the two, and the HI models, damping scale, and
+CHIME are the Overview's in both. In the specified cosmology, the 6 MHz errors are 7% to 8%
+smaller (1.09% to 1.40% per channel).
 
 ```bash
 rfisher overview --out out/overview --cosmology planck2018 --compare cmbspa2026
@@ -117,59 +125,67 @@ rfisher overview --out out/overview --cosmology planck2018 --compare cmbspa2026
 
 ## The residual strength
 
-The detector maps the retained shelf proxy into the table's strength using
-`a = (gamma x_hi)^2 N G`. `x_hi` is the retained per-input shelf proxy's upper
-end, `gamma` is the measured calibrated redundant-stack amplitude divided by
-the archive proxy, and `N = 16,384` is the frame length. `gamma` is not an
-intrinsic coherent fraction. `G` is an assumed effective temporal gain for an
-unmeasured cross-moment, not a measured coherence time or a cross-day bound.
-The first-order bias ratio is `a * abs(response_dv)`.
-The signed distance shift is `delta ln D_V / sigma_dv = -a * response_dv`,
-since the fitted dilation is `alpha_V = D_V_fid / D_V`. The table field
-`bias_dv_per_unit_a` (schema v2) stores the `ln(alpha_V)` projection, which
-has the opposite sign.
+The detector maps the retained shelf proxy to the table's strength with
 
-The table is normalized to 8,760 retained hours. The paper's primary calendar
-comparison uses the Overview's ideal year: retaining fraction `kappa` requires
-`1 / kappa` years for this reference exposure. An additional operating-duty
-penalty is a separate scenario. A fixed calendar-duration forecast instead uses
-`ttot = 8760 * Y * kappa` hours; it must be recomputed at that exposure.
+    a = (gamma x_hi)^2 N G
+
+where `x_hi` is the upper end of the retained per-input shelf proxy, `gamma` is the measured,
+calibrated redundant-stack amplitude divided by the archive proxy, `N = 16384` is the frame
+length, and `G` is an assumed effective temporal gain for an unmeasured cross-moment. `gamma`
+is an amplitude ratio, and no intrinsic coherent fraction is inferred from it.
+No coherence time or cross-day bound has been measured, so `G` is assumed.
+
+To first order, the ratio of bias to σ is `a * abs(response_dv)`. Since the fitted dilation is
+`alpha_V = D_V_fid / D_V`, the signed distance shift is
+`delta ln D_V / sigma_dv = -a * response_dv`. The table field `bias_dv_per_unit_a`
+(schema v2) stores the `ln(alpha_V)` projection, which has the opposite sign.
+
+The table is normalized to 8760 retained hours. For the paper's primary calendar time,
+the Overview's ideal year is assumed, so retaining a fraction `kappa` of the data
+requires `1 / kappa` years for this reference exposure. An operating-duty penalty is
+treated as an additional scenario. A forecast for a fixed calendar duration of `Y` years
+uses `ttot = 8760 * Y * kappa` hours and must be recomputed at that exposure.
 
 The threshold rule is in PilotProxy. Its finite-amplitude and channel-specific
-transfer budgets are external inputs, not silently included in `a_tol`.
-`nonlinear.py` and the validation tools check the expected-likelihood model;
-they do not establish the physical transfer or cross-day DTV covariance.
-See [the paper/code contract](docs/PAPER_CODE_MAP.md).
+transfer budgets are external inputs to the rule, and `a_tol` holds none of them.
+`nonlinear.py` and the validation tools check the expected-likelihood model. These
+checks do not cover the physical transfer or the cross-day DTV covariance (see
+[the paper/code contract](docs/PAPER_CODE_MAP.md)).
 
 ## The model
 
-- **Inputs** (`inputs.py`): the specified cosmology, `cmbspa2026` (SPT-3G, ACT and Planck CMB
-  with DESI DR2 BAO), with its linear P(k) table, checked against the cosmology before use; CHIME as in the CHIME Overview (4 cylinders × 256 feeds,
-  T_sys = 55 K, 31,000 deg², 0.39 MHz channels); the inter-cylinder baselines only,
-  built from the array layout (`baselines.py`, `data/nx_CHIME_inter.dat`; built from all
-  pairs, the same code reproduces RadioFisher's as-built density exactly); 8,760 h of
-  retained data.
-- **Fit** (`tolerance.py`): A, s_NL = σ_NL², α⊥, α∥, fσ8 and bσ8 are fitted; the rest are held
-  at the fiducial. The dilations are combined into D_V as the CHIME Overview does. The
-  bias is first order and compared with the clean σ of D_V. Where the two dilations'
-  biases have opposite signs they partly cancel in D_V; the response changes sign between
-  channels 31 and 32, so those two tolerances are the loosest.
-  The matrix coordinate `s_NL` is damping variance in Mpc squared;
-  the configuration `sigma_nl` is the damping length in Mpc.
-- **Residual** (`residual.py`): an assumed flat 6 MHz residual-power template. It puts the same visibility on every baseline that measures a Fourier cell,
-  with support inside the horizon wedge. This distributes the residual; it does not
-  excise wedge modes or apply a delay filter. Relative to the noise power,
-  `dP / C_N = a × N_ν × N_meas(k⊥) × f_w(k⊥)` for `|k∥| ≤ m k⊥ + π/L`, and zero outside.
-- **Quadrature** (`forecast.py`): Gauss–Legendre in k and μ, split at every kink of the
-  integrand. Evaluation is batched by radial segment, preserving its k-dependent angular
-  boundaries and bounding memory use. The same node generator serves the finite
-  check. Doubling either order changes the tolerance by less than 3 × 10⁻⁷.
+The fixed forecast inputs are set in `inputs.py`. The cosmology is the specified
+`cmbspa2026` (SPT-3G, ACT, and Planck CMB with DESI DR2 BAO), and its linear P(k) table is
+checked against the cosmology before use. CHIME is modeled as in the CHIME Overview, with
+4 cylinders × 256 feeds, T_sys = 55 K, 31000 deg², and 0.39 MHz channels. Only the
+inter-cylinder baselines are used, and their density is built from the array layout (`baselines.py`,
+`data/nx_CHIME_inter.dat`). Built from all pairs, the same code reproduces RadioFisher's
+as-built density exactly. The exposure is 8760 h of retained data.
+
+The fit (`tolerance.py`) has six free parameters: A, s_NL = σ_NL², α⊥, α∥, fσ8, and bσ8.
+The rest are held at the fiducial. As in the CHIME Overview, the dilations give D_V, and the
+first-order bias is compared with the clean σ of D_V. Where the biases of the two dilations
+have opposite signs, they partly cancel in D_V. The response changes sign between channels
+31 and 32, so the tolerances of those two channels are the loosest. The matrix coordinate
+`s_NL` is the damping variance in Mpc squared, and the configuration value `sigma_nl` is the
+damping length in Mpc.
+
+The residual (`residual.py`) is an assumed flat 6 MHz template of residual power. This
+template puts the same visibility on every baseline that measures a Fourier cell, and its
+support is the horizon wedge. No wedge modes are excised, and no delay filter is applied.
+Relative to the noise power, the residual is
+`dP / C_N = a × N_ν × N_meas(k⊥) × f_w(k⊥)` for `|k∥| ≤ m k⊥ + π/L` and zero elsewhere.
+
+The quadrature (`forecast.py`) is Gauss–Legendre in k and μ, split at every kink of the
+integrand. Evaluation is batched by radial segment, which keeps the k-dependent angular
+boundaries of each segment and bounds the memory use. The same node generator is used by
+the finite check. Doubling either order changes the tolerance by less than 3 × 10⁻⁷.
 
 ## The table
 
-24 channels: DTV allocations 14 to 36 and channel 37, which carries no DTV and
-serves as the control, all in the specified cosmology. σ is the clean one-year uncertainty
-of D_V in percent; the response is signed.
+The table has 24 channels, all in the specified cosmology. These are the DTV allocations
+14 to 36 and channel 37, which carries no DTV and is the control. σ is the clean one-year
+uncertainty of D_V in percent, and the response is signed.
 
 | Channel | MHz | z | σ(D_V)/D_V (%) | Response | a_tol | |
 |---|---|---|---|---|---|---|
@@ -200,13 +216,13 @@ of D_V in percent; the response is signed.
 
 ![Summary](docs/figures/summary.png)
 
-Each plate shows where the residual sits in Fourier space at the tolerated strength,
-and how the bias of D_V grows with strength. The checked-in `docs/figures/` gallery
-lets readers inspect every channel without installing the software. These images
-are documentation, not calculation inputs. Regenerate the channel gallery with
-`rfisher figures --out docs/figures`. Rebuild the two Overview plots with
+Each plate shows the residual in Fourier space at the tolerated strength and the bias of
+D_V against the residual's strength. Since the `docs/figures/` gallery is checked in, every
+channel can be inspected without installing the software. No calculation reads these
+images. The channel gallery is regenerated with `rfisher figures --out docs/figures`, and
+the two Overview plots with
 `rfisher overview --out docs/figures --cosmology planck2018 --compare cmbspa2026`.
-Use `out/` for exploratory figures.
+Exploratory figures go in `out/`.
 
 ## Files
 
@@ -230,18 +246,18 @@ python -m pip install -e ".[test]"
 python -m pytest -q
 ```
 
-One test rebuilds channel 19 and checks it against the shipped table: σ to 1e-5 and the
-responses to 1e-4 of the larger dilation response (other numpy and scipy builds differ by
-a few parts in a million, which D_V's partial cancellation magnifies). CI also rebuilds
-channels 14, 29 and 37 against RadioFisher at the pinned commit.
+One test rebuilds channel 19 and compares it with the shipped table, σ to 1e-5 and the
+responses to 1e-4 of the larger dilation response. Other numpy and scipy builds change the
+result by a few parts in a million, and the partial cancellation in D_V magnifies this
+change. CI also rebuilds channels 14, 29, and 37 with RadioFisher at the pinned commit.
 
-### Figure colors
+## Figure colors
 
-Plots and diagrams use the WVU colors from the
-[Beamer template](https://github.com/WVURAIL/wvu_beamer_template), with a standalone
-copy in `src/rfisher/wvu_palette.py`. Update it with the template's
-`tools/export_plot_palette.py`. Blue denotes measurements; old gold provides
-contrast for model curves and small labels. Additional series use WVU accents
-and distinct markers or line styles where needed. Grayscale masks keep their
-binary meaning. Journal requirements take precedence; the palette does not
-affect the calculations or the shipped table.
+Plots and diagrams use the WVU colors of the
+[Beamer template](https://github.com/WVURAIL/wvu_beamer_template), and
+`src/rfisher/wvu_palette.py` is a standalone copy, updated with the template's
+`tools/export_plot_palette.py`. Blue is used for measurements, and old gold gives contrast
+for model curves and small labels. Further series use the WVU accents, with their own
+markers or line styles where needed, and grayscale masks keep their binary meaning. A
+journal's figure requirements take precedence over this palette. The palette has no effect
+on the calculations or the shipped table.

@@ -103,7 +103,7 @@ def make_fit(point):
 
 
 def save_study(root, protocol, contract_change=None, fit_change=None, preflight_change=None):
-    """Use the production receipt writer, including filename and payload binding."""
+    """Write the study with the production receipt writer and its filename and payload binding."""
     for channel in sorted({p["channel"] for p in protocol["points"]}):
         for level in ["base", "refined"]:
             folder = root / f"ch{channel}" / level
@@ -201,7 +201,7 @@ def test_ambiguous_multistart_uses_frozen_table_sigma_not_preflight_sigma(tmp_pa
 
     def change(fit, point, level, start):
         if point["a_over_atol"] == 1 and start == "fisher":
-            fit["theta"][2] += 0.004  # 0.02 of original sigma_perp, not 0.004 of preflight sigma.
+            fit["theta"][2] += 0.004  # 0.02 of the table's sigma_perp (0.2) and 0.004 of the preflight sigma (1.0)
             fit["objective"] += 1
 
     save_study(tmp_path, protocol, fit_change=change)

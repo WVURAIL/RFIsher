@@ -3,10 +3,10 @@
 For each channel, one RadioFisher forecast at the channel's own redshift gives
 the clean one-year uncertainty of the two BAO dilations and the bias a coherent
 DTV residual of unit strength adds to each. Bias is proportional to strength,
-so the channel's first-order tolerance is the strength at which the combined
-volume-distance bias equals its clean uncertainty. The detector compares
-its assigned strength with this table. nonlinear.py separately checks finite
-amplitudes in an expected-covariance model; neither calculation measures the
+so the channel's first-order tolerance is the strength that makes the bias of
+the volume-averaged distance D_V equal to its clean uncertainty. The detector
+compares its assigned strength with this table. nonlinear.py checks finite
+amplitudes in an expected-covariance model. Neither calculation measures the
 physical transfer or the cross-day residual.
 
     bands       the channels and their redshifts

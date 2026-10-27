@@ -1,9 +1,9 @@
 """Per-channel plates and the all-channel summary, drawn from a channel table.
 
-Each plate answers two questions for one channel:
-  (a) where in Fourier space the residual sits, at the tolerated strength;
-  (b) how the bias of D_V grows with the residual's strength, and where it
-      reaches the clean sigma.
+Each plate has two panels for one channel:
+  (a) the residual in Fourier space at the tolerated strength
+  (b) the bias of D_V against the residual's strength, with the point where
+      it reaches the clean sigma
 """
 from pathlib import Path
 

@@ -47,8 +47,8 @@ jobs:
       - run: python tools/generate_call_graph.py && git diff --exit-code docs/rfisher_functions.svg
 
   radiofisher-integration:
-    # RadioFisher at the pinned commit passes its own tests, and three channels
-    # (both ends of the band and the control) rebuild to the shipped table.
+    # RadioFisher at the pinned commit passes its own tests, and channels 14, 29,
+    # and 37 (the control) rebuild to the shipped table.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

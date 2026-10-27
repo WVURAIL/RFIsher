@@ -1,7 +1,7 @@
 """The assumed DTV residual-power template: a flat 6 MHz shelf.
 
 The template assigns the same visibility on every baseline that measures a
-Fourier cell, at the delay of its direction, so its power sits inside the
+Fourier cell, at the delay of its direction, so its power lies in the
 horizon wedge. Per Fourier mode, relative to RadioFisher's one-year noise
 power C_N:
 
@@ -9,18 +9,19 @@ power C_N:
              = 0                                          otherwise
 
   a        residual strength: |V_DTV|^2 / sigma_V^2 on one baseline in one frame, times the assumed effective temporal gain
-  N_nu     channels across the band (6 MHz / 0.39 MHz). A flat shelf puts all
-           its power in one line-of-sight mode (Parseval)
+  N_nu     frequency channels in the band (6 MHz / 0.39 MHz). A flat shelf puts
+           all its power in one line-of-sight mode (Parseval)
   N_meas   baselines measuring the same Fourier cell, n(u) A_eff / lambda^2
            (RadioFisher's own baseline density and area per receiver)
   k_w      m k_perp + pi / L, with m = r (1+z) / r_nu the horizon slope and L
            the band's depth. Averaging the source delay over baseline
            orientations spreads the one mode over |k_par| <= k_w, so each mode
-           there carries f_w = pi / (L k_w) of it
+           there receives a fraction f_w = pi / (L k_w) of it
 
-The template is the unit-strength residual; first-order bias is proportional to a.
-It sets the support of the unmodeled residual, not a cut on retained sky modes.
-It does not estimate gamma, temporal coherence, or post-processing suppression.
+The template is the residual at unit strength, and the first-order bias is
+proportional to a. The template sets the support of the unmodeled residual, and no
+retained sky modes are cut. This module does not estimate gamma, the temporal
+coherence, or any post-processing suppression.
 """
 import numpy as np
 from radiofisher.instrument import collecting_area_m2, wavelength_m

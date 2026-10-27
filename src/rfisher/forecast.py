@@ -1,15 +1,16 @@
 """Compute one channel's Fisher matrix and the residual's bias row.
 
-RadioFisher prepares the redshift bin and supplies each parameter's
-integrand at (k, mu). RFIsher then performs the integration. The residual
+RadioFisher prepares the redshift bin and supplies the integrand of each
+parameter at (k, mu). RFIsher then performs the integration. The residual
 bias row needs more resolution than RadioFisher's standard Simpson grid
 provides, so we use segmented Gauss-Legendre quadrature in both variables.
 
-Split the integral wherever its form changes: power-spectrum table knots,
-baseline-density knots, foreground and nonlinear cuts, and the residual's
-wedge edge. Evaluate the BAO-template derivative directly at each k with
-a central-difference step of 1e-7 Mpc^-1, setting it to zero below
-0.03 Mpc^-1, rather than interpolating it from RadioFisher's k grid.
+The integral is split wherever its form changes: at the power-spectrum
+table knots, the baseline-density knots, the foreground and nonlinear cuts,
+and the residual's wedge edge. The derivative of the BAO template is
+evaluated directly at each k, so no interpolation from RadioFisher's k grid
+is needed. A central difference with a step of 1e-7 Mpc^-1 is used, and the
+derivative is set to zero below 0.03 Mpc^-1.
 """
 import itertools
 
@@ -50,7 +51,7 @@ def prepare(band: Band, cosmo=None, expt=None, fns=None) -> dict:
 
 
 def radial_edges(p: dict) -> np.ndarray:
-    """Locate changes in the k integrand that need separate integration segments."""
+    """Locate the k values where the integrand changes form (the k segment edges)."""
     c = p["cosmo"]
     template = np.asarray(c["fbao"].x)
     pk = np.asarray(c["pk_nobao"].x)
@@ -66,7 +67,7 @@ def radial_edges(p: dict) -> np.ndarray:
 
 
 def angular_edges(k: float, p: dict) -> np.ndarray:
-    """Locate changes in the mu integrand at this k."""
+    """Locate the mu values where the integrand changes form at this k."""
     xratio = 2 * np.pi * p["nu"] * p["knots"] / (p["cosmo"]["r"] * k)
     xratio = xratio[(xratio > 0) & (xratio < 1)]
     mu = np.sqrt(np.maximum(0, 1 - xratio * xratio))
@@ -79,9 +80,10 @@ def angular_edges(k: float, p: dict) -> np.ndarray:
 def quadrature_segments(p: dict, radial_order: int, angular_order: int, *, edges=None):
     """Yield bounded batches of paired (k, mu) nodes and weights 2 k² dk dmu.
 
-    Each radial node has its own angular boundaries. Batch one radial segment
-    at a time so evaluation is vectorized without allocating the entire grid.
-    The linear forecast and finite-amplitude check use these same nodes.
+    Each radial node has its own angular boundaries. The nodes are batched one
+    radial segment at a time, so evaluation is vectorized and the entire grid
+    is never allocated. The linear forecast and the finite-amplitude check use
+    these same nodes.
     """
     qk, wk = leggauss(radial_order)
     qu, wu = leggauss(angular_order)
@@ -103,8 +105,9 @@ def quadrature_segments(p: dict, radial_order: int, angular_order: int, *, edges
 def integrate(p: dict, radial_order: int = RADIAL_ORDER, angular_order: int = ANGULAR_ORDER):
     """Integrate all Fisher elements over the positive-mu half of the grid.
 
-    Use F_ij = Vfac * 2 * integral(k^2 d_i d_j dk dmu), with mu in [0, 1].
-    The factor two accounts for the equal contribution at negative mu.
+    The Fisher matrix is F_ij = Vfac * 2 * integral(k^2 d_i d_j dk dmu), with
+    mu in [0, 1]. The factor two accounts for the equal contribution at
+    negative mu.
     """
     total, names = None, None
     for k, mu, weight in quadrature_segments(p, radial_order, angular_order):

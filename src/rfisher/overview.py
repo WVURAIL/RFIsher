@@ -8,7 +8,7 @@ fiducial values. Then combine the dilation uncertainties into
 sigma(D_V)/D_V.
 
 This reproduction uses every baseline in RadioFisher's as-built density,
-as the Overview forecast does. The tolerance table separately uses only
+as the Overview forecast does. The tolerance table uses only the
 inter-cylinder baselines. On the Overview's 15 redshift bins, this
 calculation reproduces the published forecast. On 6 MHz channels, it
 provides the clean reference for the tolerance calculation.
@@ -49,7 +49,7 @@ def bin_fisher(task):
 
 
 def combine(matrices: list, names: list) -> dict:
-    """Per-bin sigma(D_V)/D_V and sigma(f sigma_8) from the combined matrix."""
+    """Per-bin sigma(D_V)/D_V and sigma(f sigma_8) from the joint Fisher matrix of all bins."""
     n = len(matrices)
     if not n:
         raise ValueError("at least one redshift bin is required")

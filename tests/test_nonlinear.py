@@ -216,7 +216,8 @@ def test_retention_check_uses_covariance_scale_and_rejects_real_change():
 
 def test_blocked_sums_reproduce_independent_weighted_outer_products(model):
     m, _ = model
-    # Noninteger replication exercises the block boundary and final short block.
+    # 70003 modes, a noninteger number of copies of the grid, cross one 65536-mode block
+    # boundary and leave a short final block.
     ix = np.arange(70003) % len(m.k)
     repeated = FiniteBAOModel(
         m.k[ix],
