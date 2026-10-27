@@ -1,17 +1,17 @@
 """CHIME's baseline density n(x), built from the array layout.
 
 RadioFisher's CHIME density (src/radiofisher/data/nx_CHIME_800.dat) counts every pair of
-feeds, including the pairs within one cylinder. CHIME's 21 cm analyses drop those
+feeds, so the pairs on one cylinder are counted too. CHIME's 21 cm analyses drop these
 intra-cylinder baselines, which carry noise cross-talk and a strong response to diffuse
 Galactic emission (CHIME Collaboration 2025, arXiv:2511.19620; the stacking analysis of
 the CHIME Overview, Sec. IV.5). The tolerance table therefore uses the inter-cylinder
 pairs only (``inputs.experiment``). The Overview reproduction keeps RadioFisher's
 density, as the Overview's own forecast does.
 
-Layout: 4 cylinders 22 m apart east-west, 256 feeds per cylinder 0.3048 m apart
+The array has 4 cylinders 22 m apart east-west and 256 feeds per cylinder 0.3048 m apart
 north-south. As in RadioFisher's file, x = u / nu[MHz] = |d| / 300 m, n(x) = n(u) nu^2 is
 per unit x^2 and counts unordered pairs, and the grid is that file's. Built from all
-pairs this reproduces RadioFisher's file exactly.
+pairs, this density reproduces RadioFisher's file exactly.
 
     python -m rfisher.baselines      # rewrites src/rfisher/data/nx_CHIME_inter.dat
 """

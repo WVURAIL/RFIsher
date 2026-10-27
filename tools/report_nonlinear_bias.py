@@ -13,7 +13,7 @@ from rfisher.pk_cache import file_sha256
 
 
 class IncompleteStudyError(RuntimeError):
-    """A planned fit is unavailable; invalid provenance is a separate error."""
+    """Raised when a planned fit is unavailable. Invalid provenance raises ValueError."""
 
 
 def validate_contract(contract, channel, level, protocol, protocol_hash, common):
@@ -150,7 +150,11 @@ def small_amplitude_gate(point, audit):
 
 
 def build_report(protocol, protocol_hash, results, table, allow_incomplete=False):
-    """Audit every planned point; partial mode never relaxes provenance checks."""
+    """Audit every planned point.
+
+    With allow_incomplete, unavailable points are listed in the report, and the
+    provenance checks are applied in full.
+    """
     if not protocol["points"] or len({p["id"] for p in protocol["points"]}) != len(protocol["points"]):
         raise ValueError("protocol requires nonempty, unique point IDs")
     receipts, audits, channel_gates, missing, common = {}, {}, {}, {}, {}

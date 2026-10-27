@@ -1,22 +1,22 @@
 """Convert a channel's clean Fisher matrix and residual response into a tolerance.
 
-The fitted parameters are the BAO amplitude A, damping variance
-s_NL = sigma_nl**2 (Mpc squared), dilations alpha_perp and alpha_par,
-f sigma_8, and b sigma_8. Hold the other parameters at their fiducial
-values. Invert this fitted block to obtain the clean covariance C.
+The fitted parameters are the BAO amplitude A, the damping variance
+s_NL = sigma_nl**2 (Mpc squared), the dilations alpha_perp and alpha_par,
+f sigma_8, and b sigma_8. The other parameters are held at their fiducial
+values. The fitted block is inverted to obtain the clean covariance C.
 The extra '_Pres' column B gives the residual's projection onto each
 parameter, so C B is the first-order bias for unit residual strength.
 
-Next combine the two dilations into the volume-averaged distance used
-by the CHIME Overview:
+Next, the two dilations give the volume-averaged distance used by the
+CHIME Overview:
 
     ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par
     sigma_dv = sqrt(w C w), where w = (2/3, 1/3) on the dilations
     response_dv = (w . bias) / sigma_dv, per unit strength
     a_tol = 1 / |response_dv|
 
-At a_tol, the modeled bias equals one clean standard deviation. The sign
-needs care: alpha_V = D_V_fid / D_V, so the physical distance shift is
+At a_tol, the modeled bias equals one clean standard deviation. Since
+alpha_V = D_V_fid / D_V, the physical distance shift has the opposite sign,
 delta ln D_V / sigma_dv = -a * response_dv. Schema v2 stores the
 ln(alpha_V) projection in bias_dv_per_unit_a.
 """

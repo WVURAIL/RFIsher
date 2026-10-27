@@ -1,10 +1,10 @@
 """Fit a finite-amplitude BAO model to an expected covariance.
 
-These checks complement the published linear tables. The retained
-RadioFisher derivative switches specify a phenomenological model in
-which the BAO feature shifts; they do not supply the full Alcock-Paczynski
-signal transformation. The Fisher coordinate s_NL is the damping variance
-in Mpc squared.
+These checks complement the published linear tables. With the retained
+RadioFisher derivative switches, the model is phenomenological, and only
+the BAO feature shifts with the dilations. The full Alcock-Paczynski
+transformation of the signal is not modeled. In the Fisher matrix, the
+coordinate s_NL is the damping variance in Mpc squared.
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ class FiniteBAOModel:
         self.template_slope = np.diff(self.template_f) / np.diff(self.template_k)
         self.fisher = np.zeros((6, 6))
         self.bias_row = np.zeros(6)
-        # Bound dot-product length so refinement does not amplify summation error.
+        # The sums are taken in blocks of 65536 modes, so refinement does not amplify the summation error.
         for begin in range(0, len(self.k), 65536):
             block = slice(begin, begin + 65536)
             d, w = self.derivatives[block], self.weight[block]
@@ -175,7 +175,7 @@ class FiniteBAOModel:
         eps = strength * self.residual_fraction
         if np.any(t <= -1) or not np.all(np.isfinite(t)):
             raise ValueError("nonpositive or nonfinite modeled covariance")
-        # Stable clean divergence: log1p(t)-t/(1+t) starts at second order.
+        # The clean divergence log1p(t) - t/(1+t) starts at second order, so a series is used for |t| < 1e-4.
         clean = np.log1p(t) - t / (1 + t)
         small = np.abs(t) < 1e-4
         z = t[small]
@@ -315,7 +315,10 @@ class FiniteBAOModel:
 
 
 def check_retained_modes(fisher, bias_row, full):
-    """Check retention in the full quadrature's natural covariance scales."""
+    """Check that dropping infinite-noise modes leaves the Fisher matrix and bias row unchanged.
+
+    The errors are scaled by the covariance scales of the full quadrature.
+    """
     scale = np.sqrt(np.diag(full))
     errors = {
         "fisher_max_normalized": float(np.max(np.abs((fisher - full[:6, :6]) / np.outer(scale[:6], scale[:6])))),
@@ -331,9 +334,10 @@ def check_retained_modes(fisher, bias_row, full):
 
 
 def build_model(prepared, cache_dir, radial_order=8, angular_order=16, chunk_segments=64):
-    """Build the model on the forecast quadrature.
+    """Build the finite model on the forecast quadrature.
 
-    Checkpoint independent radial segments so completed work can be reused.
+    The radial segments are independent and are checkpointed in cache_dir, so
+    completed segments are reused.
     """
     from radiofisher import baofisher as rf
 
