@@ -234,3 +234,11 @@ def test_blocked_sums_reproduce_independent_weighted_outer_products(model):
     expected_b = np.einsum("ni,n->i", m.derivatives, m.weight * m.residual_fraction * counts)
     np.testing.assert_allclose(repeated.fisher, expected_f, rtol=1e-12, atol=1e-12)
     np.testing.assert_allclose(repeated.bias_row, expected_b, rtol=1e-12, atol=1e-12)
+
+
+def test_changed_direct_derivative_binding_is_refused(small_cache):
+    from rfisher.nonlinear import build_model
+    p, directory, _, _ = small_cache
+    p["cosmo"]["dfbao_dk"] = rf.DirectBAODerivative(p["cosmo"]["fbao"], step=2e-7)
+    with pytest.raises(ValueError, match="matched forecast derivative"):
+        build_model(p, directory, radial_order=2, angular_order=3, chunk_segments=8)

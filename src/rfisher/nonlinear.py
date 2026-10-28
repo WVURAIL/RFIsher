@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 import scipy
+from radiofisher import summarize_fisher
 from scipy.optimize import minimize
 
 from . import forecast
@@ -113,14 +114,12 @@ class FiniteBAOModel:
             d, w = self.derivatives[block], self.weight[block]
             self.fisher += (d.T * w) @ d
             self.bias_row += d.T @ (w * self.residual_fraction[block])
-        diagonal = np.sqrt(np.diag(self.fisher))
-        scaled = self.fisher / np.outer(diagonal, diagonal)
-        if np.linalg.cond(scaled) > 1e8 or np.linalg.eigvalsh(scaled)[0] <= 0:
-            raise ValueError("ill-conditioned fitted Fisher matrix")
-        self.covariance = np.linalg.solve(scaled, np.eye(6)) / np.outer(diagonal, diagonal)
-        self.scale = np.sqrt(np.diag(self.covariance))
-        self.linear_shift = self.covariance @ self.bias_row
-        self.sigma_dv = float(np.sqrt(DV_WEIGHTS @ self.covariance[2:4, 2:4] @ DV_WEIGHTS))
+        result = summarize_fisher(self.fisher, PARAMETERS, PARAMETERS, bias_projection=self.bias_row)
+        self.covariance = result.covariance
+        self.scale = result.sigma
+        self.linear_shift = result.bias
+        distance = result.project(np.r_[0., 0., DV_WEIGHTS, 0., 0.], ("ln_alpha_V",))
+        self.sigma_dv = float(distance.sigma[0])
         self.a_tol = self.sigma_dv / abs((2 * self.linear_shift[2] + self.linear_shift[3]) / 3)
 
     def domain(self):
@@ -350,10 +349,10 @@ def build_model(prepared, cache_dir, radial_order=8, angular_order=16, chunk_seg
         raise ValueError("finite check requires the bound standard coherent-shelf residual")
     df = c["dfbao_dk"]
     if (
-        getattr(df, "__module__", None) != "rfisher.forecast"
-        or getattr(df, "__qualname__", None) != "prepare.<locals>.dfbao_dk"
-        or len(df.__closure__ or ()) != 1
-        or df.__closure__[0].cell_contents is not c["fbao"]
+        not isinstance(df, rf.DirectBAODerivative)
+        or df.fbao is not c["fbao"]
+        or df.step != forecast.STEP
+        or df.cutoff != 0.03
     ):
         raise ValueError("finite check requires the matched forecast derivative hook")
     cache_dir = Path(cache_dir)
@@ -366,6 +365,7 @@ def build_model(prepared, cache_dir, radial_order=8, angular_order=16, chunk_seg
         "chunk_segments": chunk_segments,
         "source_sha256": file_sha256(__file__),
         "theta0": theta0.tolist(),
+        "bao_derivative": {"method": "direct", "step": df.step, "cutoff": df.cutoff},
         "template_sha256": array_digest({"x": c["fbao"].x, "y": c["fbao"].y}),
         "pk_sha256": array_digest({"x": c["pk_nobao"].x, "y": c["pk_nobao"].y}),
         "baseline_sha256": file_sha256(e["n(x)_file"]),

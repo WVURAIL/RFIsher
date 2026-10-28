@@ -8,7 +8,7 @@ forecast at the channel's own redshift, with CHIME as in the CHIME Overview on t
 inter-cylinder baselines CHIME's analyses use, the specified cosmology and one retained year of data. The two BAO dilations are combined into the one number the
 CHIME Overview reports, the volume-averaged distance D_V
 (`ln α_V = 2/3 ln α⊥ + 1/3 ln α∥`). The forecast gives its clean uncertainty σ. A
-coherent DTV residual of unit strength is added through RadioFisher's residual hook,
+fully coherent DTV residual of unit strength is added through RadioFisher's residual hook,
 and the forecast returns the bias it causes in D_V. Bias is proportional to the
 residual's strength `a`, so each channel reduces to one **response** (bias ÷ σ per unit
 strength) and one **tolerance**:
@@ -19,7 +19,9 @@ A residual weaker than `a_tol` has a first-order assigned bias below its σ.
 
 The table of these numbers is RFIsher's main output. It does not depend on the
 detector's calibration: a new threshold, era or mask never needs a new table. Only a
-new cosmology, telescope, residual model or retained-time anchor does.
+new cosmology, telescope, residual model or retained-time anchor does. Full coherence
+is the adopted assumption. Stacking, estimating gamma, and fitting temporal-coherence
+gains are outside this workflow; their existing code is retained for historical work.
 
 The optional [finite BAO-only likelihood check](docs/NONLINEAR_BIAS_CHECK.md)
 tests the local bias approximation against an explicitly defined nonlinear
@@ -80,9 +82,8 @@ rfisher overview --out out/overview --workers 12
 ```
 
 Set `--workers` to suit the machine. See [the paper/code contract](docs/PAPER_CODE_MAP.md)
-to trace each quantity, or PilotProxy's
-[first-run walkthrough](https://github.com/WVURAIL/pilotproxy/blob/main/docs/FIRST_RUN.md)
-to continue from this response table to the paper's conditional thresholds.
+to trace each quantity. The response and tolerance above are the outputs of the
+full-coherence calculation.
 
 ## Reference: the CHIME Overview forecast
 
@@ -96,8 +97,7 @@ large. The reproduction counts every baseline, as the Overview's forecast does
 (RadioFisher's as-built density), so it matches the published numbers. The tolerance
 table does not: CHIME's analyses drop the pairs within one cylinder, which carry noise
 cross-talk and a strong response to diffuse Galactic emission (CHIME Collaboration 2025,
-arXiv:2511.19620), and the stack-to-proxy amplitude ratio used with the table is measured between
-cylinders. Without those baselines the table's clean σ(D_V) is 17% to 34% larger than on
+arXiv:2511.19620). Without those baselines the table's clean σ(D_V) is 17% to 34% larger than on
 all of them. On all baselines it agrees with the reproduction to within 1.5% on every
 channel; the table integrates more finely and fits `s_NL` per channel.
 
@@ -117,12 +117,25 @@ rfisher overview --out out/overview --cosmology planck2018 --compare cmbspa2026
 
 ## The residual strength
 
-The detector maps the retained shelf proxy into the table's strength using
-`a = (gamma x_hi)^2 N G`. `x_hi` is the retained per-input shelf proxy's upper
-end, `gamma` is the measured calibrated redundant-stack amplitude divided by
-the archive proxy, and `N = 16,384` is the frame length. `gamma` is not an
-intrinsic coherent fraction. `G` is an assumed effective temporal gain for an
-unmeasured cross-moment, not a measured coherence time or a cross-day bound.
+The residual is fully coherent across measurements contributing to a Fourier cell.
+Its dimensionless strength `a` directly multiplies the unit template:
+
+```text
+dP / C_N = a * N_nu * N_meas(k_perp) * f_w(k_perp)
+```
+
+Here `C_N` is the noise power at the forecast's retained exposure. Supply `a`
+in that normalization: RFIsher applies no stack-derived gamma or fitted temporal
+gain. The response table remains unchanged because its unit template already
+uses this coherent sum.
+
+A per-frame detector proxy is not automatically an exposure-normalized `a`.
+For M equally weighted repeats with independent thermal noise, a fully coherent
+residual retains its visibility while the noise variance falls by M; its
+power-to-noise ratio therefore grows by M. Setting a historical temporal-gain
+factor to one would not represent full temporal coherence. That proxy conversion
+and the previous `(gamma x_hi)^2 N G` calibration are outside the present scope.
+
 The first-order bias ratio is `a * abs(response_dv)`.
 The signed distance shift is `delta ln D_V / sigma_dv = -a * response_dv`,
 since the fitted dilation is `alpha_V = D_V_fid / D_V`. The table field
@@ -135,19 +148,45 @@ comparison uses the Overview's ideal year: retaining fraction `kappa` requires
 penalty is a separate scenario. A fixed calendar-duration forecast instead uses
 `ttot = 8760 * Y * kappa` hours; it must be recomputed at that exposure.
 
-The threshold rule is in PilotProxy. Its finite-amplitude and channel-specific
-transfer budgets are external inputs, not silently included in `a_tol`.
-`nonlinear.py` and the validation tools check the expected-likelihood model;
-they do not establish the physical transfer or cross-day DTV covariance.
+The previous calibrated threshold rule remains in PilotProxy for historical
+work and is not part of this full-coherence workflow. `nonlinear.py` and the
+validation tools separately check the expected-likelihood model.
 See [the paper/code contract](docs/PAPER_CODE_MAP.md).
+
+## How the bias is calculated
+
+RadioFisher evaluates the clean covariance and its parameter derivatives. With
+`P_res` attached, it adds a `_Pres` integrand equal to `dP / C`, where `C` is
+the clean total covariance. RadioFisher integrates the same weighted products for
+both the clean Fisher block and the residual projection:
+
+```text
+F_ij = integral W (C_,i / C) (C_,j / C)
+B_i  = integral W (C_,i / C) (dP / C)
+bias = inverse(F_fit) B_fit
+parameter_covariance = inverse(F_fit)
+```
+
+Thus one derivative factor is replaced by the residual to form `B`; the bias
+is obtained after solving with the clean Fisher block. `_Pres` is excluded
+from the fitted parameters. RadioFisher supplies the integrands, segmented
+quadrature, conditioned solve, and general projection API. RFIsher
+`forecast.py` adds the DTV integration boundary; `tolerance.tolerance` selects
+the fitted parameters and D_V weights, then calls `radiofisher.summarize_fisher`
+and its `project` method. The outputs include
+`sigma_dv`, `bias_dv_per_unit_a`, `response_dv`, and `a_tol`. `sigma_dv` is the
+clean statistical uncertainty on the distance measurement, not an uncertainty
+on the assumed systematic bias. This is the first-order bias construction in
+[Amara & Réfrégier (2008), Eqs. 7–8](https://arxiv.org/abs/0710.5171).
 
 ## The model
 
 - **Inputs** (`inputs.py`): the specified cosmology, `cmbspa2026` (SPT-3G, ACT and Planck CMB
   with DESI DR2 BAO), with its linear P(k) table, checked against the cosmology before use; CHIME as in the CHIME Overview (4 cylinders × 256 feeds,
   T_sys = 55 K, 31,000 deg², 0.39 MHz channels); the inter-cylinder baselines only,
-  built from the array layout (`baselines.py`, `data/nx_CHIME_inter.dat`; built from all
-  pairs, the same code reproduces RadioFisher's as-built density exactly); 8,760 h of
+  built from the array layout by `radiofisher.baselines` (`rfisher.baselines`
+  retains the compatibility interface and recorded data file); built from all
+  pairs, the same code reproduces the as-built density exactly; 8,760 h of
   retained data.
 - **Fit** (`tolerance.py`): A, s_NL = σ_NL², α⊥, α∥, fσ8 and bσ8 are fitted; the rest are held
   at the fiducial. The dilations are combined into D_V as the CHIME Overview does. The
@@ -160,10 +199,25 @@ See [the paper/code contract](docs/PAPER_CODE_MAP.md).
   with support inside the horizon wedge. This distributes the residual; it does not
   excise wedge modes or apply a delay filter. Relative to the noise power,
   `dP / C_N = a × N_ν × N_meas(k⊥) × f_w(k⊥)` for `|k∥| ≤ m k⊥ + π/L`, and zero outside.
-- **Quadrature** (`forecast.py`): Gauss–Legendre in k and μ, split at every kink of the
-  integrand. Evaluation is batched by radial segment, preserving its k-dependent angular
-  boundaries and bounding memory use. The same node generator serves the finite
-  check. Doubling either order changes the tolerance by less than 3 × 10⁻⁷.
+- **Quadrature** (`radiofisher.quadrature`, selected by `forecast.py`):
+  Gauss–Legendre in k and μ, split at the model breakpoints and the DTV wedge
+  boundary. RadioFisher evaluates the direct BAO derivative and integrates
+  bounded radial batches. The same nodes serve the finite check. Doubling
+  either order changes the tolerance by less than 3 × 10⁻⁷.
+
+## Package boundary
+
+RFIsher is the DTV study application. It specifies the channel bins, adopted
+inputs, coherent residual, fitted parameters, D_V projection, and tolerance
+outputs. RadioFisher owns the common physics, derivative evaluation, numerical
+integration, baseline construction, covariance/bias solve, and propagation
+through a supplied Jacobian.
+
+The finite BAO-only likelihood study remains here because it is tied to these
+model choices. Its linear reference uses the same RadioFisher result API.
+Moving the direct derivative upstream changes the recorded source and cache
+identity: use a fresh finite-model cache after upgrading, rather than relabeling
+an existing cache. Historical channel-table provenance remains unchanged.
 
 ## The table
 
@@ -214,9 +268,9 @@ Use `out/` for exploratory figures.
 |---|---|
 | `src/rfisher/bands.py` | the channels and their redshifts |
 | `src/rfisher/inputs.py`, `pk_cache.py` | the fixed forecast inputs and the P(k) table check |
-| `src/rfisher/baselines.py`, `data/nx_CHIME_inter.dat` | the inter-cylinder baseline density, built from the array layout |
+| `src/rfisher/baselines.py`, `data/nx_CHIME_inter.dat` | compatibility wrapper and recorded inter-cylinder density |
 | `src/rfisher/residual.py` | the coherent DTV residual |
-| `src/rfisher/forecast.py` | one channel's Fisher matrix with the residual's bias row |
+| `src/rfisher/forecast.py` | channel setup and residual boundaries for RadioFisher integration |
 | `src/rfisher/tolerance.py` | σ and bias of D_V, response and tolerance |
 | `src/rfisher/overview.py` | the CHIME Overview forecast, reproduced, and in 6 MHz channels |
 | `src/rfisher/table.py`, `figures.py`, `cli.py` | the table, the figures, the command line |

@@ -100,6 +100,8 @@ def build_table(bands=None, workers: int | None = None) -> dict:
                            "baselines": inputs.DEFAULT_BASELINES,
                             "retained_hours": inputs.RETAINED_HOURS,
                             "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
+                            "coherence": "full",
+                            "strength_normalization": "direct unit-template amplitude at the forecast exposure",
                             "fitted": list(FITTED),
                             "tolerance_on": "D_V: ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par",
                             "quadrature": {"radial_order": forecast.RADIAL_ORDER,

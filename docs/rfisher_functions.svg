@@ -37,7 +37,7 @@
 <text x="56" y="329" font-size="14" fill="#1C2B39" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">1  forecast.prepare(band)</text>
 <text x="56" y="350" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">radiofisher.prepare_bin(z_min, z_max, ...)</text>
 <text x="56" y="368" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">  the channel's own redshift, 6 MHz deep</text>
-<text x="56" y="386" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">BAO template slope taken directly at each k</text>
+<text x="56" y="386" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">radiofisher direct BAO derivative (step = 1e-7)</text>
 <text x="56" y="404" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">residual.geometry(cosmo, expt)</text>
 <text x="56" y="422" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">residual.coherent_shelf(g)  -&gt;  expt['P_res']</text>
 <rect x="664" y="306" width="592" height="156" rx="7" fill="#F0ECE2" stroke="#7F6310" stroke-width="2.2"/>
@@ -51,16 +51,16 @@
 <line x1="344" y1="462" x2="344" y2="484" stroke="#1C2B39" stroke-width="1.5" marker-end="url(#a)"/>
 <rect x="44" y="486" width="1212" height="118" rx="7" fill="#E0E5EB" stroke="#002855" stroke-width="1.3"/>
 <text x="56" y="509" font-size="14" fill="#1C2B39" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">2  forecast.integrate(p)</text>
-<text x="56" y="530" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">radial_edges, angular_edges (+ residual.wedge_mu): split k and mu at every kink of the integrand</text>
-<text x="56" y="548" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">quadrature_segments: Gauss-Legendre, 8 nodes per k segment x 16 per mu segment; batched paired nodes</text>
-<text x="56" y="566" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">radiofisher.fisher_integrands(..., paired=True)  -&gt;  12 parameter rows and the '_Pres' row</text>
+<text x="56" y="530" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">radiofisher.quadrature supplies model breakpoints; RFIsher adds residual.wedge_mu</text>
+<text x="56" y="548" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">quadrature.quadrature_segments: Gauss-Legendre, 8 x 16 nodes; bounded paired batches</text>
+<text x="56" y="566" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">radiofisher.quadrature.integrate_segments -&gt; shared fisher_integrands(..., paired=True)</text>
 <text x="56" y="584" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">F_ij = Vfac x 2 Sum k^2 w d_i d_j   (13 x 13, the last row and column belong to the residual)</text>
 <line x1="344" y1="604" x2="344" y2="626" stroke="#1C2B39" stroke-width="1.5" marker-end="url(#a)"/>
 <rect x="44" y="628" width="1212" height="136" rx="7" fill="#FFFFFF" stroke="#1C2B39" stroke-width="1.3"/>
 <text x="56" y="651" font-size="14" fill="#1C2B39" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">3  tolerance.tolerance(F, names)</text>
-<text x="56" y="672" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">fit A, damping variance s_NL, alpha_perp, alpha_par, f sigma_8, b sigma_8</text>
+<text x="56" y="672" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">radiofisher.summarize_fisher: fit A, s_NL, alpha_perp, alpha_par, f sigma_8, b sigma_8</text>
 <text x="56" y="690" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">C = (F_fit)^-1, the clean one-year covariance;   B = the '_Pres' column;   bias per unit a = C B</text>
-<text x="56" y="708" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">combine the dilations as the CHIME Overview does: ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par</text>
+<text x="56" y="708" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">FisherResult.project: caller supplies ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par</text>
 <text x="56" y="726" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">sigma_dv = sqrt(w C w);   response_dv = (w . bias) / sigma_dv,   w = (2/3, 1/3)</text>
 <text x="56" y="744" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">delta ln D_V / sigma_dv = -a response_dv;   a_tol = 1 / |response_dv|</text>
 <line x1="344" y1="764" x2="344" y2="786" stroke="#1C2B39" stroke-width="1.5" marker-end="url(#a)"/>
@@ -80,9 +80,9 @@
 <text x="668" y="976" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">channel_NN.png: where the residual sits, and the bias</text>
 <text x="668" y="994" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">of D_V against residual strength</text>
 <rect x="24" y="1030" width="1252" height="100" rx="7" fill="#FFFFFF" stroke="#554741" stroke-width="1.3" stroke-dasharray="6 4"/>
-<text x="36" y="1053" font-size="14" fill="#554741" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">downstream, not in RFIsher: the detector side reads the table</text>
-<text x="36" y="1074" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">for each threshold: retained proxy x and kept fraction kappa from saved frame scores and signed excesses</text>
-<text x="36" y="1092" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">a = (gamma x_hi)^2 x 16,384 x G; gamma = stack / proxy, G = assumed gain; bias / sigma = a x |response_dv|</text>
-<text x="36" y="1110" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">rule: knee or loosest tighter threshold meeting the budget, calendar and last-year guards; otherwise unassigned</text>
+<text x="36" y="1053" font-size="14" fill="#554741" font-weight="600" text-anchor="start" font-family="DejaVu Sans Mono, monospace" xml:space="preserve">full-coherence use: supply residual strength a at the forecast exposure</text>
+<text x="36" y="1074" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">bias / sigma = a x |response_dv|; signed distance shift = -a x bias_dv_per_unit_a</text>
+<text x="36" y="1092" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">sigma_dv is the clean distance uncertainty; a_tol is the first-order strength giving |bias| = sigma</text>
+<text x="36" y="1110" font-size="12.5" fill="#554741" font-weight="normal" text-anchor="start" xml:space="preserve">stacking, gamma estimation and temporal-gain fits are outside scope; existing code is retained</text>
 <line x1="330" y1="1010" x2="330" y2="1028" stroke="#554741" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#m)"/>
 </svg>

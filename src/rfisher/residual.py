@@ -8,7 +8,8 @@ power C_N:
     dP / C_N = a * N_nu * N_meas(k_perp) * f_w(k_perp)   for |k_par| <= k_w(k_perp)
              = 0                                          otherwise
 
-  a        residual strength: |V_DTV|^2 / sigma_V^2 on one baseline in one frame, times the assumed effective temporal gain
+  a        dimensionless residual strength at the forecast exposure; supplied
+           directly, without a stack-derived amplitude or temporal-gain fit
   N_nu     channels across the band (6 MHz / 0.39 MHz). A flat shelf puts all
            its power in one line-of-sight mode (Parseval)
   N_meas   baselines measuring the same Fourier cell, n(u) A_eff / lambda^2
@@ -18,9 +19,13 @@ power C_N:
            orientations spreads the one mode over |k_par| <= k_w, so each mode
            there carries f_w = pi / (L k_w) of it
 
-The template is the unit-strength residual; first-order bias is proportional to a.
+Full coherence is assumed across the measurements contributing to a Fourier
+cell. The template is the unit-strength residual; first-order bias is
+proportional to a. Its noise normalization is at the forecast exposure, not
+per frame: a per-frame proxy needs a separate exposure conversion.
 It sets the support of the unmodeled residual, not a cut on retained sky modes.
-It does not estimate gamma, temporal coherence, or post-processing suppression.
+Stacking, gamma estimation, temporal-gain fits, and post-processing suppression
+are outside this workflow.
 """
 import numpy as np
 from radiofisher.instrument import collecting_area_m2, wavelength_m

@@ -63,7 +63,7 @@ s.append(text(200, 292, "for each channel, in parallel under table.build_table()
 
 s.append(box(44, 306, 600, 156, "1  forecast.prepare(band)", ["radiofisher.prepare_bin(z_min, z_max, ...)",
                                                              "  the channel's own redshift, 6 MHz deep",
-                                                             "BAO template slope taken directly at each k",
+                                                             "radiofisher direct BAO derivative (step = 1e-7)",
                                                              "residual.geometry(cosmo, expt)",
                                                              "residual.coherent_shelf(g)  ->  expt['P_res']"], stroke=BLUE, fill=BLUEBG))
 s.append(box(664, 306, 592, 156, "residual.coherent_shelf: the DTV model", [
@@ -76,16 +76,16 @@ s.append(arrow(662, 420, 646, 420, MODEL, "b"))
 s.append(arrow(344, 462, 344, 484))
 
 s.append(box(44, 486, 1212, 118, "2  forecast.integrate(p)", [
-    "radial_edges, angular_edges (+ residual.wedge_mu): split k and mu at every kink of the integrand",
-    "quadrature_segments: Gauss-Legendre, 8 nodes per k segment x 16 per mu segment; batched paired nodes",
-    "radiofisher.fisher_integrands(..., paired=True)  ->  12 parameter rows and the '_Pres' row",
+    "radiofisher.quadrature supplies model breakpoints; RFIsher adds residual.wedge_mu",
+    "quadrature.quadrature_segments: Gauss-Legendre, 8 x 16 nodes; bounded paired batches",
+    "radiofisher.quadrature.integrate_segments -> shared fisher_integrands(..., paired=True)",
     "F_ij = Vfac x 2 Sum k^2 w d_i d_j   (13 x 13, the last row and column belong to the residual)"], stroke=BLUE, fill=BLUEBG))
 s.append(arrow(344, 604, 344, 626))
 
 s.append(box(44, 628, 1212, 136, "3  tolerance.tolerance(F, names)", [
-    "fit A, damping variance s_NL, alpha_perp, alpha_par, f sigma_8, b sigma_8",
+    "radiofisher.summarize_fisher: fit A, s_NL, alpha_perp, alpha_par, f sigma_8, b sigma_8",
     "C = (F_fit)^-1, the clean one-year covariance;   B = the '_Pres' column;   bias per unit a = C B",
-    "combine the dilations as the CHIME Overview does: ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par",
+    "FisherResult.project: caller supplies ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par",
     "sigma_dv = sqrt(w C w);   response_dv = (w . bias) / sigma_dv,   w = (2/3, 1/3)",
     "delta ln D_V / sigma_dv = -a response_dv;   a_tol = 1 / |response_dv|"]))
 s.append(arrow(344, 764, 344, 786))
@@ -103,10 +103,10 @@ s.append(box(656, 914, 620, 96, "figures.draw_all(table, out)", ["summary.png: t
                                                                  "of D_V against residual strength"]))
 
 # downstream
-s.append(box(24, 1030, 1252, 100, "downstream, not in RFIsher: the detector side reads the table", [
-    "for each threshold: retained proxy x and kept fraction kappa from saved frame scores and signed excesses",
-    "a = (gamma x_hi)^2 x 16,384 x G; gamma = stack / proxy, G = assumed gain; bias / sigma = a x |response_dv|",
-    "rule: knee or loosest tighter threshold meeting the budget, calendar and last-year guards; otherwise unassigned"],
+s.append(box(24, 1030, 1252, 100, "full-coherence use: supply residual strength a at the forecast exposure", [
+    "bias / sigma = a x |response_dv|; signed distance shift = -a x bias_dv_per_unit_a",
+    "sigma_dv is the clean distance uncertainty; a_tol is the first-order strength giving |bias| = sigma",
+    "stacking, gamma estimation and temporal-gain fits are outside scope; existing code is retained"],
     stroke=MUTED, dash="6 4", tcol=MUTED))
 s.append(f'<line x1="330" y1="1010" x2="330" y2="1028" stroke="{MUTED}" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#m)"/>')
 s.append("</svg>")
