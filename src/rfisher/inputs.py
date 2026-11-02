@@ -71,8 +71,9 @@ def cosmology(name: str = DEFAULT_COSMOLOGY) -> dict:
 def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES) -> dict:
     """CHIME as in the CHIME Overview, observing for ``hours`` of retained data.
 
-    ``baselines`` is "inter-cylinder" (the default: CHIME's analyses drop the pairs within
-    one cylinder) or "all" (RadioFisher's as-built density, as the Overview's forecast uses).
+    ``baselines`` is "inter-cylinder" (the default, since CHIME's analyses drop the
+    intra-cylinder pairs) or "all" (RadioFisher's as-built density, as the Overview's
+    forecast uses).
     """
     if baselines not in BASELINES:
         raise ValueError(f"unknown baselines {baselines!r}; choose one of {BASELINES}")

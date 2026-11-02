@@ -25,7 +25,7 @@ def test_figures_for_one_channel(tmp_path, capsys):
 
 
 def test_table_for_one_channel(tmp_path, monkeypatch):
-    # The forecast is checked in test_table; this checks the command around it.
+    # The forecast is checked in test_table.py. This test checks the command around it.
     monkeypatch.setattr(table, "row", fake_row)
     main(["table", "--out", str(tmp_path), "--channels", "37", "--workers", "1"])
     assert [r["channel"] for r in table.read_table(tmp_path / "channel_table.json")["channels"]] == [37]

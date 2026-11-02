@@ -25,8 +25,9 @@ def test_a_channel_rebuilds_to_the_shipped_row(number):
     assert fresh["normalization"]["power_scale"] == pytest.approx(shipped["normalization"]["power_scale"], rel=1e-10)
     for key in ("z_center", "sigma_dv"):
         assert fresh[key] == pytest.approx(shipped[key], rel=1e-5), key
-    # D_V partly cancels the two dilation responses, which magnifies build differences
-    # in its relative value; hold it to 1e-4 of the larger dilation response instead.
+    # The two dilation responses partly cancel in D_V, which magnifies the small changes between
+    # numpy and scipy builds in the relative D_V response. Each response is compared to 1e-4 of
+    # the larger dilation response.
     scale = max(abs(v) for v in shipped["dilations"]["response"])
     for fr, sh in zip(fresh["dilations"]["response"], shipped["dilations"]["response"]):
         assert abs(fr - sh) <= 1e-4 * scale

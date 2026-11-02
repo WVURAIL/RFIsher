@@ -1,8 +1,8 @@
-"""The linear P(k) table: check that it belongs to the cosmology, or rebuild it.
+"""Check that the linear P(k) table belongs to the cosmology, or rebuild it.
 
 The table's header binds it to the physical densities, the CAMB settings and a
 SHA-256 digest of its numbers. Rebuilding needs the optional ``camb`` package
-(pip install -e '.[pk]'); a committed table only needs checking.
+(pip install -e '.[pk]'). A committed table only needs checking.
 """
 import copy
 import hashlib
@@ -24,8 +24,9 @@ NEUTRINO_MASS_DENSITY_EV = 93.04
 def physical_densities(cosmo: dict) -> dict:
     """Baryon, cold dark matter and neutrino densities (omega h^2).
 
-    ``omega_M_0`` is total matter including massive neutrinos. An explicit
-    ``ombh2``/``omch2``/``omnuh2`` triplet takes precedence.
+    ``omega_M_0`` is the total matter density and covers the massive neutrinos. When
+    the explicit ``ombh2``/``omch2``/``omnuh2`` triplet is given, it is used in place of
+    the densities derived from ``omega_b_0``, ``omega_M_0``, and ``mnu``.
     """
     explicit = ("ombh2", "omch2", "omnuh2")
     present = [key for key in explicit if key in cosmo]
@@ -115,7 +116,7 @@ def inspect_pk_cache(path) -> dict:
 
 def cache_matches(path, cosmo: dict, kmax_h: float = DEFAULT_KMAX_H,
                   npoints: int = DEFAULT_NPOINTS) -> bool:
-    """Whether the table is intact and was built for this cosmology."""
+    """True when the table is intact and was built for this cosmology."""
     try:
         meta = inspect_pk_cache(path)
     except (OSError, ValueError, IndexError, UnicodeDecodeError, json.JSONDecodeError):
