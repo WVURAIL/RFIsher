@@ -1,13 +1,11 @@
 """DTV channel setup and integration boundaries for RadioFisher.
 
 RadioFisher owns the BAO derivative, quadrature, and covariance integrands.
-RFIsher selects the study inputs and adds the coherent residual's wedge edge
-so the shared integration resolves its discontinuity.
+RFIsher selects the study inputs and attaches a flat unit-power residual.
 """
 import numpy as np
 import radiofisher as rf
 from radiofisher import quadrature
-from radiofisher.instrument import mode_limits
 
 from . import inputs, residual
 from .bands import Band
@@ -27,11 +25,8 @@ def prepare(band: Band, cosmo=None, expt=None, fns=None) -> dict:
         band.z_min, band.z_max, cosmo, expt, fns, *K_RANGE,
         bao_derivative="direct", bao_step=STEP,
     )
-    g = residual.geometry(c, e)
-    e["P_res"] = residual.coherent_shelf(g)
-    kfg, knl = mode_limits(c, e)
-    return {"cosmo": c, "expt": e, "Vfac": Vfac, "geometry": g, "band": band,
-            "kfg": kfg, "knl": knl, "nu": e["nu_line"] / (1 + c["z"]),
+    e["P_res"] = residual.unit_power
+    return {"cosmo": c, "expt": e, "Vfac": Vfac, "band": band,
             "knots": np.genfromtxt(e["n(x)_file"])[:, 0]}
 
 
@@ -44,14 +39,12 @@ def radial_edges(p: dict) -> np.ndarray:
 
 
 def angular_edges(k: float, p: dict) -> np.ndarray:
-    """Add the DTV wedge edge to RadioFisher's angular breakpoints."""
-    edges = quadrature.angular_edges(k, p["cosmo"], p["expt"], p["knots"])
-    wedge = residual.wedge_mu(k, p["geometry"])
-    return edges if wedge is None else np.unique(np.r_[edges, wedge])
+    """Instrument and foreground breakpoints of the clean forecast."""
+    return quadrature.angular_edges(k, p["cosmo"], p["expt"], p["knots"])
 
 
 def quadrature_segments(p: dict, radial_order: int, angular_order: int, *, edges=None):
-    """Shared RadioFisher nodes with this study's residual boundary."""
+    """Shared RadioFisher quadrature nodes and integration weights."""
     return quadrature.quadrature_segments(
         radial_edges(p) if edges is None else edges,
         lambda k: angular_edges(k, p), radial_order, angular_order,

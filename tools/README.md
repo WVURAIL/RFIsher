@@ -1,12 +1,5 @@
-# Development and validation tools
+# Plot configuration
 
-Run from the repository root with the package installed.
-
-- `check_nonlinear_bias.py`: execute the finite-amplitude study specified by a protocol.
-- `report_nonlinear_bias.py`: qualify and summarize its recorded fits.
-- `generate_call_graph.py`: regenerate `docs/rfisher_functions.svg`.
-
-The nonlinear tools require explicit study inputs; they are not prerequisites
-for reading the shipped table. Preserve the original protocols and fit receipts.
-See [the paper/code contract](../docs/PAPER_CODE_MAP.md) for the numerical and
-physical limits of these checks.
+The retained tool, `wvu_palette.py`, supplies the plot colors.
+Forecast generation is available through the package CLI. Local finite-amplitude
+checks are covered by `tests/test_nonlinear.py`.

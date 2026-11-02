@@ -1,73 +1,57 @@
-"""The assumed DTV residual-power template: a flat 6 MHz shelf.
+"""Flat additive DTV power in the same covariance units (mK^2) as C_S.
 
-The template assigns the same visibility on every baseline that measures a
-Fourier cell, at the delay of its direction, so its power sits inside the
-horizon wedge. Per Fourier mode, relative to RadioFisher's one-year noise
-power C_N:
-
-    dP / C_N = a * N_nu * N_meas(k_perp) * f_w(k_perp)   for |k_par| <= k_w(k_perp)
-             = 0                                          otherwise
-
-  a        dimensionless residual strength at the forecast exposure; supplied
-           directly, without a stack-derived amplitude or temporal-gain fit
-  N_nu     channels across the band (6 MHz / 0.39 MHz). A flat shelf puts all
-           its power in one line-of-sight mode (Parseval)
-  N_meas   baselines measuring the same Fourier cell, n(u) A_eff / lambda^2
-           (RadioFisher's own baseline density and area per receiver)
-  k_w      m k_perp + pi / L, with m = r (1+z) / r_nu the horizon slope and L
-           the band's depth. Averaging the source delay over baseline
-           orientations spreads the one mode over |k_par| <= k_w, so each mode
-           there carries f_w = pi / (L k_w) of it
-
-Full coherence is assumed across the measurements contributing to a Fourier
-cell. The template is the unit-strength residual; first-order bias is
-proportional to a. Its noise normalization is at the forecast exposure, not
-per frame: a per-frame proxy needs a separate exposure conversion.
-It sets the support of the unmodeled residual, not a cut on retained sky modes.
-Stacking, gamma estimation, temporal-gain fits, and post-processing suppression
-are outside this workflow.
+The unit template is one at every forecast mode. Its amplitude is a power,
+not a voltage, a power-to-noise ratio, or an integrated total over grid nodes.
+Quadrature weights supply the integration measure; refining the grid must not
+renormalize the residual. The modeled first-order bias scales linearly with
+the supplied power.
 """
 import numpy as np
-from radiofisher.instrument import collecting_area_m2, wavelength_m
-from scipy.optimize import brentq
+
+MODEL = "flat-additive-power-v1"
+UNITS = "mK^2"
+
+def unit_power(k, mu, cn, cs):
+    """Unit additive covariance, independent of noise and quadrature density."""
+    return np.ones(np.broadcast_shapes(np.shape(k), np.shape(mu), np.shape(cn), np.shape(cs)))
 
 
-def geometry(cosmo: dict, expt: dict) -> dict:
-    """The quantities the template needs, from a prepared RadioFisher bin."""
-    z = cosmo["z"]
-    nu = expt["nu_line"] / (1 + z)
-    lam = wavelength_m(nu)
-    aeff = collecting_area_m2(expt)
-    return {"z": z, "r": cosmo["r"], "nu": nu, "lam": lam, "nx": expt["n(x)"], "acell": aeff / lam**2,
-                "L": cosmo["rnu"] * expt["dnutot"] / expt["nu_line"],
-                "n_nu": expt["dnutot"] / expt["dnu"], "m": cosmo["r"] * (1 + z) / cosmo["rnu"]}
+NORMALIZATION = "flat-temperature-variance-v1"
 
 
-def n_meas(kperp, g):
-    """Baselines measuring one Fourier cell at k_perp."""
-    return g["nx"](kperp * g["r"] / (2 * np.pi) / g["nu"]) / g["nu"] ** 2 * g["acell"]
+def normalization(cosmo, expt):
+    """Set a=(Tsys*x)^2/M using the analytic volume of supported modes.
 
+    x is the retained shelf-to-background power ratio. Assigning Tsys*x to
+    temperature and its squared amplitude to the supported modes defines
+    the simple model; it is not an empirical sky calibration.
+    """
+    from radiofisher import baofisher as rf
+    from radiofisher.instrument import mode_limits
 
-def wedge_kpar(kperp, g):
-    """k_w: the largest |k_par| the residual reaches at this k_perp."""
-    return g["m"] * kperp + np.pi / g["L"]
-
-
-def coherent_shelf(g: dict):
-    """The unit-strength residual dP(k, mu, C_N, C_S) for RadioFisher's P_res hook."""
-    def dP(k, u, cn, cs):
-        k, u, cn = np.broadcast_arrays(k, u, cn)
-        kpar = k * u
-        kperp = k * np.sqrt(np.clip(1 - u * u, 0, 1))
-        kw = wedge_kpar(kperp, g)
-        return cn * g["n_nu"] * n_meas(kperp, g) * (np.pi / (g["L"] * kw)) * (np.abs(kpar) <= kw)
-    return dP
-
-
-def wedge_mu(k: float, g: dict):
-    """mu at which |k_par| = k_w for this k (the template's edge), or None."""
-    def f(mu):
-        return k * mu - g["m"] * k * np.sqrt(1 - mu * mu) - np.pi / g["L"]
-    if f(0.) >= 0 or f(1.) <= 0:
-        return None
-    return brentq(f, 0., 1., xtol=1e-14)
+    density = expt["n(x)"]
+    knots, values = np.asarray(density.x), np.asarray(density.y)
+    if np.any(values < 0) or not np.isfinite(values).all():
+        raise ValueError("baseline density must be finite and nonnegative")
+    kfg, knl = mode_limits(cosmo, expt)
+    if not 0 <= kfg < knl:
+        raise ValueError("normalization requires positive supported mode volume")
+    nu = expt["nu_line"] / (1 + cosmo["z"])
+    # The baseline table is piecewise linear and has no physical support
+    # outside its knots. Its tiny extrapolation sentinel is not a baseline.
+    transverse = np.minimum(2 * np.pi * nu * knots / cosmo["r"],
+                            np.sqrt(knl**2 - kfg**2))
+    left, right = transverse[:-1], transverse[1:]
+    supported = ((values[:-1] > 0) | (values[1:] > 0)) & (right > left)
+    lo, hi = left[supported], right[supported]
+    integral = np.sum(((knl**2-lo**2)**1.5 - (knl**2-hi**2)**1.5)/3
+                      - kfg*(hi**2-lo**2)/2)
+    volume = cosmo["r"]**2 * cosmo["rnu"] * integral / (2 * np.pi**2)
+    temperature = float(rf.Tsys_tot(cosmo["z"], expt))
+    if not np.isfinite(volume) or volume <= 0:
+        raise ValueError("normalization requires positive supported mode volume")
+    if not np.isfinite(temperature) or temperature <= 0:
+        raise ValueError("normalization requires positive system temperature")
+    return {"model": NORMALIZATION, "mode_volume": float(volume),
+            "temperature_mK": temperature, "power_scale": float(temperature**2 / volume),
+            "relation": "a = power_scale * x**2"}
