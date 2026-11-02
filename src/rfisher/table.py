@@ -19,11 +19,11 @@ from pathlib import Path
 import numpy as np
 import scipy
 
-from . import __version__, baselines, forecast, inputs, pk_cache
+from . import __version__, baselines, forecast, inputs, pk_cache, residual
 from .bands import Band, channels
 from .tolerance import FITTED, tolerance
 
-SCHEMA = "rfisher-channel-table-v2"
+SCHEMA = "rfisher-channel-table-v3"
 TABLE = "channel_table.json"
 CSV_COLUMNS = ["channel", "role", "low_mhz", "high_mhz", "z_center", "sigma_dv", "response_dv", "a_tol"]
 
@@ -33,13 +33,13 @@ def row(band: Band) -> dict:
     t0 = time.monotonic()
     F, names, p = forecast.channel_fisher(band)
     t = tolerance(F, names)
-    g = p["geometry"]
     return {"channel": band.channel, "role": band.role, "low_mhz": band.low_mhz, "high_mhz": band.high_mhz,
             "z_min": band.z_min, "z_max": band.z_max, "z_center": float(p["cosmo"]["z"]),
             "sigma_dv": t["sigma_dv"], "bias_dv_per_unit_a": t["bias_dv_per_unit_a"],
             "response_dv": t["response_dv"], "a_tol": t["a_tol"], "dilations": t["dilations"],
             "condition": t["condition"],
-            "residual": {"n_nu": g["n_nu"], "horizon_slope": g["m"], "band_depth_mpc": g["L"]},
+            "normalization": residual.normalization(p["cosmo"], p["expt"]),
+            "residual": {"model": residual.MODEL, "power_units": residual.UNITS},
             "seconds": time.monotonic() - t0}
 
 
@@ -99,7 +99,9 @@ def build_table(bands=None, workers: int | None = None) -> dict:
                            "experiment": "CHIME (CHIME Overview), inter-cylinder baselines only",
                            "baselines": inputs.DEFAULT_BASELINES,
                             "retained_hours": inputs.RETAINED_HOURS,
-                            "residual": "coherent flat 6 MHz shelf in the horizon wedge, unit strength",
+                            "residual": residual.MODEL,
+                            "power_units": residual.UNITS,
+                            "strength_normalization": residual.NORMALIZATION,
                             "fitted": list(FITTED),
                             "tolerance_on": "D_V: ln alpha_V = 2/3 ln alpha_perp + 1/3 ln alpha_par",
                             "quadrature": {"radial_order": forecast.RADIAL_ORDER,

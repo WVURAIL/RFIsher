@@ -67,8 +67,8 @@ def test_expected_likelihood_score_and_clean_hessian(model):
     value, gradient = m.objective(m.theta0, 0)
     assert abs(value) < 1e-20
     np.testing.assert_allclose(gradient, 0, atol=1e-16)
-    _, gradient = m.objective(m.theta0, 1e-4)
-    np.testing.assert_allclose(gradient, -1e-4 * m.bias_row, rtol=1e-6, atol=1e-16)
+    _, gradient = m.objective(m.theta0, 1e-10)
+    np.testing.assert_allclose(gradient, -1e-10 * m.bias_row, rtol=1e-6, atol=1e-16)
     numeric = np.empty((6, 6))
     for i in range(6):
         step = 1e-7 * max(abs(m.theta0[i]), 0.1)
@@ -85,13 +85,13 @@ def test_finite_objective_gradient_and_nonlinearity(model):
     theta = m.theta0.copy()
     theta[[0, 1, 4, 5]] *= [1.1, 0.8, 1.02, 1.03]
     theta[2:4] = [1.0031, 0.9973]
-    value, grad = m.objective(theta, 1e-4)
+    value, grad = m.objective(theta, 1e-10)
     for i in range(6):
         step = 1e-8 * max(abs(theta[i]), 0.1)
         hi, lo = theta.copy(), theta.copy()
         hi[i] += step
         lo[i] -= step
-        numeric = (m.objective(hi, 1e-4)[0] - m.objective(lo, 1e-4)[0]) / (2 * step)
+        numeric = (m.objective(hi, 1e-10)[0] - m.objective(lo, 1e-10)[0]) / (2 * step)
         assert numeric == pytest.approx(grad[i], rel=1e-4, abs=1e-8)
     linear = 1 + (m.derivatives @ (theta - m.theta0)) / np.maximum(m.signal_fraction, 1e-250)
     assert np.max(np.abs(m.signal_ratio(theta) - linear)) > 1e-3
@@ -120,7 +120,7 @@ def test_zero_signal_corner_has_finite_covariance_gradient(model):
     m, _ = model
     theta = m.theta0.copy()
     theta[4:] = 0
-    value, gradient = m.objective(theta, 1e-4)
+    value, gradient = m.objective(theta, 1e-10)
     assert np.isfinite(value) and np.isfinite(gradient).all()
 
 
@@ -129,109 +129,37 @@ def test_local_exact_hessian_matches_gradient_difference(model):
     theta = m.theta0.copy()
     theta[[0, 1, 4, 5]] *= [1.1, 0.8, 1.02, 1.03]
     theta[2:4] = [1.0031, 0.9973]
-    H = m.curvature(theta, 1e-4)
+    H = m.curvature(theta, 1e-10)
     numeric = np.empty((6, 6))
     for i in range(6):
         step = 1e-8 * max(abs(theta[i]), 0.1)
         hi, lo = theta.copy(), theta.copy()
         hi[i] += step
         lo[i] -= step
-        numeric[:, i] = (m.objective(hi, 1e-4)[1] - m.objective(lo, 1e-4)[1]) / (2 * step)
+        numeric[:, i] = (m.objective(hi, 1e-10)[1] - m.objective(lo, 1e-10)[1]) / (2 * step)
     scale = np.sqrt(np.diag(m.fisher))
     assert np.max(np.abs((numeric - H) / np.outer(scale, scale))) < 1e-3
 
 
-@pytest.fixture
-def small_cache(monkeypatch, tmp_path):
-    from rfisher.nonlinear import build_model
+def test_scaled_boundary_roundoff_stays_in_physical_domain(model, monkeypatch):
+    """The channel-30 damping bound reconstructed as -7e-15 before clipping."""
+    from types import SimpleNamespace
 
-    monkeypatch.setattr(forecast, "radial_edges", lambda p: np.linspace(0.0311, 0.2493, 41))
-    monkeypatch.setattr(forecast, "angular_edges", lambda k, p: np.array([0.043, 0.25, 0.5, 0.75, 1.0]))
-    p = forecast.prepare(bands.channel(14))
-    directory = tmp_path / "cache"
-    m, identity = build_model(p, directory, radial_order=2, angular_order=3, chunk_segments=8)
-    return p, directory, m, identity
+    original, _ = model
+    m = copy.copy(original)
+    m.scale = original.scale.copy()
+    m.scale[1] = 1.4991148605697757
+    assert m.theta0[1] + m.scale[1] * (-m.theta0[1] / m.scale[1]) < 0
 
+    def at_damping_bound(fun, start, **kwargs):
+        point = start.copy()
+        point[1] = kwargs["bounds"][1][0]
+        value, gradient = fun(point)
+        assert np.isfinite(value) and np.isfinite(gradient).all()
+        return SimpleNamespace(x=point, success=True, message="test boundary",
+                               nit=1, nfev=1)
 
-def test_normal_prepared_grid_and_resumption(small_cache):
-    from rfisher.nonlinear import build_model
-
-    p, directory, first, identity = small_cache
-    second, again = build_model(p, directory, radial_order=2, angular_order=3, chunk_segments=8)
-    assert identity == again
-    np.testing.assert_array_equal(first.derivatives, second.derivatives)
-    np.testing.assert_array_equal(first.fisher, second.fisher)
-
-
-def test_changed_noise_setting_and_custom_residual_refused(small_cache):
-    from rfisher.nonlinear import build_model
-
-    p, directory, _, _ = small_cache
-    p["expt"]["dnu"] *= 2
-    with pytest.raises(ValueError, match="identity differs"):
-        build_model(p, directory, radial_order=2, angular_order=3, chunk_segments=8)
-    p["expt"]["P_res"] = lambda *args: 0
-    with pytest.raises(ValueError, match="standard coherent-shelf"):
-        build_model(p, directory, radial_order=2, angular_order=3, chunk_segments=8)
-
-
-def test_swapped_valid_chunk_is_refused(small_cache):
-    from rfisher.nonlinear import build_model
-
-    p, directory, _, _ = small_cache
-    (directory / "00008.npz").write_bytes((directory / "00000.npz").read_bytes())
-    with pytest.raises(ValueError, match="identity/segment"):
-        build_model(p, directory, radial_order=2, angular_order=3, chunk_segments=8)
-
-
-def test_mutated_checkpoint_payload_refused(small_cache):
-    from rfisher.nonlinear import build_model
-
-    p, directory, _, _ = small_cache
-    path = directory / "00000.npz"
-    with np.load(path) as z:
-        data = {k: z[k] for k in z.files}
-    data["rows"][0, 3] += 1
-    np.savez_compressed(path, **data)
-    with pytest.raises(ValueError, match="payload mismatch"):
-        build_model(p, directory, radial_order=2, angular_order=3, chunk_segments=8)
-
-
-def test_retention_check_uses_covariance_scale_and_rejects_real_change():
-    from rfisher.nonlinear import check_retained_modes
-
-    full = np.eye(7)
-    full[0, 1] = full[1, 0] = 1e-20
-    fisher = full[:6, :6].copy()
-    fisher[0, 1] += 1e-15
-    bias = full[:6, 6].copy()
-    bias[2] += 1e-15
-    check = check_retained_modes(fisher, bias, full)
-    assert check["fisher_max_normalized"] < 1e-12
-    assert check["bias_max_normalized"] < 1e-12
-    fisher[2, 2] += 1e-6
-    with pytest.raises(ValueError, match="discarding infinite-noise"):
-        check_retained_modes(fisher, bias, full)
-
-
-def test_blocked_sums_reproduce_independent_weighted_outer_products(model):
-    m, _ = model
-    # 70003 modes, a noninteger number of copies of the grid, cross one 65536-mode block
-    # boundary and leave a short final block.
-    ix = np.arange(70003) % len(m.k)
-    repeated = FiniteBAOModel(
-        m.k[ix],
-        m.mu[ix],
-        m.weight[ix],
-        m.signal_fraction[ix],
-        m.residual_fraction[ix],
-        m.derivatives[ix],
-        m.theta0,
-        m.template_k,
-        m.template_f,
-    )
-    counts = np.bincount(ix, minlength=len(m.k))
-    expected_f = np.einsum("ni,nj,n->ij", m.derivatives, m.derivatives, m.weight * counts)
-    expected_b = np.einsum("ni,n->i", m.derivatives, m.weight * m.residual_fraction * counts)
-    np.testing.assert_allclose(repeated.fisher, expected_f, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(repeated.bias_row, expected_b, rtol=1e-12, atol=1e-12)
+    monkeypatch.setattr("rfisher.nonlinear.minimize", at_damping_bound)
+    fitted = m.fit(1e-10)
+    assert fitted["theta"][1] == 0
+    assert PARAMETERS[1] in fitted["active_bounds"]

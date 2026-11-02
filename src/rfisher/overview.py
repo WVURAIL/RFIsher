@@ -60,13 +60,14 @@ def combine(matrices: list, names: list) -> dict:
     for i, Fi in enumerate(matrices):
         rows = list(range(i * len(PER_BIN), (i + 1) * len(PER_BIN))) + list(range(size - len(SHARED), size))
         F[np.ix_(rows, rows)] += Fi[np.ix_(per + shared, per + shared)]
-    C = np.linalg.inv(F)
+    parameters = [f"{p}:{i}" for i in range(n) for p in PER_BIN] + list(SHARED)
+    result = rf.summarize_fisher(F, parameters, parameters)
     starts = np.arange(n) * len(PER_BIN)
-    dilations = starts[:, None] + [PER_BIN.index("aperp"), PER_BIN.index("apar")]
-    covariance = C[dilations[:, :, None], dilations[:, None, :]]
-    sigma_dv = np.sqrt(np.einsum("i,nij,j->n", DV_WEIGHTS, covariance, DV_WEIGHTS))
+    projection = np.zeros((n, size))
+    projection[np.arange(n)[:, None], starts[:, None] + [PER_BIN.index("aperp"), PER_BIN.index("apar")]] = DV_WEIGHTS
+    distances = result.project(projection, [f"ln_alpha_V:{i}" for i in range(n)])
     growth = starts + PER_BIN.index("fs8")
-    return {"sigma_dv": sigma_dv.tolist(), "sigma_fs8": np.sqrt(C[growth, growth]).tolist()}
+    return {"sigma_dv": distances.sigma.tolist(), "sigma_fs8": result.sigma[growth].tolist()}
 
 
 def forecast(bins: list, workers: int | None = None, cosmology: str = OVERVIEW_COSMOLOGY) -> dict:

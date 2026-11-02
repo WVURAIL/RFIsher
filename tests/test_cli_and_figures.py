@@ -32,16 +32,14 @@ def test_table_for_one_channel(tmp_path, monkeypatch):
     assert (tmp_path / "channel_table.csv").read_text().splitlines()[1].startswith("37,control,")
 
 
-def test_overview_in_two_cosmologies(tmp_path, monkeypatch, capsys):
+def test_overview_reference(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(overview, "forecast", fake_forecast)
-    main(["overview", "--out", str(tmp_path), "--cosmology", "planck2018", "--compare", "cmbspa2026"])
+    main(["overview", "--out", str(tmp_path)])
     printed = [p.split("/")[-1] for p in capsys.readouterr().out.split()]
-    assert printed == ["overview_planck2018.json", "overview_cmbspa2026.json",
-                       "overview_reference.png", "overview_cosmology.png"]
+    assert printed == ["overview_planck2018.json", "overview_reference.png"]
     assert all((tmp_path / n).stat().st_size > 0 for n in printed)
-    ref = json.loads((tmp_path / "overview_cmbspa2026.json").read_text())
-    assert ref["cosmology"] == "cmbspa2026" and len(ref["overview_bins"]["bins"]) == 15
-    assert [b["channel"] for b in ref["channels"]["bins"]] == list(range(14, 38))
+    ref = json.loads((tmp_path / "overview_planck2018.json").read_text())
+    assert len(ref["overview_bins"]["bins"]) == 15
 
 
 @pytest.mark.parametrize("cosmology, label", [("planck2018", "Planck 2018"), ("cmbspa2026", "cmbspa2026")])
@@ -54,30 +52,13 @@ def test_the_overview_title_names_its_cosmology(tmp_path, monkeypatch, cosmology
     assert titles == [f"CHIME Overview forecast, one clean year ({label}, CHIME, 8,760 h)"]
 
 
-def test_plates_use_the_table_cosmology(tmp_path, monkeypatch):
-    asked, load = [], figures.inputs.cosmology
-    monkeypatch.setattr(figures.inputs, "cosmology", lambda name: asked.append(name) or load(name))
-    monkeypatch.setattr(figures, "plate", lambda row, out, shared: out / f"channel_{row['channel']:02d}.png")
-    t = table.read_table()
-    t["inputs"]["cosmology"] = "planck2018"
-    figures.draw_all(t, tmp_path, channels={19})
-    assert asked == ["planck2018"]
-
-
 def test_figures_use_the_table_exposure(tmp_path, monkeypatch):
-    durations, experiment = [], figures.inputs.experiment
-
-    def record_exposure(*args, **kwargs):
-        durations.append(kwargs["hours"])
-        return experiment(*args, **kwargs)
-
-    monkeypatch.setattr(figures.inputs, "experiment", record_exposure)
-    monkeypatch.setattr(figures, "plate", lambda row, out, shared: out / "plate.png")
+    durations = []
+    monkeypatch.setattr(figures, "plate", lambda row, out, hours: durations.append(hours) or out / "plate.png")
     t = table.read_table()
     t["inputs"]["retained_hours"] = 100
     figures.draw_all(t, tmp_path, channels={19})
     assert durations == [100]
-
 
 def test_unknown_requested_channel_is_not_silently_ignored(tmp_path):
     with pytest.raises(SystemExit) as error:

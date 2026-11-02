@@ -22,6 +22,7 @@ def test_the_shipped_table_covers_every_channel():
 def test_a_channel_rebuilds_to_the_shipped_row(number):
     shipped = next(r for r in read_table()["channels"] if r["channel"] == number)
     fresh = row(channel(number))
+    assert fresh["normalization"]["power_scale"] == pytest.approx(shipped["normalization"]["power_scale"], rel=1e-10)
     for key in ("z_center", "sigma_dv"):
         assert fresh[key] == pytest.approx(shipped[key], rel=1e-5), key
     # The two dilation responses partly cancel in D_V, which magnifies the small changes between
