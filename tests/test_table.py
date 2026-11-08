@@ -58,3 +58,31 @@ def test_empty_channel_selection_is_refused():
 def test_nonpositive_worker_count_is_refused():
     with pytest.raises(ValueError, match="workers"):
         build_table(workers=0)
+
+
+def test_a_row_with_a_template_and_a_target():
+    from test_residual import doubled
+
+    from rfisher import residual
+    base, other = row(channel(19)), row(channel(19), template=doubled, target="aperp")
+    assert "target" not in base and base["normalization"] is not None
+    assert other["normalization"] is None
+    assert other["residual"]["model"].endswith(":doubled") and base["residual"]["model"] == residual.MODEL
+    assert other["response_dv"] == pytest.approx(2 * base["response_dv"], rel=1e-12)
+    assert other["target"]["weights"] == {"aperp": 1.0}
+    assert other["target"]["response"] == pytest.approx(2 * base["dilations"]["response"][0], rel=1e-12)
+
+
+def test_the_table_records_only_options_that_differ(monkeypatch):
+    import rfisher.table as module
+
+    monkeypatch.setattr(module, "row", lambda band, **options: {"channel": band.channel})
+    default = build_table([channel(19)], workers=1)
+    assert "target" not in default["inputs"] and "telescope" not in default["inputs"]
+    assert default["inputs"]["experiment"] == "CHIME (CHIME Overview), inter-cylinder baselines only"
+    assert build_table([channel(19)], workers=1, target="fs8")["inputs"]["target"] == "fs8"
+
+
+def test_an_unknown_telescope_is_refused():
+    with pytest.raises(ValueError, match="telescope"):
+        build_table([channel(19)], workers=1, telescope="nope")

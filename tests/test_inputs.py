@@ -70,3 +70,11 @@ def test_truncated_pk_header_is_refused(tmp_path):
     path.write_text('# incomplete')
     with pytest.raises(ValueError, match='versioned'):
         pk_cache.inspect_pk_cache(path)
+
+
+def test_an_unknown_telescope_is_refused():
+    with pytest.raises(ValueError, match="telescope"):
+        inputs.experiment(telescope="nope")
+    with pytest.raises(ValueError, match="telescope"):
+        inputs.describe("nope")
+    assert inputs.describe("chime", "all") == "CHIME (CHIME Overview), all baselines"

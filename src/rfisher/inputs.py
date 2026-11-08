@@ -32,6 +32,9 @@ PK_TABLES = {"planck2018": "pk_planck2018.dat", "cmbspa2026": "pk_cmbspa2026.dat
 PK_TABLE = PK_TABLES[DEFAULT_COSMOLOGY]
 BASELINES = ("inter-cylinder", "all")
 DEFAULT_BASELINES = "inter-cylinder"
+# a new telescope needs a RadioFisher experiment and its baseline density
+TELESCOPES = {"chime": "CHIME (CHIME Overview)"}
+DEFAULT_TELESCOPE = "chime"
 
 
 def pk_table_path(name: str = DEFAULT_COSMOLOGY):
@@ -68,13 +71,16 @@ def cosmology(name: str = DEFAULT_COSMOLOGY) -> dict:
     return rf.load_power_spectrum(cosmo, str(path))
 
 
-def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES) -> dict:
-    """CHIME as in the CHIME Overview, observing for ``hours`` of retained data.
+def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES,
+               telescope: str = DEFAULT_TELESCOPE) -> dict:
+    """The telescope, by default CHIME as in the CHIME Overview, observing for ``hours`` of retained data.
 
     ``baselines`` is "inter-cylinder" (the default, since CHIME's analyses drop the
     intra-cylinder pairs) or "all" (RadioFisher's as-built density, as the Overview's
     forecast uses).
     """
+    if telescope not in TELESCOPES:
+        raise ValueError(f"unknown telescope {telescope!r}; choose one of {sorted(TELESCOPES)}")
     if baselines not in BASELINES:
         raise ValueError(f"unknown baselines {baselines!r}; choose one of {BASELINES}")
     if not math.isfinite(hours) or hours <= 0:
@@ -84,6 +90,14 @@ def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES
     if baselines == "inter-cylinder":
         expt["n(x)"] = str(_baselines.inter_file())
     return expt
+
+
+def describe(telescope: str = DEFAULT_TELESCOPE, baselines: str = DEFAULT_BASELINES) -> str:
+    """The experiment as a table records it."""
+    if telescope not in TELESCOPES:
+        raise ValueError(f"unknown telescope {telescope!r}; choose one of {sorted(TELESCOPES)}")
+    return TELESCOPES[telescope] + (", inter-cylinder baselines only" if baselines == "inter-cylinder"
+                                    else ", all baselines")
 
 
 def background(cosmo: dict):
