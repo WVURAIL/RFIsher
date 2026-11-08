@@ -1,4 +1,4 @@
-"""First-order BAO bias and tolerance for flat additive unit power."""
+"""First-order BAO bias and tolerance for additive residual power."""
 __version__ = "1.0.0"
 
 from . import tolerance

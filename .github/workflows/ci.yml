@@ -57,6 +57,8 @@ jobs:
         run: |
           commit=$(grep -o 'RadioFisher.git@[0-9a-f]\{40\}' pyproject.toml | cut -d@ -f2)
           git clone -q https://github.com/WVURAIL/RadioFisher.git "$RUNNER_TEMP/RadioFisher"
+          # the pinned commit is on no branch, so a plain clone lacks it
+          git -C "$RUNNER_TEMP/RadioFisher" fetch -q origin "$commit"
           git -C "$RUNNER_TEMP/RadioFisher" checkout -q "$commit"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:

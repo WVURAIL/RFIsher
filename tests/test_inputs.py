@@ -70,3 +70,14 @@ def test_truncated_pk_header_is_refused(tmp_path):
     path.write_text('# incomplete')
     with pytest.raises(ValueError, match='versioned'):
         pk_cache.inspect_pk_cache(path)
+
+
+def test_an_unknown_telescope_is_refused():
+    with pytest.raises(ValueError, match="telescope"):
+        inputs.experiment(telescope="nope")
+    with pytest.raises(ValueError, match="telescope"):
+        inputs.describe("nope")
+    assert inputs.describe("chime", "all") == "CHIME (CHIME Overview), all baselines"
+    assert inputs.describe("hirax") == "HIRAX (nominal), all baselines"
+    assert inputs.experiment(telescope="chord")["mode"] == "idish"
+    assert inputs.experiment(hours=10.0, telescope="kko")["ttot"] == pytest.approx(10.0 * HOUR_IN_MHZ_INVERSE)

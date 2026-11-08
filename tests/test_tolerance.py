@@ -3,7 +3,7 @@ import importlib
 import numpy as np
 import pytest
 
-from rfisher.tolerance import DV_WEIGHTS, FITTED, tolerance
+from rfisher.tolerance import DV_WEIGHTS, FITTED, target_tolerance, tolerance
 
 NAMES = ["A", "b_HI", "Tb", "s_NL", "sigma8tot", "n_s", "f", "aperp", "apar", "fs8", "bs8", "pk", "_Pres"]
 
@@ -72,3 +72,49 @@ def test_the_explicit_module_and_function_imports():
     assert exported.FITTED == FITTED and exported.tolerance is tolerance
     F = synthetic({"aperp": 5e4, "apar": 2.5e4})
     assert exported.tolerance(F, NAMES) == tolerance(F, NAMES)
+
+
+def test_the_dv_target_reproduces_the_dv_tolerance():
+    F = synthetic({"aperp": 5e4, "apar": 2.5e4, "fs8": 3.0})
+    dv, target = tolerance(F, NAMES), target_tolerance(F, NAMES, "dv")
+    assert target["sigma"] == pytest.approx(dv["sigma_dv"], rel=1e-14)
+    assert target["response"] == pytest.approx(dv["response_dv"], rel=1e-14)
+    assert target["a_tol"] == pytest.approx(dv["a_tol"], rel=1e-14)
+
+
+def test_single_parameter_targets():
+    # the fitted block is diagonal, so each bias is C B and each sigma is the diagonal error
+    F = synthetic({"aperp": 5e4, "apar": 2.5e4, "fs8": 3.0})
+    assert target_tolerance(F, NAMES, "aperp")["response"] == pytest.approx(20.0 / 0.02)
+    assert target_tolerance(F, NAMES, "apar")["response"] == pytest.approx(10.0 / 0.02)
+    assert target_tolerance(F, NAMES, "fs8")["response"] == pytest.approx(3.0)
+    assert target_tolerance(F, NAMES, {"aperp": 1, "apar": -1})["bias_per_unit_a"] == pytest.approx(10.0)
+
+
+def test_a_projection_from_another_fisher_code():
+    F = synthetic({"aperp": 5e4, "apar": 2.5e4})
+    keep = [i for i, n in enumerate(NAMES) if n != "_Pres"]
+    clean, names = F[np.ix_(keep, keep)], [NAMES[i] for i in keep]
+    B = F[keep, NAMES.index("_Pres")]
+    embedded = target_tolerance(F, NAMES, "dv")
+    supplied = target_tolerance(clean, names, "dv", bias_projection=B)
+    assert supplied == embedded
+
+
+def test_a_target_of_a_smaller_fitted_set():
+    F = synthetic({"aperp": 5e4, "apar": 2.5e4})
+    result = target_tolerance(F, NAMES, "aperp", fitted=("aperp", "apar"))
+    assert result["sigma"] == pytest.approx(0.02) and result["response"] == pytest.approx(1000.0)
+
+
+@pytest.mark.parametrize("weights, message", [({}, "at least one"), ({"b_HI": 1.0}, "not fitted")])
+def test_a_bad_target_is_refused(weights, message):
+    with pytest.raises(ValueError, match=message):
+        target_tolerance(synthetic({"aperp": 1.0}), NAMES, weights)
+
+
+def test_a_target_without_a_residual_is_refused():
+    keep = [i for i, n in enumerate(NAMES) if n != "_Pres"]
+    F = synthetic({"aperp": 1.0})[np.ix_(keep, keep)]
+    with pytest.raises(ValueError, match="residual"):
+        target_tolerance(F, [NAMES[i] for i in keep], "dv")

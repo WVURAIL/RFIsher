@@ -60,3 +60,52 @@ def test_temperature_normalization_excludes_missing_baselines(monkeypatch):
                                          bounds_error=False, fill_value=1e-200)}
     with pytest.raises(ValueError, match="mode volume"):
         residual.normalization(c, e)
+
+
+def fisher(shared, **options):
+    """F and names of channel 19 from the shared inputs."""
+    cosmo, expt, fns = shared
+    return forecast.channel_fisher(channel(19), cosmo=cosmo, expt=expt, fns=fns, **options)[:2]
+
+
+def doubled(k, mu, cn, cs):
+    return 2 * residual.unit_power(k, mu, cn, cs)
+
+
+def line_of_sight(k, mu, cn, cs):
+    """Power only along the line of sight, a smooth stand-in for a spectral residual."""
+    return np.broadcast_to(np.asarray(mu) ** 2, np.broadcast_shapes(np.shape(k), np.shape(mu))).copy()
+
+
+def test_the_response_is_linear_in_the_template(shared):
+    from rfisher.tolerance import tolerance
+    unit = tolerance(*fisher(shared))
+    twice = tolerance(*fisher(shared, template=doubled))
+    assert twice["response_dv"] == pytest.approx(2 * unit["response_dv"], rel=1e-12)
+    assert twice["sigma_dv"] == unit["sigma_dv"]
+
+
+def test_a_template_changes_the_bias_and_not_the_clean_forecast(shared):
+    from rfisher.tolerance import tolerance
+    flat = tolerance(*fisher(shared))
+    radial = tolerance(*fisher(shared, template=line_of_sight))
+    assert radial["sigma_dv"] == flat["sigma_dv"]
+    assert radial["dilations"]["covariance"] == flat["dilations"]["covariance"]
+    assert radial["response_dv"] != pytest.approx(flat["response_dv"], rel=1e-3)
+
+
+def test_a_template_must_be_callable(shared):
+    with pytest.raises(TypeError, match="template"):
+        forecast.prepare(channel(19), *shared, template=1.0)
+
+
+def test_templates_load_by_name():
+    assert residual.load_template("rfisher.residual:unit_power") is residual.unit_power
+    assert residual.load_template("flat") is residual.unit_power
+    assert residual.template_name(residual.unit_power) == residual.MODEL
+    assert residual.template_name(doubled) == f"{__name__}:doubled"
+    for spec in ("rfisher.residual", ":unit_power", "rfisher.residual:"):
+        with pytest.raises(ValueError):
+            residual.load_template(spec)
+    with pytest.raises(TypeError):
+        residual.load_template("rfisher.residual:MODEL")

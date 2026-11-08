@@ -32,6 +32,11 @@ PK_TABLES = {"planck2018": "pk_planck2018.dat", "cmbspa2026": "pk_cmbspa2026.dat
 PK_TABLE = PK_TABLES[DEFAULT_COSMOLOGY]
 BASELINES = ("inter-cylinder", "all")
 DEFAULT_BASELINES = "inter-cylinder"
+# the other arrays are nominal RadioFisher inputs (radiofisher.arrays)
+TELESCOPES = {"chime": "CHIME (CHIME Overview)", "chord": "CHORD (nominal)", "hirax": "HIRAX (nominal)",
+              "kko": "KKO outrigger (nominal)", "gbo": "GBO outrigger (nominal)",
+              "hcro": "HCRO outrigger (nominal)"}
+DEFAULT_TELESCOPE = "chime"
 
 
 def pk_table_path(name: str = DEFAULT_COSMOLOGY):
@@ -68,22 +73,39 @@ def cosmology(name: str = DEFAULT_COSMOLOGY) -> dict:
     return rf.load_power_spectrum(cosmo, str(path))
 
 
-def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES) -> dict:
-    """CHIME as in the CHIME Overview, observing for ``hours`` of retained data.
+def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES,
+               telescope: str = DEFAULT_TELESCOPE) -> dict:
+    """The telescope, by default CHIME as in the CHIME Overview, observing for ``hours`` of retained data.
 
     ``baselines`` is "inter-cylinder" (the default, since CHIME's analyses drop the
     intra-cylinder pairs) or "all" (RadioFisher's as-built density, as the Overview's
     forecast uses).
     """
+    if telescope not in TELESCOPES:
+        raise ValueError(f"unknown telescope {telescope!r}; choose one of {sorted(TELESCOPES)}")
     if baselines not in BASELINES:
         raise ValueError(f"unknown baselines {baselines!r}; choose one of {BASELINES}")
     if not math.isfinite(hours) or hours <= 0:
         raise ValueError("retained hours must be finite and positive")
+    if telescope != "chime":
+        # these arrays have no inter-cylinder selection, so every baseline is used
+        expt = copy.deepcopy(rf.arrays.EXPERIMENTS[telescope.upper()])
+        expt["ttot"] = hours * HOUR_IN_MHZ_INVERSE
+        return expt
     expt = copy.deepcopy(rf.chime.CHIME)
     expt["ttot"] = hours * HOUR_IN_MHZ_INVERSE
     if baselines == "inter-cylinder":
         expt["n(x)"] = str(_baselines.inter_file())
     return expt
+
+
+def describe(telescope: str = DEFAULT_TELESCOPE, baselines: str = DEFAULT_BASELINES) -> str:
+    """The experiment as a table records it."""
+    if telescope not in TELESCOPES:
+        raise ValueError(f"unknown telescope {telescope!r}; choose one of {sorted(TELESCOPES)}")
+    if telescope != "chime" or baselines == "all":
+        return TELESCOPES[telescope] + ", all baselines"
+    return TELESCOPES[telescope] + ", inter-cylinder baselines only"
 
 
 def background(cosmo: dict):
