@@ -101,6 +101,7 @@ def test_a_template_must_be_callable(shared):
 
 def test_templates_load_by_name():
     assert residual.load_template("rfisher.residual:unit_power") is residual.unit_power
+    assert residual.load_template("flat") is residual.unit_power
     assert residual.template_name(residual.unit_power) == residual.MODEL
     assert residual.template_name(doubled) == f"{__name__}:doubled"
     for spec in ("rfisher.residual", ":unit_power", "rfisher.residual:"):

@@ -74,11 +74,12 @@ def test_table_options_reach_the_rows(tmp_path, monkeypatch):
     bands.write_text("channel,low_mhz,high_mhz,role\n7,600.0,606.0,test\n")
     main(["table", "--out", str(tmp_path), "--bands", str(bands), "--target", "apar",
           "--template", "rfisher.residual:unit_power", "--workers", "1"])
-    assert seen == [{"template": residual.unit_power, "target": "apar", "telescope": "chime"}]
+    assert seen == [{"template": residual.unit_power, "target": "apar", "telescope": "chime",
+                     "backend": "radiofisher"}]
     assert (tmp_path / "channel_table.csv").read_text().splitlines()[1].startswith("7,test,600.0,606.0,")
 
 
-@pytest.mark.parametrize("extra", [["--target", "nope"], ["--template", "nope"], ["--telescope", "nope"],
+@pytest.mark.parametrize("extra", [["--target", "nope"], ["--template", "nope"], ["--telescope", "nope"], ["--backend", "nope"],
                                    ["--bands", "missing.csv"], ["--channels", "19,99"]])
 def test_bad_table_options_are_refused(tmp_path, extra):
     with pytest.raises(SystemExit) as error:

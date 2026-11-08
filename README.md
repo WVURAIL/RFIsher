@@ -39,8 +39,10 @@ The residual template is a function f(k, mu, cn, cs) that returns the
 residual power in mK^2 at each forecast mode. The tolerance is then in units
 of the template amplitude, and the temperature normalization of the flat DTV
 template is recorded as None. A template with a sharp edge in k or mu needs
-that edge in the quadrature. The template is passed in Python as
-`template=` or on the command line as `--template package.module:function`.
+that edge in the quadrature. Named templates are kept in
+`residual.TEMPLATES`, which holds only `flat` at present. A template is passed
+in Python as `template=` or on the command line as `--template flat` or
+`--template package.module:function`.
 
 The D_V tolerance is always computed. With `--target`, each row also gives
 the tolerance on aperp, apar or fs8, and `target_tolerance` accepts any
@@ -50,11 +52,14 @@ weighted sum of the fitted parameters.
 
 ## Using another Fisher code
 
-The bias step needs only the Fisher matrix F without the residual and the
-residual projection B. `rfisher.tolerance.target_tolerance(F, names, weights,
-fitted, bias_projection=B)` returns the statistical error, the first-order bias,
-the response and the tolerance for a forecast made with any code, where B
-follows the order of names.
+A Fisher backend is a function of (band, template, telescope) that returns
+F with a '_Pres' row and column, the parameter names, z_center and a
+normalization that may be None. RadioFisher is the default backend, and
+others are added to `forecast.BACKENDS` or passed to `build_table` as
+`backend=`. For a single forecast,
+`rfisher.tolerance.target_tolerance(F, names, weights, fitted,
+bias_projection=B)` takes the Fisher matrix F without the residual and the
+projection B in the order of names.
 
 ## Telescopes
 

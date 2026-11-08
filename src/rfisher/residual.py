@@ -16,13 +16,18 @@ def unit_power(k, mu, cn, cs):
     return np.ones(np.broadcast_shapes(np.shape(k), np.shape(mu), np.shape(cn), np.shape(cs)))
 
 
+TEMPLATES = {"flat": unit_power}
+
+
 def load_template(spec: str):
-    """The template named "package.module:function", for the command line."""
+    """A template from TEMPLATES or written as "package.module:function", for the command line."""
     import importlib
 
+    if spec in TEMPLATES:
+        return TEMPLATES[spec]
     module, sep, name = spec.partition(":")
     if not sep or not module or not name:
-        raise ValueError(f"template {spec!r} must be written as package.module:function")
+        raise ValueError(f"template {spec!r} must be one of {sorted(TEMPLATES)} or package.module:function")
     template = getattr(importlib.import_module(module), name)
     if not callable(template):
         raise TypeError(f"{spec} is not a function")

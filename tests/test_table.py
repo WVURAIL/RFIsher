@@ -86,3 +86,26 @@ def test_the_table_records_only_options_that_differ(monkeypatch):
 def test_an_unknown_telescope_is_refused():
     with pytest.raises(ValueError, match="telescope"):
         build_table([channel(19)], workers=1, telescope="nope")
+
+
+def synthetic_backend(band, template, telescope):
+    """A backend with a known answer: diagonal dilation errors of 0.02 and B on aperp only."""
+    import numpy as np
+    names = ["A", "s_NL", "aperp", "apar", "fs8", "bs8", "_Pres"]
+    F = np.diag([1.0, 1.0, 2500.0, 2500.0, 1.0, 1.0, 0.0])
+    F[2, 6] = F[6, 2] = 5e4
+    return {"F": F, "names": names, "z_center": band.z_center, "normalization": None}
+
+
+def test_another_backend_fills_the_row():
+    r = row(channel(19), backend=synthetic_backend, target="aperp")
+    assert r["dilations"]["bias_per_unit_a"] == pytest.approx([20.0, 0.0])
+    assert r["target"]["response"] == pytest.approx(1000.0)
+    assert r["z_center"] == channel(19).z_center and r["normalization"] is None
+    t = build_table([channel(19)], workers=1, backend=synthetic_backend)
+    assert t["inputs"]["backend"].endswith(":synthetic_backend")
+
+
+def test_an_unknown_backend_is_refused():
+    with pytest.raises(ValueError, match="backend"):
+        build_table([channel(19)], workers=1, backend="nope")

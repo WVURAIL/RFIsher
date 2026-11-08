@@ -14,9 +14,10 @@ def main(argv=None):
     t.add_argument("--out", type=Path, required=True)
     t.add_argument("--channels", help="comma-separated channel numbers (default: all)")
     t.add_argument("--bands", type=Path, help="band CSV with channel, low_mhz, high_mhz (default: the DTV channels)")
-    t.add_argument("--template", help="residual template as package.module:function (default: flat unit power)")
+    t.add_argument("--template", help="residual template: flat or package.module:function (default: flat)")
     t.add_argument("--target", help="also give the tolerance on dv, aperp, apar or fs8")
     t.add_argument("--telescope", default="chime", help="telescope (default: chime)")
+    t.add_argument("--backend", default="radiofisher", help="Fisher backend (default: radiofisher)")
     t.add_argument("--workers", type=int)
     f = sub.add_parser("figures", help="draw the per-channel plates and the summary")
     f.add_argument("--table", type=Path, help="table JSON (default: the shipped table)")
@@ -47,6 +48,10 @@ def main(argv=None):
         from .inputs import TELESCOPES
         if args.telescope not in TELESCOPES:
             ap.error(f"unknown telescope {args.telescope!r}; choose one of {', '.join(sorted(TELESCOPES))}")
+    if getattr(args, "backend", "radiofisher") != "radiofisher":
+        from .forecast import BACKENDS
+        if args.backend not in BACKENDS:
+            ap.error(f"unknown backend {args.backend!r}; choose one of {', '.join(sorted(BACKENDS))}")
     template = None
     if getattr(args, "template", None) is not None:
         from . import residual
@@ -62,7 +67,7 @@ def main(argv=None):
         bands = [b for b in channels(band_file) if pick is None or b.channel in pick]
         template = residual.unit_power if template is None else template
         table = build_table(bands, args.workers, template=template, target=args.target,
-                            telescope=args.telescope)
+                            telescope=args.telescope, backend=args.backend)
         for path in write_table(table, args.out):
             print(path)
     elif args.command == "overview":

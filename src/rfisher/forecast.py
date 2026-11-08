@@ -70,3 +70,20 @@ def channel_fisher(band: Band, **kwargs):
     p = prepare(band, **kwargs)
     F, names = integrate(p, **orders)
     return F, names, p
+
+
+def radiofisher(band: Band, template=residual.unit_power, telescope: str = inputs.DEFAULT_TELESCOPE) -> dict:
+    """The RadioFisher backend: F, its names and the bin details a table row records.
+
+    Another backend is any function of (band, template, telescope) that
+    returns F with a '_Pres' row and column, names and z_center. Its
+    normalization may be None.
+    """
+    F, names, p = channel_fisher(band, expt=inputs.experiment(telescope=telescope), template=template)
+    return {"F": F, "names": names, "z_center": float(p["cosmo"]["z"]),
+            "normalization": (residual.normalization(p["cosmo"], p["expt"])
+                              if template is residual.unit_power else None)}
+
+
+BACKENDS = {"radiofisher": radiofisher}
+DEFAULT_BACKEND = "radiofisher"

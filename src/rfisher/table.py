@@ -30,25 +30,24 @@ CSV_COLUMNS = ["channel", "role", "low_mhz", "high_mhz", "z_center", "sigma_dv",
 
 
 def row(band: Band, template=residual.unit_power, target=None,
-        telescope: str = inputs.DEFAULT_TELESCOPE) -> dict:
+        telescope: str = inputs.DEFAULT_TELESCOPE, backend=forecast.DEFAULT_BACKEND) -> dict:
     """Forecast one channel and reduce it to its table row.
 
-    A target other than None adds its tolerance to the row. The temperature
-    normalization holds only for the flat DTV template and is None otherwise.
+    backend is a name in forecast.BACKENDS or a function with the same
+    signature. A target other than None adds its tolerance to the row.
     """
     t0 = time.monotonic()
-    F, names, p = forecast.channel_fisher(band, expt=inputs.experiment(telescope=telescope), template=template)
-    t = tolerance(F, names)
+    fisher = forecast.BACKENDS[backend] if isinstance(backend, str) else backend
+    b = fisher(band, template, telescope)
+    t = tolerance(b["F"], b["names"])
     out = {"channel": band.channel, "role": band.role, "low_mhz": band.low_mhz, "high_mhz": band.high_mhz,
-           "z_min": band.z_min, "z_max": band.z_max, "z_center": float(p["cosmo"]["z"]),
+           "z_min": band.z_min, "z_max": band.z_max, "z_center": b["z_center"],
            "sigma_dv": t["sigma_dv"], "bias_dv_per_unit_a": t["bias_dv_per_unit_a"],
            "response_dv": t["response_dv"], "a_tol": t["a_tol"], "dilations": t["dilations"],
-           "condition": t["condition"],
-           "normalization": (residual.normalization(p["cosmo"], p["expt"])
-                             if template is residual.unit_power else None),
+           "condition": t["condition"], "normalization": b["normalization"],
            "residual": {"model": residual.template_name(template), "power_units": residual.UNITS}}
     if target is not None:
-        out["target"] = target_tolerance(F, names, target)
+        out["target"] = target_tolerance(b["F"], b["names"], target)
     out["seconds"] = time.monotonic() - t0
     return out
 
@@ -91,7 +90,7 @@ def provenance() -> dict:
 
 
 def build_table(bands=None, workers: int | None = None, *, template=residual.unit_power, target=None,
-                telescope: str = inputs.DEFAULT_TELESCOPE) -> dict:
+                telescope: str = inputs.DEFAULT_TELESCOPE, backend=forecast.DEFAULT_BACKEND) -> dict:
     """Forecast every channel (in parallel) and return the table.
 
     With more than one worker, the template must be a module-level function
@@ -103,8 +102,11 @@ def build_table(bands=None, workers: int | None = None, *, template=residual.uni
     if workers is not None and workers < 1:
         raise ValueError("workers must be positive")
     workers = min(len(bands), workers or os.cpu_count() or 1)
-    experiment = inputs.describe(telescope)   # refuse an unknown telescope before the workers start
-    one = partial(row, template=template, target=target, telescope=telescope)
+    # refuse an unknown telescope or backend before the workers start
+    experiment = inputs.describe(telescope)
+    if isinstance(backend, str) and backend not in forecast.BACKENDS:
+        raise ValueError(f"unknown backend {backend!r}; choose one of {sorted(forecast.BACKENDS)}")
+    one = partial(row, template=template, target=target, telescope=telescope, backend=backend)
     if workers == 1:
         rows = [one(b) for b in bands]
     else:
@@ -130,6 +132,8 @@ def build_table(bands=None, workers: int | None = None, *, template=residual.uni
         table["inputs"]["target"] = target
     if telescope != inputs.DEFAULT_TELESCOPE:
         table["inputs"]["telescope"] = telescope
+    if backend != forecast.DEFAULT_BACKEND:
+        table["inputs"]["backend"] = backend if isinstance(backend, str) else f"{backend.__module__}:{backend.__qualname__}"
     return table
 
 
