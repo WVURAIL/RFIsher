@@ -109,3 +109,13 @@ def test_another_backend_fills_the_row():
 def test_an_unknown_backend_is_refused():
     with pytest.raises(ValueError, match="backend"):
         build_table([channel(19)], workers=1, backend="nope")
+
+
+@pytest.mark.parametrize("telescope", ["chord", "hirax", "kko", "gbo", "hcro"])
+def test_other_telescopes_run(telescope):
+    import math
+    r = row(channel(19), telescope=telescope)
+    assert r["sigma_dv"] > 0 and math.isfinite(r["a_tol"]) and r["a_tol"] > 0
+    assert r["normalization"]["power_scale"] > 0
+    t = build_table([channel(19)], workers=1, telescope=telescope)
+    assert t["inputs"]["telescope"] == telescope and t["inputs"]["experiment"].endswith("all baselines")

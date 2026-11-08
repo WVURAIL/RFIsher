@@ -32,8 +32,10 @@ PK_TABLES = {"planck2018": "pk_planck2018.dat", "cmbspa2026": "pk_cmbspa2026.dat
 PK_TABLE = PK_TABLES[DEFAULT_COSMOLOGY]
 BASELINES = ("inter-cylinder", "all")
 DEFAULT_BASELINES = "inter-cylinder"
-# a new telescope needs a RadioFisher experiment and its baseline density
-TELESCOPES = {"chime": "CHIME (CHIME Overview)"}
+# the other arrays are nominal RadioFisher inputs (radiofisher.arrays)
+TELESCOPES = {"chime": "CHIME (CHIME Overview)", "chord": "CHORD (nominal)", "hirax": "HIRAX (nominal)",
+              "kko": "KKO outrigger (nominal)", "gbo": "GBO outrigger (nominal)",
+              "hcro": "HCRO outrigger (nominal)"}
 DEFAULT_TELESCOPE = "chime"
 
 
@@ -85,6 +87,11 @@ def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES
         raise ValueError(f"unknown baselines {baselines!r}; choose one of {BASELINES}")
     if not math.isfinite(hours) or hours <= 0:
         raise ValueError("retained hours must be finite and positive")
+    if telescope != "chime":
+        # these arrays have no inter-cylinder selection, so every baseline is used
+        expt = copy.deepcopy(rf.arrays.EXPERIMENTS[telescope.upper()])
+        expt["ttot"] = hours * HOUR_IN_MHZ_INVERSE
+        return expt
     expt = copy.deepcopy(rf.chime.CHIME)
     expt["ttot"] = hours * HOUR_IN_MHZ_INVERSE
     if baselines == "inter-cylinder":
@@ -96,8 +103,9 @@ def describe(telescope: str = DEFAULT_TELESCOPE, baselines: str = DEFAULT_BASELI
     """The experiment as a table records it."""
     if telescope not in TELESCOPES:
         raise ValueError(f"unknown telescope {telescope!r}; choose one of {sorted(TELESCOPES)}")
-    return TELESCOPES[telescope] + (", inter-cylinder baselines only" if baselines == "inter-cylinder"
-                                    else ", all baselines")
+    if telescope != "chime" or baselines == "all":
+        return TELESCOPES[telescope] + ", all baselines"
+    return TELESCOPES[telescope] + ", inter-cylinder baselines only"
 
 
 def background(cosmo: dict):

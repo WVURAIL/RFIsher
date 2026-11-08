@@ -63,10 +63,11 @@ projection B in the order of names.
 
 ## Telescopes
 
-CHIME is the only telescope at present. A new telescope is added to
-`inputs.TELESCOPES` with its RadioFisher experiment and baseline density.
-CHORD and HIRAX are dish arrays, so they first need a dish noise model in
-RadioFisher.
+`--telescope` selects chime (the default), chord, hirax, kko, gbo or hcro.
+The other arrays come from `radiofisher.arrays`, where CHORD and HIRAX use the
+dish interferometer mode. Their inputs are nominal and show that the
+forecast runs. Every baseline is used for them, since only CHIME has an
+inter-cylinder selection.
 
 The nonlinear module is a focused local BAO-model validation helper, separate
 from table generation. See docs/PAPER_CODE_MAP.md.
