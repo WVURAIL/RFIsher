@@ -52,6 +52,18 @@ def test_the_overview_title_names_its_cosmology(tmp_path, monkeypatch, cosmology
     assert titles == [f"CHIME Overview forecast, one clean year ({label}, CHIME, 8,760 h)"]
 
 
+def test_the_summary_title_names_what_differs_from_the_shipped_table():
+    t = table.read_table()
+    assert figures.summary_title(t) == ("RFIsher channel table: one RadioFisher forecast per 6 MHz channel, "
+                                        "flat additive DTV power, 8,760 retained hours, D_V (cmbspa2026)")
+    other = dict(t, channels=[dict(t["channels"][0], high_mhz=472.0), dict(t["channels"][1], high_mhz=479.0)],
+                 inputs=dict(t["inputs"], telescope="chord", experiment="CHORD (nominal), all baselines",
+                             residual="mymodule:shelf", backend="mymodule:fisher"))
+    assert figures.summary_title(other) == ("RFIsher channel table: one mymodule:fisher forecast per channel, "
+                                            "residual mymodule:shelf, CHORD (nominal), all baselines, "
+                                            "8,760 retained hours, D_V (cmbspa2026)")
+
+
 def test_figures_use_the_table_exposure(tmp_path, monkeypatch):
     durations = []
     monkeypatch.setattr(figures, "plate", lambda row, out, hours: durations.append(hours) or out / "plate.png")
@@ -77,6 +89,22 @@ def test_table_options_reach_the_rows(tmp_path, monkeypatch):
     assert seen == [{"template": residual.unit_power, "target": "apar", "telescope": "chime",
                      "backend": "radiofisher"}]
     assert (tmp_path / "channel_table.csv").read_text().splitlines()[1].startswith("7,test,600.0,606.0,")
+
+
+def test_figures_take_their_channels_from_the_table(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(table, "row", fake_row)
+    bands = tmp_path / "bands.csv"
+    bands.write_text("channel,low_mhz,high_mhz\n7,600.0,606.0\n")
+    main(["table", "--out", str(tmp_path), "--bands", str(bands), "--workers", "1"])
+    capsys.readouterr()
+    drawn = ["figures", "--table", str(tmp_path / "channel_table.json"), "--out", str(tmp_path)]
+    main([*drawn, "--channels", "7"])
+    assert [p.split("/")[-1] for p in capsys.readouterr().out.split()] == ["summary.png", "channel_07.png"]
+    # channel 19 is in the default band file and not in this table
+    for refused in ([*drawn, "--channels", "19"], ["figures", "--table", str(tmp_path / "missing.json"), "--out", str(tmp_path)]):
+        with pytest.raises(SystemExit) as error:
+            main(refused)
+        assert error.value.code == 2
 
 
 @pytest.mark.parametrize("extra", [["--target", "nope"], ["--template", "nope"], ["--telescope", "nope"], ["--backend", "nope"],

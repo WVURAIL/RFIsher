@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from radiofisher.units import NU21_MHZ
 
-from . import inputs
+from . import inputs, residual
 from . import wvu_palette as wvu
 
 INK, MUTED, GRID, SURF = wvu.INK, wvu.MUTED, wvu.tint(wvu.SENECA_GRAY, 0.3), wvu.WHITE
@@ -64,6 +64,18 @@ def plate(row, out: Path, hours) -> Path:
     return path
 
 
+def summary_title(table) -> str:
+    """The title of the shipped table's summary, with whatever a table's inputs change from it named."""
+    given = table["inputs"]
+    widths = {r["high_mhz"] - r["low_mhz"] for r in table["channels"]}
+    channel = f"{widths.pop():g} MHz channel" if len(widths) == 1 else "channel"
+    model = given.get("residual", residual.MODEL)
+    power = "flat additive DTV power" if model == residual.MODEL else f"residual {model}"
+    experiment = f"{given['experiment']}, " if "telescope" in given else ""
+    return (f"RFIsher channel table: one {given.get('backend', 'RadioFisher')} forecast per {channel}, {power}, "
+            f"{experiment}{given['retained_hours']:,.0f} retained hours, D_V ({given['cosmology']})")
+
+
 def summary(table, out: Path) -> Path:
     hours = table["inputs"]["retained_hours"]
     exposure = "one year" if hours == inputs.RETAINED_HOURS else f"{hours:,.0f} retained hours"
@@ -87,9 +99,7 @@ def summary(table, out: Path) -> Path:
                title="(c) Clean uncertainty of D_V")
         for ax in axes:
             _tidy(ax)
-        fig.suptitle(f"RFIsher channel table: one RadioFisher forecast per 6 MHz channel, flat additive DTV power, "
-                     f"{hours:,.0f} retained hours, D_V ({table['inputs']['cosmology']})", x=0.01, ha="left", fontsize=13,
-                     fontweight="bold")
+        fig.suptitle(summary_title(table), x=0.01, ha="left", fontsize=13, fontweight="bold")
         path = out / "summary.png"
         fig.savefig(path, dpi=110)
         plt.close(fig)

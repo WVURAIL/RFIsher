@@ -33,15 +33,24 @@ def main(argv=None):
         from .tolerance import TARGETS
         if args.target not in TARGETS:
             ap.error(f"unknown target {args.target!r}; choose one of {', '.join(TARGETS)}")
-    if pick is not None or band_file is not None:
+    # a requested channel must be in what the command reads: the table for figures, the band file otherwise
+    known = None
+    if args.command == "figures":
+        from .table import read_table
+        try:
+            drawn = read_table(args.table)
+        except (OSError, ValueError) as error:  # json.JSONDecodeError is a ValueError
+            ap.error(str(error))
+        known = {r["channel"] for r in drawn["channels"]}
+    elif pick is not None or band_file is not None:
         from .bands import channels
         try:
             known = {b.channel for b in channels(band_file)}
         except (OSError, ValueError) as error:
             ap.error(str(error))
-        unknown = (pick or set()) - known
-        if unknown:
-            ap.error(f"unknown channels: {', '.join(map(str, sorted(unknown)))}")
+    unknown = set() if known is None else (pick or set()) - known
+    if unknown:
+        ap.error(f"unknown channels: {', '.join(map(str, sorted(unknown)))}")
     if getattr(args, "workers", None) is not None and args.workers < 1:
         ap.error("workers must be positive")
     if getattr(args, "telescope", "chime") != "chime":
@@ -84,8 +93,7 @@ def main(argv=None):
 
     else:
         from .figures import draw_all
-        from .table import read_table
-        for path in draw_all(read_table(args.table), args.out, pick):
+        for path in draw_all(drawn, args.out, pick):
             print(path)
 
 

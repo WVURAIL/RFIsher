@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import scipy
 
-from . import __version__, baselines, forecast, inputs, pk_cache, residual
+from . import __version__, forecast, inputs, pk_cache, residual
 from .bands import Band, channels
 from .tolerance import FITTED, target_tolerance, tolerance
 
@@ -79,13 +79,13 @@ def _radiofisher_source() -> dict:
     return out
 
 
-def provenance() -> dict:
+def provenance(telescope: str = inputs.DEFAULT_TELESCOPE) -> dict:
+    density = Path(inputs.experiment(telescope=telescope)["n(x)"])   # the n(x) table the forecast reads
     return {"rfisher": {"version": __version__, "commit": _git_commit(Path(__file__).parent)},
                 "radiofisher": _radiofisher_source(),
                 "pk_table": {"name": inputs.PK_TABLES[inputs.DEFAULT_COSMOLOGY],
                              "sha256": pk_cache.file_sha256(inputs.pk_table_path())},
-                "baseline_density": {"name": baselines.INTER_FILE,
-                                     "sha256": pk_cache.file_sha256(baselines.inter_file())},
+                "baseline_density": {"name": density.name, "sha256": pk_cache.file_sha256(density)},
                 "python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__}
 
 
@@ -116,7 +116,7 @@ def build_table(bands=None, workers: int | None = None, *, template=residual.uni
                 "inputs": {"cosmology": inputs.DEFAULT_COSMOLOGY,
                            "cosmology_description": inputs.COSMOLOGY_NAMES[inputs.DEFAULT_COSMOLOGY],
                            "experiment": experiment,
-                           "baselines": inputs.DEFAULT_BASELINES,
+                           "baselines": inputs.baselines_used(telescope),
                             "retained_hours": inputs.RETAINED_HOURS,
                             "residual": residual.template_name(template),
                             "power_units": residual.UNITS,
@@ -127,7 +127,7 @@ def build_table(bands=None, workers: int | None = None, *, template=residual.uni
                             "quadrature": {"radial_order": forecast.RADIAL_ORDER,
                                             "angular_order": forecast.ANGULAR_ORDER,
                                             "bao_derivative_step": forecast.STEP}},
-                "provenance": provenance(), "channels": rows}
+                "provenance": provenance(telescope), "channels": rows}
     if target is not None:
         table["inputs"]["target"] = target
     if telescope != inputs.DEFAULT_TELESCOPE:
