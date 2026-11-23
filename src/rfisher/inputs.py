@@ -99,11 +99,16 @@ def experiment(hours: float = RETAINED_HOURS, baselines: str = DEFAULT_BASELINES
     return expt
 
 
+def baselines_used(telescope: str = DEFAULT_TELESCOPE, baselines: str = DEFAULT_BASELINES) -> str:
+    """The baseline selection experiment() gives a telescope: only CHIME has an inter-cylinder one."""
+    return baselines if telescope == "chime" else "all"
+
+
 def describe(telescope: str = DEFAULT_TELESCOPE, baselines: str = DEFAULT_BASELINES) -> str:
     """The experiment as a table records it."""
     if telescope not in TELESCOPES:
         raise ValueError(f"unknown telescope {telescope!r}; choose one of {sorted(TELESCOPES)}")
-    if telescope != "chime" or baselines == "all":
+    if baselines_used(telescope, baselines) == "all":
         return TELESCOPES[telescope] + ", all baselines"
     return TELESCOPES[telescope] + ", inter-cylinder baselines only"
 

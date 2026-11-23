@@ -80,6 +80,8 @@ def test_the_table_records_only_options_that_differ(monkeypatch):
     default = build_table([channel(19)], workers=1)
     assert "target" not in default["inputs"] and "telescope" not in default["inputs"]
     assert default["inputs"]["experiment"] == "CHIME (CHIME Overview), inter-cylinder baselines only"
+    assert default["inputs"]["baselines"] == "inter-cylinder"
+    assert default["provenance"]["baseline_density"] == read_table()["provenance"]["baseline_density"]
     assert build_table([channel(19)], workers=1, target="fs8")["inputs"]["target"] == "fs8"
 
 
@@ -119,3 +121,10 @@ def test_other_telescopes_run(telescope):
     assert r["normalization"]["power_scale"] > 0
     t = build_table([channel(19)], workers=1, telescope=telescope)
     assert t["inputs"]["telescope"] == telescope and t["inputs"]["experiment"].endswith("all baselines")
+    # the table names the baselines and the n(x) file this telescope's forecast read, not CHIME's
+    from radiofisher import arrays
+
+    from rfisher import pk_cache
+    density = arrays.density_file(telescope.upper())
+    assert t["inputs"]["baselines"] == "all"
+    assert t["provenance"]["baseline_density"] == {"name": density.name, "sha256": pk_cache.file_sha256(density)}
